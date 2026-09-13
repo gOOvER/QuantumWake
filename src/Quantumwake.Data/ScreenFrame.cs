@@ -112,9 +112,12 @@ public sealed record MapReading(
 /// <summary>What the mobiGlas bar said the wallet holds.</summary>
 /// <param name="Balance">The figure, or null when the engine returned none.</param>
 /// <param name="Trouble">
-/// Why there is no figure. Measured twice on this install: the balance is set
-/// in an italic display face the in-box engine does not read at any size, so
-/// the usual answer is a sentence rather than a number.
+/// Why there is no figure. The balance is set in a bold italic face that the
+/// in-box engine drops from a whole-frame read about half the time - two of
+/// four frames measured, two of them a second apart in the same scene - and
+/// reads without a wrong digit once the panel is cropped and sheared upright.
+/// So a missing figure means both looks failed, not that the face cannot be
+/// read; see <see cref="WalletSecondLook"/>.
 /// </param>
 public sealed record WalletReading(long? Balance, string? Trouble);
 
@@ -324,25 +327,70 @@ public static partial class ScreenFrames
     private static WalletReading ReadWallet(
         IReadOnlyList<ScreenTextLine> lines, IReadOnlyList<ScreenTextLine> bar)
     {
+        return WalletFigure(lines, bar) is { } balance
+            ? new WalletReading(balance, null)
+            : new WalletReading(null, WalletTrouble);
+    }
+
+    /// <summary>
+    /// What the wallet says when the figure did not read on either look. It
+    /// used to blame the face; the face reads, this engine just drops the line
+    /// now and then, so the honest thing to say is that this frame missed and
+    /// another will do.
+    /// </summary>
+    public const string WalletTrouble =
+        "the balance did not read on this frame - the bar beside it did; another screenshot usually reads";
+
+    /// <summary>The balance among these lines, given where the bar is, or null.</summary>
+    private static long? WalletFigure(IReadOnlyList<ScreenTextLine> lines, IReadOnlyList<ScreenTextLine> bar)
+    {
         var firstApp = bar.Min(word => word.Left);
         var row = bar.Average(word => word.Top);
         var height = bar.Max(word => word.Height);
 
-        var figure = lines
+        return lines
             .Where(line => line.Left < firstApp)
             .Where(line => Math.Abs(line.Top - row) <= height * 4)
             .OrderBy(line => Math.Abs(line.Top - row))
             .Select(line => Figure(line.Text))
             .FirstOrDefault(value => value is not null);
+    }
 
-        return figure is { } balance
-            ? new WalletReading(balance, null)
-            : new WalletReading(null,
-                "the balance is printed in a face this engine does not read - the bar beside it read fine");
+    /// <summary>
+    /// Where the wallet panel sits on a frame whose bar read and whose balance
+    /// did not, or null when there is nothing for a second look to do.
+    /// </summary>
+    /// <remarks>
+    /// Measured in bar heights rather than pixels so that it holds at any
+    /// resolution: on the 3440x1440 frames measured the bar's words are 12-14
+    /// px tall and HOME's left edge is at x=1283, and the figure's glyph starts
+    /// 320 px to the left of it and 33 px above the row. Thirty heights to the
+    /// left and four above covers that with room for the panel's decoration
+    /// without reaching the app bar's first tile.
+    /// </remarks>
+    public static ScreenPatch? WalletPanel(IReadOnlyList<ScreenTextLine> lines)
+    {
+        var all = lines
+            .Select(line => line with { Text = line.Text.Trim() })
+            .Where(line => line.Text.Length > 0)
+            .ToList();
+
+        if (AppBarRow(all) is not { } bar || WalletFigure(all, bar) is not null)
+            return null;
+
+        var firstApp = bar.Min(word => word.Left);
+        var row = bar.Average(word => word.Top);
+        var height = bar.Max(word => word.Height);
+
+        return new ScreenPatch(
+            Left: Math.Max(0, firstApp - height * 30),
+            Top: Math.Max(0, row - height * 4),
+            Width: Math.Min(firstApp, height * 30),
+            Height: height * 6);
     }
 
     /// <summary>A whole number with or without thousands separators, or null.</summary>
-    private static long? Figure(string text)
+    internal static long? Figure(string text)
     {
         var match = FigureRegex().Match(text);
         if (!match.Success) return null;

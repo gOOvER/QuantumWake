@@ -35,7 +35,32 @@ public interface IScreenReader
 {
     /// <summary>Every line the engine found, with where it sat.</summary>
     Task<IReadOnlyList<ScreenTextLine>> ReadAsync(string imagePath, CancellationToken token = default);
+
+    /// <summary>
+    /// One patch of the frame again, scaled and sheared before the engine
+    /// sees it, with the boxes mapped back into the frame's own pixels.
+    /// </summary>
+    /// <remarks>
+    /// The second look <see cref="WalletSecondLook"/> takes when the whole
+    /// frame read and the balance did not. Mapping back is the reader's job
+    /// because only it knows what it did to the pixels; the caller wants to
+    /// ask the same questions of these lines as of the first read's.
+    /// </remarks>
+    Task<IReadOnlyList<ScreenTextLine>> ReadAsync(
+        string imagePath, ScreenPatch patch, ScreenTreatment treatment, CancellationToken token = default);
 }
+
+/// <summary>A rectangle of the frame, in its pixels.</summary>
+public sealed record ScreenPatch(double Left, double Top, double Width, double Height);
+
+/// <summary>What to do to a patch before the engine reads it.</summary>
+/// <param name="Scale">How many times larger to draw it.</param>
+/// <param name="Shear">
+/// How far each row is pulled left per pixel of height above the bottom, so
+/// that a right-leaning face stands up. 0.2 is about eleven degrees, which is
+/// what makes the mobiGlas balance read; see <see cref="WalletSecondLook"/>.
+/// </param>
+public sealed record ScreenTreatment(double Scale, double Shear);
 
 /// <summary>
 /// Reads what the pilot last copied.

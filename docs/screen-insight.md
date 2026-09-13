@@ -360,6 +360,11 @@ Which is a shame, because the balance is a genuinely new signal: `Game.log`
 records what was spent and earned and **never the total**, so the Ledger has a
 running sum it has never once been able to check against the truth.
 
+> **Overturned on 13 Sep 2026.** The face reads. What the engine drops is the
+> slant, and only sometimes: see *The face reads after all, once stood up*
+> under step 3. Kept here as written because the measurements above were real
+> and the conclusion drawn from them was the wrong one.
+
 ### Step 2: what the catalogue makes of it
 
 Built and measured on the same eight screenshots. The matcher is
@@ -968,6 +973,69 @@ is read.
 **The Hermes checks clean where it should.** Its missile racks agree with the
 factory fit; its systems tab differs on every port - Lotus power plants,
 Hemera drive, 7MA shields - which is what an upgraded ship looks like.
+
+### The face reads after all, once stood up
+
+Step 1 called the balance "the one thing it will not read" and blamed the
+typeface. On 13 Sep 2026 a Maps frame came back with the wallet unread and
+the note saying so, and this time the frame was checked rather than the note
+believed. Four frames were measured, all 3440x1440, all with the bar read in
+full:
+
+| Frame | Whole-frame read | Balance |
+|---|---|---|
+| 12 Sep 00:47, Contracts | read | 2,780,332 |
+| 12 Sep 22:32:26, Maps | **dropped** | 3,265,516 |
+| 12 Sep 22:32:27, Maps | read | 3,265,516 |
+| 13 Sep 01:43, Maps | **dropped** | 3,958,160 |
+
+Two of four read. The two Maps frames are one second apart in the same scene,
+their wallet panels indistinguishable side by side at 4x, and the engine read
+one and not the other. So the face is not unreadable; the engine's line
+detector is on a knife edge with it, and a whole-frame read falls on either
+side by pixel noise. The handle beneath, set upright, read on all four.
+
+**What moves it is the slant.** The wallet panel was cropped off the bar - 30
+bar-heights to the left of the first app, four above the row to two below -
+and fed back to the same engine under treatments:
+
+- *Cropped and scaled, nothing else:* recovered one of the two misses.
+- *Binarised black-on-white at x3:* recovered both, and was rejected. On the
+  13 Sep frame a tighter binarised crop read `4958.160`. A treatment that can
+  invent a digit has no place under a cash balance.
+- *Sheared upright by 0.15-0.25, about nine to fourteen degrees, at x1.5-x2,
+  no thresholding:* read all four frames. Across 112 such reads not one digit
+  was wrong; the line either came back right or not at all.
+
+Two more things about this engine, both found while trying to draw a fixture
+for it, both worth knowing before the next reading is built:
+
+- **It returns nothing for a line of digits standing alone.** Crops of the
+  real panel that held only the figure, at three sizes and three treatments,
+  gave nothing; the same crops with `NEKRON` beneath gave the figure. The
+  panel always has the handle, so the second look is safe, but a lone number
+  elsewhere on a screen - a kiosk total with no word near it - may not be.
+- **It has a ceiling as well as a floor.** A drawn line of digits read at 36
+  and 45 px tall and returned nothing at 54 and above, while the word beneath
+  went on reading. The balance is 25 px on this frame, which is why x2 is the
+  most the rungs go to and x3 lost one of the four frames.
+
+**So the wallet now takes a second look**, and only when the bar read and the
+figure did not: the panel is cropped, sheared and read again under a short
+ladder of treatments, and a figure is believed when two rungs agree on its
+digits. The first two rungs settled both dropped frames on their own. The
+added line goes back into the frame's lines in frame coordinates - the 13 Sep
+figure lands at (962, 1298), where the 22:32:27 whole-frame read had placed
+its own at (959, 1295) - so one place still decides what the wallet is.
+
+The note changed with it. "Printed in a face this engine does not read" was
+a guess dressed as a diagnosis, and it was wrong on every one of the frames
+it was shown on. It now says the frame missed, the bar did not, and another
+screenshot usually reads - which is what the four frames say.
+
+`QUANTUMWAKE_WALLET_FRAMES` is the instrument: name the frames, run the
+`WalletFrameMeasurement` test in `Quantumwake.OcrTests`, and it prints both
+looks and every rung for each.
 
 ### The commodity kiosk, and the one measurement not from this install
 

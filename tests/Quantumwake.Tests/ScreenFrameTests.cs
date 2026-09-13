@@ -262,7 +262,13 @@ public class ScreenFrameTests
 
         Assert.NotNull(wallet);
         Assert.Null(wallet.Balance);
-        Assert.Contains("face", wallet.Trouble);
+
+        // It used to blame the face. The face reads - the same engine returned
+        // the same figure from a frame one second later - so the note now says
+        // what is true: this frame missed, and the bar beside it did not.
+        Assert.Equal(ScreenFrames.WalletTrouble, wallet.Trouble);
+        Assert.DoesNotContain("face", wallet.Trouble);
+        Assert.Contains("this frame", wallet.Trouble);
     }
 
     [Fact]
