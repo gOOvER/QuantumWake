@@ -232,11 +232,11 @@ function showView(name) {
 
   const buttons = $$('#tabs button');
 
-  // Commodity and Help are drill-downs rather than tabs: Market stays lit for
-  // a commodity, and About stays lit for Help. Neither earns a top-bar slot,
-  // but both are still shareable views with their own fragment.
+  // Commodity, Help and a share recap are drill-downs rather than tabs. Their
+  // parent stays lit, but each has its own fragment so a saved HTML report is
+  // not confused with the app's live dashboard.
   const target = buttons.find(
-    (b) => b.dataset.view === (name === 'commodity' ? 'market' : name === 'help' ? 'about' : name));
+    (b) => b.dataset.view === (name === 'commodity' ? 'market' : name === 'help' ? 'about' : name === 'share' ? 'settings' : name));
 
   if (!target) return;
 
@@ -338,7 +338,7 @@ function showView(name) {
    someone and a page that survives a refresh. */
 function viewFromHash() {
   const name = decodeURIComponent(location.hash.replace(/^#/, ''));
-  return name === 'help' || $$('#tabs button').some((b) => b.dataset.view === name) ? name : null;
+  return name === 'help' || name === 'share' || $$('#tabs button').some((b) => b.dataset.view === name) ? name : null;
 }
 
 /**
@@ -10186,6 +10186,229 @@ $('#backup-file')?.addEventListener('change', async (event) => {
     $('#backup-status').textContent = 'That file could not be read.';
   }
 });
+
+/* ---------- shareable recaps ---------- */
+
+let shareReportData = null;
+
+function shareChoice() {
+  return {
+    session: Boolean($('#share-session')?.checked),
+    fleet: Boolean($('#share-fleet')?.checked),
+    trade: Boolean($('#share-trade')?.checked),
+    handle: Boolean($('#share-handle')?.checked),
+  };
+}
+
+function shareMetric(label, value) {
+  const metric = el('div', 'share-metric');
+  metric.append(el('div', 'share-metric-value', value));
+  metric.append(el('div', 'share-metric-label', label));
+  return metric;
+}
+
+function shareSection(title, sources, detail = '') {
+  const section = el('section', 'share-section');
+  const head = el('div', 'share-section-head');
+  head.append(el('h3', null, title));
+  head.append(sourceMarks(sources));
+  section.append(head);
+  if (detail) section.append(el('p', 'share-section-detail', detail));
+  return section;
+}
+
+function shareList(rows, empty) {
+  const list = el('ul', 'share-list');
+  if (!rows.length) list.append(el('li', 'muted', empty));
+  for (const row of rows) {
+    const item = el('li');
+    item.append(el('span', null, row.label));
+    if (row.detail) item.append(el('span', 'muted', row.detail));
+    if (row.value) item.append(el('b', row.className || '', row.value));
+    list.append(item);
+  }
+  return list;
+}
+
+/** A frozen recap uses only evidence already held locally by the app. */
+async function buildShareReport() {
+  const choice = shareChoice();
+  if (!choice.session && !choice.fleet && !choice.trade)
+    throw new Error('Choose at least one section for the recap.');
+
+  const report = { choice, madeAt: new Date().toISOString() };
+  const needsSessions = choice.session || choice.handle;
+  const sessions = needsSessions ? await getJson('/api/sessions') : [];
+  const latest = [...sessions].sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))[0] || null;
+
+  if (choice.handle) report.handle = latest?.handle || '';
+  if (choice.session && latest) {
+    const detail = await getJson(`/api/sessions/${encodeURIComponent(latest.id)}`).catch(() => null);
+    report.session = { summary: latest, detail };
+  } else if (choice.session) report.session = { summary: null, detail: null };
+
+  if (choice.fleet) report.fleet = await getJson('/api/fleet').catch(() => null);
+
+  if (choice.trade) {
+    const [earnings, market] = await Promise.all([
+      getJson('/api/earnings?days=30').catch(() => null),
+      getJson('/api/market').catch(() => []),
+    ]);
+    report.trade = { earnings, market };
+  }
+
+  return report;
+}
+
+function renderShareReport(report) {
+  const host = $('#share-report');
+  if (!host) return;
+  host.textContent = '';
+
+  const head = el('header', 'share-report-head');
+  const title = el('div');
+  title.append(el('div', 'share-kicker', 'QUANTUM WAKE · PILOT RECAP'));
+  title.append(el('h2', null, report.handle ? `${report.handle}'s recent flight` : 'Recent flight recap'));
+  title.append(el('p', 'muted', `Snapshot made ${new Date(report.madeAt).toLocaleString()}. It does not update after it is shared.`));
+  head.append(title);
+  head.append(sourceMarks(['logs']));
+  host.append(head);
+
+  if (report.session) renderShareSession(host, report.session);
+  if (report.fleet) renderShareFleet(host, report.fleet);
+  if (report.trade) renderShareTrade(host, report.trade);
+
+  host.append(el('p', 'share-limits',
+    'Source labels name the evidence behind each section. Trading is limited to commodity movements the game log records; it is not total income.'));
+}
+
+function renderShareSession(host, session) {
+  const summary = session.summary;
+  const section = shareSection('Latest session', ['logs'],
+    'What the game log recorded during the most recent session.');
+  if (!summary) {
+    section.append(el('p', 'muted', 'No completed session has been recorded yet.'));
+    host.append(section);
+    return;
+  }
+
+  const detail = session.detail;
+  const route = detail ? sessionRoute(detail) : [];
+  const ships = detail ? (detail.ships || []).map((ship) => ship.displayName || ship.model).filter(Boolean) : [];
+  const metrics = el('div', 'share-metrics');
+  metrics.append(
+    shareMetric('In game', duration(summary.inGame)),
+    shareMetric('Ship', ships.join(' · ') || summary.primaryShip || 'On foot'),
+    shareMetric('Route points', String(route.length || summary.locations || 0)),
+    shareMetric('Contracts', String(summary.contracts || 0)),
+    shareMetric('Deaths', String(summary.deaths || 0)),
+  );
+  section.append(metrics);
+
+  section.append(el('h4', null, 'Recorded route'));
+  section.append(shareList(route.slice(0, 8).map((place) => ({
+    label: place.displayName,
+    detail: [place.body, place.system].filter(Boolean).join(' · ') || place.routeKind,
+    value: shortTimeOf(place.at),
+  })), 'No named locations were written in this session.'));
+  host.append(section);
+}
+
+function renderShareFleet(host, fleet) {
+  const section = shareSection('Fleet snapshot', ['logs'],
+    'Ships flown by this account; it does not claim to be the game entitlement roster.');
+  if (!fleet) {
+    section.append(el('p', 'muted', 'The fleet summary could not be read.'));
+    host.append(section);
+    return;
+  }
+
+  const ships = [...(fleet.flown || [])].sort((a, b) => (b.sorties || 0) - (a.sorties || 0));
+  const seconds = ships.reduce((sum, ship) => sum + toSeconds(ship.estimatedTime || ship.timeAboard || '00:00:00'), 0);
+  const metrics = el('div', 'share-metrics');
+  metrics.append(
+    shareMetric('Game entitlement', fleet.owned === null || fleet.owned === undefined ? '—' : String(fleet.owned)),
+    shareMetric('Ships flown', String(ships.length)),
+    shareMetric('Total sorties', String(ships.reduce((sum, ship) => sum + (ship.sorties || 0), 0))),
+    shareMetric('Time aboard', `~${duration(seconds)}`),
+  );
+  section.append(metrics);
+  section.append(el('h4', null, 'Most flown'));
+  section.append(shareList(ships.slice(0, 6).map((ship) => ({
+    label: ship.name,
+    detail: ship.lastFlown ? `last flown ${dateOf(ship.lastFlown)}` : '',
+    value: `${ship.sorties || 0} sortie${ship.sorties === 1 ? '' : 's'}`,
+  })), 'No ship flights have been recorded.'));
+  host.append(section);
+}
+
+function renderShareTrade(host, trade) {
+  const section = shareSection('Trading snapshot · last 30 days', ['logs'],
+    'Commodity movements the game log recorded. Contract rewards, bounties and fees are not included.');
+  const rate = trade.earnings?.window;
+  const rows = [...(trade.market || [])].filter((row) => row.myTrades > 0)
+    .sort((a, b) => (b.myRevenue || 0) - (a.myRevenue || 0));
+  const metrics = el('div', 'share-metrics');
+  metrics.append(
+    shareMetric('Recorded profit', rate ? money(rate.earned) : '—'),
+    shareMetric('Trading rate', rate?.perHour > 0 ? `${money(rate.perHour)}/h` : 'No rate yet'),
+    shareMetric('In-game hours', rate ? hoursOf(rate.inGame) : '—'),
+    shareMetric('Commodities moved', String(rows.length)),
+  );
+  section.append(metrics);
+  section.append(el('h4', null, 'Largest recorded sales'));
+  section.append(shareList(rows.slice(0, 6).map((row) => ({
+    label: row.name,
+    detail: `${row.myScuSold || 0} SCU sold · ${row.myTrades || 0} trip${row.myTrades === 1 ? '' : 's'}`,
+    value: money(row.myRevenue || 0),
+    className: 'inward',
+  })), 'No commodity movements were recorded in this window.'));
+  host.append(section);
+}
+
+function shareReportDocument() {
+  const report = $('#share-report');
+  if (!shareReportData || !report) return null;
+  const content = report.cloneNode(true);
+  return '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+    + '<meta name="viewport" content="width=device-width, initial-scale=1">'
+    + '<title>Quantum Wake pilot recap</title><style>' + shareReportCss() + '</style></head><body>'
+    + content.outerHTML + '</body></html>';
+}
+
+function shareReportCss() {
+  return 'body{margin:0;background:#070c14;color:#dcebf7;font:14px/1.5 system-ui,Segoe UI,sans-serif}.share-report{max-width:960px;margin:32px auto;padding:28px;background:linear-gradient(150deg,#101d2c,#070c14);border:1px solid #2c526d}.share-report-head,.share-section-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.share-kicker{color:#8be7ff;font:700 11px ui-monospace,Consolas,monospace;letter-spacing:2px}.share-report h2{margin:4px 0;font-size:30px}.share-report h3{margin:0;color:#8be7ff;font-size:18px}.share-report h4{margin:20px 0 7px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#7691a8}.muted,.share-section-detail{color:#9ab0c3}.data-sources{display:flex;gap:4px;flex-wrap:wrap}.data-source{border:1px solid #2c526d;padding:2px 5px;font:10px ui-monospace,Consolas,monospace;letter-spacing:.7px;color:#8be7ff}.game-install{color:#7ee3a5}.screenshot-ocr,.data-source-qualifier{color:#ffbc66}.community-data{color:#c59cff}.share-section{margin-top:22px;padding-top:18px;border-top:1px solid #24445b}.share-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-top:14px}.share-metric{padding:10px;background:#0a1420;border-left:2px solid #35c8f0}.share-metric-value{font-size:16px;font-weight:700}.share-metric-label{font-size:10px;color:#9ab0c3;text-transform:uppercase;letter-spacing:.8px}.share-list{list-style:none;padding:0;margin:0}.share-list li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;padding:6px 0;border-bottom:1px solid #172b3b}.share-list b{white-space:nowrap}.inward{color:#7ee3a5}.share-limits{margin:25px 0 0;color:#9ab0c3;font-size:12px}@media print{body{background:#fff;color:#14202b}.share-report{margin:0;max-width:none;border:0;background:#fff}.share-report h3,.share-kicker{color:#126b91}.share-section{border-color:#b8cbd6}.share-metric{background:#eef5f8;border-color:#126b91}.muted,.share-section-detail,.share-metric-label,.share-limits{color:#50616c}.data-source{color:#126b91;border-color:#8ca6b4}.share-list li{border-color:#d6e1e7}}';
+}
+
+async function openShareReport() {
+  const status = $('#share-status');
+  if (status) status.textContent = 'Building recap…';
+  try {
+    shareReportData = await buildShareReport();
+    renderShareReport(shareReportData);
+    if (status) status.textContent = '';
+    showView('share');
+  } catch (error) {
+    if (status) status.textContent = error.message || 'The recap could not be built.';
+  }
+}
+
+function saveShareReport() {
+  const html = shareReportDocument();
+  if (!html) return;
+  const stamp = new Date().toISOString().slice(0, 10);
+  const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+  const link = el('a');
+  link.href = url;
+  link.download = `quantumwake-pilot-recap-${stamp}.html`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+$('#share-open')?.addEventListener('click', () => openShareReport());
+$('#share-back')?.addEventListener('click', () => showView('settings'));
+$('#share-print')?.addEventListener('click', () => window.print());
+$('#share-save-html')?.addEventListener('click', () => saveShareReport());
 
 async function saveExport() {
   const button = $('#export-save');

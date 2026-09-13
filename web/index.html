@@ -1971,8 +1971,49 @@
   </section>
 
 
+  <!-- A local, print-friendly answer to “what did I do?”  It is deliberately
+       a view rather than a server upload: the HTML can be read before anyone
+       receives it, and no report ever leaves this PC by itself. -->
+  <section id="view-share" class="view">
+    <div class="section-bar">
+      <h2>Shareable recap</h2>
+      <div class="controls">
+        <button class="ghost" id="share-print">Print / Save PDF</button>
+        <button class="ghost" id="share-save-html">Save HTML</button>
+        <button class="ghost" id="share-back">Back to Settings</button>
+      </div>
+    </div>
+    <p class="muted caption">A local summary from the sections you chose. It is a snapshot, not a live link; source labels and limits stay with the figures when you print or save it.</p>
+    <article class="share-report" id="share-report" aria-live="polite"></article>
+  </section>
+
   <section id="view-settings" class="view">
     <h2>Settings</h2>
+
+    <div class="option-block">
+      <div class="option-head">
+        <h3>Share a recap</h3>
+        <button class="ghost" id="share-open">Preview recap</button>
+      </div>
+      <p class="muted">A polished, offline page for a pilot you fly with. Review it here, then save a self-contained HTML file or print it to PDF. Nothing is sent or uploaded.</p>
+      <label class="toggle">
+        <input type="checkbox" id="share-session" checked>
+        <span>Latest session <em class="muted">Route, ship, contracts and recorded economy.</em></span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="share-fleet" checked>
+        <span>Fleet snapshot <em class="muted">Your flown ships, sorties and time aboard.</em></span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="share-trade" checked>
+        <span>Trading snapshot <em class="muted">Recorded commodity results from the last 30 days.</em></span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="share-handle">
+        <span>Put my handle on it <em class="muted">Off by default, so the report is ready to share privately.</em></span>
+      </label>
+      <span class="muted" id="share-status"></span>
+    </div>
 
     <div class="option-block">
       <div class="option-head">

@@ -358,7 +358,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.23
+### 0.11.24
+
+- **Share a polished pilot recap without uploading anything.** Choose the
+  latest session, fleet snapshot and/or 30-day trading snapshot in Settings,
+  then review it, save a self-contained HTML page, or print it to PDF. The
+  report keeps its source labels and says that log-recorded trading is a floor,
+  not total income.
 
 - **Answers now carry clear source labels.** The Now page, Hangar and
   commodity Market show whether a fact comes from your game log, installed
