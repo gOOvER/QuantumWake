@@ -539,6 +539,30 @@ h2.spaced { margin-top: 32px; }
   margin-bottom: 11px;
 }
 
+/* Evidence is attached to the answer it supports, not buried in Settings.
+   The colours distinguish origins at a glance; the words remain present so a
+   colour-blind or monochrome display does not turn provenance into a guess. */
+.card-source { margin: -7px 0 10px; min-height: 14px; }
+.view-sources { margin: -4px 0 12px; min-height: 16px; }
+.data-sources { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.data-source {
+  display: inline-block;
+  padding: 2px 5px;
+  border: 1px solid var(--rule);
+  color: var(--dim);
+  background: rgba(255, 255, 255, .025);
+  font: 8px/1 var(--mono);
+  letter-spacing: .08em;
+  white-space: nowrap;
+}
+.data-source.game-log { color: var(--cyan-hot); border-color: var(--cyan-deep); }
+.data-source.game-install { color: var(--green); border-color: rgba(79, 212, 138, .34); }
+.data-source.screenshot-ocr { color: var(--amber); border-color: rgba(255, 171, 61, .36); }
+.data-source.community-data { color: var(--violet); border-color: rgba(181, 140, 240, .36); }
+.data-source-qualifier { color: var(--amber); border-color: rgba(255, 171, 61, .36); }
+body.overlay .card-source { margin: -2px 0 4px; min-height: 11px; }
+body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
+
 /* Now is often a glance-only dashboard. Keeping the label and a small
    explicit control visible gives every card a stable, reversible summary. */
 .now-card-actions {
@@ -3258,6 +3282,9 @@ body.entity-open .view { padding-right: 296px; }
 .help-start b, .help-start span { display: block; }
 .help-start b { color: var(--text); font-size: 12px; }
 .help-start span { margin-top: 4px; color: var(--muted); font-size: 11.5px; line-height: 1.55; }
+.help-source-guide { margin: -12px 0 25px; padding: 12px 13px; border: 1px solid var(--rule); background: rgba(53, 200, 240, .035); }
+.help-source-guide .view-sources { margin: 7px 0; }
+.help-source-guide p { margin: 0; max-width: 76ch; color: var(--muted); font-size: 11.5px; line-height: 1.55; }
 .help-page h3 { margin: 26px 0 9px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--cyan-hot); }
 .faq { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 18px; }
 .faq details {

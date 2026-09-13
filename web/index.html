@@ -186,6 +186,7 @@
 
       <article class="card hero" data-card="location">
         <div class="card-label">Location</div>
+        <div class="card-source source-slot" id="now-location-source" data-sources="logs"></div>
         <div class="hero-value" id="now-location">—</div>
         <div class="hero-sub" id="now-location-sub"></div>
         <div class="confidence" id="now-confidence"></div>
@@ -197,6 +198,7 @@
 
       <article class="card" data-card="ship">
         <div class="card-label">Ship</div>
+        <div class="card-source source-slot" id="now-ship-source" data-sources="logs"></div>
         <div class="now-ship-summary">
           <div class="now-ship-logo" id="now-ship-logo" hidden></div>
           <div class="value" id="now-ship">—</div>
@@ -205,6 +207,7 @@
 
       <article class="card" data-card="session">
         <div class="card-label">Session</div>
+        <div class="card-source source-slot" id="now-session-source" data-sources="logs"></div>
         <div class="value" id="now-clock">—</div>
         <div class="sub" id="now-mode"></div>
       </article>
@@ -272,6 +275,7 @@
 
       <article class="card span2" data-card="feed">
         <div class="card-label">Live feed</div>
+        <div class="card-source source-slot" id="now-feed-source" data-sources="logs"></div>
         <ul class="feed" id="now-feed">
           <li class="empty">Waiting for the game…</li>
         </ul>
@@ -279,6 +283,7 @@
 
       <article class="card" data-card="stats">
         <div class="card-label">This session</div>
+        <div class="card-source source-slot" id="now-stats-source" data-sources="logs" data-source-qualifier="INFERRED"></div>
         <div class="statline"><span>Deaths</span><b id="now-deaths">0</b></div>
         <div class="statline"><span>Incapacitations</span><b id="now-incaps">0</b></div>
         <div class="note" id="combat-note"></div>
@@ -292,6 +297,7 @@
 
       <article class="card span2" id="now-screen-card" data-card="screen" hidden>
         <div class="card-label">Last screenshot</div>
+        <div class="card-source source-slot" id="now-screen-source" data-sources="screenshot"></div>
         <div class="value" id="now-screen-summary">&mdash;</div>
         <div class="sub" id="now-screen-when"></div>
         <ul class="feed screen-checks" id="now-screen-checks"></ul>
@@ -300,6 +306,7 @@
 
       <article class="card span2" id="now-earning-card" data-card="earning" hidden>
         <div class="card-label">Trading rate</div>
+        <div class="card-source source-slot" id="now-earning-source" data-sources="logs screenshot"></div>
         <!-- The one figure the logs cannot make, from the last screenshot that
              showed it. Shown only once one has; it is what a pilot at a kiosk
              wants and the overlay is where they are. -->
@@ -1183,6 +1190,7 @@
         <span class="muted" id="hangar-count"></span>
       </div>
     </div>
+    <div class="view-sources source-slot" id="hangar-data-sources" data-sources="logs install"></div>
     <p class="muted caption">
       Every ship your logs say you have flown, from your installed game files. The
       gallery shows the game's own render of a ship in the paint you chose on Fleet,
@@ -1323,6 +1331,8 @@
                autocomplete="off" spellcheck="false">
       </div>
     </div>
+
+    <div class="view-sources" id="market-data-sources" hidden></div>
 
     <p class="muted caption" id="market-caption">
       Every commodity the community dataset knows, with your own trading record
@@ -2408,6 +2418,12 @@
         <div><b>Something looks wrong?</b><span>Check the source beside the number first; a missing log signal is not the same as zero, and the app says which it is.</span></div>
         <div><b>Need to report it?</b><span>Settings → Report a problem makes a small diagnostic file you can read before sharing.</span></div>
       </div>
+
+      <section class="help-source-guide" aria-label="How to read data sources">
+        <div class="entity-label">Data sources</div>
+        <div class="view-sources source-slot" id="help-data-sources" data-sources="logs install screenshot community"></div>
+        <p>These labels name the evidence behind an answer, not a promise that it is current. A reading from a screenshot is dated; community data is optional and not live; an inference says so beside the source.</p>
+      </section>
 
       <div class="help-tools">
         <input type="search" id="help-search" class="search" placeholder="Find a question — try “wipe”, “points”, “backup”…" autocomplete="off" spellcheck="false" aria-label="Find a question">

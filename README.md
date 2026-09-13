@@ -358,7 +358,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.22
+### 0.11.23
+
+- **Answers now carry clear source labels.** The Now page, Hangar and
+  commodity Market show whether a fact comes from your game log, installed
+  game files, a locally read screenshot, or optional community data. Inferred
+  figures say so too, and Help explains what each label can and cannot prove.
 
 - **The wallet reads from screenshots that used to say it could not.** A
   mobiGlas frame would report the balance as "printed in a face this engine

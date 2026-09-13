@@ -49,6 +49,18 @@ public class MarketSourceTests
         Assert.DoesNotContain("floor", caption);
     }
 
+    [Fact]
+    public void The_market_marks_its_reference_and_personal_record_separately()
+    {
+        var installSources = Loaded(FromInstall).NodeText("#market-data-sources");
+        Assert.Contains("GAME INSTALL", installSources);
+        Assert.Contains("GAME LOG", installSources);
+
+        var datasetSources = Loaded(FromDataset).NodeText("#market-data-sources");
+        Assert.Contains("COMMUNITY DATA", datasetSources);
+        Assert.Contains("GAME LOG", datasetSources);
+    }
+
     /// <summary>
     /// The offer to download must not appear once the page is already full, or
     /// it reads as though nothing had loaded.

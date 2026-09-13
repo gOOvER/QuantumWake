@@ -110,6 +110,85 @@ function el(tag, className, text) {
   return node;
 }
 
+/*
+ * An answer is only as useful as knowing which evidence supports it.  These
+ * four labels are deliberately small and fixed: every new view can use the
+ * same language instead of quietly inventing another way to say "probably".
+ */
+const DATA_SOURCES = {
+  logs: {
+    label: 'GAME LOG',
+    name: 'your game log',
+    detail: 'Events written by Star Citizen to Game.log and its local backups.',
+  },
+  install: {
+    label: 'GAME INSTALL',
+    name: 'your game install',
+    detail: 'Reference data read from the Star Citizen files installed on this PC.',
+  },
+  screenshot: {
+    label: 'SCREENSHOT / OCR',
+    name: 'a screenshot reading',
+    detail: 'A saved screenshot read locally. It describes the moment it was captured.',
+  },
+  community: {
+    label: 'COMMUNITY DATA',
+    name: 'optional community data',
+    detail: 'The optional community dataset you chose to download; it is not a live game feed.',
+  },
+};
+
+// The dashboard's markup is also represented by a deliberately small test
+// DOM, which creates nodes by id instead of parsing the whole document. Keep
+// the first source-bearing answers listed here so browser and tests start from
+// the same evidence contract; later dynamic views still use setSourceMarks.
+const SOURCE_SLOT_IDS = [
+  ['#now-location-source', ['logs']],
+  ['#now-ship-source', ['logs']],
+  ['#now-session-source', ['logs']],
+  ['#now-feed-source', ['logs']],
+  ['#now-stats-source', ['logs'], 'INFERRED'],
+  ['#now-screen-source', ['screenshot']],
+  ['#now-earning-source', ['logs', 'screenshot']],
+  ['#hangar-data-sources', ['logs', 'install']],
+  ['#help-data-sources', ['logs', 'install', 'screenshot', 'community']],
+];
+
+function sourceMarks(keys, qualifier = '') {
+  const known = (Array.isArray(keys) ? keys : String(keys || '').split(/[\s,]+/))
+    .map((key) => DATA_SOURCES[key]).filter(Boolean);
+  const marks = el('span', 'data-sources');
+  marks.setAttribute('role', 'note');
+  marks.setAttribute('aria-label', `Data sources: ${known.map((source) => source.name).join(', ')}`);
+
+  for (const source of known) {
+    const mark = el('span', `data-source ${source.label.toLowerCase().replace(/[^a-z]+/g, '-')}`, source.label);
+    mark.title = source.detail;
+    marks.append(mark);
+  }
+  if (qualifier) marks.append(el('span', 'data-source data-source-qualifier', qualifier));
+  return marks;
+}
+
+/** Fill declarative source slots in markup; dynamic views call this same helper. */
+function setSourceMarks(node, keys, qualifier = '') {
+  if (!node) return;
+  node.textContent = '';
+  const known = (Array.isArray(keys) ? keys : String(keys || '').split(/[\s,]+/))
+    .filter((key) => DATA_SOURCES[key]);
+  node.hidden = known.length === 0;
+  if (known.length) node.append(sourceMarks(known, qualifier));
+}
+
+function hydrateSourceMarks() {
+  for (const node of $$('.source-slot'))
+    setSourceMarks(node, node.dataset.sources, node.dataset.sourceQualifier || '');
+  for (const [id, keys, qualifier] of SOURCE_SLOT_IDS)
+    setSourceMarks($(id), keys, qualifier || '');
+}
+
+hydrateSourceMarks();
+
 /* ---------- period selector ---------- */
 
 /**
@@ -3413,6 +3492,12 @@ function renderMarket() {
   const caption = $('#market-caption');
   const source = marketEntries[0]?.source;
   if (caption && MARKET_CAPTIONS[source]) caption.textContent = MARKET_CAPTIONS[source];
+  // Market deliberately combines the reference catalogue with what the pilot
+  // actually sold. The chips make that join visible before a price-like count
+  // is mistaken for an event the log recorded.
+  setSourceMarks($('#market-data-sources'), source === 'install'
+    ? ['install', 'logs']
+    : source === 'dataset' ? ['community', 'logs'] : []);
 
   const term = ($('#market-search').value || '').trim().toLowerCase();
   const group = $('#market-group').value;
