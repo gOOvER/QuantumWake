@@ -112,4 +112,67 @@ public class RouteReliabilityTests
         Assert.Contains("Ready", page.NodeText("#route-readiness"));
         Assert.Contains(page.Fetched(), url => url.Contains("ranking=reliable") && url.Contains("safety=prefer-monitored") && url.Contains("pad=known"));
     }
+
+    /// <summary>
+    /// The circuits under the table are asked with the table's own filters.
+    /// They used to be asked with the load and the money alone, so a table
+    /// set to Monitored only could have a Pyro loop proposed beneath it.
+    /// </summary>
+    [Fact]
+    public void Circuits_carry_every_filter_the_table_was_built_with()
+    {
+        var page = new Page();
+        page.Do("""
+            __dom.node('#routes-ship').value = '64';
+            __dom.node('#routes-capital').value = '10000';
+            __dom.node('#routes-safety').value = 'monitored';
+            __dom.node('#routes-pad').value = 'xl';
+            __dom.node('#routes-evidence').value = 'full';
+            __dom.node('#routes-fresh-only').checked = true;
+            await loadRoutes();
+            """);
+
+        var circuits = Assert.Single(page.Fetched(), url => url.Contains("/api/routes/circuits?"));
+        Assert.Contains("scu=64", circuits);
+        Assert.Contains("capital=10000", circuits);
+        Assert.Contains("safety=monitored", circuits);
+        Assert.Contains("pad=xl", circuits);
+        Assert.Contains("evidence=full", circuits);
+        Assert.Contains("freshOnly=true", circuits);
+    }
+
+    [Fact]
+    public void An_empty_table_under_avoid_lawless_names_that_choice()
+    {
+        var page = new Page();
+        page.Do("""
+            __dom.node('#routes-ship').value = '64';
+            __dom.node('#routes-safety').value = 'avoid-lawless';
+            __dom.node('#routes-fresh-only').checked = true;
+            await loadRoutes();
+            """);
+
+        var text = page.NodeText("#routes-table tbody");
+        Assert.Contains("out of lawless space", text);
+        Assert.DoesNotContain("Fresh only", text);
+    }
+
+    /// <summary>
+    /// A recap is built on demand and lives only in the page: a refreshed or
+    /// bookmarked #share has nothing to show, so it lands on Settings, where
+    /// the button is, rather than on an empty article with a Save button
+    /// that does nothing.
+    /// </summary>
+    [Fact]
+    public void A_share_fragment_with_no_recap_built_lands_on_settings()
+    {
+        var page = new Page();
+        page.Do("location.hash = '#share'; shareReportData = null;");
+
+        Assert.Equal("settings", page.Text("viewFromHash()"));
+
+        page.Do("shareReportData = { title: 'x' };");
+
+        Assert.Equal("share", page.Text("viewFromHash()"));
+    }
 }

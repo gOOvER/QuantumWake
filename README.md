@@ -358,7 +358,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.29
+### 0.11.30
 
 - **Turn a haul into a planning workspace.** Trade Routes now scores
   repeatability from report freshness, capacity and alternate buyers; keeps the
@@ -383,11 +383,25 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   states and pad records; those records never claim a particular hull fits.
   Backup buyers are now individually saveable alternate flight plans.
 
-- **Plan with the ship you chose.** The trade-route picker is now a persistent
-  current-ship choice from your flown roster. Cargo leads and routes vanish for
-  a hull with no documented cargo grid, while the planning panel shows only
-  supported cargo, map, crew or ground-vehicle guidance. Quantum range and
-  vehicle-bay fit stay explicitly unknown until a source can prove them.
+- **Plan with the ship you chose.** The trade-route picker is a persistent
+  choice from your flown roster, and it knows each hull's hold from the same
+  fleet data the rest of the app uses - the Hermes reads 288 SCU the moment
+  the page opens, not after the ship catalogue finishes loading. Routes and
+  cargo leads are withheld only for a hull known to carry nothing: a fighter,
+  or a ground vehicle whatever its grid says. A ship nobody has sized gets the
+  per-SCU table with a note saying so, and "On foot / no ship" is a choice
+  that stays chosen rather than snapping back to the last ship flown. Quantum
+  range and vehicle-bay fit stay explicitly unknown until a source can prove
+  them.
+
+- **Filters look at every route, and a hangar counts as somewhere to land.**
+  Security and pad choices used to sift only the thirty routes already picked,
+  so "Monitored only" could show one row and claim no monitored route existed.
+  They now run over the whole ranking. The four Stanton cities list only a
+  hangar, never a landing pad, and were being dropped by "XL pad both ends"
+  with every major city in the list. Return-load circuits honour the same
+  filters as the table above them, and printing the recap no longer hijacks
+  Ctrl+P on every other page.
 
 - **Share a polished pilot recap without uploading anything.** Choose the
   latest session, fleet snapshot and/or 30-day trading snapshot in Settings,
@@ -399,6 +413,8 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   commodity Market show whether a fact comes from your game log, installed
   game files, a locally read screenshot, or optional community data. Inferred
   figures say so too, and Help explains what each label can and cannot prove.
+
+### 0.11.22
 
 - **The wallet reads from screenshots that used to say it could not.** A
   mobiGlas frame would report the balance as "printed in a face this engine

@@ -1490,68 +1490,38 @@ public static class ServerHost
         app.MapGet("/api/routes", (LogLibrary lib, UexData uex, double? scu, decimal? capital, string? from,
             string? ranking, bool? freshOnly, string? evidence, string? safety, string? pad) =>
         {
-            // Price reports say nothing about hostility or what ship can land.
-            // The narrow answers below come from two independent local sources:
-            // system security from the resolved map place, and pad labels from
-            // the game map's own amenities. An unmatched counter stays unknown;
-            // it is never promoted to safe or assumed to fit a hull.
-            (string PlaceId, string Security, IReadOnlyList<string> Amenities, List<string> Pads) End(string terminal)
-            {
-                var place = lib.Terminals.Resolve(terminal);
-                var amenities = place is null
-                    ? Array.Empty<string>()
-                    : lib.GameCommodities.Place(place.Name)?.Amenities ?? Array.Empty<string>();
-                var pads = amenities
-                    .Where(a => a.Contains("Landing Pad", StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-
-                return (
-                    place?.RawId ?? string.Empty,
-                    TerminalPlaces.SecurityOfSystem(place?.System),
-                    amenities,
-                    pads);
-            }
-
-            static bool MatchesSafety(string buy, string sell, string filter) => filter switch
-            {
-                "monitored" => buy == "monitored" && sell == "monitored",
-                "avoid-lawless" => buy != "lawless" && sell != "lawless",
-                "lawless" => buy == "lawless" || sell == "lawless",
-                _ => true,
-            };
-
-            static bool HasXlPad(IReadOnlyList<string> pads) => pads.Any(p =>
-                p.Contains("Landing Pad XL", StringComparison.OrdinalIgnoreCase));
-
-            static bool MatchesPads(IReadOnlyList<string> buy, IReadOnlyList<string> sell, string filter) => filter switch
-            {
-                "known" => buy.Count > 0 && sell.Count > 0,
-                "xl" => HasXlPad(buy) && HasXlPad(sell),
-                _ => true,
-            };
-
-            static int SafetyRank(string buy, string sell) => buy == "monitored" && sell == "monitored"
-                ? 2 : buy == "lawless" || sell == "lawless" ? 0 : 1;
+            // The security and pad answers live in RouteEnds, shared with the
+            // circuits endpoint so the panel under the table cannot disagree
+            // with it.
+            RouteEnds.End End(string terminal) => RouteEnds.Of(lib, terminal);
 
             var selectedSafety = safety?.ToLowerInvariant() ?? "any";
             var selectedPad = pad?.ToLowerInvariant() ?? "any";
+
+            // The safety and pad filters run over the whole ranking, not its
+            // top thirty. They used to sift the thirty rows the ranker had
+            // already chosen, and on the matrix as measured 28 of those 30
+            // touched Pyro - so "Monitored only" left one row and the page
+            // then said no monitored route existed, which was false. Routes()
+            // ranks everything before it takes, so asking for all of it costs
+            // nothing extra; the thirty are taken after the filter.
             var candidates = uex.Routes(
                     scu ?? 0,
                     capital ?? 0,
                     from,
-                    limit: 30,
+                    limit: int.MaxValue,
                     reliableFirst: !string.Equals(ranking, "profit", StringComparison.OrdinalIgnoreCase),
                     freshOnly: freshOnly == true,
                     evidence: evidence ?? "any")
                 .Select((route, index) => new { route, index, buy = End(route.BuyAt), sell = End(route.SellAt) })
-                .Where(row => MatchesSafety(row.buy.Security, row.sell.Security, selectedSafety))
-                .Where(row => MatchesPads(row.buy.Pads, row.sell.Pads, selectedPad));
+                .Where(row => RouteEnds.MatchesSafety(row.buy.Security, row.sell.Security, selectedSafety))
+                .Where(row => RouteEnds.MatchesPads(row.buy.Pads, row.sell.Pads, selectedPad));
 
             if (selectedSafety == "prefer-monitored")
-                candidates = candidates.OrderByDescending(row => SafetyRank(row.buy.Security, row.sell.Security))
+                candidates = candidates.OrderByDescending(row => RouteEnds.SafetyRank(row.buy.Security, row.sell.Security))
                     .ThenBy(row => row.index);
 
-            return candidates.Select(row => new
+            return candidates.Take(30).Select(row => new
             {
                 row.route.Commodity,
                 row.route.BuyAt,
@@ -1603,9 +1573,23 @@ public static class ServerHost
 
         // A return load makes the route a circuit rather than a one-way margin.
         // Kept apart from /api/routes because its second leg is a different
-        // decision: the main table remains one row per simple haul.
-        app.MapGet("/api/routes/circuits", (LogLibrary lib, UexData uex, double? scu, decimal? capital, string? from) =>
-            uex.Circuits(scu ?? 0, capital ?? 0, from).Select(c => new
+        // decision: the main table remains one row per simple haul. It takes
+        // the table's filters, though, and both legs honour them: the panel
+        // sits under the table, and a loop through a system the pilot asked
+        // to avoid is not a return load, whatever it pays.
+        app.MapGet("/api/routes/circuits", (LogLibrary lib, UexData uex, double? scu, decimal? capital, string? from,
+            string? ranking, bool? freshOnly, string? evidence, string? safety, string? pad) =>
+            uex.Circuits(
+                    scu ?? 0,
+                    capital ?? 0,
+                    from,
+                    reliableFirst: !string.Equals(ranking, "profit", StringComparison.OrdinalIgnoreCase),
+                    freshOnly: freshOnly == true,
+                    evidence: evidence ?? "any",
+                    admits: route => RouteEnds.Admits(lib, route,
+                        safety?.ToLowerInvariant() ?? "any",
+                        pad?.ToLowerInvariant() ?? "any"))
+                .Select(c => new
             {
                 commodity = c.Outbound.Commodity,
                 buyAt = c.Outbound.BuyAt,

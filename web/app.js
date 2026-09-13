@@ -338,7 +338,10 @@ function showView(name) {
    someone and a page that survives a refresh. */
 function viewFromHash() {
   const name = decodeURIComponent(location.hash.replace(/^#/, ''));
-  return name === 'help' || name === 'share' || $$('#tabs button').some((b) => b.dataset.view === name) ? name : null;
+  // A recap is built on demand and lives only in this page, so a bookmarked
+  // or refreshed #share has nothing to show; it lands where the button is.
+  if (name === 'share') return shareReportData ? 'share' : 'settings';
+  return name === 'help' || $$('#tabs button').some((b) => b.dataset.view === name) ? name : null;
 }
 
 /**
@@ -1620,7 +1623,7 @@ function renderPilotBriefing(briefing) {
 
   const trade = $('#briefing-trade');
   trade.textContent = '';
-  const cargoReady = !activePlanningShip() || planningHasCargo();
+  const cargoReady = !planningBlocksCargo();
   if (cargoReady) {
     for (const lead of briefing.trade || []) {
       const row = el('div', 'briefing-row');
@@ -3146,7 +3149,7 @@ async function refreshTradeAdvice(place) {
   // A local planning choice is more useful than a generic margin when the
   // chosen hull cannot carry a commodity at all. The source prices remain on
   // Market; only this actionable card is withheld.
-  if (!place || (activePlanningShip() && !planningHasCargo())) {
+  if (!place || planningBlocksCargo()) {
     card.hidden = true;
     adviceFor = null;
     return;
@@ -3862,8 +3865,6 @@ async function loadShipsRef() {
   if (careers.includes(previous)) select.value = previous;
 
   renderShipsRef();
-  if (libraryStats) renderShipPlan();
-  loadRoutes().catch(() => {});
 }
 
 function renderShipsRef() {
@@ -7116,8 +7117,14 @@ let routeRequest = 0;
  * choice must not turn either into a claim.
  */
 const PLANNING_SHIP_KEY = 'qw-planning-ship';
-let planningShipName = '';
-try { planningShipName = localStorage.getItem(PLANNING_SHIP_KEY) || ''; } catch { /* optional */ }
+
+/* Three states, not two. null is "never chosen", and the planner picks the
+ * ship in use or the last flown. '' is "on foot", chosen on purpose, and it
+ * has to survive every re-render: the first version folded it into "not a
+ * candidate" and snapped straight back to a ship, so the one option that gave
+ * the per-SCU table could be clicked but never kept. */
+let planningShipName = null;
+try { planningShipName = localStorage.getItem(PLANNING_SHIP_KEY); } catch { /* optional */ }
 
 /* The install identifies a hull and whether it flies, but does not currently
  * expose its cargo grid. Keep a pilot-entered hold separate from reference
@@ -7129,19 +7136,40 @@ try { planningManualCargo = JSON.parse(localStorage.getItem(PLANNING_MANUAL_CARG
 
 const planningShipKey = (name) => String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
+/* The reference rides on the fleet row itself: the server resolves it by class
+ * name, with the variant fallback, and it is in libraryStats from the first
+ * tick. Matching the display name against /api/reference/ships instead was
+ * tried and undone - that list is one entry per name, so a Hammerhead GS read
+ * as the 40 SCU base hull, a hull whose display name differs from the
+ * community name lost its grid altogether, and every ship read "cargo
+ * capacity needed" until the catalogue landed, a good half minute after the
+ * game data on a cold start. */
 function planningCandidates() {
   return (libraryStats?.ships || [])
     .filter((ship) => !excludedShips.has(ship.name))
     .map((ship) => ({
       ship,
-      reference: shipCatalogue.find((ref) => planningShipKey(ref.name) === planningShipKey(ship.name)) || null,
+      reference: ship.reference || null,
       install: (hangarShips?.ships || []).find((known) => known.className === ship.className) || null,
     }))
     .sort((a, b) => new Date(b.ship.lastFlown || 0) - new Date(a.ship.lastFlown || 0));
 }
 
+/* The name the plan resolves to, without writing it anywhere: a choice that
+ * was never made falls to the ship in use or the last flown, a saved name no
+ * longer in the roster does the same, and '' stays on foot. */
+function resolvedPlanningShipName(candidates = planningCandidates()) {
+  if (planningShipName === '') return '';
+  if (candidates.some((candidate) => candidate.ship.name === planningShipName)) return planningShipName;
+  const current = nowState?.ship;
+  return candidates.find((candidate) => planningShipKey(candidate.ship.name) === planningShipKey(current))?.ship.name
+    || candidates[0]?.ship.name || '';
+}
+
 function activePlanningShip() {
-  return planningCandidates().find((candidate) => candidate.ship.name === planningShipName) || null;
+  const candidates = planningCandidates();
+  const name = resolvedPlanningShipName(candidates);
+  return candidates.find((candidate) => candidate.ship.name === name) || null;
 }
 
 function planningCargoKey(candidate) {
@@ -7177,6 +7205,30 @@ function planningIsGroundVehicle(candidate = activePlanningShip()) {
 
 function planningHasCargo(candidate = activePlanningShip()) {
   return planningCargo(candidate) > 0;
+}
+
+/* Whether anything at all has said how big the hold is. A reference row
+ * carries a figure even when it is zero - a fighter, a rover - and that zero
+ * is a fact to act on. No reference, no screenshot and no entry is a different
+ * thing: the hold is unknown, not absent. */
+function planningCargoKnown(candidate = activePlanningShip()) {
+  return !!candidate?.reference
+    || Number(candidate?.install?.cargoScu) > 0
+    || planningManualCargoFor(candidate) > 0;
+}
+
+/* The one case where cargo routes are withheld: the hold is known and it is
+ * nothing. An unknown hold falls back to the per-SCU table the page always
+ * had, sized per unit and saying so, because hiding every route from a
+ * pilot whose catalogue is off or still loading was a regression, not a
+ * safeguard. */
+function planningBlocksCargo(candidate = activePlanningShip()) {
+  if (!candidate) return false;
+  // A ground vehicle is excluded whatever its grid says: the community
+  // catalogue gives the UTV 1 SCU, and that was enough to put a table of
+  // one-SCU hauls under a card saying trade routes are excluded.
+  if (planningIsGroundVehicle(candidate)) return true;
+  return planningCargoKnown(candidate) && !planningHasCargo(candidate);
 }
 
 const cargoSourceName = (source) => ({
@@ -7245,11 +7297,7 @@ function renderShipPlan() {
   if (!select || !title || !options || !limit) return;
 
   const candidates = planningCandidates();
-  const current = nowState?.ship;
-  if (!candidates.some((candidate) => candidate.ship.name === planningShipName)) {
-    planningShipName = candidates.find((candidate) => planningShipKey(candidate.ship.name) === planningShipKey(current))?.ship.name
-      || candidates[0]?.ship.name || '';
-  }
+  const resolved = resolvedPlanningShipName(candidates);
 
   select.textContent = '';
   select.append(new Option('On foot / no ship selected', ''));
@@ -7260,7 +7308,7 @@ function renderShipPlan() {
       : cargo > 0 ? `${cargo.toLocaleString()} SCU · ${planningCargoSource(candidate) === 'screenshot' ? 'screenshot' : 'manual'}` : 'cargo capacity needed';
     select.append(new Option(`${candidate.ship.name} · ${suffix}`, candidate.ship.name));
   }
-  select.value = planningShipName;
+  select.value = resolved;
 
   const active = activePlanningShip();
   options.textContent = '';
@@ -7277,7 +7325,7 @@ function renderShipPlan() {
   const spacefaring = planningIsSpaceship(active);
   title.textContent = active.ship.name;
 
-  if (cargo > 0) {
+  if (cargo > 0 && !planningIsGroundVehicle(active)) {
     options.append(planningCapability('Trade & cargo',
       cargoSource === 'manual'
         ? `Routes use your local ${cargo.toLocaleString()} SCU hold entry. Verify it against the vehicle terminal; it is not reference data.`
@@ -7407,7 +7455,6 @@ function renderRouteProfiles() {
 
 function applyRouteProfile(profile) {
   if (!profile) return;
-  planningShipName = profile.ship || planningShipName;
   $('#routes-capital').value = profile.capital || '';
   $('#routes-ranking').value = profile.ranking || 'reliable';
   $('#routes-evidence').value = profile.evidence || 'reported';
@@ -7415,8 +7462,11 @@ function applyRouteProfile(profile) {
   $('#routes-pad').value = profile.pad || 'any';
   $('#routes-here').checked = !!profile.here;
   $('#routes-fresh-only').checked = !!profile.fresh;
-  renderShipPlan();
-  loadRoutes().catch(() => {});
+  // The ship goes through the same door as the selector, so it is kept for
+  // the next load and the Now page's advice follows it. Setting the variable
+  // alone left the Now page advising for the previous hull and a reload
+  // quietly reverting the preset's ship.
+  choosePlanningShip(typeof profile.ship === 'string' ? profile.ship : resolvedPlanningShipName());
 }
 
 function saveRouteProfile() {
@@ -7424,7 +7474,7 @@ function saveRouteProfile() {
   if (!name) return;
   const profile = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name,
-    ship: planningShipName, capital: $('#routes-capital').value,
+    ship: resolvedPlanningShipName(), capital: $('#routes-capital').value,
     ranking: $('#routes-ranking').value, evidence: $('#routes-evidence').value,
     safety: $('#routes-safety').value, pad: $('#routes-pad').value,
     here: $('#routes-here').checked, fresh: $('#routes-fresh-only').checked,
@@ -7474,12 +7524,30 @@ function renderRouteDashboard(rows) {
   for (const saved of routeHistory.slice(0, 5)) history.append(el('div', 'route-history', `${saved.commodity} · ${saved.buyAt} → ${saved.sellAt} · saved ${ago(saved.at)}`));
 }
 
-async function loadRouteCircuits(scu, capital, from) {
+/* The query the table was built from, so the panels under it answer the same
+ * question. Circuits once asked with only the load and the money and quietly
+ * dropped the safety, pad, freshness and evidence filters the table honoured,
+ * which put a Pyro loop under a table set to Monitored only. */
+function routeQuery({ scu, capital, from, ranking, freshOnly, evidence, safety, pad }) {
+  return `scu=${scu}&capital=${capital}&from=${encodeURIComponent(from)}`
+    + `&ranking=${encodeURIComponent(ranking)}&freshOnly=${freshOnly}`
+    + `&evidence=${encodeURIComponent(evidence)}`
+    + (safety !== 'any' ? `&safety=${encodeURIComponent(safety)}` : '')
+    + (pad !== 'any' ? `&pad=${encodeURIComponent(pad)}` : '');
+}
+
+let circuitRequest = 0;
+
+async function loadRouteCircuits(query) {
   const panel = $('#route-circuits');
   const list = $('#route-circuit-list');
-  if (!panel || !list || !scu) { if (panel) panel.hidden = true; return; }
+  if (!panel || !list || !query.scu) { if (panel) panel.hidden = true; return; }
+  // Same guard as the table: typing in the capital box fires one of these per
+  // keystroke, and without it the last to land won rather than the last sent.
+  const request = ++circuitRequest;
   let circuits = [];
-  try { circuits = await getJson(`/api/routes/circuits?scu=${scu}&capital=${capital}&from=${encodeURIComponent(from)}`); } catch { /* UEX off */ }
+  try { circuits = await getJson(`/api/routes/circuits?${routeQuery(query)}`); } catch { /* UEX off */ }
+  if (request !== circuitRequest) return;
   list.textContent = '';
   for (const circuit of circuits.slice(0, 6)) {
     const card = el('article', 'route-circuit');
@@ -7536,7 +7604,7 @@ function saveSplitTradeRoute(route, portions) {
 /** Finds a safer first choice without silently changing a pilot's explicit safety or pad requirement. */
 function chooseBestSafeRoute() {
   const active = activePlanningShip();
-  if (active && !planningHasCargo(active)) {
+  if (planningBlocksCargo(active)) {
     renderRouteHeader();
     return;
   }
@@ -7579,40 +7647,44 @@ async function loadRoutes() {
     ? here
     : '';
   const originNote = $('#routes-origin-note');
-  originNote.textContent = from
+  // A ship whose hold nobody has stated gets the per-SCU table, and the note
+  // says why the units are what they are, rather than an empty table asking
+  // for a number the pilot may not have to hand.
+  const unsized = active && !planningCargoKnown(active);
+  originNote.textContent = (from
     ? ` Origin: ${from}; results require UEX to match this terminal.`
-    : '';
+    : '')
+    + (unsized ? ` Sized per SCU: ${active.ship.name}'s hold is not on record. Enter it above to size a full load.` : '');
 
   const body = $('#routes-table tbody');
   body.textContent = '';
   const request = ++routeRequest;
+  const query = { scu, capital, from, ranking, freshOnly, evidence, safety, pad };
 
-  // A hull without a documented cargo grid cannot make a cargo run. This is
+  // A hull known to have no cargo grid cannot make a cargo run. This is
   // deliberately handled before the community-price request: returning a
   // per-SCU table would look like a viable haul despite the selected ship.
-  if (active && !planningHasCargo(active)) {
+  // Only a known zero does this; an unknown hold is sized per SCU above.
+  if (planningBlocksCargo(active)) {
     const tr = el('tr');
-    const td = el('td', 'muted', active
-      ? planningIsSpaceship(active) && !active.reference
-        ? `${active.ship.name} needs a local Cargo SCU entry above before routes can be sized. The installed data confirms a spaceship, but not its hold capacity.`
-        : `${active.ship.name} has no documented cargo grid, so cargo routes are hidden for this plan.`
-      : 'Choose a ship with a documented cargo grid to see cargo routes.');
+    const td = el('td', 'muted', planningIsGroundVehicle(active)
+      ? `${active.ship.name} is a ground vehicle, so cargo routes are hidden for this plan.`
+      : `${active.ship.name} has no documented cargo grid, so cargo routes are hidden for this plan.`);
     td.colSpan = 12;
     tr.append(td);
     body.append(tr);
-    setRouteReadiness('needs-cargo', 'Needs cargo SCU', 'Routes cannot be sized until the selected ship has a verified or local hold capacity.');
+    setRouteReadiness('needs-cargo', 'No cargo grid', 'The selected hull carries no cargo, so there is nothing to size a route for.');
     highlightBestRoute = false;
+    // The panels below the table describe the previous ship's plan otherwise.
+    renderRouteDashboard([]);
+    const circuits = $('#route-circuits');
+    if (circuits) circuits.hidden = true;
     return;
   }
 
   let rows = [];
   try {
-    rows = await getJson(
-      `/api/routes?scu=${scu}&capital=${capital}&from=${encodeURIComponent(from)}`
-      + `&ranking=${encodeURIComponent(ranking)}&freshOnly=${freshOnly}`
-      + `&evidence=${encodeURIComponent(evidence)}`
-      + (safety !== 'any' ? `&safety=${encodeURIComponent(safety)}` : '')
-      + (pad !== 'any' ? `&pad=${encodeURIComponent(pad)}` : ''));
+    rows = await getJson(`/api/routes?${routeQuery(query)}`);
   } catch { /* UEX off */ }
 
   // The initial per-SCU request often leaves before the fleet has loaded. It
@@ -7627,6 +7699,8 @@ async function loadRoutes() {
     // there are now two tickboxes that can do it.
     const td = el('td', 'muted', safety === 'monitored'
       ? 'No route keeps both ends in monitored space. Try Avoid lawless or Any security.'
+      : safety === 'avoid-lawless'
+        ? 'No route keeps both ends out of lawless space. Try Any security.'
       : safety === 'lawless'
         ? 'No route touches a lawless system in the available price reports.'
         : pad === 'xl'
@@ -7650,7 +7724,7 @@ async function loadRoutes() {
       pad !== 'any' ? 'No returned route has the landing-pad evidence requested at both endpoints.' : 'No route currently meets the selected ship, wallet, evidence, and safety criteria.');
     highlightBestRoute = false;
     renderRouteDashboard(rows);
-    loadRouteCircuits(scu, capital, from).catch(() => {});
+    loadRouteCircuits(query).catch(() => {});
     return;
   }
 
@@ -7767,7 +7841,7 @@ async function loadRoutes() {
   setRouteReadiness('ready', 'Ready', 'At least one route meets the selected ship, wallet, safety, pad, and evidence filters.');
   highlightBestRoute = false;
   renderRouteDashboard(rows);
-  loadRouteCircuits(scu, capital, from).catch(() => {});
+  loadRouteCircuits(query).catch(() => {});
 }
 
 onInput('#routes-capital', loadRoutes);
@@ -10942,7 +11016,17 @@ function saveShareReport() {
 
 $('#share-open')?.addEventListener('click', () => openShareReport());
 $('#share-back')?.addEventListener('click', () => showView('settings'));
-$('#share-print')?.addEventListener('click', () => window.print());
+// The print stylesheet is scoped to this class rather than to the page, so
+// Ctrl+P on Sessions or Fleet prints that page and not a blank one - or a
+// recap left over from earlier.
+$('#share-print')?.addEventListener('click', () => {
+  document.body.classList.add('printing-share');
+  const done = () => document.body.classList.remove('printing-share');
+  window.addEventListener('afterprint', done, { once: true });
+  window.print();
+  // Browsers without afterprint, and the stub document: never leave it set.
+  setTimeout(done, 1000);
+});
 $('#share-save-html')?.addEventListener('click', () => saveShareReport());
 
 async function saveExport() {
@@ -11926,6 +12010,10 @@ function renderFleet(stats) {
   renderFleetShips();
   renderShipPlan();
   refreshTradeAdvice(nowState?.location).catch(() => {});
+  // The briefing's trade leads are gated on the plan too, and its refresh is
+  // keyed on place and ship - so the roster landing has to wake it, or the
+  // leads stay as the first tick left them until the pilot moves.
+  reloadPilotBriefing().catch(() => {});
 }
 
 /** UEX price for one roster ship, 0 when unpriced or assets are off. */

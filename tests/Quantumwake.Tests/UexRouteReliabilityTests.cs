@@ -87,6 +87,27 @@ public class UexRouteReliabilityTests : IDisposable
         Assert.True(circuit.ReturnProfit > 0);
     }
 
+
+    /// <summary>
+    /// The panel under the table answers the same question as the table. The
+    /// fixture's return leg is only partly reported - 18 SCU of demand against
+    /// a 64 SCU hold - so a Reported full load table gets no circuit under it,
+    /// and an outward leg the safety or pad filter refuses is never tried.
+    /// </summary>
+    [Fact]
+    public async Task A_circuit_is_held_to_the_table_filters_on_both_legs()
+    {
+        var uex = new UexData(_directory);
+        await uex.EnableAsync(new HttpClient(new Feed()));
+
+        // The loop runs both ways round in this fixture, so unfiltered is two.
+        Assert.Equal(2, uex.Circuits(64, 10_000, evidence: "reported").Count);
+        Assert.Equal(2, uex.Circuits(64, 10_000, freshOnly: true).Count);
+        Assert.Empty(uex.Circuits(64, 10_000, evidence: "full"));
+        Assert.Empty(uex.Circuits(64, 10_000, admits: _ => false));
+        Assert.Single(uex.Circuits(64, 10_000, admits: route => route.BuyAt == "Fresh seller"));
+    }
+
     /// <summary>A cache written before UEX's date_modified was stored: no row is stamped.</summary>
     private sealed class UnstampedFeed : HttpMessageHandler
     {
