@@ -7153,11 +7153,12 @@ function planningManualCargoFor(candidate = activePlanningShip()) {
 }
 
 function planningCargo(candidate = activePlanningShip()) {
-  return Number(candidate?.reference?.cargoScu) || planningManualCargoFor(candidate);
+  return Number(candidate?.reference?.cargoScu) || Number(candidate?.install?.cargoScu) || planningManualCargoFor(candidate);
 }
 
 function planningCargoSource(candidate = activePlanningShip()) {
   return Number(candidate?.reference?.cargoScu) > 0 ? 'community'
+    : Number(candidate?.install?.cargoScu) > 0 ? 'screenshot'
     : planningManualCargoFor(candidate) > 0 ? 'manual' : null;
 }
 
@@ -7221,7 +7222,7 @@ function renderShipPlan() {
     const cargo = planningCargo(candidate);
     const suffix = candidate.reference
       ? cargo > 0 ? `${cargo.toLocaleString()} SCU` : planningIsSpaceship(candidate) ? 'no cargo grid' : 'ground vehicle'
-      : cargo > 0 ? `${cargo.toLocaleString()} SCU · manual` : 'cargo capacity needed';
+      : cargo > 0 ? `${cargo.toLocaleString()} SCU · ${planningCargoSource(candidate) === 'screenshot' ? 'screenshot' : 'manual'}` : 'cargo capacity needed';
     select.append(new Option(`${candidate.ship.name} · ${suffix}`, candidate.ship.name));
   }
   select.value = planningShipName;
@@ -7244,8 +7245,10 @@ function renderShipPlan() {
     options.append(planningCapability('Trade & cargo',
       cargoSource === 'manual'
         ? `Routes use your local ${cargo.toLocaleString()} SCU hold entry. Verify it against the vehicle terminal; it is not reference data.`
+        : cargoSource === 'screenshot'
+          ? `Routes use the ${cargo.toLocaleString()} SCU hold shown in your latest commodity-terminal screenshot${active.install?.cargoReadAt ? ` (${ago(active.install.cargoReadAt)})` : ''}.`
         : `Routes are sized to this ${cargo.toLocaleString()} SCU cargo grid.`,
-      cargoSource === 'community' ? ['community'] : null));
+      cargoSource === 'community' ? ['community'] : cargoSource === 'screenshot' ? ['screenshot'] : null));
   }
   if (spacefaring) {
     options.append(planningCapability('Map & flight plans',

@@ -40,6 +40,10 @@ public sealed record ScreenSighting(
     KioskReading? Kiosk = null,
     bool Dismissed = false);
 
+/// <summary>A cargo hold as the commodity terminal displayed it in one saved screenshot.</summary>
+/// <remarks>The number describes that photographed ship and its configuration at that moment.</remarks>
+public sealed record KioskCargoHold(string Ship, double CapacityScu, DateTimeOffset ShotAt);
+
 /// <summary>One <c>/showlocation</c> reading the pilot pasted.</summary>
 /// <param name="At">When it was parsed, which for a paste is the only time there is.</param>
 /// <param name="Believed">
@@ -296,6 +300,17 @@ public sealed class ScreenReadingStore
     public ScreenSighting? LatestFleet()
     {
         lock (_gate) return _sightings.FirstOrDefault(s => !s.Dismissed && s.Fleet is not null);
+    }
+
+    /// <summary>The newest believed commodity-terminal hold reading for each named ship.</summary>
+    public IReadOnlyList<KioskCargoHold> LatestKioskCargoHolds()
+    {
+        lock (_gate) return [.. _sightings
+            .Where(s => !s.Dismissed && s.Kiosk is { Ship: { Length: > 0 }, CargoCapacity: > 0 })
+            .GroupBy(s => s.Kiosk!.Ship!, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.OrderByDescending(s => s.ShotAt).First())
+            .Select(s => new KioskCargoHold(s.Kiosk!.Ship!, s.Kiosk.CargoCapacity!.Value, s.ShotAt))
+            .OrderByDescending(hold => hold.ShotAt)];
     }
 
     /// <summary>Whether this file has been read already, so a folder scan does not read it twice.</summary>

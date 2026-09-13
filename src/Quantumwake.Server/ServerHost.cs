@@ -830,12 +830,15 @@ public static class ServerHost
         // so the page can draw the fleet to one scale. A ship the install does
         // not describe is still listed - the log flew it - with no size, and
         // the page says so rather than drawing a guess.
-        app.MapGet("/api/fleet/hangar", (LogLibrary lib) =>
+        app.MapGet("/api/fleet/hangar", (LogLibrary lib, ScreenReadingStore readings) =>
         {
             var game = lib.GameCommodities;
+            var photographedHolds = readings.LatestKioskCargoHolds();
             var ships = lib.Stats().Ships.Select(ship =>
             {
                 var vehicle = game.Vehicle(ship.ClassName);
+                var photographed = photographedHolds.FirstOrDefault(hold =>
+                    string.Equals(hold.Ship, ship.Name, StringComparison.OrdinalIgnoreCase));
                 return new
                 {
                     ship.Name,
@@ -848,6 +851,9 @@ public static class ServerHost
                     height = vehicle?.Height,
                     icon = vehicle?.Icon is not null,
                     kind = vehicle?.Kind,
+                    cargoScu = photographed?.CapacityScu,
+                    cargoSource = photographed is null ? null : "screenshot",
+                    cargoReadAt = photographed?.ShotAt,
                 };
             });
 

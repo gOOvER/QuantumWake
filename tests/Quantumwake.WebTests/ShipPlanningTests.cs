@@ -66,4 +66,24 @@ public class ShipPlanningTests
         Assert.Contains("local 6 SCU hold entry", page.NodeText("#ship-plan-options"));
         Assert.Contains(page.Fetched(), url => url.Contains("/api/routes?scu=6"));
     }
+
+    [Fact]
+    public void A_kiosk_screenshot_hold_is_preferred_to_a_manual_entry_when_the_catalogue_is_unavailable()
+    {
+        var page = new Page();
+        page.Serve("/api/routes?scu=6&capital=0&from=&ranking=reliable&freshOnly=false&evidence=reported", "[]");
+
+        page.Do("""
+            libraryStats = { ships: [{ name: 'RSI Hermes', className: 'RSI_Hermes', lastFlown: '2026-09-13T00:00:00Z' }] };
+            hangarShips = { ships: [{ className: 'RSI_Hermes', kind: 'Spaceship', cargoScu: 6, cargoSource: 'screenshot', cargoReadAt: '2026-09-13T00:00:00Z' }] };
+            shipCatalogue = [];
+            planningShipName = 'RSI Hermes';
+            planningManualCargo = { rsihermes: 4 };
+            renderShipPlan();
+            await loadRoutes();
+            """);
+
+        Assert.Contains("latest commodity-terminal screenshot", page.NodeText("#ship-plan-options"));
+        Assert.Contains(page.Fetched(), url => url.Contains("/api/routes?scu=6"));
+    }
 }
