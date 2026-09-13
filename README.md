@@ -358,7 +358,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.24
+### 0.11.25
+
+- **Plan with the ship you chose.** The trade-route picker is now a persistent
+  current-ship choice from your flown roster. Cargo leads and routes vanish for
+  a hull with no documented cargo grid, while the planning panel shows only
+  supported cargo, map, crew or ground-vehicle guidance. Quantum range and
+  vehicle-bay fit stay explicitly unknown until a source can prove them.
 
 - **Share a polished pilot recap without uploading anything.** Choose the
   latest session, fleet snapshot and/or 30-day trading snapshot in Settings,

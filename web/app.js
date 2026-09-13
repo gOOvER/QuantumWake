@@ -1620,22 +1620,25 @@ function renderPilotBriefing(briefing) {
 
   const trade = $('#briefing-trade');
   trade.textContent = '';
-  for (const lead of briefing.trade || []) {
-    const row = el('div', 'briefing-row');
-    const main = el('div', 'briefing-main');
-    const commodity = el('button', 'briefing-link', lead.commodity);
-    commodity.title = 'Open this commodity in Market';
-    commodity.addEventListener('click', () => openCommodity(lead.commodity));
-    main.append(commodity);
-    main.append(el('div', 'briefing-detail',
-      `buy ${money(lead.buyHere)} → sell ${money(lead.sellThere)} at ${lead.sellTerminal}`));
-    row.append(main);
-    row.append(el('span', 'inward', `+${money(lead.marginPerScu)}/SCU`));
-    trade.append(row);
+  const cargoReady = !activePlanningShip() || planningHasCargo();
+  if (cargoReady) {
+    for (const lead of briefing.trade || []) {
+      const row = el('div', 'briefing-row');
+      const main = el('div', 'briefing-main');
+      const commodity = el('button', 'briefing-link', lead.commodity);
+      commodity.title = 'Open this commodity in Market';
+      commodity.addEventListener('click', () => openCommodity(lead.commodity));
+      main.append(commodity);
+      main.append(el('div', 'briefing-detail',
+        `buy ${money(lead.buyHere)} → sell ${money(lead.sellThere)} at ${lead.sellTerminal}`));
+      row.append(main);
+      row.append(el('span', 'inward', `+${money(lead.marginPerScu)}/SCU`));
+      trade.append(row);
+    }
+    if ((briefing.trade || []).length)
+      trade.append(el('div', 'briefing-caveat', 'Leads only — cargo in your hold is not recorded by Game.log.'));
   }
-  if ((briefing.trade || []).length)
-    trade.append(el('div', 'briefing-caveat', 'Leads only — cargo in your hold is not recorded by Game.log.'));
-  $('#briefing-trade-section').hidden = !(briefing.trade || []).length;
+  $('#briefing-trade-section').hidden = !cargoReady || !(briefing.trade || []).length;
 
   const services = $('#briefing-services');
   services.textContent = '';
@@ -3140,7 +3143,10 @@ let adviceFor = null;
 async function refreshTradeAdvice(place) {
   const card = $('#trade-advice-card');
 
-  if (!place) {
+  // A local planning choice is more useful than a generic margin when the
+  // chosen hull cannot carry a commodity at all. The source prices remain on
+  // Market; only this actionable card is withheld.
+  if (!place || (activePlanningShip() && !planningHasCargo())) {
     card.hidden = true;
     adviceFor = null;
     return;
@@ -3856,6 +3862,8 @@ async function loadShipsRef() {
   if (careers.includes(previous)) select.value = previous;
 
   renderShipsRef();
+  if (libraryStats) renderShipPlan();
+  loadRoutes().catch(() => {});
 }
 
 function renderShipsRef() {
@@ -7101,27 +7109,146 @@ async function applyOverlayLayout() {
  */
 let routeRequest = 0;
 
+/*
+ * The retrieved ship says what is in use right now, but planning often starts
+ * while standing in a hangar. Keep that deliberate choice locally: Game.log
+ * cannot prove ownership or which hull is currently on a pad, and a saved
+ * choice must not turn either into a claim.
+ */
+const PLANNING_SHIP_KEY = 'qw-planning-ship';
+let planningShipName = '';
+try { planningShipName = localStorage.getItem(PLANNING_SHIP_KEY) || ''; } catch { /* optional */ }
+
+const planningShipKey = (name) => String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+function planningCandidates() {
+  return (libraryStats?.ships || [])
+    .filter((ship) => !excludedShips.has(ship.name))
+    .map((ship) => ({
+      ship,
+      reference: shipCatalogue.find((ref) => planningShipKey(ref.name) === planningShipKey(ship.name)) || null,
+      install: (hangarShips?.ships || []).find((known) => known.className === ship.className) || null,
+    }))
+    .sort((a, b) => new Date(b.ship.lastFlown || 0) - new Date(a.ship.lastFlown || 0));
+}
+
+function activePlanningShip() {
+  return planningCandidates().find((candidate) => candidate.ship.name === planningShipName) || null;
+}
+
+function planningCargo(candidate = activePlanningShip()) {
+  return Number(candidate?.reference?.cargoScu) || 0;
+}
+
+function planningIsSpaceship(candidate = activePlanningShip()) {
+  if (!candidate) return false;
+  if (typeof candidate.reference?.isSpaceship === 'boolean') return candidate.reference.isSpaceship;
+  return String(candidate.install?.kind || '').toLowerCase() === 'spaceship';
+}
+
+function planningIsGroundVehicle(candidate = activePlanningShip()) {
+  if (!candidate) return false;
+  if (typeof candidate.reference?.isSpaceship === 'boolean') return !candidate.reference.isSpaceship;
+  const kind = String(candidate.install?.kind || '').toLowerCase();
+  return kind === 'ground' || kind === 'gravlev';
+}
+
+function planningHasCargo(candidate = activePlanningShip()) {
+  return planningCargo(candidate) > 0;
+}
+
+function planningCapability(label, detail, source) {
+  const card = el('div', 'ship-plan-option');
+  card.append(el('b', null, label));
+  card.append(el('span', 'muted', detail));
+  if (source) card.append(sourceMarks(source));
+  return card;
+}
+
+/** Draw the options that this selected hull can actually support. */
+function renderShipPlan() {
+  const select = $('#routes-ship');
+  const title = $('#ship-plan-title');
+  const options = $('#ship-plan-options');
+  const limit = $('#ship-plan-limit');
+  if (!select || !title || !options || !limit) return;
+
+  const candidates = planningCandidates();
+  const current = nowState?.ship;
+  if (!candidates.some((candidate) => candidate.ship.name === planningShipName)) {
+    planningShipName = candidates.find((candidate) => planningShipKey(candidate.ship.name) === planningShipKey(current))?.ship.name
+      || candidates[0]?.ship.name || '';
+  }
+
+  select.textContent = '';
+  select.append(new Option('On foot / no ship selected', ''));
+  for (const candidate of candidates) {
+    const cargo = planningCargo(candidate);
+    const suffix = candidate.reference
+      ? cargo > 0 ? `${cargo.toLocaleString()} SCU` : planningIsSpaceship(candidate) ? 'no cargo grid' : 'ground vehicle'
+      : 'reference unavailable';
+    select.append(new Option(`${candidate.ship.name} · ${suffix}`, candidate.ship.name));
+  }
+  select.value = planningShipName;
+
+  const active = activePlanningShip();
+  options.textContent = '';
+  if (!active) {
+    title.textContent = candidates.length ? 'Choose a flown ship to constrain this plan' : 'No flown ships are available yet';
+    limit.textContent = 'This selection stays in this browser. It does not change your fleet or claim a ship is currently retrieved.';
+    return;
+  }
+
+  const cargo = planningCargo(active);
+  const crew = Number(active.reference?.crew) || 0;
+  const spacefaring = planningIsSpaceship(active);
+  title.textContent = active.ship.name;
+
+  if (cargo > 0) {
+    options.append(planningCapability('Trade & cargo',
+      `Routes are sized to this ${cargo.toLocaleString()} SCU cargo grid.`, ['community']));
+  }
+  if (spacefaring) {
+    options.append(planningCapability('Map & flight plans',
+      'Star-map stops and multi-stop flight plans are available for this spaceship.', ['install']));
+  }
+  if (crew > 1) {
+    options.append(planningCapability('Crew',
+      `Reference capacity: up to ${crew} people. Party notifications remain a floor, not a roster.`, ['community', 'logs']));
+  }
+  if (planningIsGroundVehicle(active)) {
+    options.append(planningCapability('Ground vehicle',
+      'Ground-only planning is available; trade routes and quantum navigation are excluded.', ['install']));
+  }
+  if (!options.childElementCount) {
+    options.append(planningCapability('No documented planning capability',
+      'This hull has no cargo, crew, or movement reference that can safely constrain a plan yet.', null));
+  }
+
+  limit.textContent = !active.reference
+    ? 'No optional ship reference is loaded for this hull, so cargo, crew and movement options stay hidden rather than guessed. Enable the community ship dataset in Settings to add them.'
+    : 'Quantum fuel/range and vehicle-bay fit are not present in the installed or community reference data, so this planner does not guess either one.';
+}
+
+function choosePlanningShip(name) {
+  planningShipName = name || '';
+  try { localStorage.setItem(PLANNING_SHIP_KEY, planningShipName); } catch { /* optional */ }
+  renderShipPlan();
+  refreshTradeAdvice(nowState?.location).catch(() => {});
+  reloadPilotBriefing().catch(() => {});
+  loadRoutes().catch(() => {});
+}
+
 async function loadRoutes() {
   const select = $('#routes-ship');
   if (!select) return;
 
-  // The ship list is the owned, ticked fleet with a known cargo grid.
-  if (libraryStats && !select.dataset.filled) {
-    const ships = libraryStats.ships
-      .filter((s) => !excludedShips.has(s.name) && s.reference?.cargoScu > 0)
-      .sort((a, b) => b.reference.cargoScu - a.reference.cargoScu);
-
-    select.textContent = '';
-    select.append(new Option('On foot / no hold', '0'));
-
-    for (const ship of ships)
-      select.append(new Option(`${ship.name} · ${ship.reference.cargoScu} SCU`, ship.reference.cargoScu));
-
-    if (ships.length) select.selectedIndex = 1;
-    select.dataset.filled = '1';
-  }
-
-  const scu = Number(select.value) || 0;
+  if (libraryStats) renderShipPlan();
+  const active = activePlanningShip();
+  // The raw number remains accepted for the tiny test harness and for a page
+  // whose fleet request has not landed yet. Real use replaces it with the
+  // selected hull's documented cargo grid as soon as that roster is known.
+  const scu = planningCargo(active) || Number(select.value) || 0;
   const capital = Number($('#routes-capital').value) || 0;
   const ranking = $('#routes-ranking').value || 'reliable';
   const freshOnly = $('#routes-fresh-only').checked;
@@ -7139,6 +7266,20 @@ async function loadRoutes() {
   const body = $('#routes-table tbody');
   body.textContent = '';
   const request = ++routeRequest;
+
+  // A hull without a documented cargo grid cannot make a cargo run. This is
+  // deliberately handled before the community-price request: returning a
+  // per-SCU table would look like a viable haul despite the selected ship.
+  if (active && !planningHasCargo(active)) {
+    const tr = el('tr');
+    const td = el('td', 'muted', active
+      ? `${active.ship.name} has no documented cargo grid, so cargo routes are hidden for this plan.`
+      : 'Choose a ship with a documented cargo grid to see cargo routes.');
+    td.colSpan = 12;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
 
   let rows = [];
   try {
@@ -7251,7 +7392,7 @@ async function loadRoutes() {
 }
 
 onInput('#routes-capital', loadRoutes);
-$('#routes-ship')?.addEventListener('change', loadRoutes);
+$('#routes-ship')?.addEventListener('change', () => choosePlanningShip($('#routes-ship').value));
 $('#routes-here')?.addEventListener('change', loadRoutes);
 $('#routes-ranking')?.addEventListener('change', loadRoutes);
 $('#routes-evidence')?.addEventListener('change', loadRoutes);
@@ -11389,6 +11530,8 @@ function renderFleet(stats) {
 
   drawFleetChart(stats.fleetHistory || []);
   renderFleetShips();
+  renderShipPlan();
+  refreshTradeAdvice(nowState?.location).catch(() => {});
 }
 
 /** UEX price for one roster ship, 0 when unpriced or assets are off. */

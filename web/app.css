@@ -3638,6 +3638,26 @@ th.sortable.sort-asc::after { content: " ▴"; color: var(--cyan); }
 
 /* ---------- trade advice ---------- */
 
+/* The ship chooser is a planning constraint, not a second fleet roster. Its
+   compact option cards only describe capabilities the selected hull can prove. */
+.ship-plan {
+  margin: 0 0 13px;
+  padding: 13px 15px;
+  border: 1px solid var(--rule);
+  background: rgba(8, 22, 33, .7);
+}
+.ship-plan-head { display: flex; justify-content: space-between; gap: 16px; align-items: end; }
+.ship-plan-title { color: var(--text); font-size: 15px; font-weight: 600; }
+.ship-plan-picker { display: grid; gap: 4px; min-width: min(100%, 280px); font: 9px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.ship-plan-picker .select { max-width: 100%; }
+.ship-plan-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 7px; margin-top: 12px; }
+.ship-plan-option { display: grid; grid-template-columns: 1fr auto; gap: 3px 8px; min-width: 0; padding: 8px 9px; border-left: 2px solid var(--cyan-deep); background: rgba(0, 0, 0, .16); font-size: 11px; }
+.ship-plan-option b { color: var(--cyan-hot); }
+.ship-plan-option > .muted { grid-column: 1 / -1; line-height: 1.4; }
+.ship-plan-option .data-sources { grid-column: 1 / -1; margin-top: 2px; }
+.ship-plan-limit { margin: 10px 0 0; max-width: 90ch; font-size: 10.5px; line-height: 1.45; }
+@media (max-width: 640px) { .ship-plan-head { align-items: stretch; flex-direction: column; } .ship-plan-picker { min-width: 0; } }
+
 .advice { list-style: none; margin: 6px 0 0; padding: 0; }
 .advice li {
   padding: 5px 0;

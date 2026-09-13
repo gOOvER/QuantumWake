@@ -478,7 +478,6 @@
     <div class="section-bar">
       <h2>Trade routes</h2>
       <div class="controls">
-        <select id="routes-ship" class="select" title="Whose hold to fill"></select>
         <input type="number" id="routes-capital" class="search" placeholder="Capital, aUEC" min="0" step="10000">
         <select id="routes-ranking" class="select" title="How to rank trade routes">
           <option value="reliable">Reliable first</option>
@@ -499,8 +498,22 @@
         </label>
       </div>
     </div>
+    <section class="ship-plan" id="ship-plan" aria-live="polite">
+      <div class="ship-plan-head">
+        <div>
+          <div class="card-label">Plan with this ship</div>
+          <div class="ship-plan-title" id="ship-plan-title">Choose a ship from your flown roster</div>
+        </div>
+        <label class="ship-plan-picker" for="routes-ship">
+          <span class="muted">Current ship</span>
+          <select id="routes-ship" class="select" title="Use this ship to constrain planning"></select>
+        </label>
+      </div>
+      <div class="ship-plan-options" id="ship-plan-options"></div>
+      <p class="muted ship-plan-limit" id="ship-plan-limit"></p>
+    </section>
     <p class="muted caption">
-      Estimated UEX hauls, sized to a real hold and wallet. “Reported capacity”
+      Estimated UEX hauls, sized to the selected ship's documented hold and wallet. “Reported capacity”
       requires a stock and demand report on both ends; “full load” also requires
       those reports to cover your target SCU. A price report is not live
       inventory, terminal access, or travel time — each row shows the evidence
