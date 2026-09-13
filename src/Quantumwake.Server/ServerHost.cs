@@ -1489,7 +1489,7 @@ public static class ServerHost
             // system security from the resolved map place, and pad labels from
             // the game map's own amenities. An unmatched counter stays unknown;
             // it is never promoted to safe or assumed to fit a hull.
-            (string PlaceId, string Security, List<string> Pads) End(string terminal)
+            (string PlaceId, string Security, IReadOnlyList<string> Amenities, List<string> Pads) End(string terminal)
             {
                 var place = lib.Terminals.Resolve(terminal);
                 var amenities = place is null
@@ -1502,6 +1502,7 @@ public static class ServerHost
                 return (
                     place?.RawId ?? string.Empty,
                     TerminalPlaces.SecurityOfSystem(place?.System),
+                    amenities,
                     pads);
             }
 
@@ -1551,11 +1552,13 @@ public static class ServerHost
                 buyAtId = row.buy.PlaceId,
                 row.route.BuyPrice,
                 buySecurity = row.buy.Security,
+                buyAmenities = row.buy.Amenities,
                 buyLandingPads = row.buy.Pads,
                 row.route.SellAt,
                 sellAtId = row.sell.PlaceId,
                 row.route.SellPrice,
                 sellSecurity = row.sell.Security,
+                sellAmenities = row.sell.Amenities,
                 sellLandingPads = row.sell.Pads,
                 row.route.MarginPerScu,
                 row.route.Units,
@@ -1581,6 +1584,7 @@ public static class ServerHost
                         fallback.Terminal,
                         placeId = end.PlaceId,
                         security = end.Security,
+                        amenities = end.Amenities,
                         landingPads = end.Pads,
                         fallback.SellPrice,
                         fallback.DemandScu,
@@ -1590,6 +1594,33 @@ public static class ServerHost
                 })
             });
         });
+
+        // A return load makes the route a circuit rather than a one-way margin.
+        // Kept apart from /api/routes because its second leg is a different
+        // decision: the main table remains one row per simple haul.
+        app.MapGet("/api/routes/circuits", (LogLibrary lib, UexData uex, double? scu, decimal? capital, string? from) =>
+            uex.Circuits(scu ?? 0, capital ?? 0, from).Select(c => new
+            {
+                commodity = c.Outbound.Commodity,
+                buyAt = c.Outbound.BuyAt,
+                buyAtId = lib.Terminals.IdFor(c.Outbound.BuyAt),
+                buyPrice = c.Outbound.BuyPrice,
+                sellAt = c.Outbound.SellAt,
+                sellAtId = lib.Terminals.IdFor(c.Outbound.SellAt),
+                sellPrice = c.Outbound.SellPrice,
+                units = c.Outbound.Units,
+                outboundProfit = c.Outbound.Profit,
+                returnCommodity = c.ReturnCommodity,
+                returnBuyAt = c.ReturnBuyAt,
+                returnBuyAtId = lib.Terminals.IdFor(c.ReturnBuyAt),
+                returnBuyPrice = c.ReturnBuyPrice,
+                returnSellAt = c.ReturnSellAt,
+                returnSellAtId = lib.Terminals.IdFor(c.ReturnSellAt),
+                returnSellPrice = c.ReturnSellPrice,
+                returnUnits = c.ReturnUnits,
+                returnProfit = c.ReturnProfit,
+                totalProfit = c.Outbound.Profit + c.ReturnProfit
+            }));
 
         // Where the player last woke, for the Now card. Its own endpoint
         // because the casualties page recomputes every statistic to answer,

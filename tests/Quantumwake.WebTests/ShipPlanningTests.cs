@@ -46,4 +46,24 @@ public class ShipPlanningTests
         Assert.Contains("cargo routes are hidden", page.NodeText("#routes-table tbody"));
         Assert.DoesNotContain(page.Fetched(), url => url.StartsWith("/api/routes?", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void A_spaceship_without_the_optional_catalogue_can_use_a_pilot_verified_local_hold_size()
+    {
+        var page = new Page();
+        page.Serve("/api/routes?scu=6&capital=0&from=&ranking=reliable&freshOnly=false&evidence=reported", "[]");
+
+        page.Do("""
+            libraryStats = { ships: [{ name: 'RSI Hermes', className: 'RSI_Hermes', lastFlown: '2026-09-13T00:00:00Z' }] };
+            hangarShips = { ships: [{ className: 'RSI_Hermes', kind: 'Spaceship' }] };
+            shipCatalogue = [];
+            planningShipName = 'RSI Hermes';
+            planningManualCargo = { rsihermes: 6 };
+            renderShipPlan();
+            await loadRoutes();
+            """);
+
+        Assert.Contains("local 6 SCU hold entry", page.NodeText("#ship-plan-options"));
+        Assert.Contains(page.Fetched(), url => url.Contains("/api/routes?scu=6"));
+    }
 }

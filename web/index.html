@@ -500,6 +500,8 @@
           <option value="known">Known landing pads</option>
           <option value="xl">XL pad both ends</option>
         </select>
+        <select id="routes-profile" class="select" title="Saved route-planning presets"></select>
+        <button class="ghost tiny" id="routes-profile-save" title="Save the current ship and route filters as a local preset">Save preset</button>
         <label class="toggle" title="Only routes starting where you are now">
           <input type="checkbox" id="routes-here">
           <span>From here</span>
@@ -524,6 +526,17 @@
       <div class="ship-plan-options" id="ship-plan-options"></div>
       <p class="muted ship-plan-limit" id="ship-plan-limit"></p>
     </section>
+    <section class="route-dashboard" id="route-dashboard" hidden>
+      <div class="route-dashboard-head">
+        <div>
+          <div class="card-label">Route intelligence</div>
+          <div class="muted" id="route-dashboard-summary"></div>
+        </div>
+        <button class="ghost tiny" id="routes-history-clear">Clear local history</button>
+      </div>
+      <div class="route-watch-list" id="route-watch-list"></div>
+      <div class="route-history-list" id="route-history-list"></div>
+    </section>
     <p class="muted caption">
       Estimated UEX hauls, sized to the selected ship's documented hold and wallet. Security is by
       system: Stanton is monitored; Pyro and Nyx are lawless; an unmatched terminal stays unknown.
@@ -547,6 +560,11 @@
         <tbody></tbody>
       </table>
     </div>
+    <section class="route-circuits" id="route-circuits" hidden>
+      <div class="section-bar"><h3>Return-load circuits</h3></div>
+      <p class="muted caption">Two commodity legs that return to the first terminal. Both price reports can change before you arrive; this is a loop candidate, not a guaranteed settlement.</p>
+      <div id="route-circuit-list"></div>
+    </section>
   </section>
 
   <!-- CHECKLISTS -->

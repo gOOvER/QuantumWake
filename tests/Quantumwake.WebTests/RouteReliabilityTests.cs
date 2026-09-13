@@ -25,7 +25,13 @@ public class RouteReliabilityTests
         Assert.Contains("Alternate buyers", text);
         Assert.Contains("Area18 TDD", text);
         Assert.Contains("Save alternate", text);
+        Assert.Contains("Split load 64 SCU", text);
+        Assert.Contains("Save split", text);
         Assert.Contains("Save text route", text);
+        Assert.Contains("Repeatability", text);
+        Assert.Contains("cargo exposure", text);
+        Assert.Contains("Turnaround:", text);
+        Assert.Contains("Time: not estimated", text);
         Assert.Contains("demand", text);
     }
 

@@ -30,7 +30,9 @@ public class UexRouteReliabilityTests : IDisposable
                   {"id_commodity":1,"commodity_name":"Fresh cargo","id_terminal":2,"terminal_name":"Thin buyer","price_buy":0,"price_sell":25,"scu_buy":0,"scu_sell_stock":18,"date_modified":{{Now}}},
                   {"id_commodity":1,"commodity_name":"Fresh cargo","id_terminal":3,"terminal_name":"Backup buyer","price_buy":0,"price_sell":22,"scu_buy":0,"scu_sell_stock":64,"date_modified":{{Now}}},
                   {"id_commodity":2,"commodity_name":"Stale gold","id_terminal":4,"terminal_name":"Old seller","price_buy":10,"price_sell":0,"scu_buy":80,"scu_sell_stock":0,"date_modified":{{Stale}}},
-                  {"id_commodity":2,"commodity_name":"Stale gold","id_terminal":5,"terminal_name":"Old buyer","price_buy":0,"price_sell":100,"scu_buy":0,"scu_sell_stock":64,"date_modified":{{Stale}}}
+                  {"id_commodity":2,"commodity_name":"Stale gold","id_terminal":5,"terminal_name":"Old buyer","price_buy":0,"price_sell":100,"scu_buy":0,"scu_sell_stock":64,"date_modified":{{Stale}}},
+                  {"id_commodity":3,"commodity_name":"Return cargo","id_terminal":2,"terminal_name":"Thin buyer","price_buy":10,"price_sell":0,"scu_buy":64,"scu_sell_stock":0,"date_modified":{{Now}}},
+                  {"id_commodity":3,"commodity_name":"Return cargo","id_terminal":1,"terminal_name":"Fresh seller","price_buy":0,"price_sell":20,"scu_buy":0,"scu_sell_stock":18,"date_modified":{{Now}}}
                 ]}
                 """;
 
@@ -69,6 +71,20 @@ public class UexRouteReliabilityTests : IDisposable
         Assert.All(uex.Routes(64, 10_000, evidence: "reported"), r => Assert.NotEqual("capacity-unknown", r.Availability));
         Assert.All(uex.Routes(64, 10_000, evidence: "full"), r => Assert.Equal("reported-full", r.Availability));
         Assert.Equal("Stale gold", uex.Routes(64, 10_000, reliableFirst: false)[0].Commodity);
+    }
+
+    [Fact]
+    public async Task A_circuit_uses_a_second_commodity_to_return_to_its_origin()
+    {
+        var uex = new UexData(_directory);
+        await uex.EnableAsync(new HttpClient(new Feed()));
+
+        var circuit = Assert.Single(uex.Circuits(64, 10_000), c =>
+            c.Outbound.Commodity == "Fresh cargo" && c.ReturnCommodity == "Return cargo");
+
+        Assert.Equal("Fresh seller", circuit.ReturnSellAt);
+        Assert.Equal("Thin buyer", circuit.ReturnBuyAt);
+        Assert.True(circuit.ReturnProfit > 0);
     }
 
     /// <summary>A cache written before UEX's date_modified was stored: no row is stamped.</summary>

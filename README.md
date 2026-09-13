@@ -358,7 +358,17 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.26
+### 0.11.27
+
+- **Turn a haul into a planning workspace.** Trade Routes now scores
+  repeatability from report freshness, capacity and alternate buyers; keeps the
+  cargo purchase cost visible as exposure; records known refuel/repair and pad
+  amenities at each end; saves private presets and watches; and proposes
+  price-report return-load circuits. When the optional ship catalogue is absent,
+  a ship the install identifies can use a clearly marked local hold-size entry
+  rather than being treated as incapable of hauling. Saved or alternate routes
+  remain ordinary, editable flight plans — the local route history is not game
+  telemetry.
 
 - **Choose the kind of trade run you will accept.** Route filters can now
   prefer monitored space, avoid or require lawless systems, and require

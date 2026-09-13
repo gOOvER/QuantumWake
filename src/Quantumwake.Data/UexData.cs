@@ -93,6 +93,17 @@ public sealed record UexRouteFallback(
     DateTimeOffset? SeenAt,
     string Freshness);
 
+/// <summary>A two-leg commodity circuit that returns to the terminal where it began.</summary>
+public sealed record UexCircuit(
+    UexRoute Outbound,
+    string ReturnCommodity,
+    string ReturnBuyAt,
+    decimal ReturnBuyPrice,
+    string ReturnSellAt,
+    decimal ReturnSellPrice,
+    decimal ReturnUnits,
+    decimal ReturnProfit);
+
 /// <summary>A buy-here, sell-there margin from one starting terminal.</summary>
 public sealed record UexOpportunity(
     string Commodity,
@@ -505,6 +516,53 @@ public sealed class UexData
         return reliableFirst
             ? [.. routes.OrderByDescending(ReliabilityRank).ThenByDescending(r => r.Profit).Take(limit)]
             : [.. routes.OrderByDescending(r => r.Profit).ThenByDescending(ReliabilityRank).Take(limit)];
+    }
+
+    /// <summary>
+    /// Profitable two-leg loops: sell the first commodity, buy another at that
+    /// same destination, then sell it back at the original counter. This is a
+    /// return-load suggestion, not a promise both kiosk transactions survive
+    /// long enough to complete it.
+    /// </summary>
+    public List<UexCircuit> Circuits(double scu, decimal capital, string? from = null, int limit = 12)
+    {
+        var circuits = new List<UexCircuit>();
+        foreach (var outward in Routes(scu, capital, from, limit: 50, evidence: "any"))
+        {
+            var origin = _matrix.TryGetValue(outward.Commodity, out var outboundRows)
+                ? outboundRows.FirstOrDefault(r => r.Terminal.Equals(outward.BuyAt, StringComparison.OrdinalIgnoreCase))
+                : null;
+            var destination = _matrix.TryGetValue(outward.Commodity, out outboundRows)
+                ? outboundRows.FirstOrDefault(r => r.Terminal.Equals(outward.SellAt, StringComparison.OrdinalIgnoreCase))
+                : null;
+            if (origin is null || destination is null) continue;
+
+            UexCircuit? best = null;
+            foreach (var (commodity, rows) in _matrix)
+            {
+                var buy = rows.Where(r => r.TerminalId == destination.TerminalId && r.Buy > 0)
+                    .OrderBy(r => r.Buy).FirstOrDefault();
+                var sell = rows.Where(r => r.TerminalId == origin.TerminalId && r.Sell > 0)
+                    .OrderByDescending(r => r.Sell).FirstOrDefault();
+                if (buy is null || sell is null || sell.Sell <= buy.Buy) continue;
+
+                var units = scu > 0 ? (decimal)scu : 1m;
+                if (buy.BuyScu > 0) units = Math.Min(units, buy.BuyScu);
+                if (sell.SellScu > 0) units = Math.Min(units, sell.SellScu);
+                var returnCapital = capital > 0 ? capital + outward.Profit : decimal.MaxValue;
+                if (buy.Buy > 0 && returnCapital != decimal.MaxValue)
+                    units = Math.Min(units, Math.Floor(returnCapital / buy.Buy));
+                if (units <= 0) continue;
+
+                var candidate = new UexCircuit(outward, commodity, buy.Terminal, buy.Buy,
+                    sell.Terminal, sell.Sell, units, (sell.Sell - buy.Buy) * units);
+                if (best is null || candidate.ReturnProfit > best.ReturnProfit) best = candidate;
+            }
+
+            if (best is not null) circuits.Add(best);
+        }
+
+        return [.. circuits.OrderByDescending(c => c.Outbound.Profit + c.ReturnProfit).Take(limit)];
     }
 
     /// <summary>

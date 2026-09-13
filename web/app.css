@@ -2551,6 +2551,21 @@ td.with-track .track:focus-visible { opacity: 1; }
 .route-pad { width: 100%; line-height: 1.3; }
 .route-alternatives { margin-top: 5px; padding-top: 4px; border-top: 1px solid rgba(45, 82, 109, .5); }
 .route-alternate { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-top: 3px; font-size: 10px; }
+.route-split { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-top: 5px; padding-top: 4px; border-top: 1px dotted rgba(45, 82, 109, .5); font-size: 10px; }
+.route-services, .route-timing { width: 100%; line-height: 1.3; }
+.route-score { margin-top: 4px; font-size: 10px; color: var(--dim); }
+.route-score.lower { color: var(--green); }
+.route-score.higher { color: var(--amber); }
+.route-dashboard { margin: 0 0 14px; padding: 11px 14px; border: 1px solid var(--rule); background: rgba(8, 22, 33, .55); }
+.route-dashboard-head { display: flex; gap: 12px; justify-content: space-between; align-items: start; }
+.route-watch-list, .route-history-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.route-watch, .route-history { padding: 4px 7px; border-left: 2px solid var(--cyan-deep); background: rgba(0,0,0,.16); color: var(--muted); font-size: 10px; }
+.route-circuits { margin-top: 20px; padding-top: 8px; border-top: 1px solid var(--rule); }
+.route-circuit { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; margin: 7px 0; padding: 10px; border-left: 2px solid var(--green); background: rgba(79, 212, 138, .04); font-size: 11px; }
+.route-circuit > div { grid-column: 1 / -1; }
+.route-circuit button { grid-column: 2; grid-row: 1; }
+.ship-plan-manual { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11px; }
+.ship-plan-manual input { width: 128px; padding: 4px 7px; }
 
 /* On a laptop the route's evidence is more useful than repeating two derived
    amounts: margin and outlay can be recovered from buy, sell and profit. */
