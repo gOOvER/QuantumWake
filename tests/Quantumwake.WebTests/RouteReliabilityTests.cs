@@ -22,8 +22,10 @@ public class RouteReliabilityTests
         Assert.Contains("Reported partial · 18 / 64 SCU", text);
         Assert.Contains("buy stock 80 SCU (enough)", text);
         Assert.Contains("sell demand 18 SCU (limited)", text);
-        Assert.Contains("Fallback: Area18 TDD", text);
-        Assert.Contains("Text plan", text);
+        Assert.Contains("Alternate buyers", text);
+        Assert.Contains("Area18 TDD", text);
+        Assert.Contains("Save alternate", text);
+        Assert.Contains("Save text route", text);
         Assert.Contains("demand", text);
     }
 
@@ -55,6 +57,30 @@ public class RouteReliabilityTests
         Assert.Contains("Capacity unknown · projected 64 SCU", text);
         Assert.Contains("buy stock unknown", text);
         Assert.Contains("~3,200", text);
-        Assert.Contains("Plan", text);
+        Assert.Contains("Save route", text);
+    }
+
+    [Fact]
+    public void A_safety_and_pad_choice_are_sent_to_the_route_selector_and_shown_on_the_run()
+    {
+        var page = new Page();
+        page.Serve("/api/routes?scu=64&capital=0&from=&ranking=reliable&freshOnly=false&evidence=reported&safety=monitored&pad=known", """
+            [{"commodity":"Beryl","buyAt":"Area18 TDD","buyPrice":100,"buySecurity":"monitored","buyLandingPads":["Landing Pad XL"],
+              "sellAt":"Port Tressler TDD","sellPrice":150,"sellSecurity":"monitored","sellLandingPads":["Landing Pad L"],
+              "marginPerScu":50,"units":64,"profit":3200,"outlay":6400,"limitedBy":"hold","desiredUnits":64,
+              "availability":"reported-full","buyAvailability":"enough","sellAvailability":"enough","freshness":"fresh","mapReady":true,"fallbackSells":[]}]
+            """);
+
+        page.Do("""
+            __dom.node('#routes-ship').value = '64';
+            __dom.node('#routes-safety').value = 'monitored';
+            __dom.node('#routes-pad').value = 'known';
+            await loadRoutes();
+            """);
+
+        var text = page.NodeText("#routes-table tbody");
+        Assert.Contains("monitored", text);
+        Assert.Contains("Landing Pad XL", text);
+        Assert.Contains(page.Fetched(), url => url.Contains("safety=monitored") && url.Contains("pad=known"));
     }
 }

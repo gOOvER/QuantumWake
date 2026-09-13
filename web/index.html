@@ -488,6 +488,18 @@
           <option value="full">Reported full load</option>
           <option value="any">Include unknown capacity</option>
         </select>
+        <select id="routes-safety" class="select" title="How route endpoints are filtered or ranked by system security">
+          <option value="any">Any security</option>
+          <option value="prefer-monitored">Prefer monitored</option>
+          <option value="avoid-lawless">Avoid lawless</option>
+          <option value="monitored">Monitored only</option>
+          <option value="lawless">Lawless routes</option>
+        </select>
+        <select id="routes-pad" class="select" title="How much landing-pad evidence each endpoint needs">
+          <option value="any">Any landing record</option>
+          <option value="known">Known landing pads</option>
+          <option value="xl">XL pad both ends</option>
+        </select>
         <label class="toggle" title="Only routes starting where you are now">
           <input type="checkbox" id="routes-here">
           <span>From here</span>
@@ -513,7 +525,9 @@
       <p class="muted ship-plan-limit" id="ship-plan-limit"></p>
     </section>
     <p class="muted caption">
-      Estimated UEX hauls, sized to the selected ship's documented hold and wallet. “Reported capacity”
+      Estimated UEX hauls, sized to the selected ship's documented hold and wallet. Security is by
+      system: Stanton is monitored; Pyro and Nyx are lawless; an unmatched terminal stays unknown.
+      Pad labels are the game map's recorded amenities, not a clearance guarantee for this hull. “Reported capacity”
       requires a stock and demand report on both ends; “full load” also requires
       those reports to cover your target SCU. A price report is not live
       inventory, terminal access, or travel time — each row shows the evidence

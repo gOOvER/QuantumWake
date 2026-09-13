@@ -7239,6 +7239,22 @@ function choosePlanningShip(name) {
   loadRoutes().catch(() => {});
 }
 
+/** Save either the best buyer or a named alternate as the same editable flight plan. */
+function saveTradeRoute(route, sellAt, sellAtId, sellPrice, label = '') {
+  planTrip(`${route.commodity} run${label}`, [
+    {
+      placeId: route.buyAtId || placeIdForTerminal(route.buyAt),
+      place: route.buyAt,
+      note: `Buy ${Math.floor(route.units).toLocaleString()} SCU at ${money(route.buyPrice)}`,
+    },
+    {
+      placeId: sellAtId || placeIdForTerminal(sellAt),
+      place: sellAt,
+      note: `Sell at ${money(sellPrice)} · +${money((Number(sellPrice) - Number(route.buyPrice)) * Number(route.units))}`,
+    },
+  ]);
+}
+
 async function loadRoutes() {
   const select = $('#routes-ship');
   if (!select) return;
@@ -7253,6 +7269,8 @@ async function loadRoutes() {
   const ranking = $('#routes-ranking').value || 'reliable';
   const freshOnly = $('#routes-fresh-only').checked;
   const evidence = $('#routes-evidence').value || 'reported';
+  const safety = $('#routes-safety').value || 'any';
+  const pad = $('#routes-pad').value || 'any';
   // "From here" reads the live location the Now page is already showing.
   const here = $('#now-location').textContent.trim();
   const from = $('#routes-here').checked && here && here !== '—' && !here.startsWith('In menus')
@@ -7286,7 +7304,9 @@ async function loadRoutes() {
     rows = await getJson(
       `/api/routes?scu=${scu}&capital=${capital}&from=${encodeURIComponent(from)}`
       + `&ranking=${encodeURIComponent(ranking)}&freshOnly=${freshOnly}`
-      + `&evidence=${encodeURIComponent(evidence)}`);
+      + `&evidence=${encodeURIComponent(evidence)}`
+      + (safety !== 'any' ? `&safety=${encodeURIComponent(safety)}` : '')
+      + (pad !== 'any' ? `&pad=${encodeURIComponent(pad)}` : ''));
   } catch { /* UEX off */ }
 
   // The initial per-SCU request often leaves before the fleet has loaded. It
@@ -7299,7 +7319,15 @@ async function loadRoutes() {
     // Name the filter that emptied the table. "No route from here" is the
     // wrong explanation for a table that a tickbox hid every row from, and
     // there are now two tickboxes that can do it.
-    const td = el('td', 'muted', freshOnly
+    const td = el('td', 'muted', safety === 'monitored'
+      ? 'No route keeps both ends in monitored space. Try Avoid lawless or Any security.'
+      : safety === 'lawless'
+        ? 'No route touches a lawless system in the available price reports.'
+        : pad === 'xl'
+          ? 'No route has an XL landing-pad amenity recorded at both ends. Any landing record may show more.'
+          : pad === 'known'
+            ? 'No route has recorded landing-pad amenities at both ends. Any landing record may show more.'
+      : freshOnly
       ? 'Nothing quoted in the last day. Untick "Fresh only" to see older prices.'
       : from
         ? 'No route starts from where you are - or UEX has no terminal here.'
@@ -7349,31 +7377,42 @@ async function loadRoutes() {
       ? `sell demand ${Math.floor(route.sellDemandScu)} SCU (${route.sellAvailability})`
       : 'sell demand unknown');
     report.append(el('div', 'muted route-capacity', capacity.join(' · ')));
-    if ((route.freshness !== 'fresh' || route.limitedBy === 'demand') && route.fallbackSells?.length) {
-      const choices = route.fallbackSells.map((fallback) =>
-        `${fallback.terminal} ${money(fallback.sellPrice)} (${fallback.freshness || 'unknown'})`).join(' · ');
-      report.append(el('div', 'route-fallback', `Fallback: ${choices}`));
+
+    const access = el('div', 'route-access');
+    const security = (value) => value || 'unknown';
+    access.append(el('span', 'muted', 'Space: '));
+    access.append(el('span', `sec sec-${security(route.buySecurity)}`, security(route.buySecurity)));
+    access.append(el('span', 'muted', ' → '));
+    access.append(el('span', `sec sec-${security(route.sellSecurity)}`, security(route.sellSecurity)));
+    const padNames = (pads) => Array.isArray(pads) && pads.length ? pads.join(', ') : 'no pad record';
+    access.append(el('div', 'muted route-pad', `Pads: ${padNames(route.buyLandingPads)} → ${padNames(route.sellLandingPads)}`));
+    report.append(access);
+
+    if (route.fallbackSells?.length) {
+      const alternatives = el('div', 'route-alternatives');
+      alternatives.append(el('div', 'route-fallback', 'Alternate buyers'));
+      for (const fallback of route.fallbackSells) {
+        const alternate = el('div', 'route-alternate');
+        alternate.append(el('span', 'muted', `${fallback.terminal} · ${money(fallback.sellPrice)} · ${security(fallback.security)}`));
+        const save = el('button', 'ghost tiny', 'Save alternate');
+        save.title = 'Save this buyer as an editable flight plan';
+        save.addEventListener('click', () => saveTradeRoute(
+          route, fallback.terminal, fallback.placeId, fallback.sellPrice, ' · alternate buyer'));
+        alternate.append(save);
+        alternatives.append(alternate);
+      }
+      report.append(alternatives);
     }
     tr.append(report);
 
-    // One click turns a haul into a plan: buy there, sell there, in order.
+    // Saving makes a normal editable flight plan: a route is advice until the
+    // pilot chooses it, and the plan is where it can be changed or tracked.
     const plan = el('td');
-    const button = el('button', 'ghost tiny', route.mapReady ? 'Plan' : 'Text plan');
+    const button = el('button', 'ghost tiny', route.mapReady ? 'Save route' : 'Save text route');
     button.title = route.mapReady
-      ? 'Start a flight plan for this run and draw both stops on the map'
-      : 'Add the stops to a flight plan without claiming both can be drawn on the map';
-    button.addEventListener('click', () => planTrip(`${route.commodity} run`, [
-      {
-        placeId: route.buyAtId || placeIdForTerminal(route.buyAt),
-        place: route.buyAt,
-        note: `Buy ${Math.floor(route.units).toLocaleString()} SCU at ${money(route.buyPrice)}`,
-      },
-      {
-        placeId: route.sellAtId || placeIdForTerminal(route.sellAt),
-        place: route.sellAt,
-        note: `Sell at ${money(route.sellPrice)} · +${money(route.profit)}`,
-      },
-    ]));
+      ? 'Save this run as an editable flight plan and draw both stops on the map'
+      : 'Save the stops as an editable flight plan without claiming both can be drawn on the map';
+    button.addEventListener('click', () => saveTradeRoute(route, route.sellAt, route.sellAtId, route.sellPrice));
     plan.append(button);
 
     const capped = el('td', 'muted', route.limitedBy);
@@ -7397,6 +7436,8 @@ $('#routes-here')?.addEventListener('change', loadRoutes);
 $('#routes-ranking')?.addEventListener('change', loadRoutes);
 $('#routes-evidence')?.addEventListener('change', loadRoutes);
 $('#routes-fresh-only')?.addEventListener('change', loadRoutes);
+$('#routes-safety')?.addEventListener('change', loadRoutes);
+$('#routes-pad')?.addEventListener('change', loadRoutes);
 
 /**
  * "Wake up at" on the dashboard: where the last death put you, which is as

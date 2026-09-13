@@ -358,7 +358,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.25
+### 0.11.26
+
+- **Choose the kind of trade run you will accept.** Route filters can now
+  prefer monitored space, avoid or require lawless systems, and require
+  recorded landing-pad amenities at both ends. Every row names both security
+  states and pad records; those records never claim a particular hull fits.
+  Backup buyers are now individually saveable alternate flight plans.
 
 - **Plan with the ship you chose.** The trade-route picker is now a persistent
   current-ship choice from your flown roster. Cargo leads and routes vanish for

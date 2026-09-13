@@ -2547,6 +2547,10 @@ td.with-track .track:focus-visible { opacity: 1; }
 .route-freshness.stale { color: var(--red); }
 .route-age, .route-capacity, .route-fallback { margin-top: 3px; font-size: 11px; line-height: 1.2; }
 .route-fallback { color: var(--cyan); }
+.route-access { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; margin-top: 4px; font-size: 10.5px; }
+.route-pad { width: 100%; line-height: 1.3; }
+.route-alternatives { margin-top: 5px; padding-top: 4px; border-top: 1px solid rgba(45, 82, 109, .5); }
+.route-alternate { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-top: 3px; font-size: 10px; }
 
 /* On a laptop the route's evidence is more useful than repeating two derived
    amounts: margin and outlay can be recovered from buy, sell and profit. */
