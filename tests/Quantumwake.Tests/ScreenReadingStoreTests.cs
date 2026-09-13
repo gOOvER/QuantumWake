@@ -47,6 +47,31 @@ public class ScreenReadingStoreTests : IDisposable
     }
 
     [Fact]
+    public void The_latest_believed_kiosk_hold_per_named_ship_is_available_for_planning()
+    {
+        var store = new ScreenReadingStore(_dir);
+        store.Add(Sighting("old.jpg", At.AddHours(-2), ScreenKind.Kiosk) with
+        {
+            Kiosk = new KioskReading(true, "RSI HERMES", "RSI Hermes", 2, 4, null, []),
+        });
+        store.Add(Sighting("new.jpg", At, ScreenKind.Kiosk) with
+        {
+            Kiosk = new KioskReading(true, "RSI HERMES", "RSI Hermes", 3, 6, null, []),
+        });
+        store.Add(Sighting("dismissed.jpg", At.AddMinutes(1), ScreenKind.Kiosk) with
+        {
+            Kiosk = new KioskReading(true, "RSI HERMES", "RSI Hermes", 0, 99, null, []),
+            Dismissed = true,
+        });
+
+        var hold = Assert.Single(store.LatestKioskCargoHolds());
+
+        Assert.Equal("RSI Hermes", hold.Ship);
+        Assert.Equal(6, hold.CapacityScu);
+        Assert.Equal(At, hold.ShotAt);
+    }
+
+    [Fact]
     public void The_store_is_bounded()
     {
         var store = new ScreenReadingStore(_dir);

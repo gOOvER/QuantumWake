@@ -110,6 +110,85 @@ function el(tag, className, text) {
   return node;
 }
 
+/*
+ * An answer is only as useful as knowing which evidence supports it.  These
+ * four labels are deliberately small and fixed: every new view can use the
+ * same language instead of quietly inventing another way to say "probably".
+ */
+const DATA_SOURCES = {
+  logs: {
+    label: 'GAME LOG',
+    name: 'your game log',
+    detail: 'Events written by Star Citizen to Game.log and its local backups.',
+  },
+  install: {
+    label: 'GAME INSTALL',
+    name: 'your game install',
+    detail: 'Reference data read from the Star Citizen files installed on this PC.',
+  },
+  screenshot: {
+    label: 'SCREENSHOT / OCR',
+    name: 'a screenshot reading',
+    detail: 'A saved screenshot read locally. It describes the moment it was captured.',
+  },
+  community: {
+    label: 'COMMUNITY DATA',
+    name: 'optional community data',
+    detail: 'The optional community dataset you chose to download; it is not a live game feed.',
+  },
+};
+
+// The dashboard's markup is also represented by a deliberately small test
+// DOM, which creates nodes by id instead of parsing the whole document. Keep
+// the first source-bearing answers listed here so browser and tests start from
+// the same evidence contract; later dynamic views still use setSourceMarks.
+const SOURCE_SLOT_IDS = [
+  ['#now-location-source', ['logs']],
+  ['#now-ship-source', ['logs']],
+  ['#now-session-source', ['logs']],
+  ['#now-feed-source', ['logs']],
+  ['#now-stats-source', ['logs'], 'INFERRED'],
+  ['#now-screen-source', ['screenshot']],
+  ['#now-earning-source', ['logs', 'screenshot']],
+  ['#hangar-data-sources', ['logs', 'install']],
+  ['#help-data-sources', ['logs', 'install', 'screenshot', 'community']],
+];
+
+function sourceMarks(keys, qualifier = '') {
+  const known = (Array.isArray(keys) ? keys : String(keys || '').split(/[\s,]+/))
+    .map((key) => DATA_SOURCES[key]).filter(Boolean);
+  const marks = el('span', 'data-sources');
+  marks.setAttribute('role', 'note');
+  marks.setAttribute('aria-label', `Data sources: ${known.map((source) => source.name).join(', ')}`);
+
+  for (const source of known) {
+    const mark = el('span', `data-source ${source.label.toLowerCase().replace(/[^a-z]+/g, '-')}`, source.label);
+    mark.title = source.detail;
+    marks.append(mark);
+  }
+  if (qualifier) marks.append(el('span', 'data-source data-source-qualifier', qualifier));
+  return marks;
+}
+
+/** Fill declarative source slots in markup; dynamic views call this same helper. */
+function setSourceMarks(node, keys, qualifier = '') {
+  if (!node) return;
+  node.textContent = '';
+  const known = (Array.isArray(keys) ? keys : String(keys || '').split(/[\s,]+/))
+    .filter((key) => DATA_SOURCES[key]);
+  node.hidden = known.length === 0;
+  if (known.length) node.append(sourceMarks(known, qualifier));
+}
+
+function hydrateSourceMarks() {
+  for (const node of $$('.source-slot'))
+    setSourceMarks(node, node.dataset.sources, node.dataset.sourceQualifier || '');
+  for (const [id, keys, qualifier] of SOURCE_SLOT_IDS)
+    setSourceMarks($(id), keys, qualifier || '');
+}
+
+hydrateSourceMarks();
+
 /* ---------- period selector ---------- */
 
 /**
@@ -153,11 +232,11 @@ function showView(name) {
 
   const buttons = $$('#tabs button');
 
-  // Commodity and Help are drill-downs rather than tabs: Market stays lit for
-  // a commodity, and About stays lit for Help. Neither earns a top-bar slot,
-  // but both are still shareable views with their own fragment.
+  // Commodity, Help and a share recap are drill-downs rather than tabs. Their
+  // parent stays lit, but each has its own fragment so a saved HTML report is
+  // not confused with the app's live dashboard.
   const target = buttons.find(
-    (b) => b.dataset.view === (name === 'commodity' ? 'market' : name === 'help' ? 'about' : name));
+    (b) => b.dataset.view === (name === 'commodity' ? 'market' : name === 'help' ? 'about' : name === 'share' ? 'settings' : name));
 
   if (!target) return;
 
@@ -259,7 +338,7 @@ function showView(name) {
    someone and a page that survives a refresh. */
 function viewFromHash() {
   const name = decodeURIComponent(location.hash.replace(/^#/, ''));
-  return name === 'help' || $$('#tabs button').some((b) => b.dataset.view === name) ? name : null;
+  return name === 'help' || name === 'share' || $$('#tabs button').some((b) => b.dataset.view === name) ? name : null;
 }
 
 /**
@@ -1541,22 +1620,25 @@ function renderPilotBriefing(briefing) {
 
   const trade = $('#briefing-trade');
   trade.textContent = '';
-  for (const lead of briefing.trade || []) {
-    const row = el('div', 'briefing-row');
-    const main = el('div', 'briefing-main');
-    const commodity = el('button', 'briefing-link', lead.commodity);
-    commodity.title = 'Open this commodity in Market';
-    commodity.addEventListener('click', () => openCommodity(lead.commodity));
-    main.append(commodity);
-    main.append(el('div', 'briefing-detail',
-      `buy ${money(lead.buyHere)} → sell ${money(lead.sellThere)} at ${lead.sellTerminal}`));
-    row.append(main);
-    row.append(el('span', 'inward', `+${money(lead.marginPerScu)}/SCU`));
-    trade.append(row);
+  const cargoReady = !activePlanningShip() || planningHasCargo();
+  if (cargoReady) {
+    for (const lead of briefing.trade || []) {
+      const row = el('div', 'briefing-row');
+      const main = el('div', 'briefing-main');
+      const commodity = el('button', 'briefing-link', lead.commodity);
+      commodity.title = 'Open this commodity in Market';
+      commodity.addEventListener('click', () => openCommodity(lead.commodity));
+      main.append(commodity);
+      main.append(el('div', 'briefing-detail',
+        `buy ${money(lead.buyHere)} → sell ${money(lead.sellThere)} at ${lead.sellTerminal}`));
+      row.append(main);
+      row.append(el('span', 'inward', `+${money(lead.marginPerScu)}/SCU`));
+      trade.append(row);
+    }
+    if ((briefing.trade || []).length)
+      trade.append(el('div', 'briefing-caveat', 'Leads only — cargo in your hold is not recorded by Game.log.'));
   }
-  if ((briefing.trade || []).length)
-    trade.append(el('div', 'briefing-caveat', 'Leads only — cargo in your hold is not recorded by Game.log.'));
-  $('#briefing-trade-section').hidden = !(briefing.trade || []).length;
+  $('#briefing-trade-section').hidden = !cargoReady || !(briefing.trade || []).length;
 
   const services = $('#briefing-services');
   services.textContent = '';
@@ -3061,7 +3143,10 @@ let adviceFor = null;
 async function refreshTradeAdvice(place) {
   const card = $('#trade-advice-card');
 
-  if (!place) {
+  // A local planning choice is more useful than a generic margin when the
+  // chosen hull cannot carry a commodity at all. The source prices remain on
+  // Market; only this actionable card is withheld.
+  if (!place || (activePlanningShip() && !planningHasCargo())) {
     card.hidden = true;
     adviceFor = null;
     return;
@@ -3413,6 +3498,12 @@ function renderMarket() {
   const caption = $('#market-caption');
   const source = marketEntries[0]?.source;
   if (caption && MARKET_CAPTIONS[source]) caption.textContent = MARKET_CAPTIONS[source];
+  // Market deliberately combines the reference catalogue with what the pilot
+  // actually sold. The chips make that join visible before a price-like count
+  // is mistaken for an event the log recorded.
+  setSourceMarks($('#market-data-sources'), source === 'install'
+    ? ['install', 'logs']
+    : source === 'dataset' ? ['community', 'logs'] : []);
 
   const term = ($('#market-search').value || '').trim().toLowerCase();
   const group = $('#market-group').value;
@@ -3771,6 +3862,8 @@ async function loadShipsRef() {
   if (careers.includes(previous)) select.value = previous;
 
   renderShipsRef();
+  if (libraryStats) renderShipPlan();
+  loadRoutes().catch(() => {});
 }
 
 function renderShipsRef() {
@@ -7016,31 +7109,470 @@ async function applyOverlayLayout() {
  */
 let routeRequest = 0;
 
+/*
+ * The retrieved ship says what is in use right now, but planning often starts
+ * while standing in a hangar. Keep that deliberate choice locally: Game.log
+ * cannot prove ownership or which hull is currently on a pad, and a saved
+ * choice must not turn either into a claim.
+ */
+const PLANNING_SHIP_KEY = 'qw-planning-ship';
+let planningShipName = '';
+try { planningShipName = localStorage.getItem(PLANNING_SHIP_KEY) || ''; } catch { /* optional */ }
+
+/* The install identifies a hull and whether it flies, but does not currently
+ * expose its cargo grid. Keep a pilot-entered hold separate from reference
+ * data so an unavailable optional catalogue cannot make a known freighter
+ * unusable, and never present that number as installed or community evidence. */
+const PLANNING_MANUAL_CARGO_KEY = 'qw-planning-manual-cargo';
+let planningManualCargo = {};
+try { planningManualCargo = JSON.parse(localStorage.getItem(PLANNING_MANUAL_CARGO_KEY) || '{}'); } catch { /* optional */ }
+
+const planningShipKey = (name) => String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+function planningCandidates() {
+  return (libraryStats?.ships || [])
+    .filter((ship) => !excludedShips.has(ship.name))
+    .map((ship) => ({
+      ship,
+      reference: shipCatalogue.find((ref) => planningShipKey(ref.name) === planningShipKey(ship.name)) || null,
+      install: (hangarShips?.ships || []).find((known) => known.className === ship.className) || null,
+    }))
+    .sort((a, b) => new Date(b.ship.lastFlown || 0) - new Date(a.ship.lastFlown || 0));
+}
+
+function activePlanningShip() {
+  return planningCandidates().find((candidate) => candidate.ship.name === planningShipName) || null;
+}
+
+function planningCargoKey(candidate) {
+  return planningShipKey(candidate?.ship?.className || candidate?.ship?.name);
+}
+
+function planningManualCargoFor(candidate = activePlanningShip()) {
+  return Number(planningManualCargo[planningCargoKey(candidate)]) || 0;
+}
+
+function planningCargo(candidate = activePlanningShip()) {
+  return Number(candidate?.reference?.cargoScu) || Number(candidate?.install?.cargoScu) || planningManualCargoFor(candidate);
+}
+
+function planningCargoSource(candidate = activePlanningShip()) {
+  return Number(candidate?.reference?.cargoScu) > 0 ? 'community'
+    : Number(candidate?.install?.cargoScu) > 0 ? 'screenshot'
+    : planningManualCargoFor(candidate) > 0 ? 'manual' : null;
+}
+
+function planningIsSpaceship(candidate = activePlanningShip()) {
+  if (!candidate) return false;
+  if (typeof candidate.reference?.isSpaceship === 'boolean') return candidate.reference.isSpaceship;
+  return String(candidate.install?.kind || '').toLowerCase() === 'spaceship';
+}
+
+function planningIsGroundVehicle(candidate = activePlanningShip()) {
+  if (!candidate) return false;
+  if (typeof candidate.reference?.isSpaceship === 'boolean') return !candidate.reference.isSpaceship;
+  const kind = String(candidate.install?.kind || '').toLowerCase();
+  return kind === 'ground' || kind === 'gravlev';
+}
+
+function planningHasCargo(candidate = activePlanningShip()) {
+  return planningCargo(candidate) > 0;
+}
+
+const cargoSourceName = (source) => ({
+  community: 'Community data', screenshot: 'Screenshot/OCR', manual: 'Local entry',
+}[source] || 'No source');
+
+function setRouteReadiness(kind, label, detail = '') {
+  const badge = $('#route-readiness');
+  if (!badge) return;
+  badge.className = `route-readiness ${kind}`;
+  badge.textContent = label;
+  badge.title = detail;
+}
+
+/** Keep the decision-critical ship evidence in the route header, even while its table is loading. */
+function renderRouteHeader() {
+  const context = $('#route-ship-context');
+  if (!context) return;
+  const active = activePlanningShip();
+  if (!active) {
+    context.textContent = 'No ship selected · SCU unknown · no source';
+    setRouteReadiness('needs-cargo', 'Needs cargo SCU', 'Choose a cargo ship or add a locally verified hold size.');
+    return;
+  }
+
+  const cargo = planningCargo(active);
+  const source = planningCargoSource(active);
+  const read = source === 'screenshot' && active.install?.cargoReadAt
+    ? ` · read ${ago(active.install.cargoReadAt)}`
+    : ' · last read unavailable';
+  context.textContent = cargo > 0
+    ? `${active.ship.name} · ${cargo.toLocaleString()} SCU · ${cargoSourceName(source)}${read}`
+    : `${active.ship.name} · SCU unknown · no capacity source`;
+  setRouteReadiness(cargo > 0 ? 'ready' : 'needs-cargo', cargo > 0 ? 'Ready' : 'Needs cargo SCU',
+    cargo > 0 ? 'The selected ship has a cargo constraint, so routes can be sized.' : 'No verified cargo capacity is available for the selected ship.');
+}
+
+let planningHangarLoad = null;
+async function loadPlanningInstallData() {
+  if (hangarShips) return hangarShips;
+  if (!planningHangarLoad) {
+    planningHangarLoad = getJson('/api/fleet/hangar')
+      .then((ships) => (hangarShips = ships))
+      // A missing install description still leaves the conservative reference
+      // path intact; it must not make the route page wait or fabricate a hull.
+      .catch(() => (hangarShips = { ships: [] }))
+      .finally(() => { planningHangarLoad = null; });
+  }
+  return planningHangarLoad;
+}
+
+function planningCapability(label, detail, source) {
+  const card = el('div', 'ship-plan-option');
+  card.append(el('b', null, label));
+  card.append(el('span', 'muted', detail));
+  if (source) card.append(sourceMarks(source));
+  return card;
+}
+
+/** Draw the options that this selected hull can actually support. */
+function renderShipPlan() {
+  const select = $('#routes-ship');
+  const title = $('#ship-plan-title');
+  const options = $('#ship-plan-options');
+  const limit = $('#ship-plan-limit');
+  if (!select || !title || !options || !limit) return;
+
+  const candidates = planningCandidates();
+  const current = nowState?.ship;
+  if (!candidates.some((candidate) => candidate.ship.name === planningShipName)) {
+    planningShipName = candidates.find((candidate) => planningShipKey(candidate.ship.name) === planningShipKey(current))?.ship.name
+      || candidates[0]?.ship.name || '';
+  }
+
+  select.textContent = '';
+  select.append(new Option('On foot / no ship selected', ''));
+  for (const candidate of candidates) {
+    const cargo = planningCargo(candidate);
+    const suffix = candidate.reference
+      ? cargo > 0 ? `${cargo.toLocaleString()} SCU` : planningIsSpaceship(candidate) ? 'no cargo grid' : 'ground vehicle'
+      : cargo > 0 ? `${cargo.toLocaleString()} SCU · ${planningCargoSource(candidate) === 'screenshot' ? 'screenshot' : 'manual'}` : 'cargo capacity needed';
+    select.append(new Option(`${candidate.ship.name} · ${suffix}`, candidate.ship.name));
+  }
+  select.value = planningShipName;
+
+  const active = activePlanningShip();
+  options.textContent = '';
+  if (!active) {
+    title.textContent = candidates.length ? 'Choose a flown ship to constrain this plan' : 'No flown ships are available yet';
+    limit.textContent = 'This selection stays in this browser. It does not change your fleet or claim a ship is currently retrieved.';
+    renderRouteHeader();
+    return;
+  }
+
+  const cargo = planningCargo(active);
+  const cargoSource = planningCargoSource(active);
+  const crew = Number(active.reference?.crew) || 0;
+  const spacefaring = planningIsSpaceship(active);
+  title.textContent = active.ship.name;
+
+  if (cargo > 0) {
+    options.append(planningCapability('Trade & cargo',
+      cargoSource === 'manual'
+        ? `Routes use your local ${cargo.toLocaleString()} SCU hold entry. Verify it against the vehicle terminal; it is not reference data.`
+        : cargoSource === 'screenshot'
+          ? `Routes use the ${cargo.toLocaleString()} SCU hold shown in your latest commodity-terminal screenshot${active.install?.cargoReadAt ? ` (${ago(active.install.cargoReadAt)})` : ''}.`
+        : `Routes are sized to this ${cargo.toLocaleString()} SCU cargo grid.`,
+      cargoSource === 'community' ? ['community'] : cargoSource === 'screenshot' ? ['screenshot'] : null));
+  }
+  if (spacefaring) {
+    options.append(planningCapability('Map & flight plans',
+      'Star-map stops and multi-stop flight plans are available for this spaceship.', ['install']));
+  }
+  if (crew > 1) {
+    options.append(planningCapability('Crew',
+      `Reference capacity: up to ${crew} people. Party notifications remain a floor, not a roster.`, ['community', 'logs']));
+  }
+  if (planningIsGroundVehicle(active)) {
+    options.append(planningCapability('Ground vehicle',
+      'Ground-only planning is available; trade routes and quantum navigation are excluded.', ['install']));
+  }
+  if (spacefaring && !active.reference) {
+    const manual = el('label', 'ship-plan-manual');
+    manual.append(el('span', 'muted', 'Cargo SCU (local):'));
+    const input = el('input', 'search');
+    input.type = 'number';
+    input.min = '1';
+    input.step = '1';
+    input.value = planningManualCargoFor(active) || '';
+    input.placeholder = 'Enter hold size';
+    input.title = 'Local planning value only. Confirm this ship’s cargo grid in game before relying on routes.';
+    input.addEventListener('change', () => {
+      const value = Math.max(0, Math.floor(Number(input.value) || 0));
+      const key = planningCargoKey(active);
+      if (value) planningManualCargo[key] = value;
+      else delete planningManualCargo[key];
+      try { localStorage.setItem(PLANNING_MANUAL_CARGO_KEY, JSON.stringify(planningManualCargo)); } catch { /* optional */ }
+      renderShipPlan();
+      loadRoutes().catch(() => {});
+    });
+    manual.append(input);
+    options.append(manual);
+  }
+  if (!options.childElementCount) {
+    options.append(planningCapability('No documented planning capability',
+      'This hull has no cargo, crew, or movement reference that can safely constrain a plan yet.', null));
+  }
+
+  limit.textContent = !active.reference && cargoSource === 'manual'
+    ? 'The game install confirms this is a spaceship; its cargo size above is your browser-only entry. Enable the community ship dataset in Settings to replace it with reference data.'
+    : !active.reference
+    ? 'The game install confirms this is a spaceship but has no cargo-capacity field here. Enter the vehicle terminal’s hold size above for a local route constraint, or enable the community ship dataset.'
+    : 'Quantum fuel/range and vehicle-bay fit are not present in the installed or community reference data, so this planner does not guess either one.';
+  renderRouteHeader();
+}
+
+function choosePlanningShip(name) {
+  planningShipName = name || '';
+  try { localStorage.setItem(PLANNING_SHIP_KEY, planningShipName); } catch { /* optional */ }
+  renderShipPlan();
+  refreshTradeAdvice(nowState?.location).catch(() => {});
+  reloadPilotBriefing().catch(() => {});
+  loadRoutes().catch(() => {});
+}
+
+/* Local route memory is deliberately separate from flight plans. A plan is an
+ * authored shared object; a preset, watch and save count are private browser
+ * conveniences and must not claim the game or another device knows them. */
+const ROUTE_PROFILES_KEY = 'qw-route-profiles';
+const ROUTE_HISTORY_KEY = 'qw-route-history';
+const ROUTE_WATCH_KEY = 'qw-route-watches';
+const readRouteMemory = (key) => { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; } };
+let routeProfiles = readRouteMemory(ROUTE_PROFILES_KEY);
+let routeHistory = readRouteMemory(ROUTE_HISTORY_KEY);
+let routeWatches = readRouteMemory(ROUTE_WATCH_KEY);
+let highlightBestRoute = false;
+const writeRouteMemory = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* optional */ } };
+const routeKey = (route) => [route.commodity, route.buyAt, route.sellAt].map(planningShipKey).join('|');
+
+function routeRepeatability(route) {
+  const availability = route.availability === 'reported-full' ? 3
+    : route.availability === 'reported-partial' ? 2 : 1;
+  const freshness = route.freshness === 'fresh' ? 3 : route.freshness === 'aging' ? 2 : 1;
+  return availability + freshness + Math.min(2, route.fallbackSells?.length || 0);
+}
+
+function routeRisk(route) {
+  const endpoints = [route.buySecurity, route.sellSecurity];
+  const lawless = endpoints.filter((security) => security === 'lawless').length;
+  const unknown = endpoints.filter((security) => !security || security === 'unknown').length;
+  return lawless ? ['higher', `${lawless} lawless endpoint${lawless === 1 ? '' : 's'}`]
+    : unknown ? ['uncertain', `${unknown} endpoint${unknown === 1 ? '' : 's'} unmatched`]
+      : ['lower', 'monitored endpoints'];
+}
+
+/* A partial primary buyer does not mean the hold has to leave empty. We only
+ * offer this when the source can fill the proposed hold and recorded demand at
+ * named alternate buyers accounts for every SCU; it is a price-report plan,
+ * never a promise that counters will still accept those amounts on arrival. */
+function splitTradeRoute(route) {
+  const target = Math.floor(Number(route.desiredUnits || route.units || 0));
+  if (target <= Math.floor(Number(route.units || 0)) || (Number(route.buyStockScu) > 0 && Number(route.buyStockScu) < target)) return [];
+  const buyers = [
+    { terminal: route.sellAt, placeId: route.sellAtId, sellPrice: route.sellPrice, demandScu: route.sellDemandScu },
+    ...(route.fallbackSells || []),
+  ];
+  let remaining = target;
+  const portions = [];
+  for (const buyer of buyers) {
+    const demand = Math.floor(Number(buyer.demandScu || 0));
+    if (!demand || !remaining) continue;
+    const units = Math.min(remaining, demand);
+    portions.push({ ...buyer, units });
+    remaining -= units;
+  }
+  return remaining === 0 && portions.length > 1 ? portions : [];
+}
+
+function renderRouteProfiles() {
+  const select = $('#routes-profile');
+  if (!select) return;
+  const previous = select.value;
+  select.textContent = '';
+  select.append(new Option('Route presets…', ''));
+  for (const profile of routeProfiles) select.append(new Option(profile.name, profile.id));
+  select.value = routeProfiles.some((profile) => profile.id === previous) ? previous : '';
+}
+
+function applyRouteProfile(profile) {
+  if (!profile) return;
+  planningShipName = profile.ship || planningShipName;
+  $('#routes-capital').value = profile.capital || '';
+  $('#routes-ranking').value = profile.ranking || 'reliable';
+  $('#routes-evidence').value = profile.evidence || 'reported';
+  $('#routes-safety').value = profile.safety || 'any';
+  $('#routes-pad').value = profile.pad || 'any';
+  $('#routes-here').checked = !!profile.here;
+  $('#routes-fresh-only').checked = !!profile.fresh;
+  renderShipPlan();
+  loadRoutes().catch(() => {});
+}
+
+function saveRouteProfile() {
+  const name = window.prompt('Name this local route preset:', `Preset ${routeProfiles.length + 1}`)?.trim();
+  if (!name) return;
+  const profile = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name,
+    ship: planningShipName, capital: $('#routes-capital').value,
+    ranking: $('#routes-ranking').value, evidence: $('#routes-evidence').value,
+    safety: $('#routes-safety').value, pad: $('#routes-pad').value,
+    here: $('#routes-here').checked, fresh: $('#routes-fresh-only').checked,
+  };
+  routeProfiles = [...routeProfiles.filter((saved) => saved.name !== name), profile].slice(-12);
+  writeRouteMemory(ROUTE_PROFILES_KEY, routeProfiles);
+  renderRouteProfiles();
+  $('#routes-profile').value = profile.id;
+}
+
+function rememberRoute(route, kind = 'route') {
+  const key = routeKey(route);
+  const now = new Date().toISOString();
+  const item = { key, kind, commodity: route.commodity, buyAt: route.buyAt, sellAt: route.sellAt,
+    profit: Number(route.profit || route.totalProfit || 0), outlay: Number(route.outlay || 0), at: now };
+  routeHistory = [item, ...routeHistory].slice(0, 40);
+  const snapshot = { ...item, margin: Number(route.marginPerScu || 0) };
+  routeWatches = [snapshot, ...routeWatches.filter((watch) => watch.key !== key)].slice(0, 24);
+  writeRouteMemory(ROUTE_HISTORY_KEY, routeHistory);
+  writeRouteMemory(ROUTE_WATCH_KEY, routeWatches);
+}
+
+function routeWatchNote(route) {
+  const watch = routeWatches.find((saved) => saved.key === routeKey(route));
+  if (!watch) return null;
+  const before = Number(watch.profit);
+  const now = Number(route.profit);
+  if (before <= 0) return `Saved ${ago(watch.at)}.`;
+  const change = (now - before) / before;
+  return Math.abs(change) >= .05
+    ? `Since saved ${ago(watch.at)}: ${change > 0 ? '+' : ''}${Math.round(change * 100)}% projected profit.`
+    : `Saved ${ago(watch.at)} · projected profit within 5%.`;
+}
+
+function renderRouteDashboard(rows) {
+  const panel = $('#route-dashboard');
+  if (!panel) return;
+  const watched = rows.filter((route) => routeWatches.some((watch) => watch.key === routeKey(route)));
+  panel.hidden = !(routeHistory.length || watched.length);
+  if (panel.hidden) return;
+  $('#route-dashboard-summary').textContent = `${routeHistory.length} locally saved route${routeHistory.length === 1 ? '' : 's'} · ${watched.length} currently visible watch${watched.length === 1 ? '' : 'es'}`;
+  const watches = $('#route-watch-list');
+  watches.textContent = '';
+  for (const route of watched.slice(0, 4)) watches.append(el('div', 'route-watch', `${route.commodity}: ${routeWatchNote(route)}`));
+  const history = $('#route-history-list');
+  history.textContent = '';
+  for (const saved of routeHistory.slice(0, 5)) history.append(el('div', 'route-history', `${saved.commodity} · ${saved.buyAt} → ${saved.sellAt} · saved ${ago(saved.at)}`));
+}
+
+async function loadRouteCircuits(scu, capital, from) {
+  const panel = $('#route-circuits');
+  const list = $('#route-circuit-list');
+  if (!panel || !list || !scu) { if (panel) panel.hidden = true; return; }
+  let circuits = [];
+  try { circuits = await getJson(`/api/routes/circuits?scu=${scu}&capital=${capital}&from=${encodeURIComponent(from)}`); } catch { /* UEX off */ }
+  list.textContent = '';
+  for (const circuit of circuits.slice(0, 6)) {
+    const card = el('article', 'route-circuit');
+    card.append(el('b', null, `${circuit.commodity} → ${circuit.returnCommodity}`));
+    card.append(el('div', 'muted', `${circuit.buyAt} → ${circuit.sellAt} → ${circuit.returnSellAt}`));
+    card.append(el('div', 'inward', `~${money(circuit.totalProfit)} total projected profit`));
+    const save = el('button', 'ghost tiny', 'Save circuit');
+    save.title = 'Save all three circuit stops as an editable flight plan';
+    save.addEventListener('click', () => {
+      rememberRoute({ commodity: `${circuit.commodity} / ${circuit.returnCommodity}`, buyAt: circuit.buyAt,
+        sellAt: circuit.returnSellAt, totalProfit: circuit.totalProfit }, 'circuit');
+      planTrip(`${circuit.commodity} ⇄ ${circuit.returnCommodity}`, [
+        { placeId: circuit.buyAtId, place: circuit.buyAt, note: `Buy ${Math.floor(circuit.units)} SCU ${circuit.commodity}` },
+        { placeId: circuit.sellAtId, place: circuit.sellAt, note: `Sell ${circuit.commodity}; buy ${circuit.returnCommodity}` },
+        { placeId: circuit.returnSellAtId, place: circuit.returnSellAt, note: `Sell ${circuit.returnCommodity} · +${money(circuit.returnProfit)}` },
+      ]);
+    });
+    card.append(save);
+    list.append(card);
+  }
+  panel.hidden = circuits.length === 0;
+}
+
+/** Save either the best buyer or a named alternate as the same editable flight plan. */
+function saveTradeRoute(route, sellAt, sellAtId, sellPrice, label = '') {
+  rememberRoute({ ...route, sellAt, sellPrice }, label ? 'alternate' : 'route');
+  planTrip(`${route.commodity} run${label}`, [
+    {
+      placeId: route.buyAtId || placeIdForTerminal(route.buyAt),
+      place: route.buyAt,
+      note: `Buy ${Math.floor(route.units).toLocaleString()} SCU at ${money(route.buyPrice)}`,
+    },
+    {
+      placeId: sellAtId || placeIdForTerminal(sellAt),
+      place: sellAt,
+      note: `Sell at ${money(sellPrice)} · +${money((Number(sellPrice) - Number(route.buyPrice)) * Number(route.units))}`,
+    },
+  ]);
+}
+
+function saveSplitTradeRoute(route, portions) {
+  const units = portions.reduce((sum, portion) => sum + portion.units, 0);
+  const profit = portions.reduce((sum, portion) => sum
+    + ((Number(portion.sellPrice) - Number(route.buyPrice)) * portion.units), 0);
+  rememberRoute({ ...route, sellAt: `${portions.length} buyers`, profit, outlay: Number(route.buyPrice) * units }, 'split load');
+  planTrip(`${route.commodity} split load`, [
+    { placeId: route.buyAtId || placeIdForTerminal(route.buyAt), place: route.buyAt,
+      note: `Buy ${units.toLocaleString()} SCU at ${money(route.buyPrice)}` },
+    ...portions.map((portion) => ({ placeId: portion.placeId || placeIdForTerminal(portion.terminal), place: portion.terminal,
+      note: `Sell ${portion.units.toLocaleString()} SCU at ${money(portion.sellPrice)} · +${money((Number(portion.sellPrice) - Number(route.buyPrice)) * portion.units)}` })),
+  ]);
+}
+
+/** Finds a safer first choice without silently changing a pilot's explicit safety or pad requirement. */
+function chooseBestSafeRoute() {
+  const active = activePlanningShip();
+  if (active && !planningHasCargo(active)) {
+    renderRouteHeader();
+    return;
+  }
+  $('#routes-ranking').value = 'reliable';
+  // Any security is an absence of a preference, so make the safe default
+  // explicit. A pilot's chosen avoid/only-lawless mode stays untouched.
+  if (!$('#routes-safety').value || $('#routes-safety').value === 'any') $('#routes-safety').value = 'prefer-monitored';
+  if ($('#routes-evidence').value === 'any') $('#routes-evidence').value = 'reported';
+  highlightBestRoute = true;
+  return loadRoutes().catch(() => {});
+}
+
 async function loadRoutes() {
   const select = $('#routes-ship');
   if (!select) return;
 
-  // The ship list is the owned, ticked fleet with a known cargo grid.
-  if (libraryStats && !select.dataset.filled) {
-    const ships = libraryStats.ships
-      .filter((s) => !excludedShips.has(s.name) && s.reference?.cargoScu > 0)
-      .sort((a, b) => b.reference.cargoScu - a.reference.cargoScu);
-
-    select.textContent = '';
-    select.append(new Option('On foot / no hold', '0'));
-
-    for (const ship of ships)
-      select.append(new Option(`${ship.name} · ${ship.reference.cargoScu} SCU`, ship.reference.cargoScu));
-
-    if (ships.length) select.selectedIndex = 1;
-    select.dataset.filled = '1';
+  if (libraryStats) renderShipPlan();
+  let active = activePlanningShip();
+  // The Hangar page may never have been opened this session. Fetch the same
+  // installed hull record here so an optional-community-data outage does not
+  // erase the one fact the install does prove: this is a spaceship.
+  if (active && !active.reference && !hangarShips) {
+    await loadPlanningInstallData();
+    if (libraryStats) renderShipPlan();
+    active = activePlanningShip();
   }
-
-  const scu = Number(select.value) || 0;
+  // The raw number remains accepted for the tiny test harness and for a page
+  // whose fleet request has not landed yet. Real use replaces it with the
+  // selected hull's documented cargo grid as soon as that roster is known.
+  const scu = planningCargo(active) || Number(select.value) || 0;
   const capital = Number($('#routes-capital').value) || 0;
   const ranking = $('#routes-ranking').value || 'reliable';
   const freshOnly = $('#routes-fresh-only').checked;
   const evidence = $('#routes-evidence').value || 'reported';
+  const safety = $('#routes-safety').value || 'any';
+  const pad = $('#routes-pad').value || 'any';
   // "From here" reads the live location the Now page is already showing.
   const here = $('#now-location').textContent.trim();
   const from = $('#routes-here').checked && here && here !== '—' && !here.startsWith('In menus')
@@ -7055,12 +7587,32 @@ async function loadRoutes() {
   body.textContent = '';
   const request = ++routeRequest;
 
+  // A hull without a documented cargo grid cannot make a cargo run. This is
+  // deliberately handled before the community-price request: returning a
+  // per-SCU table would look like a viable haul despite the selected ship.
+  if (active && !planningHasCargo(active)) {
+    const tr = el('tr');
+    const td = el('td', 'muted', active
+      ? planningIsSpaceship(active) && !active.reference
+        ? `${active.ship.name} needs a local Cargo SCU entry above before routes can be sized. The installed data confirms a spaceship, but not its hold capacity.`
+        : `${active.ship.name} has no documented cargo grid, so cargo routes are hidden for this plan.`
+      : 'Choose a ship with a documented cargo grid to see cargo routes.');
+    td.colSpan = 12;
+    tr.append(td);
+    body.append(tr);
+    setRouteReadiness('needs-cargo', 'Needs cargo SCU', 'Routes cannot be sized until the selected ship has a verified or local hold capacity.');
+    highlightBestRoute = false;
+    return;
+  }
+
   let rows = [];
   try {
     rows = await getJson(
       `/api/routes?scu=${scu}&capital=${capital}&from=${encodeURIComponent(from)}`
       + `&ranking=${encodeURIComponent(ranking)}&freshOnly=${freshOnly}`
-      + `&evidence=${encodeURIComponent(evidence)}`);
+      + `&evidence=${encodeURIComponent(evidence)}`
+      + (safety !== 'any' ? `&safety=${encodeURIComponent(safety)}` : '')
+      + (pad !== 'any' ? `&pad=${encodeURIComponent(pad)}` : ''));
   } catch { /* UEX off */ }
 
   // The initial per-SCU request often leaves before the fleet has loaded. It
@@ -7073,7 +7625,15 @@ async function loadRoutes() {
     // Name the filter that emptied the table. "No route from here" is the
     // wrong explanation for a table that a tickbox hid every row from, and
     // there are now two tickboxes that can do it.
-    const td = el('td', 'muted', freshOnly
+    const td = el('td', 'muted', safety === 'monitored'
+      ? 'No route keeps both ends in monitored space. Try Avoid lawless or Any security.'
+      : safety === 'lawless'
+        ? 'No route touches a lawless system in the available price reports.'
+        : pad === 'xl'
+          ? 'No route has an XL landing-pad amenity recorded at both ends. Any landing record may show more.'
+          : pad === 'known'
+            ? 'No route has recorded landing-pad amenities at both ends. Any landing record may show more.'
+      : freshOnly
       ? 'Nothing quoted in the last day. Untick "Fresh only" to see older prices.'
       : from
         ? 'No route starts from where you are - or UEX has no terminal here.'
@@ -7085,11 +7645,19 @@ async function loadRoutes() {
     td.colSpan = 12;
     tr.append(td);
     body.append(tr);
+    setRouteReadiness(pad !== 'any' ? 'no-pad' : 'no-prices',
+      pad !== 'any' ? 'No viable landing pad' : 'No current prices',
+      pad !== 'any' ? 'No returned route has the landing-pad evidence requested at both endpoints.' : 'No route currently meets the selected ship, wallet, evidence, and safety criteria.');
+    highlightBestRoute = false;
+    renderRouteDashboard(rows);
+    loadRouteCircuits(scu, capital, from).catch(() => {});
     return;
   }
 
-  for (const route of rows) {
+  for (const [index, route] of rows.entries()) {
     const tr = el('tr');
+    const best = highlightBestRoute && index === 0;
+    if (best) tr.classList.add('best-route');
     tr.append(el('td', null, route.commodity));
     tr.append(tdPlace(route.buyAt, 'muted'));
     tr.append(el('td', 'num muted', money(route.buyPrice)));
@@ -7103,6 +7671,7 @@ async function loadRoutes() {
     tr.append(projected);
 
     const report = el('td', 'route-report');
+    if (best) report.append(el('div', 'route-best', 'Best safe match'));
     const availabilityWord = route.availability === 'reported-full'
       ? `Reported full load · ${Math.floor(route.desiredUnits).toLocaleString()} SCU`
       : route.availability === 'reported-partial'
@@ -7123,31 +7692,62 @@ async function loadRoutes() {
       ? `sell demand ${Math.floor(route.sellDemandScu)} SCU (${route.sellAvailability})`
       : 'sell demand unknown');
     report.append(el('div', 'muted route-capacity', capacity.join(' · ')));
-    if ((route.freshness !== 'fresh' || route.limitedBy === 'demand') && route.fallbackSells?.length) {
-      const choices = route.fallbackSells.map((fallback) =>
-        `${fallback.terminal} ${money(fallback.sellPrice)} (${fallback.freshness || 'unknown'})`).join(' · ');
-      report.append(el('div', 'route-fallback', `Fallback: ${choices}`));
+
+    const access = el('div', 'route-access');
+    const security = (value) => value || 'unknown';
+    access.append(el('span', 'muted', 'Space: '));
+    access.append(el('span', `sec sec-${security(route.buySecurity)}`, security(route.buySecurity)));
+    access.append(el('span', 'muted', ' → '));
+    access.append(el('span', `sec sec-${security(route.sellSecurity)}`, security(route.sellSecurity)));
+    const padNames = (pads) => Array.isArray(pads) && pads.length ? pads.join(', ') : 'no pad record';
+    access.append(el('div', 'muted route-pad', `Pads: ${padNames(route.buyLandingPads)} → ${padNames(route.sellLandingPads)}`));
+    const usefulAmenities = (items) => (items || []).filter((item) => /refuel|fuel|repair/i.test(item));
+    const services = (items) => usefulAmenities(items).length ? usefulAmenities(items).join(', ') : 'no refuel/repair record';
+    access.append(el('div', 'muted route-services', `Turnaround: ${services(route.buyAmenities)} → ${services(route.sellAmenities)}`));
+    access.append(el('div', 'muted route-timing', 'Time: not estimated — no quantum-drive, fuel, or route-time source is available.'));
+    report.append(access);
+
+    const [riskLevel, riskDetail] = routeRisk(route);
+    const score = el('div', `route-score ${riskLevel}`,
+      `Repeatability ${routeRepeatability(route)}/8 · ${riskDetail} · ${money(route.outlay)} cargo exposure`);
+    score.title = 'Repeatability combines UEX quote freshness, reported stock/demand, and alternate buyers. Exposure is the projected purchase cost, not an insurance estimate.';
+    report.append(score);
+
+    if (route.fallbackSells?.length) {
+      const alternatives = el('div', 'route-alternatives');
+      alternatives.append(el('div', 'route-fallback', 'Alternate buyers'));
+      for (const fallback of route.fallbackSells) {
+        const alternate = el('div', 'route-alternate');
+        alternate.append(el('span', 'muted', `${fallback.terminal} · ${money(fallback.sellPrice)} · ${security(fallback.security)}`));
+        const save = el('button', 'ghost tiny', 'Save alternate');
+        save.title = 'Save this buyer as an editable flight plan';
+        save.addEventListener('click', () => saveTradeRoute(
+          route, fallback.terminal, fallback.placeId, fallback.sellPrice, ' · alternate buyer'));
+        alternate.append(save);
+        alternatives.append(alternate);
+      }
+      const portions = splitTradeRoute(route);
+      if (portions.length) {
+        const split = el('div', 'route-split');
+        split.append(el('span', 'muted', `Split load ${portions.reduce((sum, portion) => sum + portion.units, 0).toLocaleString()} SCU: ${portions.map((portion) => `${portion.terminal} ${portion.units.toLocaleString()}`).join(' · ')}`));
+        const saveSplit = el('button', 'ghost tiny', 'Save split');
+        saveSplit.title = 'Save the recorded multi-buyer allocation as an editable flight plan';
+        saveSplit.addEventListener('click', () => saveSplitTradeRoute(route, portions));
+        split.append(saveSplit);
+        alternatives.append(split);
+      }
+      report.append(alternatives);
     }
     tr.append(report);
 
-    // One click turns a haul into a plan: buy there, sell there, in order.
+    // Saving makes a normal editable flight plan: a route is advice until the
+    // pilot chooses it, and the plan is where it can be changed or tracked.
     const plan = el('td');
-    const button = el('button', 'ghost tiny', route.mapReady ? 'Plan' : 'Text plan');
+    const button = el('button', 'ghost tiny', route.mapReady ? 'Save route' : 'Save text route');
     button.title = route.mapReady
-      ? 'Start a flight plan for this run and draw both stops on the map'
-      : 'Add the stops to a flight plan without claiming both can be drawn on the map';
-    button.addEventListener('click', () => planTrip(`${route.commodity} run`, [
-      {
-        placeId: route.buyAtId || placeIdForTerminal(route.buyAt),
-        place: route.buyAt,
-        note: `Buy ${Math.floor(route.units).toLocaleString()} SCU at ${money(route.buyPrice)}`,
-      },
-      {
-        placeId: route.sellAtId || placeIdForTerminal(route.sellAt),
-        place: route.sellAt,
-        note: `Sell at ${money(route.sellPrice)} · +${money(route.profit)}`,
-      },
-    ]));
+      ? 'Save this run as an editable flight plan and draw both stops on the map'
+      : 'Save the stops as an editable flight plan without claiming both can be drawn on the map';
+    button.addEventListener('click', () => saveTradeRoute(route, route.sellAt, route.sellAtId, route.sellPrice));
     plan.append(button);
 
     const capped = el('td', 'muted', route.limitedBy);
@@ -7163,14 +7763,34 @@ async function loadRoutes() {
 
     body.append(tr);
   }
+
+  setRouteReadiness('ready', 'Ready', 'At least one route meets the selected ship, wallet, safety, pad, and evidence filters.');
+  highlightBestRoute = false;
+  renderRouteDashboard(rows);
+  loadRouteCircuits(scu, capital, from).catch(() => {});
 }
 
 onInput('#routes-capital', loadRoutes);
-$('#routes-ship')?.addEventListener('change', loadRoutes);
+$('#routes-ship')?.addEventListener('change', () => choosePlanningShip($('#routes-ship').value));
 $('#routes-here')?.addEventListener('change', loadRoutes);
 $('#routes-ranking')?.addEventListener('change', loadRoutes);
 $('#routes-evidence')?.addEventListener('change', loadRoutes);
 $('#routes-fresh-only')?.addEventListener('change', loadRoutes);
+$('#routes-safety')?.addEventListener('change', loadRoutes);
+$('#routes-pad')?.addEventListener('change', loadRoutes);
+$('#routes-profile')?.addEventListener('change', () => {
+  applyRouteProfile(routeProfiles.find((profile) => profile.id === $('#routes-profile').value));
+});
+$('#routes-profile-save')?.addEventListener('click', saveRouteProfile);
+$('#routes-best-safe')?.addEventListener('click', chooseBestSafeRoute);
+$('#routes-history-clear')?.addEventListener('click', () => {
+  routeHistory = [];
+  routeWatches = [];
+  writeRouteMemory(ROUTE_HISTORY_KEY, routeHistory);
+  writeRouteMemory(ROUTE_WATCH_KEY, routeWatches);
+  renderRouteDashboard([]);
+});
+renderRouteProfiles();
 
 /**
  * "Wake up at" on the dashboard: where the last death put you, which is as
@@ -10102,6 +10722,229 @@ $('#backup-file')?.addEventListener('change', async (event) => {
   }
 });
 
+/* ---------- shareable recaps ---------- */
+
+let shareReportData = null;
+
+function shareChoice() {
+  return {
+    session: Boolean($('#share-session')?.checked),
+    fleet: Boolean($('#share-fleet')?.checked),
+    trade: Boolean($('#share-trade')?.checked),
+    handle: Boolean($('#share-handle')?.checked),
+  };
+}
+
+function shareMetric(label, value) {
+  const metric = el('div', 'share-metric');
+  metric.append(el('div', 'share-metric-value', value));
+  metric.append(el('div', 'share-metric-label', label));
+  return metric;
+}
+
+function shareSection(title, sources, detail = '') {
+  const section = el('section', 'share-section');
+  const head = el('div', 'share-section-head');
+  head.append(el('h3', null, title));
+  head.append(sourceMarks(sources));
+  section.append(head);
+  if (detail) section.append(el('p', 'share-section-detail', detail));
+  return section;
+}
+
+function shareList(rows, empty) {
+  const list = el('ul', 'share-list');
+  if (!rows.length) list.append(el('li', 'muted', empty));
+  for (const row of rows) {
+    const item = el('li');
+    item.append(el('span', null, row.label));
+    if (row.detail) item.append(el('span', 'muted', row.detail));
+    if (row.value) item.append(el('b', row.className || '', row.value));
+    list.append(item);
+  }
+  return list;
+}
+
+/** A frozen recap uses only evidence already held locally by the app. */
+async function buildShareReport() {
+  const choice = shareChoice();
+  if (!choice.session && !choice.fleet && !choice.trade)
+    throw new Error('Choose at least one section for the recap.');
+
+  const report = { choice, madeAt: new Date().toISOString() };
+  const needsSessions = choice.session || choice.handle;
+  const sessions = needsSessions ? await getJson('/api/sessions') : [];
+  const latest = [...sessions].sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))[0] || null;
+
+  if (choice.handle) report.handle = latest?.handle || '';
+  if (choice.session && latest) {
+    const detail = await getJson(`/api/sessions/${encodeURIComponent(latest.id)}`).catch(() => null);
+    report.session = { summary: latest, detail };
+  } else if (choice.session) report.session = { summary: null, detail: null };
+
+  if (choice.fleet) report.fleet = await getJson('/api/fleet').catch(() => null);
+
+  if (choice.trade) {
+    const [earnings, market] = await Promise.all([
+      getJson('/api/earnings?days=30').catch(() => null),
+      getJson('/api/market').catch(() => []),
+    ]);
+    report.trade = { earnings, market };
+  }
+
+  return report;
+}
+
+function renderShareReport(report) {
+  const host = $('#share-report');
+  if (!host) return;
+  host.textContent = '';
+
+  const head = el('header', 'share-report-head');
+  const title = el('div');
+  title.append(el('div', 'share-kicker', 'QUANTUM WAKE · PILOT RECAP'));
+  title.append(el('h2', null, report.handle ? `${report.handle}'s recent flight` : 'Recent flight recap'));
+  title.append(el('p', 'muted', `Snapshot made ${new Date(report.madeAt).toLocaleString()}. It does not update after it is shared.`));
+  head.append(title);
+  head.append(sourceMarks(['logs']));
+  host.append(head);
+
+  if (report.session) renderShareSession(host, report.session);
+  if (report.fleet) renderShareFleet(host, report.fleet);
+  if (report.trade) renderShareTrade(host, report.trade);
+
+  host.append(el('p', 'share-limits',
+    'Source labels name the evidence behind each section. Trading is limited to commodity movements the game log records; it is not total income.'));
+}
+
+function renderShareSession(host, session) {
+  const summary = session.summary;
+  const section = shareSection('Latest session', ['logs'],
+    'What the game log recorded during the most recent session.');
+  if (!summary) {
+    section.append(el('p', 'muted', 'No completed session has been recorded yet.'));
+    host.append(section);
+    return;
+  }
+
+  const detail = session.detail;
+  const route = detail ? sessionRoute(detail) : [];
+  const ships = detail ? (detail.ships || []).map((ship) => ship.displayName || ship.model).filter(Boolean) : [];
+  const metrics = el('div', 'share-metrics');
+  metrics.append(
+    shareMetric('In game', duration(summary.inGame)),
+    shareMetric('Ship', ships.join(' · ') || summary.primaryShip || 'On foot'),
+    shareMetric('Route points', String(route.length || summary.locations || 0)),
+    shareMetric('Contracts', String(summary.contracts || 0)),
+    shareMetric('Deaths', String(summary.deaths || 0)),
+  );
+  section.append(metrics);
+
+  section.append(el('h4', null, 'Recorded route'));
+  section.append(shareList(route.slice(0, 8).map((place) => ({
+    label: place.displayName,
+    detail: [place.body, place.system].filter(Boolean).join(' · ') || place.routeKind,
+    value: shortTimeOf(place.at),
+  })), 'No named locations were written in this session.'));
+  host.append(section);
+}
+
+function renderShareFleet(host, fleet) {
+  const section = shareSection('Fleet snapshot', ['logs'],
+    'Ships flown by this account; it does not claim to be the game entitlement roster.');
+  if (!fleet) {
+    section.append(el('p', 'muted', 'The fleet summary could not be read.'));
+    host.append(section);
+    return;
+  }
+
+  const ships = [...(fleet.flown || [])].sort((a, b) => (b.sorties || 0) - (a.sorties || 0));
+  const seconds = ships.reduce((sum, ship) => sum + toSeconds(ship.estimatedTime || ship.timeAboard || '00:00:00'), 0);
+  const metrics = el('div', 'share-metrics');
+  metrics.append(
+    shareMetric('Game entitlement', fleet.owned === null || fleet.owned === undefined ? '—' : String(fleet.owned)),
+    shareMetric('Ships flown', String(ships.length)),
+    shareMetric('Total sorties', String(ships.reduce((sum, ship) => sum + (ship.sorties || 0), 0))),
+    shareMetric('Time aboard', `~${duration(seconds)}`),
+  );
+  section.append(metrics);
+  section.append(el('h4', null, 'Most flown'));
+  section.append(shareList(ships.slice(0, 6).map((ship) => ({
+    label: ship.name,
+    detail: ship.lastFlown ? `last flown ${dateOf(ship.lastFlown)}` : '',
+    value: `${ship.sorties || 0} sortie${ship.sorties === 1 ? '' : 's'}`,
+  })), 'No ship flights have been recorded.'));
+  host.append(section);
+}
+
+function renderShareTrade(host, trade) {
+  const section = shareSection('Trading snapshot · last 30 days', ['logs'],
+    'Commodity movements the game log recorded. Contract rewards, bounties and fees are not included.');
+  const rate = trade.earnings?.window;
+  const rows = [...(trade.market || [])].filter((row) => row.myTrades > 0)
+    .sort((a, b) => (b.myRevenue || 0) - (a.myRevenue || 0));
+  const metrics = el('div', 'share-metrics');
+  metrics.append(
+    shareMetric('Recorded profit', rate ? money(rate.earned) : '—'),
+    shareMetric('Trading rate', rate?.perHour > 0 ? `${money(rate.perHour)}/h` : 'No rate yet'),
+    shareMetric('In-game hours', rate ? hoursOf(rate.inGame) : '—'),
+    shareMetric('Commodities moved', String(rows.length)),
+  );
+  section.append(metrics);
+  section.append(el('h4', null, 'Largest recorded sales'));
+  section.append(shareList(rows.slice(0, 6).map((row) => ({
+    label: row.name,
+    detail: `${row.myScuSold || 0} SCU sold · ${row.myTrades || 0} trip${row.myTrades === 1 ? '' : 's'}`,
+    value: money(row.myRevenue || 0),
+    className: 'inward',
+  })), 'No commodity movements were recorded in this window.'));
+  host.append(section);
+}
+
+function shareReportDocument() {
+  const report = $('#share-report');
+  if (!shareReportData || !report) return null;
+  const content = report.cloneNode(true);
+  return '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+    + '<meta name="viewport" content="width=device-width, initial-scale=1">'
+    + '<title>Quantum Wake pilot recap</title><style>' + shareReportCss() + '</style></head><body>'
+    + content.outerHTML + '</body></html>';
+}
+
+function shareReportCss() {
+  return 'body{margin:0;background:#070c14;color:#dcebf7;font:14px/1.5 system-ui,Segoe UI,sans-serif}.share-report{max-width:960px;margin:32px auto;padding:28px;background:linear-gradient(150deg,#101d2c,#070c14);border:1px solid #2c526d}.share-report-head,.share-section-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.share-kicker{color:#8be7ff;font:700 11px ui-monospace,Consolas,monospace;letter-spacing:2px}.share-report h2{margin:4px 0;font-size:30px}.share-report h3{margin:0;color:#8be7ff;font-size:18px}.share-report h4{margin:20px 0 7px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#7691a8}.muted,.share-section-detail{color:#9ab0c3}.data-sources{display:flex;gap:4px;flex-wrap:wrap}.data-source{border:1px solid #2c526d;padding:2px 5px;font:10px ui-monospace,Consolas,monospace;letter-spacing:.7px;color:#8be7ff}.game-install{color:#7ee3a5}.screenshot-ocr,.data-source-qualifier{color:#ffbc66}.community-data{color:#c59cff}.share-section{margin-top:22px;padding-top:18px;border-top:1px solid #24445b}.share-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-top:14px}.share-metric{padding:10px;background:#0a1420;border-left:2px solid #35c8f0}.share-metric-value{font-size:16px;font-weight:700}.share-metric-label{font-size:10px;color:#9ab0c3;text-transform:uppercase;letter-spacing:.8px}.share-list{list-style:none;padding:0;margin:0}.share-list li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;padding:6px 0;border-bottom:1px solid #172b3b}.share-list b{white-space:nowrap}.inward{color:#7ee3a5}.share-limits{margin:25px 0 0;color:#9ab0c3;font-size:12px}@media print{body{background:#fff;color:#14202b}.share-report{margin:0;max-width:none;border:0;background:#fff}.share-report h3,.share-kicker{color:#126b91}.share-section{border-color:#b8cbd6}.share-metric{background:#eef5f8;border-color:#126b91}.muted,.share-section-detail,.share-metric-label,.share-limits{color:#50616c}.data-source{color:#126b91;border-color:#8ca6b4}.share-list li{border-color:#d6e1e7}}';
+}
+
+async function openShareReport() {
+  const status = $('#share-status');
+  if (status) status.textContent = 'Building recap…';
+  try {
+    shareReportData = await buildShareReport();
+    renderShareReport(shareReportData);
+    if (status) status.textContent = '';
+    showView('share');
+  } catch (error) {
+    if (status) status.textContent = error.message || 'The recap could not be built.';
+  }
+}
+
+function saveShareReport() {
+  const html = shareReportDocument();
+  if (!html) return;
+  const stamp = new Date().toISOString().slice(0, 10);
+  const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+  const link = el('a');
+  link.href = url;
+  link.download = `quantumwake-pilot-recap-${stamp}.html`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+$('#share-open')?.addEventListener('click', () => openShareReport());
+$('#share-back')?.addEventListener('click', () => showView('settings'));
+$('#share-print')?.addEventListener('click', () => window.print());
+$('#share-save-html')?.addEventListener('click', () => saveShareReport());
+
 async function saveExport() {
   const button = $('#export-save');
   const status = $('#export-status');
@@ -11081,6 +11924,8 @@ function renderFleet(stats) {
 
   drawFleetChart(stats.fleetHistory || []);
   renderFleetShips();
+  renderShipPlan();
+  refreshTradeAdvice(nowState?.location).catch(() => {});
 }
 
 /** UEX price for one roster ship, 0 when unpriced or assets are off. */

@@ -358,7 +358,47 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.22
+### 0.11.29
+
+- **Turn a haul into a planning workspace.** Trade Routes now scores
+  repeatability from report freshness, capacity and alternate buyers; keeps the
+  cargo purchase cost visible as exposure; records known refuel/repair and pad
+  amenities at each end; saves private presets and watches; and proposes
+  price-report return-load circuits. When the optional ship catalogue is absent,
+  a ship the install identifies can use its latest verified kiosk screenshot
+  hold size (or a clearly marked local entry when none has been read) rather
+  than being treated as incapable of hauling. Saved or alternate routes remain
+  ordinary, editable flight plans — the local route history is not game
+  telemetry.
+
+- **Know whether a route is actionable before reading the table.** The route
+  header now keeps the selected ship's SCU, evidence source and screenshot age
+  visible, with a compact readiness badge. “Best safe route” retains your ship,
+  wallet and pad preference, defaults an unset security preference to monitored
+  space, and marks the most reliable available result.
+
+- **Choose the kind of trade run you will accept.** Route filters can now
+  prefer monitored space, avoid or require lawless systems, and require
+  recorded landing-pad amenities at both ends. Every row names both security
+  states and pad records; those records never claim a particular hull fits.
+  Backup buyers are now individually saveable alternate flight plans.
+
+- **Plan with the ship you chose.** The trade-route picker is now a persistent
+  current-ship choice from your flown roster. Cargo leads and routes vanish for
+  a hull with no documented cargo grid, while the planning panel shows only
+  supported cargo, map, crew or ground-vehicle guidance. Quantum range and
+  vehicle-bay fit stay explicitly unknown until a source can prove them.
+
+- **Share a polished pilot recap without uploading anything.** Choose the
+  latest session, fleet snapshot and/or 30-day trading snapshot in Settings,
+  then review it, save a self-contained HTML page, or print it to PDF. The
+  report keeps its source labels and says that log-recorded trading is a floor,
+  not total income.
+
+- **Answers now carry clear source labels.** The Now page, Hangar and
+  commodity Market show whether a fact comes from your game log, installed
+  game files, a locally read screenshot, or optional community data. Inferred
+  figures say so too, and Help explains what each label can and cannot prove.
 
 - **The wallet reads from screenshots that used to say it could not.** A
   mobiGlas frame would report the balance as "printed in a face this engine

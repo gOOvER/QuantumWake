@@ -830,12 +830,15 @@ public static class ServerHost
         // so the page can draw the fleet to one scale. A ship the install does
         // not describe is still listed - the log flew it - with no size, and
         // the page says so rather than drawing a guess.
-        app.MapGet("/api/fleet/hangar", (LogLibrary lib) =>
+        app.MapGet("/api/fleet/hangar", (LogLibrary lib, ScreenReadingStore readings) =>
         {
             var game = lib.GameCommodities;
+            var photographedHolds = readings.LatestKioskCargoHolds();
             var ships = lib.Stats().Ships.Select(ship =>
             {
                 var vehicle = game.Vehicle(ship.ClassName);
+                var photographed = photographedHolds.FirstOrDefault(hold =>
+                    string.Equals(hold.Ship, ship.Name, StringComparison.OrdinalIgnoreCase));
                 return new
                 {
                     ship.Name,
@@ -848,6 +851,9 @@ public static class ServerHost
                     height = vehicle?.Height,
                     icon = vehicle?.Icon is not null,
                     kind = vehicle?.Kind,
+                    cargoScu = photographed?.CapacityScu,
+                    cargoSource = photographed is null ? null : "screenshot",
+                    cargoReadAt = photographed?.ShotAt,
                 };
             });
 
@@ -1482,40 +1488,144 @@ public static class ServerHost
         // could be matched, so planning a run puts real dots on the map instead
         // of the page guessing at the names a second time.
         app.MapGet("/api/routes", (LogLibrary lib, UexData uex, double? scu, decimal? capital, string? from,
-            string? ranking, bool? freshOnly, string? evidence) =>
-            uex.Routes(
-                scu ?? 0,
-                capital ?? 0,
-                from,
-                limit: 30,
-                reliableFirst: !string.Equals(ranking, "profit", StringComparison.OrdinalIgnoreCase),
-                freshOnly: freshOnly == true,
-                evidence: evidence ?? "any").Select(r => new
+            string? ranking, bool? freshOnly, string? evidence, string? safety, string? pad) =>
+        {
+            // Price reports say nothing about hostility or what ship can land.
+            // The narrow answers below come from two independent local sources:
+            // system security from the resolved map place, and pad labels from
+            // the game map's own amenities. An unmatched counter stays unknown;
+            // it is never promoted to safe or assumed to fit a hull.
+            (string PlaceId, string Security, IReadOnlyList<string> Amenities, List<string> Pads) End(string terminal)
             {
-                r.Commodity,
-                r.BuyAt,
-                buyAtId = lib.Terminals.IdFor(r.BuyAt),
-                r.BuyPrice,
-                r.SellAt,
-                sellAtId = lib.Terminals.IdFor(r.SellAt),
-                r.SellPrice,
-                r.MarginPerScu,
-                r.Units,
-                r.Profit,
-                r.Outlay,
-                r.LimitedBy,
-                r.DesiredUnits,
-                r.BuyStockScu,
-                r.SellDemandScu,
-                r.BuyAvailability,
-                r.SellAvailability,
-                r.Availability,
-                mapReady = !string.IsNullOrWhiteSpace(lib.Terminals.IdFor(r.BuyAt))
-                    && !string.IsNullOrWhiteSpace(lib.Terminals.IdFor(r.SellAt)),
-                r.BuySeenAt,
-                r.SellSeenAt,
-                r.Freshness,
-                r.FallbackSells
+                var place = lib.Terminals.Resolve(terminal);
+                var amenities = place is null
+                    ? Array.Empty<string>()
+                    : lib.GameCommodities.Place(place.Name)?.Amenities ?? Array.Empty<string>();
+                var pads = amenities
+                    .Where(a => a.Contains("Landing Pad", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                return (
+                    place?.RawId ?? string.Empty,
+                    TerminalPlaces.SecurityOfSystem(place?.System),
+                    amenities,
+                    pads);
+            }
+
+            static bool MatchesSafety(string buy, string sell, string filter) => filter switch
+            {
+                "monitored" => buy == "monitored" && sell == "monitored",
+                "avoid-lawless" => buy != "lawless" && sell != "lawless",
+                "lawless" => buy == "lawless" || sell == "lawless",
+                _ => true,
+            };
+
+            static bool HasXlPad(IReadOnlyList<string> pads) => pads.Any(p =>
+                p.Contains("Landing Pad XL", StringComparison.OrdinalIgnoreCase));
+
+            static bool MatchesPads(IReadOnlyList<string> buy, IReadOnlyList<string> sell, string filter) => filter switch
+            {
+                "known" => buy.Count > 0 && sell.Count > 0,
+                "xl" => HasXlPad(buy) && HasXlPad(sell),
+                _ => true,
+            };
+
+            static int SafetyRank(string buy, string sell) => buy == "monitored" && sell == "monitored"
+                ? 2 : buy == "lawless" || sell == "lawless" ? 0 : 1;
+
+            var selectedSafety = safety?.ToLowerInvariant() ?? "any";
+            var selectedPad = pad?.ToLowerInvariant() ?? "any";
+            var candidates = uex.Routes(
+                    scu ?? 0,
+                    capital ?? 0,
+                    from,
+                    limit: 30,
+                    reliableFirst: !string.Equals(ranking, "profit", StringComparison.OrdinalIgnoreCase),
+                    freshOnly: freshOnly == true,
+                    evidence: evidence ?? "any")
+                .Select((route, index) => new { route, index, buy = End(route.BuyAt), sell = End(route.SellAt) })
+                .Where(row => MatchesSafety(row.buy.Security, row.sell.Security, selectedSafety))
+                .Where(row => MatchesPads(row.buy.Pads, row.sell.Pads, selectedPad));
+
+            if (selectedSafety == "prefer-monitored")
+                candidates = candidates.OrderByDescending(row => SafetyRank(row.buy.Security, row.sell.Security))
+                    .ThenBy(row => row.index);
+
+            return candidates.Select(row => new
+            {
+                row.route.Commodity,
+                row.route.BuyAt,
+                buyAtId = row.buy.PlaceId,
+                row.route.BuyPrice,
+                buySecurity = row.buy.Security,
+                buyAmenities = row.buy.Amenities,
+                buyLandingPads = row.buy.Pads,
+                row.route.SellAt,
+                sellAtId = row.sell.PlaceId,
+                row.route.SellPrice,
+                sellSecurity = row.sell.Security,
+                sellAmenities = row.sell.Amenities,
+                sellLandingPads = row.sell.Pads,
+                row.route.MarginPerScu,
+                row.route.Units,
+                row.route.Profit,
+                row.route.Outlay,
+                row.route.LimitedBy,
+                row.route.DesiredUnits,
+                row.route.BuyStockScu,
+                row.route.SellDemandScu,
+                row.route.BuyAvailability,
+                row.route.SellAvailability,
+                row.route.Availability,
+                mapReady = !string.IsNullOrWhiteSpace(row.buy.PlaceId)
+                    && !string.IsNullOrWhiteSpace(row.sell.PlaceId),
+                row.route.BuySeenAt,
+                row.route.SellSeenAt,
+                row.route.Freshness,
+                fallbackSells = row.route.FallbackSells.Select(fallback =>
+                {
+                    var end = End(fallback.Terminal);
+                    return new
+                    {
+                        fallback.Terminal,
+                        placeId = end.PlaceId,
+                        security = end.Security,
+                        amenities = end.Amenities,
+                        landingPads = end.Pads,
+                        fallback.SellPrice,
+                        fallback.DemandScu,
+                        fallback.SeenAt,
+                        fallback.Freshness
+                    };
+                })
+            });
+        });
+
+        // A return load makes the route a circuit rather than a one-way margin.
+        // Kept apart from /api/routes because its second leg is a different
+        // decision: the main table remains one row per simple haul.
+        app.MapGet("/api/routes/circuits", (LogLibrary lib, UexData uex, double? scu, decimal? capital, string? from) =>
+            uex.Circuits(scu ?? 0, capital ?? 0, from).Select(c => new
+            {
+                commodity = c.Outbound.Commodity,
+                buyAt = c.Outbound.BuyAt,
+                buyAtId = lib.Terminals.IdFor(c.Outbound.BuyAt),
+                buyPrice = c.Outbound.BuyPrice,
+                sellAt = c.Outbound.SellAt,
+                sellAtId = lib.Terminals.IdFor(c.Outbound.SellAt),
+                sellPrice = c.Outbound.SellPrice,
+                units = c.Outbound.Units,
+                outboundProfit = c.Outbound.Profit,
+                returnCommodity = c.ReturnCommodity,
+                returnBuyAt = c.ReturnBuyAt,
+                returnBuyAtId = lib.Terminals.IdFor(c.ReturnBuyAt),
+                returnBuyPrice = c.ReturnBuyPrice,
+                returnSellAt = c.ReturnSellAt,
+                returnSellAtId = lib.Terminals.IdFor(c.ReturnSellAt),
+                returnSellPrice = c.ReturnSellPrice,
+                returnUnits = c.ReturnUnits,
+                returnProfit = c.ReturnProfit,
+                totalProfit = c.Outbound.Profit + c.ReturnProfit
             }));
 
         // Where the player last woke, for the Now card. Its own endpoint
