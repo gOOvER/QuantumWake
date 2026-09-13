@@ -358,6 +358,21 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.11.22
+
+- **The wallet reads from screenshots that used to say it could not.** A
+  mobiGlas frame would report the balance as "printed in a face this engine
+  does not read" while the figure sat plainly beside your handle. That was a
+  guess, and a wrong one: on four frames measured the engine read the same
+  bold italic figure on two and dropped it on the other two, including two
+  frames taken a second apart in the same scene. When the bar reads and the
+  balance does not, the panel is now cropped, stood upright and read again,
+  and a figure is accepted only when two readings agree on its digits - the
+  engine either read every one of them right or returned nothing, and the
+  one treatment that could fabricate a digit was left out. Both frames that
+  failed now read; a frame that still misses says so plainly and suggests
+  another screenshot, rather than blaming the font.
+
 ### 0.11.21
 
 - **The HUD no longer prints the game's own markup at you.** Contract lines

@@ -123,6 +123,12 @@ public sealed class ScreenInsightService(
             return Nothing(info.Name, shotAt, $"could not read that screenshot ({e.GetType().Name})");
         }
 
+        // The balance is the one line the engine drops from a whole frame
+        // that it will read from a sheared crop; see WalletSecondLook. Only
+        // ever runs when the bar is on the frame and the figure is not.
+        lines = await WalletSecondLook.TakeAsync(lines,
+            (patch, treatment, t) => reader.ReadAsync(path, patch, treatment, t), token);
+
         watch.Stop();
 
         var sighting = Understand(info.Name, shotAt, lines, watch.ElapsedMilliseconds);
