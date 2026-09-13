@@ -358,7 +358,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.28
+### 0.11.29
 
 - **Turn a haul into a planning workspace.** Trade Routes now scores
   repeatability from report freshness, capacity and alternate buyers; keeps the
@@ -370,6 +370,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   than being treated as incapable of hauling. Saved or alternate routes remain
   ordinary, editable flight plans — the local route history is not game
   telemetry.
+
+- **Know whether a route is actionable before reading the table.** The route
+  header now keeps the selected ship's SCU, evidence source and screenshot age
+  visible, with a compact readiness badge. “Best safe route” retains your ship,
+  wallet and pad preference, defaults an unset security preference to monitored
+  space, and marks the most reliable available result.
 
 - **Choose the kind of trade run you will accept.** Route filters can now
   prefer monitored space, avoid or require lawless systems, and require

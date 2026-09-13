@@ -85,5 +85,7 @@ public class ShipPlanningTests
 
         Assert.Contains("latest commodity-terminal screenshot", page.NodeText("#ship-plan-options"));
         Assert.Contains(page.Fetched(), url => url.Contains("/api/routes?scu=6"));
+        Assert.Contains("RSI Hermes · 6 SCU · Screenshot/OCR", page.NodeText("#route-ship-context"));
+        Assert.Contains("No current prices", page.NodeText("#route-readiness"));
     }
 }

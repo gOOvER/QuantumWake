@@ -89,4 +89,27 @@ public class RouteReliabilityTests
         Assert.Contains("Landing Pad XL", text);
         Assert.Contains(page.Fetched(), url => url.Contains("safety=monitored") && url.Contains("pad=known"));
     }
+
+    [Fact]
+    public void Best_safe_route_keeps_the_pad_choice_and_highlights_the_top_reliable_match()
+    {
+        var page = new Page();
+        page.Serve("/api/routes?scu=64&capital=0&from=&ranking=reliable&freshOnly=false&evidence=reported&safety=prefer-monitored&pad=known", """
+            [{"commodity":"Beryl","buyAt":"Area18 TDD","buyPrice":100,"buySecurity":"monitored","buyLandingPads":["Landing Pad XL"],
+              "sellAt":"Port Tressler TDD","sellPrice":150,"sellSecurity":"monitored","sellLandingPads":["Landing Pad L"],
+              "marginPerScu":50,"units":64,"profit":3200,"outlay":6400,"limitedBy":"hold","desiredUnits":64,
+              "availability":"reported-full","buyAvailability":"enough","sellAvailability":"enough","freshness":"fresh","mapReady":true,"fallbackSells":[]}]
+            """);
+
+        page.Do("""
+            __dom.node('#routes-ship').value = '64';
+            __dom.node('#routes-pad').value = 'known';
+            await chooseBestSafeRoute();
+            """);
+
+        Assert.Contains("GET /api/routes?scu=64&capital=0&from=&ranking=reliable&freshOnly=false&evidence=reported&safety=prefer-monitored&pad=known", string.Join("\n", page.Fetched()));
+        Assert.Contains("Best safe match", page.NodeText("#routes-table tbody"));
+        Assert.Contains("Ready", page.NodeText("#route-readiness"));
+        Assert.Contains(page.Fetched(), url => url.Contains("ranking=reliable") && url.Contains("safety=prefer-monitored") && url.Contains("pad=known"));
+    }
 }

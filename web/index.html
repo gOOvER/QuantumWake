@@ -476,7 +476,13 @@
   <!-- ROUTES -->
   <section id="view-routes" class="view">
     <div class="section-bar">
-      <h2>Trade routes</h2>
+      <div class="route-heading">
+        <h2>Trade routes</h2>
+        <div class="route-header-status" aria-live="polite">
+          <span id="route-ship-context">No ship selected · SCU unknown · no source</span>
+          <span class="route-readiness needs-cargo" id="route-readiness">Needs cargo SCU</span>
+        </div>
+      </div>
       <div class="controls">
         <input type="number" id="routes-capital" class="search" placeholder="Capital, aUEC" min="0" step="10000">
         <select id="routes-ranking" class="select" title="How to rank trade routes">
@@ -502,6 +508,7 @@
         </select>
         <select id="routes-profile" class="select" title="Saved route-planning presets"></select>
         <button class="ghost tiny" id="routes-profile-save" title="Save the current ship and route filters as a local preset">Save preset</button>
+        <button class="ghost tiny" id="routes-best-safe" title="Find and highlight the most reliable route for this ship, wallet, and current pad/security choices">Best safe route</button>
         <label class="toggle" title="Only routes starting where you are now">
           <input type="checkbox" id="routes-here">
           <span>From here</span>

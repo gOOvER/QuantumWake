@@ -1578,6 +1578,12 @@ body.overlay .scan-file { display: none; }
 .section-bar h2 { margin: 0; }
 .section-bar h2.spaced { margin-top: 32px; }
 .controls { display: flex; gap: 8px; align-items: center; }
+.route-heading { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.route-header-status { display: flex; align-items: center; gap: 6px; color: var(--muted); font: 10px var(--mono); }
+.route-readiness { padding: 3px 6px; border: 1px solid var(--rule); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+.route-readiness.ready { color: var(--green); border-color: rgba(79, 212, 138, .55); }
+.route-readiness.needs-cargo { color: var(--amber); border-color: rgba(232, 180, 76, .5); }
+.route-readiness.no-prices, .route-readiness.no-pad { color: var(--red); border-color: rgba(225, 91, 91, .5); }
 
 .search, .select {
   background: var(--deep);
@@ -2556,6 +2562,8 @@ td.with-track .track:focus-visible { opacity: 1; }
 .route-score { margin-top: 4px; font-size: 10px; color: var(--dim); }
 .route-score.lower { color: var(--green); }
 .route-score.higher { color: var(--amber); }
+.route-best { margin: 0 0 4px; color: var(--green); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+#routes-table tbody tr.best-route { background: rgba(79, 212, 138, .06); box-shadow: inset 2px 0 0 var(--green); }
 .route-dashboard { margin: 0 0 14px; padding: 11px 14px; border: 1px solid var(--rule); background: rgba(8, 22, 33, .55); }
 .route-dashboard-head { display: flex; gap: 12px; justify-content: space-between; align-items: start; }
 .route-watch-list, .route-history-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }

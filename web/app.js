@@ -7179,6 +7179,41 @@ function planningHasCargo(candidate = activePlanningShip()) {
   return planningCargo(candidate) > 0;
 }
 
+const cargoSourceName = (source) => ({
+  community: 'Community data', screenshot: 'Screenshot/OCR', manual: 'Local entry',
+}[source] || 'No source');
+
+function setRouteReadiness(kind, label, detail = '') {
+  const badge = $('#route-readiness');
+  if (!badge) return;
+  badge.className = `route-readiness ${kind}`;
+  badge.textContent = label;
+  badge.title = detail;
+}
+
+/** Keep the decision-critical ship evidence in the route header, even while its table is loading. */
+function renderRouteHeader() {
+  const context = $('#route-ship-context');
+  if (!context) return;
+  const active = activePlanningShip();
+  if (!active) {
+    context.textContent = 'No ship selected · SCU unknown · no source';
+    setRouteReadiness('needs-cargo', 'Needs cargo SCU', 'Choose a cargo ship or add a locally verified hold size.');
+    return;
+  }
+
+  const cargo = planningCargo(active);
+  const source = planningCargoSource(active);
+  const read = source === 'screenshot' && active.install?.cargoReadAt
+    ? ` · read ${ago(active.install.cargoReadAt)}`
+    : ' · last read unavailable';
+  context.textContent = cargo > 0
+    ? `${active.ship.name} · ${cargo.toLocaleString()} SCU · ${cargoSourceName(source)}${read}`
+    : `${active.ship.name} · SCU unknown · no capacity source`;
+  setRouteReadiness(cargo > 0 ? 'ready' : 'needs-cargo', cargo > 0 ? 'Ready' : 'Needs cargo SCU',
+    cargo > 0 ? 'The selected ship has a cargo constraint, so routes can be sized.' : 'No verified cargo capacity is available for the selected ship.');
+}
+
 let planningHangarLoad = null;
 async function loadPlanningInstallData() {
   if (hangarShips) return hangarShips;
@@ -7232,6 +7267,7 @@ function renderShipPlan() {
   if (!active) {
     title.textContent = candidates.length ? 'Choose a flown ship to constrain this plan' : 'No flown ships are available yet';
     limit.textContent = 'This selection stays in this browser. It does not change your fleet or claim a ship is currently retrieved.';
+    renderRouteHeader();
     return;
   }
 
@@ -7294,6 +7330,7 @@ function renderShipPlan() {
     : !active.reference
     ? 'The game install confirms this is a spaceship but has no cargo-capacity field here. Enter the vehicle terminal’s hold size above for a local route constraint, or enable the community ship dataset.'
     : 'Quantum fuel/range and vehicle-bay fit are not present in the installed or community reference data, so this planner does not guess either one.';
+  renderRouteHeader();
 }
 
 function choosePlanningShip(name) {
@@ -7315,6 +7352,7 @@ const readRouteMemory = (key) => { try { return JSON.parse(localStorage.getItem(
 let routeProfiles = readRouteMemory(ROUTE_PROFILES_KEY);
 let routeHistory = readRouteMemory(ROUTE_HISTORY_KEY);
 let routeWatches = readRouteMemory(ROUTE_WATCH_KEY);
+let highlightBestRoute = false;
 const writeRouteMemory = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* optional */ } };
 const routeKey = (route) => [route.commodity, route.buyAt, route.sellAt].map(planningShipKey).join('|');
 
@@ -7495,6 +7533,22 @@ function saveSplitTradeRoute(route, portions) {
   ]);
 }
 
+/** Finds a safer first choice without silently changing a pilot's explicit safety or pad requirement. */
+function chooseBestSafeRoute() {
+  const active = activePlanningShip();
+  if (active && !planningHasCargo(active)) {
+    renderRouteHeader();
+    return;
+  }
+  $('#routes-ranking').value = 'reliable';
+  // Any security is an absence of a preference, so make the safe default
+  // explicit. A pilot's chosen avoid/only-lawless mode stays untouched.
+  if (!$('#routes-safety').value || $('#routes-safety').value === 'any') $('#routes-safety').value = 'prefer-monitored';
+  if ($('#routes-evidence').value === 'any') $('#routes-evidence').value = 'reported';
+  highlightBestRoute = true;
+  return loadRoutes().catch(() => {});
+}
+
 async function loadRoutes() {
   const select = $('#routes-ship');
   if (!select) return;
@@ -7546,6 +7600,8 @@ async function loadRoutes() {
     td.colSpan = 12;
     tr.append(td);
     body.append(tr);
+    setRouteReadiness('needs-cargo', 'Needs cargo SCU', 'Routes cannot be sized until the selected ship has a verified or local hold capacity.');
+    highlightBestRoute = false;
     return;
   }
 
@@ -7589,13 +7645,19 @@ async function loadRoutes() {
     td.colSpan = 12;
     tr.append(td);
     body.append(tr);
+    setRouteReadiness(pad !== 'any' ? 'no-pad' : 'no-prices',
+      pad !== 'any' ? 'No viable landing pad' : 'No current prices',
+      pad !== 'any' ? 'No returned route has the landing-pad evidence requested at both endpoints.' : 'No route currently meets the selected ship, wallet, evidence, and safety criteria.');
+    highlightBestRoute = false;
     renderRouteDashboard(rows);
     loadRouteCircuits(scu, capital, from).catch(() => {});
     return;
   }
 
-  for (const route of rows) {
+  for (const [index, route] of rows.entries()) {
     const tr = el('tr');
+    const best = highlightBestRoute && index === 0;
+    if (best) tr.classList.add('best-route');
     tr.append(el('td', null, route.commodity));
     tr.append(tdPlace(route.buyAt, 'muted'));
     tr.append(el('td', 'num muted', money(route.buyPrice)));
@@ -7609,6 +7671,7 @@ async function loadRoutes() {
     tr.append(projected);
 
     const report = el('td', 'route-report');
+    if (best) report.append(el('div', 'route-best', 'Best safe match'));
     const availabilityWord = route.availability === 'reported-full'
       ? `Reported full load · ${Math.floor(route.desiredUnits).toLocaleString()} SCU`
       : route.availability === 'reported-partial'
@@ -7701,6 +7764,8 @@ async function loadRoutes() {
     body.append(tr);
   }
 
+  setRouteReadiness('ready', 'Ready', 'At least one route meets the selected ship, wallet, safety, pad, and evidence filters.');
+  highlightBestRoute = false;
   renderRouteDashboard(rows);
   loadRouteCircuits(scu, capital, from).catch(() => {});
 }
@@ -7717,6 +7782,7 @@ $('#routes-profile')?.addEventListener('change', () => {
   applyRouteProfile(routeProfiles.find((profile) => profile.id === $('#routes-profile').value));
 });
 $('#routes-profile-save')?.addEventListener('click', saveRouteProfile);
+$('#routes-best-safe')?.addEventListener('click', chooseBestSafeRoute);
 $('#routes-history-clear')?.addEventListener('click', () => {
   routeHistory = [];
   routeWatches = [];
