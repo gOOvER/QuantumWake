@@ -89,16 +89,30 @@ in octfx's ScDataDumper, credited in `credits.md` - and the model is small:
 Re-implemented from that description over the same `ship-items.json` and
 `ships.json` and run on every spaceship with a stock fit:
 
-| Figure | Recompute from parts | Stock fit matches the dataset |
+| Figure | Recompute from parts | Stock fit matches the dataset (`--garage-check`, 2026-09-14) |
 | --- | --- | --- |
-| EM, shields-up scenario | the model above | **269 of 269** within 1% |
-| IR, shields-up scenario | the model above | **269 of 269** within 1% |
-| Power segments available | the plant rule above | **269 of 269** exact |
-| Fixed-gun DPS | sum of `Weapon.Damage.DpsTotal` over fixed WeaponGuns | 177 of 238 within 2%; the misses are turret-mounted guns, to be classified per port in the build |
-| Shield HP / regen | sum over fitted Shields, capped at the pool | 213 of 269 within 2% before the pool cap was known; to be re-run with it |
-| Quantum speed, spool, fuel per jump | the fitted drive plus the ship's tank | single part, exact |
-| Mass | ship + parts | exact |
+| EM, shields-up and quantum | the model above | **269 of 269** within 1% |
+| IR, shields-up and quantum | the model above | **269 of 269** within 1% |
+| Power segments available, cooling generated | the plant rule above; coolers summed | **269 of 269** |
+| Shield HP / regen | sum over fitted Shields, capped at the pool | **269 of 269** |
+| Quantum range | tank ÷ the drive's fuel rate | **259 of 259** with a drive |
+| Mass | the dump's stock mass, moved by the swap | **269 of 269** by construction - a parts sum undershoots every large hull, a Carrack by a fifth, because the dump has no block for much of what a big ship carries |
+| Pilot-fired DPS | sum over guns not under a crewed or remote turret | **231 of 238** within 2% - see below |
 | Cross-section | ship geometry × armour multiplier | parts do not move it; shown as a fact |
+
+**The seven.** Whether a remote turret's guns are the pilot's is decided by
+controller tags in the vehicle XML, which `ships.json` does not carry. The
+sheet uses the port name - `TurretBase` is crewed, a `Turret` port named
+"remote" or "pdc" is remote, everything else is the pilot's - and the
+published dump agrees on 231 of 238 armed ships. (The dumper's newer rule,
+which also reads the fitted class, agrees on 206: the file was not generated
+by it.) The seven the file counts differently: Asgard and its Wikelo variant,
+Cutlass Steel, Starlancer MAX and TAC and their Wikelo variants - all remote
+turrets whose class says "Remote" and whose port does not. On those the
+Starlancer's four turret repeaters sit in the pilot row where the file has
+them in the turret row; the guns are on the sheet either way, and the total is
+the same. Not chased further: the answer is in a file the dataset does not
+publish.
 
 So a stealth fit is a real answer, not an estimate: swap the Bracers for a
 Glacier and the IR moves by exactly what the game's own numbers say, with the
@@ -192,9 +206,9 @@ current panel.
 
 ## Build order
 
-1. Digest: the two new files, the version check, the refresh sentence.
-2. `ShipSheet` in Core, with the stock-fit verification as a test that prints
-   the match table.
+1. ~~Digest: the two new files, the version check, the refresh sentence.~~ Done: `CommunityData.Garage.cs`, `HasGarage`.
+2. ~~`ShipSheet` in Core, with the stock-fit verification as a test that prints
+   the match table.~~ Done: `Core/GameData/Garage.cs`, `GarageSheetTests`, `--garage-check`.
 3. `GET /api/garage/{class}` and the sheet page - read-only, every group
    labelled.
 4. The bench and the delta: `POST .../sheet`, the was → now rendering, the

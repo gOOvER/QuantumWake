@@ -17,6 +17,11 @@ using Quantumwake.Data;
 // backups and reports what it found, so the numbers can be checked against the
 // ground truth recorded in docs/findings.md.
 
+// The garage check needs no install at all: it reads the two community dump
+// files and says whether the sheet reproduces their own totals, ship by ship.
+if (GetOption(args, "--garage-check") is { } dumpDir)
+    return GarageCheck(dumpDir);
+
 var pathArg = GetOption(args, "--path");
 var install = pathArg is not null
     ? GameInstallLocator.FromPath(pathArg)
@@ -164,6 +169,73 @@ static List<ScreenTextLine> Placed(IEnumerable<string> raw)
 /// in anybody's logs, and parsing 400 MB to answer it would make the harness
 /// too slow to use while iterating on the matcher.
 /// </remarks>
+/// <summary>
+/// The stock-fit comparison from docs/garage.md over the whole dump: computes
+/// every spaceship's sheet from its parts and compares with the totals the
+/// dump wrote beside them, which the sheet never reads.
+/// </summary>
+/// <param name="dumpDir">A folder holding ships.json and ship-items.json from scunpacked-data.</param>
+static int GarageCheck(string dumpDir)
+{
+    var shipsPath = Path.Combine(dumpDir, "ships.json");
+    var itemsPath = Path.Combine(dumpDir, "ship-items.json");
+
+    if (!File.Exists(shipsPath) || !File.Exists(itemsPath))
+    {
+        Console.Error.WriteLine($"Expected ships.json and ship-items.json in {dumpDir}.");
+        return 2;
+    }
+
+    var ships = CommunityData.DigestShipStats(File.ReadAllText(shipsPath));
+    var parts = CommunityData.DigestPartStats(File.ReadAllText(itemsPath));
+
+    var counted = ships.Values.Where(s => s.IsSpaceship && s.Dataset.EmShields > 0).ToList();
+    var tally = new Dictionary<string, (int Ok, int Tried)>();
+    var misses = new List<string>();
+
+    void Check(string figure, string ship, double got, double want, double tolerance)
+    {
+        if (want <= 0) return;
+        var (ok, tried) = tally.GetValueOrDefault(figure);
+        var hit = Math.Abs(got - want) / want <= tolerance;
+        tally[figure] = (ok + (hit ? 1 : 0), tried + 1);
+        if (!hit && misses.Count < 40) misses.Add($"  {figure,-14} {ship,-44} {got,14:0.#} vs {want,14:0.#}");
+    }
+
+    foreach (var ship in counted)
+    {
+        var sheet = ShipSheet.Compute(ship, parts);
+        var d = ship.Dataset;
+
+        Check("EM shields", ship.Name, sheet.Shields.Em, d.EmShields, 0.01);
+        Check("EM quantum", ship.Name, sheet.Quantum.Em, d.EmQuantum, 0.01);
+        Check("IR shields", ship.Name, sheet.Shields.Ir, d.IrShields, 0.01);
+        Check("IR quantum", ship.Name, sheet.Quantum.Ir, d.IrQuantum, 0.01);
+        Check("power seg", ship.Name, sheet.Power.Available, d.PowerSegments, 0);
+        Check("cooling seg", ship.Name, sheet.Cooling.Generated, d.CoolingSegments, 0.01);
+        Check("shield hp", ship.Name, sheet.Shield.Hp, d.ShieldHp, 0.01);
+        Check("fixed dps", ship.Name, sheet.Weapons.FixedDps, d.FixedDps, 0.02);
+        if (sheet.QuantumDrive is { } q) Check("qt range", ship.Name, q.Range, d.QuantumRange, 0.01);
+        Check("mass", ship.Name, sheet.Mass, d.MassTotal, 0.02);
+    }
+
+    Console.WriteLine($"Garage check: {counted.Count} spaceships with a stock fit, {parts.Count} parts");
+    Console.WriteLine();
+    foreach (var (figure, (ok, tried)) in tally.OrderBy(t => t.Key))
+        Console.WriteLine($"  {figure,-14} {ok,4} of {tried,-4} {(ok == tried ? "" : $"  ({tried - ok} miss)")}");
+
+    if (misses.Count > 0)
+    {
+        Console.WriteLine();
+        Console.WriteLine("Misses (first 40):");
+        foreach (var line in misses) Console.WriteLine(line);
+    }
+
+    // Fixed-vs-turret is the one split the dump itself does not settle - see
+    // ShipSheet.IsTurret - so it is reported but does not fail the check.
+    return tally.Where(t => t.Key != "fixed dps").All(t => t.Value.Ok == t.Value.Tried) ? 0 : 1;
+}
+
 static int Screen(string linesFile, string installRoot, string? catalogueQuery)
 {
     if (!File.Exists(linesFile))
