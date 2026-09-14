@@ -15,7 +15,7 @@ public class ServersPageTests
         {"current":"pub_use1b_12545750_150","newestDeployment":"12545750","servers":[
           {"shard":"pub_use1b_12545750_150","region":"US East","regionCode":"use1b","deployment":"12545750","number":"150",
            "current":true,"visits":3,"sessions":3,"time":7200,"first":"2026-09-01T00:00:00+00:00","last":"2026-09-13T00:00:00+00:00",
-           "endings":{"Left":2,"LogEnded":1},"lastEnding":"LogEnded","lastSession":"a","note":"laggy elevators","name":"amazing_view","favorite":false},
+           "endings":{"Left":2,"LogEnded":1},"lastEnding":"LogEnded","lastSession":"a","note":"laggy elevators","favorite":false},
           {"shard":"pub_euw1b_12545750_003","region":"EU West","regionCode":"euw1b","deployment":"12545750","number":"003",
            "current":true,"visits":1,"sessions":1,"time":600,"first":"2026-09-10T00:00:00+00:00","last":"2026-09-10T00:00:00+00:00",
            "endings":{"Left":1},"lastEnding":"Left","lastSession":"b","note":null,"favorite":true},
@@ -131,7 +131,7 @@ public class ServersPageTests
             """{"shard":"pub_euw1b_12545750_003","note":"two 30ks in an hour","favorite":true}""");
 
         page.Do("""
-            const cell = __dom.node('#servers-table').querySelector('tbody').children[0].descendants().find(n => n.classList.contains('note-cell')).querySelector('.note-text');
+            const cell = __dom.node('#servers-table').querySelector('tbody').children[0].descendants().find(n => n.classList.contains('note-text'));
             cell.fire('click');
             const box = __dom.node('#servers-table').querySelector('tbody').children[0].descendants().find(n => n.tagName === 'textarea');
             box.value = 'two 30ks in an hour';
@@ -186,7 +186,7 @@ public class ServersPageTests
 
         Assert.False(page.Truth("__dom.node('#now-server-card').hidden"));
         Assert.Equal("US East 150", page.NodeText("#now-server"));
-        Assert.Equal("pub_use1b_12545750_150", page.NodeText("#now-server-id"));
+        Assert.Equal("pub_use1b_12545750_150", page.NodeText("#now-server-name"));
 
         var note = page.NodeText("#now-server-note");
         Assert.Contains("2 times before", note);
@@ -201,66 +201,5 @@ public class ServersPageTests
 
         Assert.Contains("First time on this shard", page.NodeText("#now-server-note"));
         Assert.StartsWith("☆", page.NodeText("#now-server-star"));
-    }
-
-    // ---- the taught name ----
-
-    [Fact]
-    public void A_taught_name_is_shown_and_searchable()
-    {
-        var page = Loaded();
-
-        Assert.Contains("amazing_view", page.NodeText("#servers-table"));
-
-        page.Do("__dom.node('#servers-search').value = 'amazing'; renderServers();");
-        Assert.Equal("pub_use1b_12545750_150", Rows(page));
-    }
-
-    /// <summary>The name is one line: Enter saves it, and it goes to its own route.</summary>
-    [Fact]
-    public void Naming_a_shard_writes_it_on_enter()
-    {
-        var page = Loaded();
-        page.Serve("/api/servers/pub_euw1b_12545750_003/name",
-            """{"shard":"pub_euw1b_12545750_003","note":null,"name":"quiet_harbor","favorite":true}""");
-
-        page.Do("""
-            const row = __dom.node('#servers-table').querySelector('tbody').children[0];
-            row.descendants().find(n => n.classList.contains('name-cell')).querySelector('.note-text').fire('click');
-            const box = row.descendants().find(n => n.classList.contains('name-cell')).querySelector('input');
-            box.value = 'quiet_harbor';
-            await box.fire('keydown', { key: 'Enter', preventDefault() {} });
-            """);
-
-        Assert.Contains("\"name\":\"quiet_harbor\"", page.BodyOf("/api/servers/pub_euw1b_12545750_003/name"));
-        Assert.Contains("quiet_harbor", page.NodeText("#servers-table"));
-    }
-
-    [Fact]
-    public void The_card_leads_with_the_taught_name_and_keeps_the_id_beneath()
-    {
-        var page = Now("shard:'pub_use1b_12545750_150', shardShort:'US East 150', shardAlias:'amazing_view', shardVisitsBefore:1");
-
-        Assert.Equal("amazing_view", page.NodeText("#now-server"));
-        Assert.Equal("US East 150 · pub_use1b_12545750_150", page.NodeText("#now-server-id"));
-        Assert.Equal("Rename…", page.NodeText("#now-server-name"));
-    }
-
-    [Fact]
-    public void Naming_from_the_card_writes_the_name()
-    {
-        var page = Now("shard:'pub_use1b_12545750_150', shardShort:'US East 150', shardVisitsBefore:0");
-        page.Serve("/api/servers/pub_use1b_12545750_150/name",
-            """{"shard":"pub_use1b_12545750_150","note":null,"name":"amazing_view","favorite":false}""");
-
-        Assert.Equal("Name…", page.NodeText("#now-server-name"));
-
-        page.Do("""
-            __dom.node('#now-server-name').onclick();
-            __dom.node('#now-server-name-input').value = 'amazing_view';
-            await __dom.node('#now-server-name-form').onsubmit({ preventDefault() {} });
-            """);
-
-        Assert.Contains("\"name\":\"amazing_view\"", page.BodyOf("/api/servers/pub_use1b_12545750_150/name"));
     }
 }

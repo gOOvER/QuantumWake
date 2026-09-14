@@ -80,13 +80,6 @@ public sealed record NowState
     public string? ShardShort { get; init; }
 
     /// <summary>
-    /// The name the game shows for it on screen - "amazing_view" - if the
-    /// pilot has taught it. The log never carries this, so null is the usual
-    /// answer for a shard seen for the first time.
-    /// </summary>
-    public string? ShardAlias { get; init; }
-
-    /// <summary>
     /// What the pilot wrote about this shard last time, and whether they starred
     /// it. The reason the shard is on the Now page at all: the moment to decide
     /// whether to stay is the moment of landing on it.
@@ -452,7 +445,6 @@ public sealed partial class LiveSessionService : BackgroundService
         {
             Shard = shard,
             ShardShort = ShardName.TryParse(shard, out var shardName) ? shardName.Short : shard,
-            ShardAlias = shardNote?.Name,
             ShardNote = shardNote?.Note,
             ShardFavorite = shardNote?.Favorite ?? false,
             ShardVisitsBefore = shard is not null && _visitsBefore is { } seen && seen.Shard == shard ? seen.Visits : 0,

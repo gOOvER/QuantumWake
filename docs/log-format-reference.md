@@ -305,10 +305,6 @@ disagree in 14 of the 19 pairings seen. Shards from an older deployment never
 recur once a newer one has been joined, so "still exists" is judged against the
 newest deployment in the joins, never the game version.
 
-The name the game shows on screen for a shard - `amazing_view` - is **not**
-written anywhere in the log. Only the id is. It is taught by the pilot in the
-app and kept against the id.
-
 ### How a stay ended
 
 `<Channel Disconnected>` with `gamerules="SC_Default"` closes a stay:

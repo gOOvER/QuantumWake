@@ -4425,20 +4425,3 @@ body.overlay .ship-picture { display: none; }
 /* One stay per line: a session that bounced between three shards should read
    as three lines, not one ellipsised string. */
 .session-metric.session-metric-shards .session-metric-value { white-space: pre-line; font-size: 12px; }
-
-/* The taught name is the word a pilot uses for the server, so it reads as a
-   name and not as another mono id beside the real one. */
-#servers-table .name-cell { min-width: 140px; }
-#servers-table .name-cell .note-text:not(.empty) { font-weight: 600; color: var(--text); }
-#servers-table .name-cell input {
-  width: 100%;
-  font: inherit;
-  font-size: 12.5px;
-  background: var(--panel-2);
-  color: var(--text);
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  padding: 4px 7px;
-}
-.now-server-name-form { display: flex; gap: 6px; margin-top: 8px; }
-.now-server-name-form input { flex: 1; min-width: 0; }

@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace Quantumwake.Data;
 
 /// <summary>
-/// What the pilot wrote about a shard, what they call it, and whether they starred it.
+/// What the pilot wrote about a shard, and whether they starred it.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -12,11 +12,6 @@ namespace Quantumwake.Data;
 /// name is the identity: two machines that both played on
 /// <c>pub_use1b_12545750_150</c> are talking about the same server, and a
 /// restore should merge their notes on it rather than keep two.
-/// </para>
-/// <para>
-/// The name is the one the game shows on screen - "amazing_view" - and never
-/// writes to the log, so it is taught rather than read: typed once, and kept
-/// against the id for every visit before and after.
 /// </para>
 /// <para>
 /// A record with nothing written and no star is removed rather than kept empty,
@@ -28,9 +23,7 @@ public sealed record ShardNote(
     string? Note,
     bool Favorite,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt,
-    // After the dates: a file written before names existed has no key for it.
-    string? Name = null) : IStamped<ShardNote>
+    DateTimeOffset UpdatedAt) : IStamped<ShardNote>
 {
     public string StampId => Shard;
     public ShardNote Bare() => this with { UpdatedAt = default };
@@ -39,7 +32,7 @@ public sealed record ShardNote(
 
     /// <summary>True when there is nothing left worth keeping.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public bool IsEmpty => !Favorite && string.IsNullOrWhiteSpace(Note) && string.IsNullOrWhiteSpace(Name);
+    public bool IsEmpty => !Favorite && string.IsNullOrWhiteSpace(Note);
 }
 
 /// <summary>The pilot's own view of the servers they have been placed on.</summary>
@@ -78,13 +71,6 @@ public sealed class ShardNoteStore
     /// </summary>
     public ShardNote? SetNote(string shard, string? note) =>
         Change(shard, existing => existing with { Note = Sanitise.CleanOptional(note) });
-
-    /// <summary>
-    /// Names a shard the way the game shows it. Blank forgets the name; the
-    /// length is a screen's worth, not a note's.
-    /// </summary>
-    public ShardNote? SetName(string shard, string? name) =>
-        Change(shard, existing => existing with { Name = Sanitise.CleanOptional(name, 60) });
 
     /// <summary>Stars or unstars a shard, leaving its note alone.</summary>
     public ShardNote? SetFavorite(string shard, bool favorite) =>
