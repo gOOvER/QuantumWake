@@ -364,7 +364,19 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.2
+### 0.13.3
+
+- **Save a build, open it later, set two side by side.** *Save build…* keeps
+  the bench's fit under a name - "Starlancer, quiet fit" - in `builds.json`
+  beside your jobs: it survives rescans, travels in a backup, and is
+  recomputed from the reference every time it opens, so a dataset refresh
+  that changes a part's figures changes the build's with it. The ship's
+  builds sit as chips under the bench; open one, change it, *Update build*.
+  *Compare against* measures the struck figures from a saved build instead
+  of stock, which is how two fits are read against each other without a
+  second sheet. The Fleet card's **Upgrades** button is now **Garage** and
+  opens the page on that ship; the old panel is gone, its one signal - a
+  part the game has not marked flight-ready - now a chip on the bench.
 
 - **The bench: try a part and watch the sheet move.** Under the sheet, every
   port a shop sells parts for, grouped by kind with the maker's mark, the
@@ -375,7 +387,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   it and the sheet above redraws with the old figure struck beside the new,
   coloured by whether it got better *for that figure*. Identical ports fold
   into one row - sixteen missiles are one decision - and a fit goes on all of
-  them. Nothing is saved yet; that is next. The game files carry no picture
+  them. The game files carry no picture
   of a component, so a part's face is its maker: the Fankit mark where the
   app has one, a monogram of the maker's initials where it does not.
 

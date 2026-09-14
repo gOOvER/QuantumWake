@@ -219,6 +219,6 @@ current panel.
    labelled.~~ Done, 0.13.1; `POST .../sheet` exists for step 4.
 4. ~~The bench and the delta: `POST .../sheet`, the was → now rendering, the
    budget lines.~~ Done, 0.13.2, plus `GET .../options` and folded rows.
-5. Builds: store, backup, restore, the Fleet card's button re-pointed.
+5. ~~Builds: store, backup, restore, the Fleet card's button re-pointed.~~ Done, 0.13.3; compare-against too.
 6. Shopping: the job, the destination proposal.
 7. Screenshots, docs, release notes under `### 0.13.0`.

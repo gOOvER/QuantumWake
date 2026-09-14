@@ -27,13 +27,13 @@ public class PinBackupTests : IDisposable
         new JobStore(_root), new ChecklistStore(_root), new TripStore(_root),
         new MiningLogStore(_root), new MapNoteStore(_root), new GoalStore(_root),
         new WipeStore(_root), new ItemLabelStore(_root), new TombstoneStore(_root),
-        new KitStore(_root), new ScreenReadingStore(_root), new ShardNoteStore(_root));
+        new KitStore(_root), new ScreenReadingStore(_root), new ShardNoteStore(_root), new BuildStore(_root));
 
     private RestoreService Service() => new(
         new JobStore(_root), new ChecklistStore(_root), new TripStore(_root),
         new MiningLogStore(_root), new MapNoteStore(_root), new GoalStore(_root),
         new WipeStore(_root), new ItemLabelStore(_root), new TombstoneStore(_root),
-        new LogLibrary(new SessionStore(":memory:")), new KitStore(_root), new ScreenReadingStore(_root), new ShardNoteStore(_root));
+        new LogLibrary(new SessionStore(":memory:")), new KitStore(_root), new ScreenReadingStore(_root), new ShardNoteStore(_root), new BuildStore(_root));
 
     private static PinnedLocation APin(DateTimeOffset changed, string? note = "Quantanium on the north face") =>
         new(At, At.AddMinutes(2), -9641671346.9, -11490734321.2, -91805.1, 14.99996,

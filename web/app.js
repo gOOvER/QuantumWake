@@ -8849,7 +8849,11 @@ async function openGarage(cls) {
 
   garageStock = data;
   garageSheet = data.sheet;
+  garageOpenBuild = null;
+  garageCompare = '';
+  garageSheetCache.clear();
   renderGarage(data, null);
+  await loadBuilds();
 }
 
 /**
@@ -9246,6 +9250,8 @@ function renderBenchPanel() {
     const mid = el('div');
     const name = el('div', 'c-name', part.name);
     name.append(partChip(part));
+    // Only where the game applies the tag to the kind at all - see the options route.
+    if (option.flightReady === false) name.append(el('span', 'chip unready', 'not flight-ready'));
     mid.append(name);
     mid.append(el('div', 'c-maker', part.manufacturer || part.makerCode || ''));
 
@@ -9311,35 +9317,169 @@ async function fitPart(portId, cls) {
   await refitGarage();
 }
 
+/* ---------- saved builds ---------- */
+
+/** The builds saved for the ship on the bench, the one open for editing, and what deltas are measured from. */
+let garageBuilds = [];
+let garageOpenBuild = null;
+let garageCompare = '';
+const garageSheetCache = new Map();
+
+/** Opens the Garage on a ship from elsewhere - the Fleet card's button. */
+function openGarageFor(cls) {
+  garageClass = cls;
+  showView('garage');
+}
+
+async function loadBuilds() {
+  try {
+    garageBuilds = await getJson(`/api/garage/builds?ship=${encodeURIComponent(garageClass)}`);
+  } catch {
+    garageBuilds = [];
+  }
+  renderBuilds();
+}
+
+function renderBuilds() {
+  const box = $('#garage-builds');
+  box.textContent = '';
+  box.hidden = garageBuilds.length === 0;
+
+  for (const build of garageBuilds) {
+    const chip = el('span', `build-chip${build.id === garageOpenBuild ? ' open' : ''}`);
+    chip.dataset.build = build.id;
+    chip.append(el('span', null, build.name));
+    const n = Object.keys(build.swaps || {}).length;
+    chip.append(el('span', 'meta', `${n} part${n === 1 ? '' : 's'} · ${relative(build.updatedAt)}`));
+    chip.addEventListener('click', () => openBuild(build.id).catch(() => {}));
+
+    const drop = el('button', 'drop', '×');
+    drop.type = 'button';
+    drop.title = `Delete "${build.name}"`;
+    drop.addEventListener('click', (e) => { e.stopPropagation(); deleteBuild(build.id).catch(() => {}); });
+    chip.append(drop);
+    box.append(chip);
+  }
+
+  const compare = $('#garage-compare');
+  const keep = garageCompare;
+  compare.textContent = '';
+  const stock = el('option', null, 'Stock');
+  stock.value = '';
+  compare.append(stock);
+  for (const build of garageBuilds) {
+    const option = el('option', null, build.name);
+    option.value = build.id;
+    compare.append(option);
+  }
+  compare.value = garageBuilds.some((b) => b.id === keep) ? keep : '';
+  garageCompare = compare.value;
+
+  $('#garage-update').hidden = !garageOpenBuild;
+}
+
+async function openBuild(id) {
+  const build = garageBuilds.find((b) => b.id === id);
+  if (!build) return;
+  garageOpenBuild = id;
+  garageSwaps = { ...(build.swaps || {}) };
+  await refitGarage();
+}
+
+async function saveBuild(name) {
+  const res = await fetch('/api/garage/builds', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ shipClass: garageClass, name, swaps: garageSwaps }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const build = await res.json();
+  garageBuilds.unshift(build);
+  garageOpenBuild = build.id;
+  renderBuilds();
+}
+
+/** Writes the bench's swaps into the build that is open. */
+async function updateBuild() {
+  if (!garageOpenBuild) return;
+  const res = await fetch(`/api/garage/builds/${encodeURIComponent(garageOpenBuild)}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ swaps: garageSwaps }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const build = await res.json();
+  garageBuilds = garageBuilds.map((b) => (b.id === build.id ? build : b));
+  garageSheetCache.delete(build.id);
+  renderBuilds();
+}
+
+async function deleteBuild(id) {
+  const res = await fetch(`/api/garage/builds/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
+  garageBuilds = garageBuilds.filter((b) => b.id !== id);
+  garageSheetCache.delete(id);
+  if (garageOpenBuild === id) garageOpenBuild = null;
+  if (garageCompare === id) garageCompare = '';
+  renderBuilds();
+  await refitGarage();
+}
+
+/** The sheet for a set of swaps, asked of the server once per distinct fit. */
+async function sheetFor(swaps) {
+  if (!Object.keys(swaps).length) return garageStock;
+  const key = JSON.stringify(Object.entries(swaps).sort());
+  if (garageSheetCache.has(key)) return garageSheetCache.get(key);
+
+  const res = await fetch(`/api/garage/${encodeURIComponent(garageClass)}/sheet`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ swaps }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const data = { ...(await res.json()), ship: garageStock.ship };
+  garageSheetCache.set(key, data);
+  return data;
+}
+
+/**
+ * Redraws the sheet for the bench's swaps, with the struck figures measured
+ * from stock or from the build chosen under "Compare against" - which is how
+ * two builds are set side by side without a second sheet on the page.
+ */
+async function refitGarage() {
+  if (!garageClass || !garageStock) return;
+
+  const current = await sheetFor(garageSwaps);
+  const against = garageBuilds.find((b) => b.id === garageCompare);
+  const reference = against ? await sheetFor(against.swaps || {}) : garageStock;
+
+  garageSheet = current.sheet;
+  renderGarage(current, reference === current ? null : reference);
+  renderBench(current);
+  renderBenchPanel();
+  renderBuilds();
+}
+
 async function resetGarage() {
   garageSwaps = {};
   await refitGarage();
 }
 
-async function refitGarage() {
-  if (!garageClass || !garageStock) return;
-
-  if (!Object.keys(garageSwaps).length) {
-    renderGarage(garageStock, null);
-    renderBench(garageStock);
-    renderBenchPanel();
-    return;
-  }
-
-  const res = await fetch(`/api/garage/${encodeURIComponent(garageClass)}/sheet`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ swaps: garageSwaps }),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-  const data = await res.json();
-  garageSheet = data.sheet;
-  renderGarage(data, garageStock);
-  renderBench({ ...data, ship: garageStock.ship });
-  renderBenchPanel();
-}
-
 $('#garage-reset')?.addEventListener('click', () => resetGarage().catch(() => {}));
+$('#garage-update')?.addEventListener('click', () => updateBuild().catch(() => {}));
+$('#garage-save')?.addEventListener('click', () => {
+  const form = $('#garage-save-form');
+  form.hidden = !form.hidden;
+  if (!form.hidden) $('#garage-save-name').focus();
+});
+$('#garage-save-cancel')?.addEventListener('click', () => { $('#garage-save-form').hidden = true; });
+$('#garage-save-form')?.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const name = $('#garage-save-name').value.trim();
+  $('#garage-save-form').hidden = true;
+  $('#garage-save-name').value = '';
+  saveBuild(name || 'Untitled build').catch(() => {});
+});
+onInput('#garage-compare', () => { garageCompare = $('#garage-compare').value; refitGarage().catch(() => {}); });
 
 onInput('#garage-mine', () => { const v = $('#garage-mine').value; if (v) openGarage(v).catch(() => {}); });
 onInput('#garage-all', () => { const v = $('#garage-all').value; if (v) openGarage(v).catch(() => {}); });
@@ -13436,10 +13576,10 @@ function renderFleetShips() {
     // Ground vehicles have no ports anyone sells parts for, so the offer is
     // made only where it can be kept.
     if (!grounded) {
-      const upgrade = el('button', 'ghost ship-upgrade', 'Upgrades');
-      upgrade.title = `What fits ${ship.name}, and where to buy it`;
-      upgrade.addEventListener('click', () => showUpgrades(ship.name, ship.className, card));
-      body.append(upgrade);
+      const garage = el('button', 'ghost ship-upgrade', 'Garage');
+      garage.title = `${ship.name}'s numbers, what fits it, and what a part would change`;
+      garage.addEventListener('click', () => openGarageFor(ship.className || ship.name));
+      body.append(garage);
     }
 
     const compare = el('button', hangarComparison.has(ship.name) ? 'ghost tiny ship-compare active' : 'ghost tiny ship-compare', hangarComparison.has(ship.name) ? 'Selected to compare' : 'Compare');
@@ -13464,178 +13604,6 @@ function renderFleetShips() {
 }
 
 /* ---------- what fits a ship, and where it is sold ---------- */
-
-/**
- * The upgrade panel for one ship, fetched once per ship.
- *
- * The game's own data says what each port accepts, so this is not a guess: a
- * size 2 shield port takes a size 2 shield, and the shops that stock one are
- * known. What the panel is for is the trip - every option carries where it can
- * be bought, and every line can go straight onto a shopping list.
- */
-const upgradeCache = new Map();
-
-async function upgradesFor(ship) {
-  if (!upgradeCache.has(ship)) {
-    upgradeCache.set(ship,
-      getJson(`/api/fleet/upgrades?ship=${encodeURIComponent(ship)}`).catch(() => null));
-  }
-
-  return upgradeCache.get(ship);
-}
-
-/** Ports are named for the game's files; this is what a pilot calls them. */
-const PORT_WORDS = {
-  QuantumDrive: 'Quantum drive',
-  Shield: 'Shield',
-  PowerPlant: 'Power plant',
-  Cooler: 'Cooler',
-  WeaponGun: 'Gun',
-  Turret: 'Gun mount',
-  MissileLauncher: 'Missile rack',
-  Missile: 'Missile',
-  Radar: 'Radar',
-  EMP: 'EMP',
-  QuantumInterdictionGenerator: 'Quantum interdiction',
-  MiningArm: 'Mining arm',
-};
-
-/**
- * @param ship The name to show.
- * @param key The game's class name, which is what the reference data is keyed
- *   by. "Drake Corsair" answers nothing; DRAK_Corsair answers everything.
- */
-async function showUpgrades(ship, key, card) {
-  const open = card.querySelector('.upgrade-panel');
-
-  if (open) {
-    open.remove();
-    card.classList.remove('opened');
-    return;
-  }
-
-  // One at a time: the cards are a grid, and two of them spanning the row
-  // pushes everything else off the screen.
-  $$('.ship-card.opened').forEach((other) => {
-    other.classList.remove('opened');
-    other.querySelector('.upgrade-panel')?.remove();
-  });
-
-  card.classList.add('opened');
-
-  const panel = el('div', 'upgrade-panel');
-  panel.append(el('div', 'muted', 'Reading the ship…'));
-  card.append(panel);
-
-  const answer = await upgradesFor(key || ship);
-  panel.textContent = '';
-
-  if (!answer?.known) {
-    panel.append(el('div', 'muted',
-      'The reference data on this machine predates ship ports. Refresh the '
-      + 'community dataset on the Settings page and this fills in.'));
-    return;
-  }
-
-  if (!answer.groups?.length) {
-    panel.append(el('div', 'muted',
-      'Nothing on this one is sold in game — every port it has is fixed, or '
-      + 'nobody stocks a part for it.'));
-    return;
-  }
-
-  const head = el('div', 'upgrade-head');
-  head.append(el('b', null, `What fits ${ship}`));
-  head.append(el('span', 'muted', 'the game’s own port list · prices from UEX'));
-  panel.append(head);
-
-  for (const group of answer.groups) {
-    const row = el('div', 'upgrade-group');
-
-    const title = el('button', 'upgrade-toggle');
-    title.append(el('span', 'upgrade-kind', `${PORT_WORDS[group.kind] || group.kind} S${group.size}`));
-    title.append(el('span', 'muted', `${group.ports} port${group.ports === 1 ? '' : 's'}`));
-
-    // What it flies with now is the only thing a candidate can be judged
-    // against, so it sits on the closed row rather than inside.
-    if (group.fitted?.length)
-      title.append(el('span', 'upgrade-fitted', `now: ${group.fitted.join(' · ')}`));
-
-    title.append(el('span', 'muted upgrade-count', `${group.options.length} sold`));
-
-    const body = el('div', 'upgrade-options');
-    body.hidden = true;
-
-    title.addEventListener('click', () => {
-      body.hidden = !body.hidden;
-      title.classList.toggle('open', !body.hidden);
-      if (!body.hidden && !body.dataset.filled) fillUpgradeOptions(body, group);
-    });
-
-    row.append(title);
-    row.append(body);
-    panel.append(row);
-  }
-}
-
-function fillUpgradeOptions(body, group) {
-  body.dataset.filled = '1';
-  body.textContent = '';
-
-  const table = el('table', 'upgrade-table');
-  const header = el('tr');
-  for (const [label, cls] of [['Part', null], ['Maker', null], ['Grade', 'num'],
-    ['Price', 'num'], ['Cheapest at', null], ['', 'num']]) {
-    header.append(el('th', cls, label));
-  }
-  table.append(header);
-
-  for (const option of group.options) {
-    const tr = el('tr');
-    const part = el('td');
-    part.append(el('span', null, option.name));
-
-    // The game's own flag for a component that has actually shipped. Shown as
-    // the absence of a caveat rather than a badge on everything: most options
-    // carry it, so marking those would be noise and marking the rest is news.
-    if (option.flightReady === false) {
-      const draft = el('span', 'muted not-ready', ' not flight ready');
-      draft.title = 'The game defines this but does not mark it as shipped';
-      part.append(draft);
-    }
-
-    tr.append(part);
-    tr.append(el('td', 'muted', option.manufacturer || '—'));
-    tr.append(el('td', 'num muted', gradeLetter(option.grade)));
-    tr.append(el('td', 'num', option.price ? money(option.price) : '—'));
-
-    // One shop on the row and the rest in the tooltip: the choice of counter
-    // belongs to the trip, and the trip is planned from the list.
-    const shop = option.shops[0];
-    const where = el('td');
-    const jump = el('button', 'place-link', shop.terminal);
-    jump.disabled = !shop.placeId;
-    jump.title = option.shops.map((s) => `${s.terminal} — ${money(s.price)}`).join('\n');
-    jump.addEventListener('click', () => {
-      showView('map');
-      centreOnTerminal(shop.terminal, shop.placeId);
-    });
-    where.append(jump);
-
-    if (shop.security === 'lawless')
-      where.append(el('span', 'sec sec-lawless', 'lawless'));
-
-    tr.append(where);
-
-    const add = el('td', 'num');
-    add.append(trackButton(option.name, 1, ''));
-    tr.append(add);
-
-    table.append(tr);
-  }
-
-  body.append(table);
-}
 
 /** "3 days ago", "2 months ago" - easier to scan than a date. */
 function relative(iso) {

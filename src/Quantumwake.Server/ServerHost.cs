@@ -109,6 +109,7 @@ public static class ServerHost
         builder.Services.AddSingleton<TripStore>();
         builder.Services.AddSingleton<MapNoteStore>();
         builder.Services.AddSingleton<ShardNoteStore>();
+        builder.Services.AddSingleton<BuildStore>();
         builder.Services.AddSingleton<TombstoneStore>();
         builder.Services.AddSingleton<BackupBuilder>();
         builder.Services.AddSingleton<RestoreService>();
@@ -2959,6 +2960,28 @@ public static class ServerHost
         // costs and where. A part nobody sells is still offered: the bench is
         // for finding out what a part would do, and the shop is the next
         // question, not a gate on the first.
+        // ---- saved builds: a fit under a name ----
+
+        app.MapGet("/api/garage/builds", (BuildStore builds, string? ship) =>
+            ship is { Length: > 0 } ? builds.For(ship) : builds.All());
+
+        app.MapPost("/api/garage/builds", (BuildStore builds, BuildRequest body) =>
+        {
+            var build = builds.Add(body.ShipClass, body.Name, body.Swaps, body.Note);
+            return build is null ? Results.BadRequest(new { message = "A build needs a ship." }) : Results.Ok(build);
+        });
+
+        app.MapPut("/api/garage/builds/{id}", (string id, BuildStore builds, BuildRequest body) =>
+            builds.Update(id, body.Name, body.Swaps, body.Note) is { } build ? Results.Ok(build) : Results.NotFound());
+
+        app.MapDelete("/api/garage/builds/{id}", (string id, BuildStore builds, TombstoneStore deleted) =>
+        {
+            if (!builds.Remove(id)) return Results.NotFound();
+
+            deleted.Record(TombstoneStore.Kinds.Builds, id);
+            return Results.Ok(new { id });
+        });
+
         app.MapGet("/api/garage/{cls}/options", (string cls, string port, LogLibrary lib, UexData uex) =>
         {
             var community = lib.Community;
@@ -2969,12 +2992,24 @@ public static class ServerHost
             if (target is null) return Results.NotFound(new { message = $"{ship.Name} has no port {port}." });
 
             var kinds = target.Accepts.Where(GarageKinds.Contains).ToHashSet(StringComparer.Ordinal);
+
+            // Which kinds the game tags as shipped at all. The tag is not used
+            // evenly - 196 of 203 guns carry it and not one of the 81 coolers -
+            // so an untagged cooler is silence, not a warning.
+            var tagged = lib.GameCommodities.ItemFacts.Values
+                .Where(i => i.Tags.Contains("flightReady", StringComparison.OrdinalIgnoreCase))
+                .Select(i => i.Type)
+                .Where(t => t.Length > 0)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var options = community.Parts.Values
                 .Where(p => kinds.Contains(p.Type) && p.Size >= target.MinSize && p.Size <= target.MaxSize)
                 .Where(p => !p.Name.Equals(p.Class, StringComparison.Ordinal) && !p.Name.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase))
                 .Select(p => new
                 {
                     part = PartCard(p),
+                    flightReady = lib.GameCommodities.Item(p.Class) is { } facts && tagged.Contains(facts.Type)
+                        ? facts.Tags.Contains("flightReady", StringComparison.OrdinalIgnoreCase)
+                        : (bool?)null,
                     price = uex.ItemPrice(p.Uuid),
                     shops = uex.ItemMarket(p.Uuid)
                         .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
@@ -3004,136 +3039,6 @@ public static class ServerHost
                 options
             });
         });
-
-        // Every terminal price for one commodity: the map grades its sellers
-        // and buyers by these, by price or by SCU capacity.
-        /*
-         * What can be bolted onto one of your ships, and where it is sold.
-         *
-         * The ship data carries every port with the rule for what may replace
-         * what is in it, so this is the game's own answer rather than a guess:
-         * a size 2 shield port takes a size 2 shield, and the shops that stock
-         * one are known. Ports nobody sells parts for come back empty and are
-         * dropped, so the page shows what can actually be shopped for today.
-         */
-        app.MapGet("/api/fleet/upgrades", (LogLibrary lib, UexData uex, string ship) =>
-        {
-            var slots = lib.Community.Slots(ship);
-
-            if (slots.Count == 0)
-                return Results.Ok(new
-                {
-                    ship,
-
-                    // Told apart on purpose: an install whose reference data
-                    // predates ports needs a refresh, which is a different
-                    // sentence from "this ship has nothing to change".
-                    known = lib.Community.HasSlots,
-                    groups = Array.Empty<object>()
-                });
-
-            // Everything sold, by what it is and how big: one pass over the
-            // catalogue rather than one per port.
-            // Which kinds of component the game actually tags as shipped. The
-            // tag is not used evenly: 196 of 203 weapon guns carry it and not
-            // one of the 81 coolers does, so an untagged cooler means the tag
-            // was never applied to coolers rather than that the cooler is
-            // unfinished. Saying otherwise would put "not flight ready" on
-            // every cooler, shield and quantum drive in the game.
-            var tagged = lib.GameCommodities.ItemFacts.Values
-                .Where(i => i.Tags.Contains("flightReady", StringComparison.OrdinalIgnoreCase))
-                .Select(i => i.Type)
-                .Where(t => t.Length > 0)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            // Keyed by class name rather than flattened to values, because the
-            // class is what joins these to the install's own facts.
-            var catalogue = lib.Community.Items
-                .Where(i => i.Value.Uuid is not null && i.Value.Type is { Length: > 0 })
-                .GroupBy(i => (i.Value.Type!, i.Value.Size))
-                .ToDictionary(g => g.Key, g => g.ToList());
-
-            var groups = slots
-                .GroupBy(s => (s.Kind, s.Size))
-                .Select(group =>
-                {
-                    var fitted = group
-                        .Select(s => s.Fitted)
-                        .Where(f => f is { Length: > 0 })
-                        .Distinct(StringComparer.OrdinalIgnoreCase)
-                        .ToList();
-
-                    var options = (catalogue.TryGetValue(group.Key, out var candidates) ? candidates : [])
-                        .Select(entry => new
-                        {
-                            Item = entry.Value,
-                            Facts = lib.GameCommodities.Item(entry.Key),
-                        })
-                        .Select(row => new
-                        {
-                            row.Item,
-                            // Null where the game does not use the tag for this
-                            // kind of part at all, which is most kinds. Only a
-                            // component of a kind the tag is applied to can be
-                            // said to be missing it.
-                            Ready = row.Facts is null || !tagged.Contains(row.Facts.Type)
-                                ? (bool?)null
-                                : row.Facts.Tags.Contains(
-                                    "flightReady", StringComparison.OrdinalIgnoreCase),
-                        })
-                        .Select(row => new
-                        {
-                            row.Item.Name,
-                            row.Item.Manufacturer,
-                            row.Item.Grade,
-                            flightReady = row.Ready,
-                            price = uex.ItemPrice(row.Item.Uuid),
-                            shops = uex.ItemMarket(row.Item.Uuid)
-                                .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
-                                .Select(g => g.MinBy(r => r.Buy)!)
-                                .OrderBy(r => r.Buy)
-                                .Take(4)
-                                .Select(r =>
-                                {
-                                    var place = lib.Terminals.Resolve(r.Terminal);
-
-                                    return new
-                                    {
-                                        terminal = r.Terminal,
-                                        placeId = place?.RawId ?? string.Empty,
-                                        place = place?.Name,
-                                        system = place?.System,
-                                        security = TerminalPlaces.SecurityOfSystem(place?.System),
-                                        price = r.Buy
-                                    };
-                                })
-                                .ToList()
-                        })
-
-                        // Nothing to buy is not an upgrade: an item with no
-                        // shop behind it would send the player nowhere.
-                        .Where(o => o.Name is { Length: > 0 } && o.shops.Count > 0)
-                        .OrderBy(o => o.price ?? decimal.MaxValue)
-                        .Take(12)
-                        .ToList();
-
-                    return new
-                    {
-                        kind = group.Key.Kind,
-                        size = group.Key.Size,
-                        ports = Holes(group),
-                        fitted,
-                        options
-                    };
-                })
-                .Where(g => g.options.Count > 0)
-                .OrderBy(g => g.kind)
-                .ThenBy(g => g.size)
-                .ToList();
-
-            return Results.Ok(new { ship, known = true, groups });
-        });
-
         /*
          * Everything a shopping list can be written from.
          *
@@ -3599,25 +3504,6 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
 
     static string Compact(string value) =>
         new([.. value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant)]);
-}
-
-/// <summary>
-/// How many holes of one kind and size a ship really has.
-/// </summary>
-/// <remarks>
-/// Two things stop this being a count of rows. A port that accepts sizes 1 to
-/// 3 is three rows and one hole. And a gimbal mount accepts a gun directly or
-/// a gimbal that then holds the gun, so the mount and the gun inside it are
-/// the same hole offered twice - which is why a Corsair looked like it had
-/// twelve size 2 gun ports instead of six. A port whose id extends another
-/// port's id is inside it, so only the outermost of each chain is counted.
-/// </remarks>
-static int Holes(IEnumerable<ShipSlot> slots)
-{
-    var ports = slots.Select(s => s.Port).Distinct(StringComparer.Ordinal).ToList();
-
-    return ports.Count(port =>
-        !ports.Any(other => other != port && port.StartsWith(other + ".", StringComparison.Ordinal)));
 }
 
 /// <summary>Bridges the library's progress callback to the shared status.</summary>
@@ -4449,6 +4335,9 @@ public sealed record ShardNoteRequest(string? Note);
 
 /// <summary>Body of POST /api/garage/{class}/sheet: port id → class to fit there, null to empty the port.</summary>
 public sealed record GarageSwapRequest(Dictionary<string, string?>? Swaps);
+
+/// <summary>Body of POST and PUT /api/garage/builds. On PUT, null leaves a field alone.</summary>
+public sealed record BuildRequest(string? ShipClass, string? Name, Dictionary<string, string?>? Swaps, string? Note);
 
 /// <summary>Body of PUT /api/servers/{shard}/favorite.</summary>
 public sealed record ShardFavoriteRequest(bool Favorite);

@@ -1897,14 +1897,29 @@
       <h2 class="spaced">Bench</h2>
       <div class="bench-state">
         <span id="garage-changes" class="muted">Stock fit</span>
+        <label class="toggle compare-against">Compare against
+          <select id="garage-compare" class="select tiny" title="What the struck figures are measured from">
+            <option value="">Stock</option>
+          </select>
+        </label>
         <button type="button" class="ghost tiny" id="garage-reset" hidden>Reset to stock</button>
+        <button type="button" class="ghost tiny" id="garage-update" hidden>Update build</button>
+        <button type="button" class="ghost tiny" id="garage-save">Save build…</button>
       </div>
     </div>
+    <form class="build-name-form" id="garage-save-form" hidden>
+      <input type="text" id="garage-save-name" class="search" maxlength="80" placeholder="Name this build — Starlancer, quiet fit" />
+      <button type="submit" class="ghost tiny">Save</button>
+      <button type="button" class="ghost tiny" id="garage-save-cancel">Cancel</button>
+    </form>
+    <div class="builds" id="garage-builds" hidden></div>
     <p class="muted caption" id="garage-bench-caption" hidden>
       Pick a port, then a part that fits it. The sheet above moves as you do:
       every figure that changed shows what it was, coloured by whether it got
       better <em>for that figure</em> &mdash; less IR is better, less DPS is not.
-      Nothing is saved yet; that is the next step.
+      <b>Save build…</b> keeps a fit under a name; it survives rescans and travels
+      in a backup. <b>Compare against</b> measures the struck figures from a
+      saved build instead of stock, which is how two fits are set side by side.
     </p>
     <div class="bench" id="garage-bench" hidden>
       <div class="bench-ports" id="garage-bench-ports"></div>

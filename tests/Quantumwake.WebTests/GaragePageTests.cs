@@ -41,6 +41,7 @@ public class GaragePageTests
         var page = new Page();
         page.Serve("/api/garage", Garage);
         page.Serve("/api/garage/AEGS_Gladius", Gladius);
+        page.Serve("/api/garage/builds?ship=AEGS_Gladius", "[]");
         page.Do("await loadGarage();");
         return page;
     }
@@ -314,5 +315,129 @@ public class GaragePageTests
         Assert.Equal("WCP", page.Text("monogram(null, 'Wen-Cassel Propulsion')"));
         Assert.Equal("KLWE", page.Text("monogram('KLWE', 'Klaus & Werner')"));
         Assert.Equal("JS", page.Text("monogram(null, 'Juno Starwerk')"));
+    }
+
+    // ---- saved builds ----
+
+    private const string Builds = """
+        [{"id":"b1","shipClass":"AEGS_Gladius","name":"Quiet fit","swaps":{"p1":"COOL_JUST_S01_Glacier_SCItem"},
+          "createdAt":"2026-09-14T10:00:00+00:00","updatedAt":"2026-09-14T10:00:00+00:00"}]
+        """;
+
+    private static Page WithBuilds()
+    {
+        var page = new Page();
+        page.Serve("/api/garage", Garage);
+        page.Serve("/api/garage/AEGS_Gladius", Gladius);
+        page.Serve("/api/garage/builds?ship=AEGS_Gladius", "[]");
+        page.Serve("/api/garage/builds?ship=AEGS_Gladius", Builds);
+        page.Serve("/api/garage/AEGS_Gladius/options?port=p1", CoolerOptions);
+        page.Serve("/api/garage/AEGS_Gladius/sheet", Gladius
+            .Replace("\"ir\":8711", "\"ir\":8502")
+            .Replace("\"name\":\"Bracer\",\"stockClass\":\"COOL_AEGS_S01_Bracer_SCItem\",\"changed\":false",
+                "\"class\":\"COOL_JUST_S01_Glacier_SCItem\",\"name\":\"Glacier\",\"stockName\":\"Bracer\",\"stockClass\":\"COOL_AEGS_S01_Bracer_SCItem\",\"changed\":true"));
+        page.Do("await loadGarage();");
+        return page;
+    }
+
+    [Fact]
+    public void The_ships_builds_are_listed_and_one_opens_onto_the_bench()
+    {
+        var page = WithBuilds();
+
+        Assert.Contains("GET /api/garage/builds?ship=AEGS_Gladius", page.Fetched());
+        Assert.False(page.Truth("__dom.node('#garage-builds').hidden"));
+        Assert.Contains("Quiet fit", page.NodeText("#garage-builds"));
+        Assert.Contains("1 part", page.NodeText("#garage-builds"));
+        Assert.Contains("Quiet fit", page.NodeText("#garage-compare"));
+
+        page.Do("await openBuild('b1');");
+
+        Assert.Equal("COOL_JUST_S01_Glacier_SCItem", page.Text("garageSwaps.p1"));
+        Assert.Equal("1 part changed", page.NodeText("#garage-changes"));
+        Assert.False(page.Truth("__dom.node('#garage-update').hidden"));
+        Assert.True(page.Truth("__dom.node('#garage-builds').descendants().some(n => n.classList.contains('build-chip') && n.classList.contains('open'))"));
+    }
+
+    [Fact]
+    public void Saving_posts_the_bench_and_the_new_build_is_the_open_one()
+    {
+        var page = WithBuilds();
+        page.Serve("/api/garage/builds", """{"id":"b2","shipClass":"AEGS_Gladius","name":"Loud fit","swaps":{"p1":"COOL_JUST_S01_Glacier_SCItem"},"createdAt":"2026-09-14T11:00:00+00:00","updatedAt":"2026-09-14T11:00:00+00:00"}""");
+        page.Do("await fitPart('p1', 'COOL_JUST_S01_Glacier_SCItem'); await saveBuild('Loud fit');");
+
+        var body = page.BodyOf("/api/garage/builds");
+        Assert.Contains("\"shipClass\":\"AEGS_Gladius\"", body);
+        Assert.Contains("\"name\":\"Loud fit\"", body);
+        Assert.Contains("\"p1\":\"COOL_JUST_S01_Glacier_SCItem\"", body);
+        Assert.Contains("Loud fit", page.NodeText("#garage-builds"));
+        Assert.Equal("b2", page.Text("garageOpenBuild"));
+    }
+
+    [Fact]
+    public void Updating_writes_the_bench_into_the_open_build()
+    {
+        var page = WithBuilds();
+        page.Serve("/api/garage/builds/b1", """{"id":"b1","shipClass":"AEGS_Gladius","name":"Quiet fit","swaps":{},"createdAt":"2026-09-14T10:00:00+00:00","updatedAt":"2026-09-14T12:00:00+00:00"}""");
+        page.Do("await openBuild('b1'); await resetGarage(); await updateBuild();");
+
+        Assert.Contains("PUT /api/garage/builds/b1", page.Fetched());
+        Assert.Contains("\"swaps\":{}", page.BodyOf("/api/garage/builds/b1"));
+        Assert.Contains("0 parts", page.NodeText("#garage-builds"));
+    }
+
+    [Fact]
+    public void Deleting_the_open_build_returns_the_bench_to_stock()
+    {
+        var page = WithBuilds();
+        page.Serve("/api/garage/builds/b1", """{"id":"b1"}""");
+        page.Do("await openBuild('b1'); await deleteBuild('b1');");
+
+        Assert.Contains("DELETE /api/garage/builds/b1", page.Fetched());
+        Assert.True(page.Truth("__dom.node('#garage-builds').hidden"));
+        Assert.True(page.Truth("garageOpenBuild === null"));
+    }
+
+    /// <summary>
+    /// Comparing against a build measures the struck figures from that build's
+    /// sheet rather than stock: the bench at stock then shows what the build
+    /// changes, in reverse.
+    /// </summary>
+    [Fact]
+    public void Compare_against_a_build_measures_from_its_sheet()
+    {
+        var page = WithBuilds();
+        page.Do("__dom.node('#garage-compare').value = 'b1'; garageCompare = 'b1'; await refitGarage();");
+
+        // The bench is stock (IR 8,711); the build's sheet says 8,502; the row shows the build's figure struck.
+        var ir = "__dom.node('#garage-sheet').descendants().filter(n => n.classList.contains('sheet-row')).find(r => r.dataset.key === 'IR, shields up')";
+        Assert.Contains("8,502", page.Text($"{ir}.textContent"));
+        Assert.Contains("8,711", page.Text($"{ir}.textContent"));
+        Assert.Equal(1, page.Fetched().Count(f => f.StartsWith("POST /api/garage/AEGS_Gladius/sheet")));
+    }
+
+    [Fact]
+    public void A_part_the_game_has_not_marked_as_shipped_says_so_on_the_bench()
+    {
+        var page = Bench();
+        page.Serve("/api/garage/AEGS_Gladius/options?port=p1", CoolerOptions.Replace("\"price\":12000", "\"flightReady\":false,\"price\":12000"));
+        page.Do("await selectBenchPort('p1');");
+
+        var glacier = "__dom.node('#garage-bench-panel').descendants().filter(n => n.classList.contains('candidate')).find(n => n.textContent.includes('Glacier'))";
+        Assert.True(page.Truth($"{glacier}.descendants().some(n => n.classList.contains('unready'))"));
+    }
+
+    /// <summary>The Fleet card's button opens the Garage on that ship rather than a panel of its own.</summary>
+    [Fact]
+    public void The_fleet_card_opens_the_garage_on_the_ship()
+    {
+        var page = new Page();
+        page.Serve("/api/garage", Garage);
+        page.Serve("/api/garage/DRAK_Cutlass_Black", Gladius.Replace("AEGS_Gladius", "DRAK_Cutlass_Black").Replace("Aegis Gladius", "Drake Cutlass Black"));
+        page.Serve("/api/garage/builds?ship=DRAK_Cutlass_Black", "[]");
+        page.Do("openGarageFor('DRAK_Cutlass_Black'); await loadGarage();");
+
+        Assert.Equal("DRAK_Cutlass_Black", page.Text("garageClass"));
+        Assert.Contains("GET /api/garage/DRAK_Cutlass_Black", page.Fetched());
     }
 }
