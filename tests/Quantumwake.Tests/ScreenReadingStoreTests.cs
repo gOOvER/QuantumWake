@@ -47,6 +47,31 @@ public class ScreenReadingStoreTests : IDisposable
     }
 
     [Fact]
+    public void The_latest_believed_kiosk_hold_per_named_ship_is_available_for_planning()
+    {
+        var store = new ScreenReadingStore(_dir);
+        store.Add(Sighting("old.jpg", At.AddHours(-2), ScreenKind.Kiosk) with
+        {
+            Kiosk = new KioskReading(true, "RSI HERMES", "RSI Hermes", 2, 4, null, []),
+        });
+        store.Add(Sighting("new.jpg", At, ScreenKind.Kiosk) with
+        {
+            Kiosk = new KioskReading(true, "RSI HERMES", "RSI Hermes", 3, 6, null, []),
+        });
+        store.Add(Sighting("dismissed.jpg", At.AddMinutes(1), ScreenKind.Kiosk) with
+        {
+            Kiosk = new KioskReading(true, "RSI HERMES", "RSI Hermes", 0, 99, null, []),
+            Dismissed = true,
+        });
+
+        var hold = Assert.Single(store.LatestKioskCargoHolds());
+
+        Assert.Equal("RSI Hermes", hold.Ship);
+        Assert.Equal(6, hold.CapacityScu);
+        Assert.Equal(At, hold.ShotAt);
+    }
+
+    [Fact]
     public void The_store_is_bounded()
     {
         var store = new ScreenReadingStore(_dir);
@@ -328,5 +353,42 @@ public class ScreenReadingStoreTests : IDisposable
         Assert.False(ScreenSettings.Clean(ScreenMode.CopyOnly, false, true).WatchScreenshots);
         Assert.False(ScreenSettings.Clean(ScreenMode.Off, true, true).WatchScreenshots);
         Assert.False(ScreenSettings.Clean(ScreenMode.Screenshots, false, null).WatchScreenshots);
+    }
+
+    /// <summary>
+    /// The current screen is the newest one taken, not the one read last. A
+    /// kiosk from three days back, re-read once, sat on the Now page as the
+    /// state of things and led the hub with a wallet disagreement measured
+    /// backwards in time.
+    /// </summary>
+    [Fact]
+    public void Re_reading_an_old_frame_does_not_make_it_the_current_screen()
+    {
+        var store = new ScreenReadingStore(_dir);
+        store.Add(Sighting("old.jpg", At.AddDays(-3), wallet: new WalletReading(2_092_773, null)));
+        store.Add(Sighting("new.jpg", At, wallet: new WalletReading(3_958_160, null)));
+
+        // Read again, so it goes to the head of the list.
+        store.Add(Sighting("old.jpg", At.AddDays(-3), wallet: new WalletReading(2_092_773, null)));
+
+        Assert.Equal("new.jpg", store.Latest?.Shot);
+        Assert.Equal(3_958_160, store.LastWallet()?.Balance);
+    }
+
+    /// <summary>
+    /// A shot is checked against the newest wallet reading taken before it,
+    /// never one taken after, and never itself.
+    /// </summary>
+    [Fact]
+    public void The_baseline_for_a_shot_is_the_newest_wallet_read_before_it()
+    {
+        var store = new ScreenReadingStore(_dir);
+        store.Add(Sighting("first.jpg", At.AddDays(-3), wallet: new WalletReading(1_000_000, null)));
+        store.Add(Sighting("second.jpg", At.AddDays(-1), wallet: new WalletReading(2_000_000, null)));
+        store.Add(Sighting("third.jpg", At, wallet: new WalletReading(3_000_000, null)));
+
+        Assert.Equal("second.jpg", store.LastWallet(before: At)?.Shot);
+        Assert.Equal("first.jpg", store.LastWallet(before: At.AddDays(-1))?.Shot);
+        Assert.Null(store.LastWallet(before: At.AddDays(-3)));
     }
 }

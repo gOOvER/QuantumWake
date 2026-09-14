@@ -30,7 +30,9 @@ public class UexRouteReliabilityTests : IDisposable
                   {"id_commodity":1,"commodity_name":"Fresh cargo","id_terminal":2,"terminal_name":"Thin buyer","price_buy":0,"price_sell":25,"scu_buy":0,"scu_sell_stock":18,"date_modified":{{Now}}},
                   {"id_commodity":1,"commodity_name":"Fresh cargo","id_terminal":3,"terminal_name":"Backup buyer","price_buy":0,"price_sell":22,"scu_buy":0,"scu_sell_stock":64,"date_modified":{{Now}}},
                   {"id_commodity":2,"commodity_name":"Stale gold","id_terminal":4,"terminal_name":"Old seller","price_buy":10,"price_sell":0,"scu_buy":80,"scu_sell_stock":0,"date_modified":{{Stale}}},
-                  {"id_commodity":2,"commodity_name":"Stale gold","id_terminal":5,"terminal_name":"Old buyer","price_buy":0,"price_sell":100,"scu_buy":0,"scu_sell_stock":64,"date_modified":{{Stale}}}
+                  {"id_commodity":2,"commodity_name":"Stale gold","id_terminal":5,"terminal_name":"Old buyer","price_buy":0,"price_sell":100,"scu_buy":0,"scu_sell_stock":64,"date_modified":{{Stale}}},
+                  {"id_commodity":3,"commodity_name":"Return cargo","id_terminal":2,"terminal_name":"Thin buyer","price_buy":10,"price_sell":0,"scu_buy":64,"scu_sell_stock":0,"date_modified":{{Now}}},
+                  {"id_commodity":3,"commodity_name":"Return cargo","id_terminal":1,"terminal_name":"Fresh seller","price_buy":0,"price_sell":20,"scu_buy":0,"scu_sell_stock":18,"date_modified":{{Now}}}
                 ]}
                 """;
 
@@ -69,6 +71,41 @@ public class UexRouteReliabilityTests : IDisposable
         Assert.All(uex.Routes(64, 10_000, evidence: "reported"), r => Assert.NotEqual("capacity-unknown", r.Availability));
         Assert.All(uex.Routes(64, 10_000, evidence: "full"), r => Assert.Equal("reported-full", r.Availability));
         Assert.Equal("Stale gold", uex.Routes(64, 10_000, reliableFirst: false)[0].Commodity);
+    }
+
+    [Fact]
+    public async Task A_circuit_uses_a_second_commodity_to_return_to_its_origin()
+    {
+        var uex = new UexData(_directory);
+        await uex.EnableAsync(new HttpClient(new Feed()));
+
+        var circuit = Assert.Single(uex.Circuits(64, 10_000), c =>
+            c.Outbound.Commodity == "Fresh cargo" && c.ReturnCommodity == "Return cargo");
+
+        Assert.Equal("Fresh seller", circuit.ReturnSellAt);
+        Assert.Equal("Thin buyer", circuit.ReturnBuyAt);
+        Assert.True(circuit.ReturnProfit > 0);
+    }
+
+
+    /// <summary>
+    /// The panel under the table answers the same question as the table. The
+    /// fixture's return leg is only partly reported - 18 SCU of demand against
+    /// a 64 SCU hold - so a Reported full load table gets no circuit under it,
+    /// and an outward leg the safety or pad filter refuses is never tried.
+    /// </summary>
+    [Fact]
+    public async Task A_circuit_is_held_to_the_table_filters_on_both_legs()
+    {
+        var uex = new UexData(_directory);
+        await uex.EnableAsync(new HttpClient(new Feed()));
+
+        // The loop runs both ways round in this fixture, so unfiltered is two.
+        Assert.Equal(2, uex.Circuits(64, 10_000, evidence: "reported").Count);
+        Assert.Equal(2, uex.Circuits(64, 10_000, freshOnly: true).Count);
+        Assert.Empty(uex.Circuits(64, 10_000, evidence: "full"));
+        Assert.Empty(uex.Circuits(64, 10_000, admits: _ => false));
+        Assert.Single(uex.Circuits(64, 10_000, admits: route => route.BuyAt == "Fresh seller"));
     }
 
     /// <summary>A cache written before UEX's date_modified was stored: no row is stamped.</summary>

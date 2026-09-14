@@ -470,14 +470,58 @@ public class ScreenLogTests
         Assert.Equal(before + 1, page.Fetched().Count(call => call.Contains("/api/ledger/wallet")));
     }
 
+    /// <summary>
+    /// A disagreement is a finding, not a fault - the wallet check exists to
+    /// find money the log never saw - so the hub says what differs rather
+    /// than "needs review", and only while the shot is fresh: taken in this
+    /// session and within the last half hour. It used to lead with "Screen
+    /// needs review" for whatever frame had been read last, however old,
+    /// until another frame was read.
+    /// </summary>
     [Fact]
-    public void The_hub_leads_with_a_screen_disagreement_and_a_link_to_review_it()
+    public void The_hub_leads_with_what_a_fresh_screenshot_disagrees_on()
     {
         var page = Panel();
-        Frame(page, "", "{checks:[{verdict:'differs'}]}");
+        page.Do("""
+            renderNow({ connected:true, inGame:true, confidence:'None', recentEvents:[],
+              sessionStarted: new Date(Date.now() - 3600000).toISOString(),
+              screen: { shot:'ScreenShot-W.jpg', shotAt: new Date(Date.now() - 60000).toISOString(), kind:'Map', summary:'a map',
+                checks:[{subject:'Wallet',claim:'3,958,160 aUEC',belief:'2,687,900 aUEC from the ledger',verdict:'differs',
+                  note:'1,270,260 aUEC arrived without a line in the log since 12 Sep 04:47'}] } });
+            """);
 
         Assert.False(page.Truth("__dom.node('#now-focus').hidden"));
-        Assert.Contains("Screen needs review", page.NodeText("#now-focus-title"));
-        Assert.Equal("Review", page.NodeText("#now-focus-open"));
+        Assert.Contains("Screenshot differs", page.NodeText("#now-focus-title"));
+        Assert.DoesNotContain("needs review", page.NodeText("#now-focus-title"));
+        Assert.Contains("Wallet: 1,270,260 aUEC arrived without a line in the log", page.NodeText("#now-focus-detail"));
+        Assert.Equal("Log", page.NodeText("#now-focus-open"));
+    }
+
+    [Fact]
+    public void A_screenshot_from_before_this_session_does_not_lead_the_hub()
+    {
+        var page = Panel();
+        page.Do("""
+            renderNow({ connected:true, inGame:true, confidence:'None', recentEvents:[], location:'Everus Harbor',
+              sessionStarted: new Date(Date.now() - 3600000).toISOString(),
+              screen: { shot:'ScreenShot-K.jpg', shotAt:'2026-09-10T20:53:54Z', kind:'Kiosk', summary:'a kiosk',
+                checks:[{subject:'Wallet',claim:'2,092,773 aUEC',belief:'4,061,566 aUEC from the ledger',verdict:'differs'}] } });
+            """);
+
+        Assert.Equal("At location", page.NodeText("#now-focus-title"));
+    }
+
+    [Fact]
+    public void A_screenshot_older_than_half_an_hour_stops_leading_the_hub()
+    {
+        var page = Panel();
+        page.Do("""
+            renderNow({ connected:true, inGame:true, confidence:'None', recentEvents:[], location:'Everus Harbor',
+              sessionStarted: new Date(Date.now() - 7200000).toISOString(),
+              screen: { shot:'ScreenShot-W.jpg', shotAt: new Date(Date.now() - 3600000).toISOString(), kind:'Map', summary:'a map',
+                checks:[{subject:'Wallet',claim:'x',belief:'y',verdict:'differs'}] } });
+            """);
+
+        Assert.Equal("At location", page.NodeText("#now-focus-title"));
     }
 }

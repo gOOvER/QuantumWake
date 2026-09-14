@@ -145,7 +145,7 @@ public sealed class ScreenInsightService(
 
         var frame = ScreenFrames.Read(lines, items, ships, CommodityNames());
         var beliefs = new LibraryBeliefs(library);
-        var checks = ScreenChecks.Check(frame, shotAt, beliefs, readings.LastWallet());
+        var checks = ScreenChecks.Check(frame, shotAt, beliefs, readings.LastWallet(before: shotAt));
 
         // The fittings check knows which parts are stock; say so on each part
         // as well as in the verdict, because the fleet page shows them one by one.

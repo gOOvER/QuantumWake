@@ -539,6 +539,52 @@ h2.spaced { margin-top: 32px; }
   margin-bottom: 11px;
 }
 
+/* Evidence is attached to the answer it supports, not buried in Settings.
+   The colours distinguish origins at a glance; the words remain present so a
+   colour-blind or monochrome display does not turn provenance into a guess. */
+.card-source { margin: -7px 0 10px; min-height: 14px; }
+.view-sources { margin: -4px 0 12px; min-height: 16px; }
+.data-sources { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.data-source {
+  display: inline-block;
+  padding: 2px 5px;
+  border: 1px solid var(--rule);
+  color: var(--dim);
+  background: rgba(255, 255, 255, .025);
+  font: 8px/1 var(--mono);
+  letter-spacing: .08em;
+  white-space: nowrap;
+}
+.data-source.game-log { color: var(--cyan-hot); border-color: var(--cyan-deep); }
+.data-source.game-install { color: var(--green); border-color: rgba(79, 212, 138, .34); }
+.data-source.screenshot-ocr { color: var(--amber); border-color: rgba(255, 171, 61, .36); }
+.data-source.community-data { color: var(--violet); border-color: rgba(181, 140, 240, .36); }
+.data-source-qualifier { color: var(--amber); border-color: rgba(255, 171, 61, .36); }
+body.overlay .card-source { margin: -2px 0 4px; min-height: 11px; }
+body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
+
+/* A recap is deliberately a readable page, not a diagnostics dump. The same
+   structure is used by the self-contained HTML file, so print and save tell
+   the same story. */
+.share-report { max-width: 980px; padding: 24px; border: 1px solid var(--rule-hot); background: linear-gradient(150deg, var(--panel), var(--deep)); clip-path: var(--chamfer); }
+.share-report-head, .share-section-head { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; }
+.share-kicker { color: var(--cyan-hot); font: 700 10px var(--mono); letter-spacing: .2em; }
+.share-report h2 { margin: 4px 0; color: var(--text); font-size: 27px; }
+.share-report h3 { margin: 0; color: var(--cyan-hot); font-size: 16px; }
+.share-report h4 { margin: 20px 0 7px; color: var(--dim); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+.share-section { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--rule); }
+.share-section-detail { margin: 7px 0 0; color: var(--muted); font-size: 12px; }
+.share-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(138px, 1fr)); gap: 8px; margin-top: 14px; }
+.share-metric { min-width: 0; padding: 10px; border-left: 2px solid var(--cyan); background: rgba(0, 0, 0, .17); }
+.share-metric-value { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+.share-metric-label { margin-top: 3px; color: var(--dim); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+.share-list { list-style: none; margin: 0; padding: 0; }
+.share-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid rgba(45, 82, 109, .45); font-size: 12px; }
+.share-list b { white-space: nowrap; }
+.share-limits { margin: 24px 0 0; color: var(--dim); font-size: 11px; line-height: 1.5; }
+@media (max-width: 620px) { .share-report { padding: 16px; } .share-report-head, .share-section-head { flex-direction: column; gap: 8px; } .share-list li { grid-template-columns: minmax(0, 1fr) auto; } .share-list li > .muted { grid-column: 1 / -1; } }
+@media print { body.printing-share .topbar, body.printing-share .tabs, body.printing-share .scan, body.printing-share .update, body.printing-share .patch, body.printing-share footer, body.printing-share .view:not(#view-share) { display: none !important; } body.printing-share #view-share { display: block !important; padding: 0; } body.printing-share .section-bar, body.printing-share #view-share > .caption { display: none; } .share-report { max-width: none; border: 0; clip-path: none; background: #fff; color: #14202b; } .share-report h2 { color: #14202b; } .share-report h3, .share-kicker { color: #126b91; } .share-section { border-color: #b8cbd6; } .share-metric { background: #eef5f8; border-color: #126b91; } .share-section-detail, .share-metric-label, .share-limits { color: #50616c; } .data-source { color: #126b91; border-color: #8ca6b4; } }
+
 /* Now is often a glance-only dashboard. Keeping the label and a small
    explicit control visible gives every card a stable, reversible summary. */
 .now-card-actions {
@@ -1532,6 +1578,12 @@ body.overlay .scan-file { display: none; }
 .section-bar h2 { margin: 0; }
 .section-bar h2.spaced { margin-top: 32px; }
 .controls { display: flex; gap: 8px; align-items: center; }
+.route-heading { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.route-header-status { display: flex; align-items: center; gap: 6px; color: var(--muted); font: 10px var(--mono); }
+.route-readiness { padding: 3px 6px; border: 1px solid var(--rule); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+.route-readiness.ready { color: var(--green); border-color: rgba(79, 212, 138, .55); }
+.route-readiness.needs-cargo { color: var(--amber); border-color: rgba(232, 180, 76, .5); }
+.route-readiness.no-prices, .route-readiness.no-pad { color: var(--red); border-color: rgba(225, 91, 91, .5); }
 
 .search, .select {
   background: var(--deep);
@@ -2501,6 +2553,27 @@ td.with-track .track:focus-visible { opacity: 1; }
 .route-freshness.stale { color: var(--red); }
 .route-age, .route-capacity, .route-fallback { margin-top: 3px; font-size: 11px; line-height: 1.2; }
 .route-fallback { color: var(--cyan); }
+.route-access { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; margin-top: 4px; font-size: 10.5px; }
+.route-pad { width: 100%; line-height: 1.3; }
+.route-alternatives { margin-top: 5px; padding-top: 4px; border-top: 1px solid rgba(45, 82, 109, .5); }
+.route-alternate { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-top: 3px; font-size: 10px; }
+.route-split { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-top: 5px; padding-top: 4px; border-top: 1px dotted rgba(45, 82, 109, .5); font-size: 10px; }
+.route-services, .route-timing { width: 100%; line-height: 1.3; }
+.route-score { margin-top: 4px; font-size: 10px; color: var(--dim); }
+.route-score.lower { color: var(--green); }
+.route-score.higher { color: var(--amber); }
+.route-best { margin: 0 0 4px; color: var(--green); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+#routes-table tbody tr.best-route { background: rgba(79, 212, 138, .06); box-shadow: inset 2px 0 0 var(--green); }
+.route-dashboard { margin: 0 0 14px; padding: 11px 14px; border: 1px solid var(--rule); background: rgba(8, 22, 33, .55); }
+.route-dashboard-head { display: flex; gap: 12px; justify-content: space-between; align-items: start; }
+.route-watch-list, .route-history-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.route-watch, .route-history { padding: 4px 7px; border-left: 2px solid var(--cyan-deep); background: rgba(0,0,0,.16); color: var(--muted); font-size: 10px; }
+.route-circuits { margin-top: 20px; padding-top: 8px; border-top: 1px solid var(--rule); }
+.route-circuit { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; margin: 7px 0; padding: 10px; border-left: 2px solid var(--green); background: rgba(79, 212, 138, .04); font-size: 11px; }
+.route-circuit > div { grid-column: 1 / -1; }
+.route-circuit button { grid-column: 2; grid-row: 1; }
+.ship-plan-manual { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11px; }
+.ship-plan-manual input { width: 128px; padding: 4px 7px; }
 
 /* On a laptop the route's evidence is more useful than repeating two derived
    amounts: margin and outlay can be recovered from buy, sell and profit. */
@@ -3258,6 +3331,9 @@ body.entity-open .view { padding-right: 296px; }
 .help-start b, .help-start span { display: block; }
 .help-start b { color: var(--text); font-size: 12px; }
 .help-start span { margin-top: 4px; color: var(--muted); font-size: 11.5px; line-height: 1.55; }
+.help-source-guide { margin: -12px 0 25px; padding: 12px 13px; border: 1px solid var(--rule); background: rgba(53, 200, 240, .035); }
+.help-source-guide .view-sources { margin: 7px 0; }
+.help-source-guide p { margin: 0; max-width: 76ch; color: var(--muted); font-size: 11.5px; line-height: 1.55; }
 .help-page h3 { margin: 26px 0 9px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--cyan-hot); }
 .faq { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 18px; }
 .faq details {
@@ -3588,6 +3664,26 @@ th.sortable.sort-asc::after { content: " ▴"; color: var(--cyan); }
 }
 
 /* ---------- trade advice ---------- */
+
+/* The ship chooser is a planning constraint, not a second fleet roster. Its
+   compact option cards only describe capabilities the selected hull can prove. */
+.ship-plan {
+  margin: 0 0 13px;
+  padding: 13px 15px;
+  border: 1px solid var(--rule);
+  background: rgba(8, 22, 33, .7);
+}
+.ship-plan-head { display: flex; justify-content: space-between; gap: 16px; align-items: end; }
+.ship-plan-title { color: var(--text); font-size: 15px; font-weight: 600; }
+.ship-plan-picker { display: grid; gap: 4px; min-width: min(100%, 280px); font: 9px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.ship-plan-picker .select { max-width: 100%; }
+.ship-plan-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 7px; margin-top: 12px; }
+.ship-plan-option { display: grid; grid-template-columns: 1fr auto; gap: 3px 8px; min-width: 0; padding: 8px 9px; border-left: 2px solid var(--cyan-deep); background: rgba(0, 0, 0, .16); font-size: 11px; }
+.ship-plan-option b { color: var(--cyan-hot); }
+.ship-plan-option > .muted { grid-column: 1 / -1; line-height: 1.4; }
+.ship-plan-option .data-sources { grid-column: 1 / -1; margin-top: 2px; }
+.ship-plan-limit { margin: 10px 0 0; max-width: 90ch; font-size: 10.5px; line-height: 1.45; }
+@media (max-width: 640px) { .ship-plan-head { align-items: stretch; flex-direction: column; } .ship-plan-picker { min-width: 0; } }
 
 .advice { list-style: none; margin: 6px 0 0; padding: 0; }
 .advice li {

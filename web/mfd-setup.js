@@ -33,6 +33,13 @@ function fillEditor() {
     ? 'This rectangle represents the visible screen opening, including the edge labels.'
     : 'This MFD stays hidden until its monitor returns or you choose another monitor.';
   for (const key of ['x', 'y', 'width', 'height', 'cougar']) setupElement(key).value = panel[key];
+  // Blank is the default, and the placeholder says what the default comes to
+  // on this panel, so a pilot nudging one side knows where they started.
+  for (const edge of ['left', 'right', 'top', 'bottom']) {
+    const field = setupElement('inset-' + edge);
+    field.value = panel.inset?.[edge] ?? '';
+    field.placeholder = QwMfd.defaultInset(panel, edge);
+  }
   setupElement('enabled').checked = layout.enabled;
   setupElement('blackout').checked = layout.blackout !== false;
   showScreen();
@@ -120,6 +127,11 @@ setupElement('monitor').onchange = event => {
 };
 for (const key of ['x', 'y', 'width', 'height']) setupElement(key).onchange = event => {
   const p = selectedPanel(); layout.panels[selected] = QwMfd.fit({ ...p, [key]: Number(event.target.value) }, monitors.find(m => m.id === p.monitor)); changed();
+};
+for (const edge of ['left', 'right', 'top', 'bottom']) setupElement('inset-' + edge).onchange = event => {
+  const p = selectedPanel(), value = event.target.value.trim();
+  const inset = { ...(p.inset || {}), [edge]: value === '' ? null : Number(value) };
+  layout.panels[selected] = QwMfd.fit({ ...p, inset }, monitors.find(m => m.id === p.monitor)); changed();
 };
 for (let n = 1; n <= 8; n++) setupElement('cougar').add(new Option('F16 MFD ' + n, n));
 setupElement('cougar').onchange = event => { selectedPanel().cougar = Number(event.target.value); changed(); };

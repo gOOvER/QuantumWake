@@ -156,6 +156,7 @@ internal sealed class MfdController : IDisposable
                 var created = window;
                 window.Ready += () => {
                     created.Send(new { type = "alignment", enabled = _preview, panel = panel.Id });
+                    created.Send(new { type = "inset", inset = _active.Panels.FirstOrDefault(p => p.Id == panel.Id)?.Inset });
                     // On Ready as well as on every Apply: a window that has just
                     // finished navigating missed the send that placed it, and a
                     // frame drawing the shipped captions over a custom profile
@@ -168,6 +169,7 @@ internal sealed class MfdController : IDisposable
             }
             window.Place(panel, monitor);
             window.Send(new { type = "alignment", enabled = preview, panel = panel.Id });
+            window.Send(new { type = "inset", inset = panel.Inset });
             window.Send(Display(layout));
         }
         Backdrops(layout);

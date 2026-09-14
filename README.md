@@ -358,6 +358,81 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.11.32
+
+- **MFD captions can be lined up with the frame's buttons without moving the
+  opening.** The on-screen labels sat a fixed way in from each edge, so on a
+  monitor smaller than the frame the first label missed the first button, and
+  the only way to line them up was to drag the whole display out past the
+  opening. Four new fields in MFD setup - from left, right, top and bottom, in
+  pixels - move each row of captions on its own. Blank keeps the old placement.
+
+- **"Screen needs review" no longer sits on the Now page with nothing to
+  resolve.** The current screenshot is now the newest one taken, not the one
+  read last - re-reading an old frame put a three-day-old kiosk on the Now
+  page as the state of things. Its wallet was then checked against a baseline
+  taken *after* it, and reported two million aUEC leaving the wallet "since" a
+  moment the frame predates; each shot is now checked against the newest
+  wallet read before it. And a disagreement between a screenshot and the
+  logs is a finding, not a fault - the wallet check exists to find money the
+  log never saw - so the hub now says what differs, and only for a shot from
+  this session and the last half hour, instead of asking for a review that
+  had nothing to do.
+
+- **Turn a haul into a planning workspace.** Trade Routes now scores
+  repeatability from report freshness, capacity and alternate buyers; keeps the
+  cargo purchase cost visible as exposure; records known refuel/repair and pad
+  amenities at each end; saves private presets and watches; and proposes
+  price-report return-load circuits. When the optional ship catalogue is absent,
+  a ship the install identifies can use its latest verified kiosk screenshot
+  hold size (or a clearly marked local entry when none has been read) rather
+  than being treated as incapable of hauling. Saved or alternate routes remain
+  ordinary, editable flight plans — the local route history is not game
+  telemetry.
+
+- **Know whether a route is actionable before reading the table.** The route
+  header now keeps the selected ship's SCU, evidence source and screenshot age
+  visible, with a compact readiness badge. “Best safe route” retains your ship,
+  wallet and pad preference, defaults an unset security preference to monitored
+  space, and marks the most reliable available result.
+
+- **Choose the kind of trade run you will accept.** Route filters can now
+  prefer monitored space, avoid or require lawless systems, and require
+  recorded landing-pad amenities at both ends. Every row names both security
+  states and pad records; those records never claim a particular hull fits.
+  Backup buyers are now individually saveable alternate flight plans.
+
+- **Plan with the ship you chose.** The trade-route picker is a persistent
+  choice from your flown roster, and it knows each hull's hold from the same
+  fleet data the rest of the app uses - the Hermes reads 288 SCU the moment
+  the page opens, not after the ship catalogue finishes loading. Routes and
+  cargo leads are withheld only for a hull known to carry nothing: a fighter,
+  or a ground vehicle whatever its grid says. A ship nobody has sized gets the
+  per-SCU table with a note saying so, and "On foot / no ship" is a choice
+  that stays chosen rather than snapping back to the last ship flown. Quantum
+  range and vehicle-bay fit stay explicitly unknown until a source can prove
+  them.
+
+- **Filters look at every route, and a hangar counts as somewhere to land.**
+  Security and pad choices used to sift only the thirty routes already picked,
+  so "Monitored only" could show one row and claim no monitored route existed.
+  They now run over the whole ranking. The four Stanton cities list only a
+  hangar, never a landing pad, and were being dropped by "XL pad both ends"
+  with every major city in the list. Return-load circuits honour the same
+  filters as the table above them, and printing the recap no longer hijacks
+  Ctrl+P on every other page.
+
+- **Share a polished pilot recap without uploading anything.** Choose the
+  latest session, fleet snapshot and/or 30-day trading snapshot in Settings,
+  then review it, save a self-contained HTML page, or print it to PDF. The
+  report keeps its source labels and says that log-recorded trading is a floor,
+  not total income.
+
+- **Answers now carry clear source labels.** The Now page, Hangar and
+  commodity Market show whether a fact comes from your game log, installed
+  game files, a locally read screenshot, or optional community data. Inferred
+  figures say so too, and Help explains what each label can and cannot prove.
+
 ### 0.11.22
 
 - **The wallet reads from screenshots that used to say it could not.** A

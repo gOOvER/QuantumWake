@@ -290,4 +290,26 @@ public class MfdInputTests
             $"{trail}.map(c => Number(c.getAttribute('opacity'))).every((v, i, all) => i === 0 || v < all[i - 1])")!,
             "the trail fades behind the leading edge");
     }
+
+    /// <summary>
+    /// The host tells each frame where its captions sit. A side given lands on
+    /// the element as a pixel variable the stylesheet's margins read; a side
+    /// left blank leaves the variable unset, so the stylesheet's default
+    /// applies; and a later message with nothing in it clears them all.
+    /// </summary>
+    [Fact]
+    public void AnInsetMessageMovesTheCaptionRowsAndBlankSidesKeepTheDefault()
+    {
+        var panel = new Panel();
+
+        panel.Do("hostMessage({ type: 'inset', inset: { left: 40, right: null, top: '18', bottom: undefined } });");
+
+        Assert.Equal("40px", panel.Text("__dom.node('#mfd').style['--inset-left']"));
+        Assert.Equal("18px", panel.Text("__dom.node('#mfd').style['--inset-top']"));
+        Assert.Equal("undefined", panel.Text("String(__dom.node('#mfd').style['--inset-right'])"));
+
+        panel.Do("hostMessage({ type: 'inset', inset: null });");
+
+        Assert.Equal("undefined", panel.Text("String(__dom.node('#mfd').style['--inset-left'])"));
+    }
 }

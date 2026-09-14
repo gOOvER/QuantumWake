@@ -12,6 +12,31 @@ internal sealed record MfdPanel
     public int Width { get; init; } = 480;
     public int Height { get; init; } = 480;
     public int Cougar { get; init; } = 1;
+
+    /// <summary>
+    /// Where the button captions sit along each edge, in pixels in from that
+    /// edge; null, or a null side, for the page's own default.
+    /// </summary>
+    /// <remarks>
+    /// The window is the frame's opening; the bezel's buttons are wherever the
+    /// bezel puts them, and on a monitor smaller than the frame that is nearer
+    /// the edge than the page's 14% and 12%. Without this the only way to put
+    /// the first caption under the first button was to drag the window out
+    /// past the opening, which put the display under the bezel.
+    /// </remarks>
+    public MfdInset? Inset { get; init; }
+}
+
+internal sealed record MfdInset(int? Left, int? Top, int? Right, int? Bottom)
+{
+    /// <summary>Each side clamped to the panel, or dropped; the whole thing null when every side is.</summary>
+    /// <remarks>Capped at 45% of the dimension so two rows can never cross, which is what mfd-core.js does too.</remarks>
+    public MfdInset? Clean(int width, int height)
+    {
+        static int? Side(int? value, int size) => value is { } v ? Math.Clamp(v, 0, (int)Math.Floor(size * .45)) : null;
+        var cleaned = new MfdInset(Side(Left, width), Side(Top, height), Side(Right, width), Side(Bottom, height));
+        return cleaned is { Left: null, Top: null, Right: null, Bottom: null } ? null : cleaned;
+    }
 }
 
 internal sealed record MfdLayout
@@ -144,7 +169,8 @@ internal sealed record MfdLayout
             var width = Math.Clamp(p.Width, Math.Min(220, m.Width), m.Width);
             var height = Math.Clamp(p.Height, Math.Min(220, m.Height), m.Height);
             return p with { Width = width, Height = height,
-                X = Math.Clamp(p.X, 0, m.Width - width), Y = Math.Clamp(p.Y, 0, m.Height - height) };
+                X = Math.Clamp(p.X, 0, m.Width - width), Y = Math.Clamp(p.Y, 0, m.Height - height),
+                Inset = p.Inset?.Clean(width, height) };
         }).ToArray() };
     }
 
