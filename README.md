@@ -358,7 +358,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.36
+### 0.11.37
+
+- **A release is now scanned before it is published.** After the Windows build
+  makes the exact app and command-line files that ship, the release workflow
+  runs Microsoft Defender over both before making the download or announcing
+  it. If Defender is unavailable or removes a release file, the release stops.
+  This is a malware check on the published files, not a claim that Windows
+  knows the publisher - code signing remains separate.
 
 - **The app now knows which server you were on.** Every time the matchmaker
   places you, the game writes one line naming the shard -
