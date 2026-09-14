@@ -3,8 +3,8 @@
 Plan for 0.13.0, written 2026-09-14 before any code. The question was whether
 the app can show every stat for one of your ships, let you try a different
 component and see what moves - DPS, shield, EM, IR, cross-section - and then
-put the parts you settled on into a shopping list. It can, with two honest
-limits set out below.
+put the parts you settled on into a shopping list. It can - including EM and
+IR, once the dataset's own signature model had been read rather than guessed.
 
 ## What the app already has
 
@@ -55,32 +55,63 @@ the full `Loadout` tree with the class of every fitted part.
 So a stat sheet is a projection of data already on disk, and a swap is a
 recomputation over a small set of it.
 
-## What can be recomputed, and what cannot
+## What can be recomputed - all of it, once the model was found
 
 The test that matters is the one the commodity work taught: recompute the
 stock loadout's totals from the parts and compare with the dataset's own
 figures, which the recomputation never read.
 
-| Figure | Recompute from parts | Stock loadout matches dataset within 2% | Verdict |
-| --- | --- | --- | --- |
-| Fixed-gun DPS | sum of `Weapon.Damage.DpsTotal` over fixed WeaponGuns | 177 of 238 | **exact where the classification agrees**; the misses are turret-mounted guns counted as fixed, to be settled per ship in the build |
-| Shield HP / regen | sum over fitted Shields | 213 of 269 | **exact**; misses to be looked at (likely duplicate generators in the walk) |
-| Quantum speed, spool, fuel per jump | the fitted drive plus the ship's tank | - | **exact**, single part |
-| Power and cooling budget | generation vs draw in segments | - | **exact**, the dataset stores the same segments |
-| Mass | ship + parts | - | **exact** |
-| Cross-section | - | - | **ship geometry; parts do not move it**. Shown as a fact, never with a delta |
-| EM / IR ship total | sum of part emissions | **4 of 269** | **not recomputable**. A size 1 power plant whose own EM is 7,920 shows as 13,488 in the ship's total: the dataset runs a power-segment model that scales each part by its operating point. Re-implementing it is the derivation trap `datacore.md` records |
+The first attempt summed each part's EM and got 4 of 269 ships right. The
+per-group figures were the parts' EM times a factor that changed from ship to
+ship - 1.00, 1.10, 1.13, 1.30, 0.6 - and the power plant's figure was
+nothing like the plant's own number. That looked like the derivation trap
+`datacore.md` records, and the plan said "estimate" for a day.
 
-EM and IR therefore work like this, and the page says so:
+Then the dataset's own generator was read -
+[`EmissionAggregator.php`](https://github.com/octfx/ScDataDumper/blob/master/src/Services/Vehicle/EmissionAggregator.php)
+in octfx's ScDataDumper, credited in `credits.md` - and the model is small:
 
-- the **ship's** stock totals come from the dataset and are labelled as its
-  figures, by group;
-- a **part's** own EM and IR are exact and are what the swap panel compares -
-  "this cooler: 1,490 EM / 7,920 IR; the fitted one: 2,100 / 9,020";
-- the **new ship total** is an *estimate*: the dataset's figure for that
-  group scaled by the ratio of the new part's emission to the old one's. It is
-  shown with the word estimate on it, the way inferred locations carry a
-  confidence.
+- **The factor is the ship's armour.** Every armour item carries
+  `Armor.SignalMultipliers.Electromagnetic` and `.Infrared`; the Gladius's is
+  1.13, the Golem's 1.10. Every group's EM is multiplied by it. (Armour also
+  carries a `CrossSection` multiplier, 1.0 on everything looked at.)
+- **The power plant's EM is per segment drawn**, not the plant's maximum:
+  `Σ plant EM ÷ available segments × segments the fit draws`. Available
+  segments for `n` plants is `Σ round(gen ÷ n) + (n − 1) × Σ size`.
+- **Shields count only up to the ship's shield pool**; **weapon EM scales
+  down** when the guns draw more than the weapon pool allows; thrusters are
+  left out; the *shields* scenario drops the quantum drive and the *quantum*
+  scenario drops the shields.
+- **IR is the sum of every part's IR, times the armour, times the cooling
+  load** - coolant used plus power drawn, over coolant generated. That is why
+  a better cooler lowers IR: it raises the denominator.
+
+Re-implemented from that description over the same `ship-items.json` and
+`ships.json` and run on every spaceship with a stock fit:
+
+| Figure | Recompute from parts | Stock fit matches the dataset |
+| --- | --- | --- |
+| EM, shields-up scenario | the model above | **269 of 269** within 1% |
+| IR, shields-up scenario | the model above | **269 of 269** within 1% |
+| Power segments available | the plant rule above | **269 of 269** exact |
+| Fixed-gun DPS | sum of `Weapon.Damage.DpsTotal` over fixed WeaponGuns | 177 of 238 within 2%; the misses are turret-mounted guns, to be classified per port in the build |
+| Shield HP / regen | sum over fitted Shields, capped at the pool | 213 of 269 within 2% before the pool cap was known; to be re-run with it |
+| Quantum speed, spool, fuel per jump | the fitted drive plus the ship's tank | single part, exact |
+| Mass | ship + parts | exact |
+| Cross-section | ship geometry × armour multiplier | parts do not move it; shown as a fact |
+
+So a stealth fit is a real answer, not an estimate: swap the Bracers for a
+Glacier and the IR moves by exactly what the game's own numbers say, with the
+armour and the cooling load accounted for. The page still says which scenario
+it is showing - shields up, everything drawing its maximum - because that is
+the one the dataset (and erkul.games) publishes, and a pilot who has pulled
+power off weapons is quieter than it says.
+
+That is also how erkul does it: the same game files, read by their own
+extractor, the same component sums with the armour multipliers, and sliders
+that vary the segments the power model is fed. The one thing they show that
+the shipped scenario does not is the power triangle. A later version can add
+the slider, because the model here takes segments as an input already.
 
 Anything the page cannot do is said in the same sentence as the number - not
 in a footnote.
@@ -136,12 +167,13 @@ current panel.
 
 ## Verification, before it is believed
 
-1. Recompute the stock loadout for all 318 vehicles and compare with the
-   dataset's `Weaponry.FixedWeapons.DpsTotal`, `ShieldHp`, `QuantumTravel.Speed`
-   and `Power.GenerationSegments`; write the match rates into this document
-   and refuse to show any figure whose rule does not reach 95% on stock fits.
-2. Take the Gladius, swap the stock cooler for a Glacier, and check the
-   component EM/IR numbers against the item records by hand.
+1. The stock-fit comparison above becomes a test in `Quantumwake.Tests` that
+   runs against the digest and prints the match table - EM, IR and power
+   segments must stay at 100%, and any figure whose rule does not reach 95%
+   on stock fits is not shown on the page.
+2. Take the Gladius, swap the two Bracers for Glaciers, and check the new IR
+   by hand: `Σ IR × 1.13 × cooling load`, with the load recomputed from the
+   Glacier's coolant generation.
 3. Screenshot the sheet and the bench for one fighter and one hauler against
    the real install, and read them.
 
