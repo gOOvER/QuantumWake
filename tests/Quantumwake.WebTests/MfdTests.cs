@@ -743,7 +743,7 @@ public class MfdTests
 
         var json = Page(e, "server",
             "{inGame:true, shard:'pub_use1b_12545750_150', shardShort:'US East 150', shardSince:'2026-09-14T14:00:00Z',"
-            + " shardVisitsBefore:3, shardFavorite:true, shardNote:'two 30ks in an hour'}",
+            + " shardVisitsBefore:3, shardFavorite:true, shardNote:'two 30ks in an hour', shardSeenName:'amazing_view', shardDisposition:'avoid'}",
             view: "{now:'2026-09-14T15:30:00Z'}");
         Assert.Contains("pub_use1b_12545750_150", json);
         Assert.Contains("US East 150", json);
@@ -751,6 +751,8 @@ public class MfdTests
         Assert.Contains("3 times before", json);
         Assert.Contains("favourite", json);
         Assert.Contains("two 30ks in an hour", json);
+        Assert.Contains("amazing_view", json);
+        Assert.Contains("Avoid - you marked this one", json);
 
         var first = Page(e, "server", "{inGame:true, shard:'pub_use1b_12545750_199', shardVisitsBefore:0}");
         Assert.Contains("First time on this shard", first);

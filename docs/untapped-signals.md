@@ -240,7 +240,8 @@ placement*. Two things looked at and left:
   its UI - is nowhere in the log: not in the session it was seen in, not in
   194 backups, not in the cached game data. Only the id is written, so the id
   is what the app calls the server. A hand-typed alias was built and taken
-  out again before 0.12.0 shipped: it is a note by another name.
+  out again, then brought back in 0.12.2 as an *observation* - "Seen in game:
+  amazing_view", beside the id and never in place of it.
 - **The context establisher's `sessionId`** is the local client's GUID, not
   the shard. The CLI called it "shard sessions" until 0.12.0; it now says
   "client sessions".

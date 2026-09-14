@@ -807,6 +807,11 @@ window.QwMfd = (() => {
         const before = s.shardVisitsBefore || 0;
         return [
           ['SHARD', s.shard],
+          // The label the pilot saw in game and the good/avoid call are the two
+          // things worth a glance at the loading screen - so they lead the note.
+          ...(s.shardSeenName ? [['SEEN IN GAME', s.shardSeenName]] : []),
+          ...(s.shardDisposition === 'avoid' ? [['YOUR CALL', 'Avoid - you marked this one']]
+            : s.shardDisposition === 'good' ? [['YOUR CALL', 'Good - you marked this one']] : []),
           ['REGION', s.shardShort || 'Unknown region'],
           ['ON IT FOR', elapsed(s.shardSince, view.now) || 'Just placed'],
           ['BEEN HERE', before === 0 ? 'First time on this shard'

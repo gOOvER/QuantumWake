@@ -364,13 +364,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.12.2
+### 0.12.3
 
 - **Give a server the name you saw in game, without losing its real id.** Add
   a local “Seen in game” label such as `amazing_view`; it is clearly your
   observation, not a claimed translation. The full log shard id remains beside
   it, searchable and one click away with **Copy ID**. The Now card and the MFD
-  navigation page use the label when you have recorded one.
+  navigation page and the MFD Server page use the label when you have recorded one.
 
 - **Keep a personal good/avoid call and a concise support line.** A server can
   be marked Good or Avoid for this install only. **Copy report** puts a
