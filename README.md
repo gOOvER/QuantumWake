@@ -364,7 +364,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.6
+### 0.13.7
 
 - **The Garage now starts with the ship, not a wall of numbers.** Its game
   picture is centred in a fitted-layout panel, with the components currently
@@ -374,6 +374,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   on the Bench; the ship card, selected component and recomputed sheet all
   stay in step. The component positions are intentionally not drawn onto the
   hull: the data names real ports but supplies no 3D coordinates to guess at.
+
+- **A component click now lands on its choices.** Choosing a card in the
+  fitted layout smoothly brings the compatible-parts results into view and
+  gives that result panel keyboard focus. The ship's centre readout also now
+  includes remaining power capacity (or how far over budget the fit is), so a
+  brown-out risk is visible before changing a part.
 
 - **The part's own picture on the bench.** Where the Star Citizen Wiki has a
   cutout of a cooler, gun or drive, the bench and the candidate list show it

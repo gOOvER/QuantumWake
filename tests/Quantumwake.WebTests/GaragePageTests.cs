@@ -67,12 +67,15 @@ public class GaragePageTests
         Assert.Contains("Bracer", page.NodeText("#garage-rig-left"));
         Assert.Contains("Beacon", page.NodeText("#garage-rig-left"));
         Assert.True(page.Truth("__dom.node('#garage-ship-model').descendants().some(n => n.classList.contains('ship-picture'))"));
+        Assert.Contains("Power", page.NodeText("#garage-ship-summary"));
+        Assert.Contains("8.1 short", page.NodeText("#garage-ship-summary"));
 
         page.Serve("/api/garage/AEGS_Gladius/options?port=p1", CoolerOptions);
         page.Do("await __dom.node('#garage-rig-left').descendants().find(n => n.classList.contains('garage-rig-slot')).fire('click');");
 
         Assert.Contains("GET /api/garage/AEGS_Gladius/options?port=p1", page.Fetched());
         Assert.True(page.Truth("__dom.node('#garage-rig-left').descendants().some(n => n.classList.contains('garage-rig-slot') && n.classList.contains('selected'))"));
+        Assert.Equal("true", page.Text("__dom.node('#garage-rig-left').descendants().find(n => n.classList.contains('garage-rig-slot')).getAttribute('aria-pressed')"));
     }
 
     [Fact]

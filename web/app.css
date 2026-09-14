@@ -4497,10 +4497,12 @@ body.overlay .ship-picture { display: none; }
 .garage-ship-model .ship-render-wrap { width: 285px; height: 192px; flex-basis: 285px; }
 .garage-ship-model .ship-render { filter: drop-shadow(0 0 16px rgba(53, 200, 240, .3)); }
 .garage-ship-model .ship-paint { display: none; }
-.garage-ship-summary { position: absolute; z-index: 3; bottom: 9px; display: flex; gap: 6px; max-width: calc(100% - 18px); }
-.garage-ship-stat { min-width: 74px; padding: 4px 6px; border: 1px solid rgba(53, 200, 240, .28); background: rgba(4, 10, 17, .78); text-align: center; }
+.garage-ship-summary { position: absolute; z-index: 3; bottom: 9px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; width: calc(100% - 18px); }
+.garage-ship-stat { min-width: 0; padding: 4px 6px; border: 1px solid rgba(53, 200, 240, .28); background: rgba(4, 10, 17, .78); text-align: center; }
 .garage-ship-stat span { display: block; color: var(--dim); font: 8px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
-.garage-ship-stat b { display: block; margin-top: 2px; color: var(--cyan-hot); font: 10px var(--mono); white-space: nowrap; }
+.garage-ship-stat b { display: block; margin-top: 2px; color: var(--cyan-hot); font: 10px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.garage-ship-stat.alert { border-color: rgba(235, 174, 71, .7); }
+.garage-ship-stat.alert b { color: var(--amber); }
 @media (max-width: 900px) {
   .garage-rig-body { grid-template-columns: 1fr; }
   .garage-ship-stage { order: -1; min-height: 220px; border-inline: 0; border-bottom: 1px solid rgba(53, 200, 240, .12); }

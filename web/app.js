@@ -8994,21 +8994,27 @@ function renderGarageRig(data) {
   $('#garage-rig-count').textContent = `${ports.length} fitted port${ports.length === 1 ? '' : 's'}`;
   const summary = $('#garage-ship-summary');
   summary.textContent = '';
+  const power = data.sheet.power;
+  const powerHeadroom = power.available - power.usedShields;
   for (const [label, value] of [
     ['Shield', `${fmtInt(data.sheet.shield.hp)} HP`],
     ['Pilot DPS', fmt1(data.sheet.weapons.fixedDps)],
     ['Quantum', data.sheet.quantumDrive?.drive || '—'],
+    ['Power', power.overShields ? `${fmt1(Math.abs(powerHeadroom))} short` : `${fmt1(powerHeadroom)} spare`],
   ]) {
-    const stat = el('div', 'garage-ship-stat');
+    const unhealthy = label === 'Power' && power.overShields;
+    const stat = el('div', `garage-ship-stat${unhealthy ? ' alert' : ''}`);
     stat.append(el('span', null, label), el('b', null, value));
     summary.append(stat);
   }
 }
 
 function garageRigSlot(port, ship) {
-  const button = el('button', `garage-rig-slot${port.changed ? ' changed' : ''}${port.portIds.includes(garageSelectedPort) ? ' selected' : ''}`);
+  const selected = port.portIds.includes(garageSelectedPort);
+  const button = el('button', `garage-rig-slot${port.changed ? ' changed' : ''}${selected ? ' selected' : ''}`);
   button.type = 'button';
   button.dataset.port = port.portIds[0];
+  button.setAttribute('aria-pressed', String(selected));
   const many = port.portIds.length > 1;
   const name = port.name || port.class || 'Empty port';
   button.title = `${garageWord(port.group)} · ${garagePortName(port.hardpoint)} · ${name}`;
@@ -9023,7 +9029,7 @@ function garageRigSlot(port, ship) {
   const figures = partFigures(port.fitted, ship).slice(0, 2);
   if (figures.length) body.append(el('span', 'garage-rig-slot-spec', figures.map((f) => `${f[2]} ${f[0]}`).join(' · ')));
   button.append(body);
-  button.addEventListener('click', () => selectBenchPort(port.portIds[0]).catch(() => {}));
+  button.addEventListener('click', () => selectBenchPort(port.portIds[0], true).catch(() => {}));
   return button;
 }
 
@@ -9263,7 +9269,7 @@ function renderBench(data) {
 }
 
 /** Opens the candidates for one port. */
-async function selectBenchPort(portId) {
+async function selectBenchPort(portId, revealChoices = false) {
   garageSelectedPort = portId;
   for (const rowEl of $$('#garage-bench-ports .bench-port')) rowEl.classList.toggle('selected', rowEl.dataset.port === portId);
   // The fitted-layout cards are another way into this same port, so the
@@ -9283,6 +9289,15 @@ async function selectBenchPort(portId) {
   }
 
   renderBenchPanel();
+  if (revealChoices) revealGarageChoices(panel);
+}
+
+/** A card in the fitted layout opens a result well below the fold. Move to
+ * that answer once it has rendered; without this, the click can look inert. */
+function revealGarageChoices(panel) {
+  panel.tabIndex = -1;
+  panel.focus({ preventScroll: true });
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function renderBenchPanel() {
