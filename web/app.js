@@ -8289,13 +8289,15 @@ function filteredServers() {
   const region = $('#servers-region')?.value || '';
   const currentOnly = !!$('#servers-current')?.checked;
   const starredOnly = !!$('#servers-starred')?.checked;
+  const troubledOnly = !!$('#servers-troubled')?.checked;
 
   return serverRows.filter((r) => {
     if (currentOnly && !r.current) return false;
     if (starredOnly && !r.favorite) return false;
+    if (troubledOnly && !(r.endings?.Backend > 0)) return false;
     if (region && r.region !== region) return false;
     if (term) {
-      const hay = `${r.shard} ${r.region} ${r.note || ''} ${(r.places || []).map((p) => p.name).join(' ')}`.toLowerCase();
+      const hay = `${r.shard} ${r.seenName || ''} ${r.disposition || ''} ${r.region} ${r.note || ''} ${(r.places || []).map((p) => p.name).join(' ')}`.toLowerCase();
       if (!hay.includes(term)) return false;
     }
     return true;
@@ -8318,12 +8320,15 @@ function renderServers() {
 
   const current = all.filter((r) => r.current);
   const visits = all.reduce((total, r) => total + r.visits, 0);
+  const backendEnds = all.reduce((total, r) => total + (r.endings?.Backend || 0), 0);
 
   tiles('#servers-summary', [
     ['Shards visited', all.length],
     ['Still running', current.length],
     ['Placements', visits],
+    ['Back-end ends', backendEnds],
     ['Favourites', all.filter((r) => r.favorite).length],
+    ['Marked avoid', all.filter((r) => r.disposition === 'avoid').length],
     ['On now', serverCurrent || 'not on a shard'],
     ['Newest deployment', serverNewestDeployment || '—'],
   ]);
@@ -8337,7 +8342,7 @@ function renderServers() {
       ? 'Nothing matches those filters. Untick "Current deployment only" to see shards from earlier deployments.'
       : 'No shard joins yet. The game writes one <Join PU> line each time it places you; '
         + 'sessions summarised before this build read it will show up after a rescan.');
-    td.colSpan = 9;
+    td.colSpan = 10;
     tr.append(td);
     body.append(tr);
     return;
@@ -8359,9 +8364,13 @@ function serverRow(row) {
   starCell.append(star);
   tr.append(starCell);
 
+  tr.append(dispositionCell(row));
+
   const shard = el('td', 'shard');
   shard.append(document.createTextNode(row.shard));
   if (row.shard === serverCurrent) shard.append(el('span', 'here-badge', 'on now'));
+  shard.append(seenNameText(row));
+  shard.append(serverActions(row));
   shard.append(el('small', null, row.current
     ? `deployment ${row.deployment}`
     : `deployment ${row.deployment} — retired`));
@@ -8385,6 +8394,87 @@ function serverRow(row) {
   tr.append(note);
 
   return tr;
+}
+
+/** A personal marker is advice, not evidence about the game or a public rating. */
+function dispositionCell(row) {
+  const td = el('td', 'server-disposition');
+  const select = el('select', `select tiny${row.disposition ? ` ${row.disposition}` : ''}`);
+  for (const [value, label] of [['', '—'], ['good', 'Good'], ['avoid', 'Avoid']]) {
+    const option = el('option', null, label);
+    option.value = value;
+    select.append(option);
+  }
+  select.value = row.disposition || '';
+  select.title = 'Your personal server marker';
+  select.addEventListener('change', () => setServerDisposition(row.shard, select.value).catch(() => {
+    select.value = row.disposition || '';
+  }));
+  td.append(select);
+  return td;
+}
+
+function seenNameText(row) {
+  const text = el('small', `seen-name${row.seenName ? '' : ' empty'}`,
+    row.seenName ? `Seen in game: ${row.seenName}` : 'Add game label…');
+  text.title = 'Click to record the name the game showed you';
+  text.tabIndex = 0;
+  text.addEventListener('click', () => editServerSeenName(row, text));
+  text.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); editServerSeenName(row, text); }
+  });
+  return text;
+}
+
+function editServerSeenName(row, text) {
+  const box = el('input', 'search');
+  box.type = 'text';
+  box.value = row.seenName || '';
+  box.maxLength = 80;
+  box.placeholder = 'amazing_view';
+
+  let done = false;
+  const finish = (save) => {
+    if (done) return;
+    done = true;
+    if (save && box.value.trim() !== (row.seenName || '')) {
+      saveServerSeenName(row.shard, box.value).catch(() => box.replaceWith(seenNameText(row)));
+    } else box.replaceWith(seenNameText(row));
+  };
+  box.addEventListener('blur', () => finish(true));
+  box.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') finish(false);
+    if (e.key === 'Enter') finish(true);
+  });
+  text.replaceWith(box);
+  box.focus();
+}
+
+function serverActions(row) {
+  const actions = el('div', 'server-actions');
+  const copy = el('button', 'ghost tiny', 'Copy ID');
+  copy.type = 'button';
+  copy.addEventListener('click', () => copyServerText(row.shard, copy));
+  const report = el('button', 'ghost tiny', 'Copy report');
+  report.type = 'button';
+  report.addEventListener('click', () => copyServerText(serverReport(row), report));
+  actions.append(copy, report);
+  return actions;
+}
+
+function serverReport(row) {
+  const ending = row.shard === serverCurrent ? 'still connected' : endingLabel(row.lastEnding);
+  const when = row.shard === serverCurrent ? 'now' : dateOf(row.last);
+  const stay = row.lastDuration ? ` after ${duration(row.lastDuration)}` : '';
+  return `Quantumwake server report: shard ${row.shard}; region ${row.region}; ${when}; ${ending}${stay}.`;
+}
+
+async function copyServerText(value, button) {
+  if (!navigator.clipboard?.writeText) return;
+  await navigator.clipboard.writeText(value);
+  const was = button.textContent;
+  button.textContent = 'Copied';
+  setTimeout(() => { button.textContent = was; }, 1200);
 }
 
 /**
@@ -8504,7 +8594,7 @@ async function saveServerNote(shard, note) {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
   const saved = await res.json();
-  applyServerChange(shard, { note: saved.note || null, favorite: !!saved.favorite });
+  applyServerChange(shard, saved);
 }
 
 async function setServerFavorite(shard, favorite) {
@@ -8515,7 +8605,25 @@ async function setServerFavorite(shard, favorite) {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
   const saved = await res.json();
-  applyServerChange(shard, { note: saved.note || null, favorite: !!saved.favorite });
+  applyServerChange(shard, saved);
+}
+
+async function saveServerSeenName(shard, name) {
+  const res = await fetch(`/api/servers/${encodeURIComponent(shard)}/seen-name`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  applyServerChange(shard, await res.json());
+}
+
+async function setServerDisposition(shard, disposition) {
+  const res = await fetch(`/api/servers/${encodeURIComponent(shard)}/disposition`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ disposition }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  applyServerChange(shard, await res.json());
 }
 
 /** Folds a saved change into the rows in hand and redraws both places that show it. */
@@ -8525,7 +8633,11 @@ function applyServerChange(shard, change) {
   renderServers();
 
   if (nowState && nowState.shard === shard) {
-    nowState = { ...nowState, shardNote: change.note, shardFavorite: change.favorite };
+    nowState = { ...nowState,
+      shardNote: change.note || null,
+      shardFavorite: !!change.favorite,
+      shardSeenName: change.seenName || null,
+      shardDisposition: change.disposition || null };
     renderNowServer(nowState);
   }
 }
@@ -8544,18 +8656,21 @@ function renderNowServer(state) {
   card.hidden = !state.shard;
   if (card.hidden) return;
 
-  $('#now-server').textContent = state.shardShort || state.shard;
+  $('#now-server').textContent = state.shardSeenName || state.shardShort || state.shard;
   $('#now-server-name').textContent = state.shard;
 
   const before = state.shardVisitsBefore || 0;
   const parts = [before === 0
     ? 'First time on this shard.'
     : `Placed here ${before} time${before === 1 ? '' : 's'} before.`];
+  if (state.shardSeenName) parts.push(`Name shown by the game: “${state.shardSeenName}”.`);
+  if (state.shardDisposition === 'avoid') parts.push('You marked this shard avoid.');
+  if (state.shardDisposition === 'good') parts.push('You marked this shard good.');
   if (state.shardNote) parts.push(`Your note: “${state.shardNote}”`);
 
   const note = $('#now-server-note');
   note.textContent = parts.join(' ');
-  note.className = `note${state.shardNote ? ' warn' : ''}`;
+  note.className = `note${state.shardNote || state.shardDisposition === 'avoid' ? ' warn' : ''}`;
 
   const star = $('#now-server-star');
   star.textContent = state.shardFavorite ? '★ Favourite' : '☆ Favourite';
@@ -8575,6 +8690,7 @@ onInput('#servers-search', renderServers);
 onInput('#servers-region', renderServers);
 onInput('#servers-current', renderServers);
 onInput('#servers-starred', renderServers);
+onInput('#servers-troubled', renderServers);
 
 /**
  * The one-line version of the price chart, for the expanded Market row.

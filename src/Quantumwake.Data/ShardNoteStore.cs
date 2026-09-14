@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace Quantumwake.Data;
 
 /// <summary>
-/// What the pilot wrote about a shard, and whether they starred it.
+/// What the pilot recorded about a shard: a note, marker, label and star.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -14,8 +14,8 @@ namespace Quantumwake.Data;
 /// restore should merge their notes on it rather than keep two.
 /// </para>
 /// <para>
-/// A record with nothing written and no star is removed rather than kept empty,
-/// so the file holds opinions and not a row per server ever visited.
+/// A record with no local information is removed rather than kept empty, so
+/// the file holds the pilot's observations and not a row per server ever visited.
 /// </para>
 /// </remarks>
 public sealed record ShardNote(
@@ -23,7 +23,9 @@ public sealed record ShardNote(
     string? Note,
     bool Favorite,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt) : IStamped<ShardNote>
+    DateTimeOffset UpdatedAt,
+    string? SeenName = null,
+    string? Disposition = null) : IStamped<ShardNote>
 {
     public string StampId => Shard;
     public ShardNote Bare() => this with { UpdatedAt = default };
@@ -32,7 +34,8 @@ public sealed record ShardNote(
 
     /// <summary>True when there is nothing left worth keeping.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public bool IsEmpty => !Favorite && string.IsNullOrWhiteSpace(Note);
+    public bool IsEmpty => !Favorite && string.IsNullOrWhiteSpace(Note)
+        && string.IsNullOrWhiteSpace(SeenName) && string.IsNullOrWhiteSpace(Disposition);
 }
 
 /// <summary>The pilot's own view of the servers they have been placed on.</summary>
@@ -77,6 +80,25 @@ public sealed class ShardNoteStore
         Change(shard, existing => existing with { Favorite = favorite });
 
     /// <summary>
+    /// Records the label the pilot saw in-game. It is deliberately an observation,
+    /// not a translation the game or this app claims is authoritative.
+    /// </summary>
+    public ShardNote? SetSeenName(string shard, string? seenName) =>
+        Change(shard, existing => existing with { SeenName = CleanShort(seenName) });
+
+    /// <summary>Marks a shard as good or avoid; anything else clears the mark.</summary>
+    public ShardNote? SetDisposition(string shard, string? disposition) =>
+        Change(shard, existing => existing with
+        {
+            Disposition = disposition?.Trim().ToLowerInvariant() switch
+            {
+                "good" => "good",
+                "avoid" => "avoid",
+                _ => null
+            }
+        });
+
+    /// <summary>
     /// Applies an edit, creating the record if this is the first thing written
     /// about the shard and dropping it if the edit emptied it. Returns what is
     /// now stored, or null when nothing is.
@@ -112,6 +134,12 @@ public sealed class ShardNoteStore
             Save();
             return changed;
         }
+    }
+
+    private static string? CleanShort(string? value)
+    {
+        var clean = Sanitise.Clean(value, string.Empty, 80);
+        return clean.Length == 0 ? null : clean;
     }
 
     public bool Remove(string shard)

@@ -86,6 +86,8 @@ public sealed record NowState
     /// </summary>
     public string? ShardNote { get; init; }
     public bool ShardFavorite { get; init; }
+    public string? ShardSeenName { get; init; }
+    public string? ShardDisposition { get; init; }
 
     /// <summary>When the current placement happened, or null between placements.</summary>
     public DateTimeOffset? ShardSince { get; init; }
@@ -469,6 +471,8 @@ public sealed partial class LiveSessionService : BackgroundService
             ShardNote = shardNote?.Note,
             ShardSince = shard is null ? null : placedAt,
             ShardFavorite = shardNote?.Favorite ?? false,
+            ShardSeenName = shardNote?.SeenName,
+            ShardDisposition = shardNote?.Disposition,
             ShardVisitsBefore = shard is not null && _visitsBefore is { } seen && seen.Shard == shard ? seen.Visits : 0,
             Connected = true,
             InGame = location.InGame,

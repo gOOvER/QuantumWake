@@ -287,7 +287,8 @@ public sealed record ShardRecord(
     IReadOnlyDictionary<string, int> Endings,
     ShardLeave LastEnding,
     string? LastSession,
-    IReadOnlyList<ShardPlace> Places);
+    IReadOnlyList<ShardPlace> Places,
+    TimeSpan LastDuration);
 
 /// <summary>A place reached while on a shard, how many separate arrivals, and the latest.</summary>
 public sealed record ShardPlace(string Name, string? System, int Visits, DateTimeOffset Last);
@@ -1799,7 +1800,8 @@ public sealed class LogLibrary : IDisposable
                             .ToDictionary(e => e.Key, e => e.Count(), StringComparer.Ordinal),
                         last.Stay.Ending,
                         last.Session,
-                        PlacesOn(g.Select(x => (x.Stay, x.Places))));
+                        PlacesOn(g.Select(x => (x.Stay, x.Places))),
+                        last.Stay.Duration);
                 })
                 .OrderByDescending(r => r.Last)
         ];

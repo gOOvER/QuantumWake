@@ -97,6 +97,63 @@ public class ServersPageTests
     }
 
     [Fact]
+    public void The_game_label_is_searchable_and_a_personal_marker_is_saved()
+    {
+        var page = new Page();
+        page.Serve("/api/servers", Servers.Replace("\"note\":\"laggy elevators\",\"favorite\":false",
+            "\"note\":\"laggy elevators\",\"favorite\":false,\"seenName\":\"amazing_view\",\"disposition\":\"avoid\""));
+        page.Serve("/api/servers/pub_use1b_12545750_150/disposition",
+            """{"shard":"pub_use1b_12545750_150","note":"laggy elevators","favorite":false,"seenName":"amazing_view","disposition":"good"}""");
+        page.Do("await loadServers(); __dom.node('#servers-search').value = 'amazing_view'; renderServers();");
+
+        Assert.Equal("pub_use1b_12545750_150", Rows(page));
+        Assert.Contains("Seen in game: amazing_view", page.NodeText("#servers-table"));
+
+        page.Do("""
+            const marker = __dom.node('#servers-table').querySelector('tbody').children[0].descendants().find(n => n.tagName === 'select');
+            marker.value = 'good';
+            await marker.fire('change');
+            """);
+
+        Assert.Contains("PUT /api/servers/pub_use1b_12545750_150/disposition", page.Fetched());
+        Assert.Contains("\"disposition\":\"good\"", page.BodyOf("/api/servers/pub_use1b_12545750_150/disposition"));
+    }
+
+    [Fact]
+    public void Back_end_filter_and_summary_use_only_explicit_back_end_endings()
+    {
+        var page = new Page();
+        page.Serve("/api/servers", Servers.Replace("\"endings\":{\"Left\":2,\"LogEnded\":1}",
+            "\"endings\":{\"Left\":2,\"Backend\":1}"));
+        page.Do("await loadServers(); __dom.node('#servers-troubled').checked = true; renderServers();");
+
+        Assert.Equal("pub_use1b_12545750_150", Rows(page));
+        Assert.Contains("Back-end ends", page.NodeText("#servers-summary"));
+    }
+
+    [Fact]
+    public void A_seen_name_is_edited_in_place_and_the_report_uses_no_log_contents()
+    {
+        var page = Loaded();
+        page.Serve("/api/servers/pub_euw1b_12545750_003/seen-name",
+            """{"shard":"pub_euw1b_12545750_003","note":null,"favorite":true,"seenName":"amazing_view","disposition":null}""");
+
+        page.Do("""
+            const label = __dom.node('#servers-table').querySelector('tbody').children[0].descendants().find(n => n.classList.contains('seen-name'));
+            label.fire('click');
+            const box = __dom.node('#servers-table').querySelector('tbody').children[0].descendants().find(n => n.tagName === 'input');
+            box.value = 'amazing_view';
+            await box.fire('blur');
+            """);
+
+        Assert.Contains("\"name\":\"amazing_view\"", page.BodyOf("/api/servers/pub_euw1b_12545750_003/seen-name"));
+        var report = page.Text("serverReport(serverRows.find(r => r.shard === 'pub_use1b_12545750_150'))");
+        Assert.Contains("pub_use1b_12545750_150", report);
+        Assert.Contains("US East", report);
+        Assert.DoesNotContain("laggy elevators", report);
+    }
+
+    [Fact]
     public void The_summary_counts_what_is_still_running_apart_from_what_was()
     {
         var text = Loaded().NodeText("#servers-summary");
@@ -193,6 +250,16 @@ public class ServersPageTests
         Assert.Contains("2 times before", note);
         Assert.Contains("laggy elevators", note);
         Assert.StartsWith("★", page.NodeText("#now-server-star"));
+    }
+
+    [Fact]
+    public void The_card_prefers_the_name_seen_in_game_but_keeps_the_canonical_id()
+    {
+        var page = Now("shard:'pub_use1b_12545750_150', shardShort:'US East 150', shardSeenName:'amazing_view', shardDisposition:'avoid'");
+
+        Assert.Equal("amazing_view", page.NodeText("#now-server"));
+        Assert.Equal("pub_use1b_12545750_150", page.NodeText("#now-server-name"));
+        Assert.Contains("marked this shard avoid", page.NodeText("#now-server-note"));
     }
 
     [Fact]

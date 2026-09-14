@@ -56,10 +56,29 @@ public class ShardNoteStoreTests : IDisposable
     }
 
     [Fact]
+    public void A_seen_game_name_and_personal_marker_survive_a_restart()
+    {
+        var store = new ShardNoteStore(_root);
+        store.SetSeenName("pub_use1b_12545750_150", " amazing_view ");
+        store.SetDisposition("pub_use1b_12545750_150", "AVOID");
+
+        var back = Assert.Single(new ShardNoteStore(_root).All());
+        Assert.Equal("amazing_view", back.SeenName);
+        Assert.Equal("avoid", back.Disposition);
+
+        // They are independent user choices: clearing one must not discard the other.
+        Assert.NotNull(store.SetDisposition("pub_use1b_12545750_150", ""));
+        Assert.Null(store.SetSeenName("pub_use1b_12545750_150", ""));
+        Assert.Empty(store.All());
+    }
+
+    [Fact]
     public void Notes_are_in_the_backup_and_come_back_from_one()
     {
         var store = new ShardNoteStore(_root);
         store.SetNote("pub_use1b_12545750_150", "laggy elevators");
+        store.SetSeenName("pub_use1b_12545750_150", "amazing_view");
+        store.SetDisposition("pub_use1b_12545750_150", "avoid");
 
         var backup = new BackupBuilder(
             new JobStore(_root), new ChecklistStore(_root), new TripStore(_root),
@@ -87,6 +106,8 @@ public class ShardNoteStoreTests : IDisposable
 
         var landed = Assert.Single(target.All());
         Assert.Equal("laggy elevators", landed.Note);
+        Assert.Equal("amazing_view", landed.SeenName);
+        Assert.Equal("avoid", landed.Disposition);
     }
 
     /// <summary>

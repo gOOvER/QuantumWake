@@ -4396,6 +4396,13 @@ body.overlay .ship-picture { display: none; }
 #servers-table tr.gone td { color: var(--muted); }
 #servers-table tr.gone .shard { text-decoration: line-through; text-decoration-color: var(--muted); }
 #servers-table .shard small { display: block; color: var(--muted); }
+#servers-table .shard .seen-name { cursor: text; margin-top: 3px; }
+#servers-table .shard .seen-name.empty { font-style: italic; }
+#servers-table .shard .search { display: block; min-width: 14ch; width: 100%; margin-top: 3px; padding: 2px 5px; font-size: 10px; }
+#servers-table .server-actions { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
+#servers-table .server-disposition .select { min-width: 62px; padding: 2px 4px; font-size: 10px; }
+#servers-table .server-disposition .select.good { color: var(--cyan); }
+#servers-table .server-disposition .select.avoid { color: var(--amber); }
 #servers-table td.places { max-width: 260px; }
 #servers-table td.ending { white-space: nowrap; }
 #servers-table td.ending .bad { color: var(--red); }

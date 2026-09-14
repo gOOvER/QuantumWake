@@ -637,6 +637,9 @@ window.QwMfd = (() => {
                 : !briefing ? 'Loading your tracked plan…'
                   : stop?.place ? stop.place + reach : 'No outstanding stop in the tracked plan'],
           ['LOCATION', s.location || 'Location not yet identified'],
+          ['SERVER', !s.shard ? 'Server not yet identified'
+            : `${s.shardSeenName || s.shardShort || s.shard}${s.shardSeenName ? ` · ${s.shard}` : ''}`
+              + (s.shardDisposition === 'avoid' ? ' · marked avoid' : s.shardDisposition === 'good' ? ' · marked good' : '')],
           ['SHIP', s.ship || 'No ship identified in the logs'],
           ['LOCATION SOURCE', s.location ? `${s.confidence || 'Unknown'} confidence · game logs` : 'Waiting for a location signal']
         ];

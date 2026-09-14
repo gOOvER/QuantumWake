@@ -364,7 +364,24 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.12.1
+### 0.12.2
+
+- **Give a server the name you saw in game, without losing its real id.** Add
+  a local “Seen in game” label such as `amazing_view`; it is clearly your
+  observation, not a claimed translation. The full log shard id remains beside
+  it, searchable and one click away with **Copy ID**. The Now card and the MFD
+  navigation page use the label when you have recorded one.
+
+- **Keep a personal good/avoid call and a concise support line.** A server can
+  be marked Good or Avoid for this install only. **Copy report** puts a
+  privacy-safe line on the clipboard with the shard id, region, time and log
+  ending - no account, IP address or log contents. A new Back-end failures
+  filter and summary count only explicit back-end disconnects; an unclosed log
+  still stays labelled as ambiguous.
+
+- **The server you are on no longer waits for a log rotation to appear.** A
+  live placement is shown immediately in the Servers table and marked *on
+  now*. Its initial visit count and time are provisional until the log closes.
 
 - **A release is now scanned before it is published.** After the Windows build
   makes the exact app and command-line files that ship, the release workflow
@@ -405,9 +422,10 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   Servers names the last place you landed during your stays on that shard,
   with a "+N more" button that unfolds the rest in place, and search finds a
   shard by a place. Arrivals made in the menu or on a previous shard of the
-  same session are not credited. The game shows each shard a friendlier
-  name on screen - `amazing_view` - but writes only the id to the log, so the
-  id is the name here: Sessions and the debrief show it in full.
+  same session are not credited. The game may show a friendlier name on
+  screen - `amazing_view` - while writing only the id to the log. You can save
+  that observation locally; Sessions and the debrief keep the canonical id in
+  full.
 
 - **The shard you are on is lit.** On the Servers page the row for the
   server the game has you on right now leads the table, highlighted and
