@@ -209,8 +209,8 @@ current panel.
 1. ~~Digest: the two new files, the version check, the refresh sentence.~~ Done: `CommunityData.Garage.cs`, `HasGarage`.
 2. ~~`ShipSheet` in Core, with the stock-fit verification as a test that prints
    the match table.~~ Done: `Core/GameData/Garage.cs`, `GarageSheetTests`, `--garage-check`.
-3. `GET /api/garage/{class}` and the sheet page - read-only, every group
-   labelled.
+3. ~~`GET /api/garage/{class}` and the sheet page - read-only, every group
+   labelled.~~ Done, 0.13.1; `POST .../sheet` exists for step 4.
 4. The bench and the delta: `POST .../sheet`, the was → now rendering, the
    budget lines.
 5. Builds: store, backup, restore, the Fleet card's button re-pointed.

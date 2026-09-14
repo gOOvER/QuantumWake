@@ -28,9 +28,30 @@ public sealed partial class CommunityData
     /// <summary>Every part with figures, by class name.</summary>
     public IReadOnlyDictionary<string, PartStats> Parts => _parts;
 
-    /// <summary>A ship's base figures and stock loadout, by class name, or null.</summary>
-    public ShipBase? GarageShip(string? className) =>
-        className is not null && _shipBases.TryGetValue(className, out var ship) ? ship : null;
+    /// <summary>
+    /// A ship's base figures and stock loadout, by class name, or null.
+    /// </summary>
+    /// <remarks>
+    /// The same matching as <see cref="Ship"/>: exact, else the shortest class
+    /// that extends the name with an underscore - the logs say MISC_Starlancer
+    /// and the dump says MISC_Starlancer_Max.
+    /// </remarks>
+    public ShipBase? GarageShip(string? className)
+    {
+        if (string.IsNullOrWhiteSpace(className) || _shipBases.Count == 0)
+            return null;
+
+        var key = className.Trim().Replace(' ', '_');
+
+        if (_shipBases.TryGetValue(key, out var exact))
+            return exact;
+
+        return _shipBases
+            .Where(p => p.Key.StartsWith(key + "_", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(p => p.Key.Length)
+            .Select(p => p.Value)
+            .FirstOrDefault();
+    }
 
     /// <summary>Every ship the garage can draw, by class name.</summary>
     public IReadOnlyDictionary<string, ShipBase> GarageShips => _shipBases;
@@ -199,12 +220,16 @@ public sealed partial class CommunityData
     /// Ship class name → base figures and loadout tree, from <c>ships.json</c>.
     /// </summary>
     /// <remarks>
-    /// Every entry in the tree that names a part or can take one is kept -
-    /// the signature model reads the life support and the armour, which no
-    /// pilot can change - and empty fixed slots are dropped, since a port
-    /// with nothing in it that nothing can go into is not part of the ship.
+    /// Every entry the sheet reads is kept: a port a pilot can change, a port
+    /// holding a part with figures - the model reads the life support and the
+    /// armour, which no pilot can change - or a port whose children are. Seats,
+    /// doors, controllers and empty fixed slots are not part of the ship the
+    /// sheet describes, and dropping them takes the digest from 9.7 MB to
+    /// under half. What a port accepts is kept only where a swap could use
+    /// it, and for the turret ports the gun classification reads.
     /// </remarks>
-    public static Dictionary<string, ShipBase> DigestShipStats(string shipsJson)
+    /// <param name="parts">The part digest, so a port is kept when its part has figures.</param>
+    public static Dictionary<string, ShipBase> DigestShipStats(string shipsJson, IReadOnlyDictionary<string, PartStats> parts)
     {
         var result = new Dictionary<string, ShipBase>(StringComparer.OrdinalIgnoreCase);
 
@@ -259,12 +284,12 @@ public sealed partial class CommunityData
                     Number(s, "Weaponry", "TurretDps"),
                     Number(s, "QuantumTravel", "Range"),
                     Num(s, "MassTotal") ?? 0),
-                Ports(loadout));
+                Ports(loadout, parts));
         }
 
         return result;
 
-        static IReadOnlyList<FitPort> Ports(JsonElement ports)
+        static IReadOnlyList<FitPort> Ports(JsonElement ports, IReadOnlyDictionary<string, PartStats> parts)
         {
             if (ports.ValueKind != JsonValueKind.Array)
                 return [];
@@ -274,25 +299,41 @@ public sealed partial class CommunityData
             {
                 var cls = Str(port, "ClassName");
                 var editable = port.TryGetProperty("Editable", out var ed) && ed.ValueKind == JsonValueKind.True;
-                var children = port.TryGetProperty("Loadout", out var sub) ? Ports(sub) : [];
+                var children = port.TryGetProperty("Loadout", out var sub) ? Ports(sub, parts) : [];
 
-                if (cls is null && !editable && children.Count == 0)
-                    continue;
+                var described = cls is not null && parts.ContainsKey(cls);
+                var type = Str(port, "Type");
 
                 var accepts = new List<string>();
                 if (port.TryGetProperty("CompatibleTypes", out var types) && types.ValueKind == JsonValueKind.Array)
                     foreach (var t in types.EnumerateArray())
                         if (Str(t, "Type") is { } kind) accepts.Add(kind);
 
+                // A turret is told by the port's type or by what it accepts - the
+                // Valkyrie's door mounts are WeaponMount ports that accept a
+                // TurretBase - and the gun classification needs either kept.
+                var turretish = (type is not null && type.StartsWith("Turret", StringComparison.Ordinal))
+                    || accepts.Any(a => a.StartsWith("Turret", StringComparison.Ordinal));
+
+                // Editable means something to the bench only when a shop sells what
+                // fits: twenty weapon cabinets and a life-support filter slot are
+                // editable in the data and decisions for nobody.
+                var bench = editable && accepts.Any(Shoppable.Contains);
+
+                if (!bench && !described && children.Count == 0 && !turretish)
+                    continue;
+
+                if (!bench && !turretish)
+                    accepts.Clear();
+
                 var hardpoint = Str(port, "HardpointName") ?? "?";
-                var type = Str(port, "Type");
 
                 list.Add(new FitPort(
                     Str(port, "PortId") ?? hardpoint,
                     hardpoint,
                     cls,
                     type is null ? null : type.Split('.')[0],
-                    editable,
+                    bench,
                     (int)(Num(port, "MinSize") ?? 0),
                     (int)(Num(port, "MaxSize") ?? Num(port, "MinSize") ?? 0),
                     accepts,

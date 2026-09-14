@@ -372,7 +372,7 @@ public sealed partial class CommunityData
         var blueprints = DigestBlueprints(blueprintsJson);
         var lore = DigestPlaceLore(starmapInfoJson);
         var partStats = DigestPartStats(shipItemsJson);
-        var shipStats = DigestShipStats(shipsJson);
+        var shipStats = DigestShipStats(shipsJson, partStats);
 
         Directory.CreateDirectory(_directory);
         File.WriteAllText(DigestPath, JsonSerializer.Serialize(digest));

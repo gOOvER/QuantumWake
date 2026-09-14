@@ -186,8 +186,8 @@ static int GarageCheck(string dumpDir)
         return 2;
     }
 
-    var ships = CommunityData.DigestShipStats(File.ReadAllText(shipsPath));
     var parts = CommunityData.DigestPartStats(File.ReadAllText(itemsPath));
+    var ships = CommunityData.DigestShipStats(File.ReadAllText(shipsPath), parts);
 
     var counted = ships.Values.Where(s => s.IsSpaceship && s.Dataset.EmShields > 0).ToList();
     var tally = new Dictionary<string, (int Ok, int Tried)>();

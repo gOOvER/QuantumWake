@@ -75,6 +75,7 @@
         <button data-view="loadout">Loadout</button>
         <button data-view="stash">Stash</button>
         <button data-view="loot">Loot</button>
+        <button data-view="garage">Garage</button>
       </div>
     </div>
     <div class="tab-group">
@@ -1854,6 +1855,54 @@
             <th>First seen</th><th>Item</th><th>Kind</th>
             <th title="Median buy price across every terminal stocking it">Typical price</th>
             <th>Where you were</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="view-garage" class="view">
+    <div class="section-bar">
+      <h2>Garage</h2>
+      <div class="controls">
+        <select id="garage-mine" class="select" title="Ships the logs have seen you fly"></select>
+        <select id="garage-all" class="select" title="Every ship in the reference"></select>
+      </div>
+    </div>
+    <p class="muted caption">
+      A ship's numbers, and what a part would do to them. Every figure here is
+      recomputed from the fitted parts using the community dataset's own model
+      &mdash; the same files and the same arithmetic that produced its published
+      totals, checked against them on every ship (<code>docs/garage.md</code>).
+      <b>Signatures are the shields-up, everything-at-maximum scenario</b> the
+      dataset and erkul publish; a pilot who has pulled power off the guns is
+      quieter than this says. The logs name the ship you fly but not its parts,
+      so the sheet starts from the stock fit.
+    </p>
+
+    <p class="muted" id="garage-unavailable" hidden></p>
+
+    <div id="garage-head" class="garage-head" hidden>
+      <div class="garage-title" id="garage-title"></div>
+      <div class="muted" id="garage-sub"></div>
+      <div class="muted small" id="garage-source"></div>
+    </div>
+
+    <div class="sheet" id="garage-sheet"></div>
+
+    <div id="garage-notes" class="garage-notes" hidden></div>
+
+    <h2 class="spaced" id="garage-ports-heading" hidden>Fitted parts</h2>
+    <div class="table-wrap" id="garage-ports-wrap" hidden>
+      <table id="garage-ports">
+        <thead>
+          <tr>
+            <th>Port</th>
+            <th>Takes</th>
+            <th class="num">Size</th>
+            <th>Fitted</th>
+            <th>What it does</th>
           </tr>
         </thead>
         <tbody></tbody>

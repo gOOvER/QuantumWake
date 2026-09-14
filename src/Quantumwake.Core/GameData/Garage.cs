@@ -268,7 +268,9 @@ public sealed record ShipSheet(
                 var cls = swapped ? to : port.Class;
                 var part = cls is not null && parts.TryGetValue(cls, out var p) ? p : null;
 
-                if (cls is not null && part is null)
+                // Only a part the bench offers is worth a sentence: a door or a seat
+                // with no figures is the dump's business, not the pilot's.
+                if (cls is not null && part is null && port.Editable)
                     _unknown.Add(cls);
 
                 if (port.Editable || port.Class is not null)

@@ -26,9 +26,11 @@ public class GarageSheetTests(ITestOutputHelper output)
 {
     private static readonly string Root = Path.Combine(AppContext.BaseDirectory, "Fixtures");
 
-    private static (Dictionary<string, ShipBase> Ships, Dictionary<string, PartStats> Parts) Load() =>
-        (CommunityData.DigestShipStats(File.ReadAllText(Path.Combine(Root, "garage-ships.json"))),
-         CommunityData.DigestPartStats(File.ReadAllText(Path.Combine(Root, "garage-ship-items.json"))));
+    private static (Dictionary<string, ShipBase> Ships, Dictionary<string, PartStats> Parts) Load()
+    {
+        var parts = CommunityData.DigestPartStats(File.ReadAllText(Path.Combine(Root, "garage-ship-items.json")));
+        return (CommunityData.DigestShipStats(File.ReadAllText(Path.Combine(Root, "garage-ships.json")), parts), parts);
+    }
 
     /// <summary>
     /// The seven hulls whose remote-turret guns the published dump counts

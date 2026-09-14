@@ -284,6 +284,7 @@ function showView(name) {
   if (name === 'casualties') loadCasualties().catch(() => {});
   if (name === 'crew') loadCrew().catch(() => {});
   if (name === 'servers') loadServers().catch(() => {});
+  if (name === 'garage') loadGarage().catch(() => {});
   if (name === 'points') loadPoints().catch(() => {});
   if (name === 'wikelo') loadWikelo().catch(() => {});
 
@@ -8723,6 +8724,312 @@ onInput('#servers-search', renderServers);
 onInput('#servers-region', renderServers);
 onInput('#servers-current', renderServers);
 onInput('#servers-starred', renderServers);
+
+/* ---------- garage ---------- */
+
+/** The ship on the bench, by class, and the last sheet drawn for it. */
+let garageClass = null;
+let garageStock = null;
+let garageSheet = null;
+
+/** Ports named for the game's files; this is what a pilot calls them. */
+const GARAGE_GROUP_WORDS = {
+  QuantumDrive: 'Quantum drive',
+  Shield: 'Shield generator',
+  PowerPlant: 'Power plant',
+  Cooler: 'Cooler',
+  WeaponGun: 'Gun',
+  Turret: 'Gun mount',
+  TurretBase: 'Turret',
+  MissileLauncher: 'Missile rack',
+  Missile: 'Missile',
+  Radar: 'Radar',
+  EMP: 'EMP',
+  QuantumInterdictionGenerator: 'Quantum interdiction',
+  WeaponMining: 'Mining laser',
+  Armor: 'Armour',
+  LifeSupportGenerator: 'Life support',
+  FlightController: 'Flight controller',
+  FuelTank: 'Fuel tank',
+  QuantumFuelTank: 'Quantum fuel tank',
+  WeaponDefensive: 'Countermeasures',
+  TractorBeam: 'Tractor beam',
+  Misc: 'Utility',
+};
+
+const garageWord = (group) => GARAGE_GROUP_WORDS[group] || String(group || '').replace(/([a-z])([A-Z])/g, '$1 $2');
+
+/** A hardpoint name as a pilot reads it: hardpoint_shield_generator_left → shield generator left. */
+function garagePortName(hardpoint) {
+  return String(hardpoint || '')
+    .replace(/^hardpoint_/i, '')
+    .replace(/_attach$/i, '')
+    .replace(/_/g, ' ');
+}
+
+const fmtInt = (n) => Math.round(Number(n) || 0).toLocaleString();
+const fmt1 = (n) => (Math.round((Number(n) || 0) * 10) / 10).toLocaleString(undefined, { maximumFractionDigits: 1 });
+
+/** Metres to the unit a pilot uses: Gm for ranges, km for anything shorter. */
+function fmtDistance(metres) {
+  const m = Number(metres) || 0;
+  if (m >= 1e9) return `${(m / 1e9).toLocaleString(undefined, { maximumFractionDigits: 1 })} Gm`;
+  if (m >= 1e6) return `${(m / 1e6).toLocaleString(undefined, { maximumFractionDigits: 1 })} Mm`;
+  return `${(m / 1e3).toLocaleString(undefined, { maximumFractionDigits: 1 })} km`;
+}
+
+/** Drive speed, in km/s - the figure the in-game drive screen shows. */
+const fmtSpeed = (mps) => `${Math.round((Number(mps) || 0) / 1000).toLocaleString()} km/s`;
+
+async function loadGarage() {
+  const mine = $('#garage-mine');
+  if (!mine) return;
+
+  let data;
+  try {
+    data = await getJson('/api/garage');
+  } catch {
+    return;
+  }
+
+  const unavailable = $('#garage-unavailable');
+  if (!data.known) {
+    unavailable.hidden = false;
+    unavailable.textContent = 'The reference data predates the garage. Refresh the community dataset in Settings '
+      + 'and this page fills in - it needs the part figures the older download did not keep.';
+    return;
+  }
+  unavailable.hidden = true;
+
+  fillGaragePicker(mine, 'Your fleet…', data.mine.map((s) => [s.class, `${s.name} · ${s.sorties} sortie${s.sorties === 1 ? '' : 's'}`]));
+  fillGaragePicker($('#garage-all'), 'Any ship…', data.all.map((s) => [s.class, `${s.name}${s.role ? ` · ${s.role}` : ''}`]));
+
+  // Open the ship already on the bench, else the one flown most, else nothing.
+  const first = garageClass || data.mine[0]?.class || null;
+  if (first) await openGarage(first);
+}
+
+function fillGaragePicker(select, prompt, entries) {
+  if (!select) return;
+  const keep = select.value;
+  select.textContent = '';
+  const head = el('option', null, prompt);
+  head.value = '';
+  select.append(head);
+  for (const [value, label] of entries) {
+    const option = el('option', null, label);
+    option.value = value;
+    select.append(option);
+  }
+  select.value = entries.some(([v]) => v === keep) ? keep : '';
+}
+
+/** Puts a ship on the bench: its stock sheet, and its ports. */
+async function openGarage(cls) {
+  garageClass = cls;
+  for (const id of ['#garage-mine', '#garage-all']) {
+    const select = $(id);
+    if (select && [...select.options].some((o) => o.value === cls)) select.value = cls;
+    else if (select) select.value = '';
+  }
+
+  let data;
+  try {
+    data = await getJson(`/api/garage/${encodeURIComponent(cls)}`);
+  } catch {
+    const unavailable = $('#garage-unavailable');
+    unavailable.hidden = false;
+    unavailable.textContent = `The reference does not know a ship called ${cls}.`;
+    return;
+  }
+
+  garageStock = data;
+  garageSheet = data.sheet;
+  renderGarage(data, null);
+}
+
+/**
+ * Draws the sheet. With a stock sheet to compare against, every figure that
+ * moved shows the old one struck beside it.
+ */
+function renderGarage(data, stock) {
+  const head = $('#garage-head');
+  head.hidden = false;
+  $('#garage-title').textContent = data.ship.name;
+  $('#garage-sub').textContent = [data.ship.manufacturer, data.ship.role, data.ship.career,
+    `size ${data.ship.size}`, `crew ${data.ship.crew}`].filter(Boolean).join(' · ');
+  $('#garage-source').textContent = `Community dataset${data.dump ? ` · dump ${data.dump}` : ''} · recomputed from the fitted parts`;
+
+  const s = data.sheet;
+  const o = stock?.sheet || null;
+  const ship = data.ship;
+
+  const sheet = $('#garage-sheet');
+  sheet.textContent = '';
+
+  sheet.append(sheetGroup('Hull', 'ships.json', [
+    row('Hull HP', fmtInt(ship.health)),
+    row('Mass', `${fmtInt(s.mass)} kg`, 'The dataset’s stock figure, moved by what you changed.', o ? [o.mass, s.mass, 'kg'] : null),
+    row('Cross-section', `${fmtInt(s.crossSection.x)} · ${fmtInt(s.crossSection.y)} · ${fmtInt(s.crossSection.z)}`,
+      'Front · side · top. Geometry: parts do not change it.'),
+    row('Cargo', ship.cargoScu ? `${fmt1(ship.cargoScu)} SCU` : '—'),
+    row('Fuel', `${fmtInt(ship.hydrogenFuel)} H · ${fmtInt(ship.quantumFuel)} Q`),
+  ]));
+
+  const f = ship.flight;
+  sheet.append(sheetGroup('Flight', 'ships.json', [
+    row('SCM', `${fmtInt(f.scm)} m/s`),
+    row('Boost', `${fmtInt(f.boost)} m/s`),
+    row('Max', `${fmtInt(f.max)} m/s`),
+    row('Pitch · yaw · roll', `${fmtInt(f.pitch)} · ${fmtInt(f.yaw)} · ${fmtInt(f.roll)} °/s`),
+  ]));
+
+  const w = s.weapons;
+  const ow = o?.weapons;
+  sheet.append(sheetGroup('Weapons', 'parts', [
+    row('Pilot DPS', fmt1(w.fixedDps), w.guns.length ? w.guns.join(', ') : 'No guns the pilot fires.', ow ? [ow.fixedDps, w.fixedDps] : null),
+    row('Sustained', fmt1(w.fixedSustainedDps), null, ow ? [ow.fixedSustainedDps, w.fixedSustainedDps] : null, true),
+    row('Alpha', fmt1(w.fixedAlpha), null, ow ? [ow.fixedAlpha, w.fixedAlpha] : null, true),
+    row('Turret DPS', w.turretDps ? fmt1(w.turretDps) : '—', w.turretDps ? 'Crewed or remote turrets; somebody else fires these.' : null, ow ? [ow.turretDps, w.turretDps] : null),
+    row('Missiles', w.missiles ? `${w.missiles} · ${fmtInt(w.missileDamage)} dmg` : '—', null, ow ? [ow.missileDamage, w.missileDamage] : null),
+  ]));
+
+  const sh = s.shield;
+  const osh = o?.shield;
+  sheet.append(sheetGroup('Defence', 'parts', [
+    row('Shield HP', fmtInt(sh.hp), sh.poolLimit && sh.generators > sh.poolLimit
+      ? `${sh.generators} generators fitted, ${sh.poolLimit} online: the pool caps it.` : null, osh ? [osh.hp, sh.hp] : null),
+    row('Shield regen', `${fmtInt(sh.regen)} /s`, null, osh ? [osh.regen, sh.regen] : null),
+    row('Generators', sh.poolLimit ? `${sh.generators} of ${sh.poolLimit}` : String(sh.generators)),
+    row('Armour', `EM ×${s.armorSignals.em} · IR ×${s.armorSignals.ir}`, 'The hull’s signal multipliers; every signature below carries them.'),
+  ]));
+
+  const sig = s.shields;
+  const osig = o?.shields;
+  const groups = Object.entries(sig.emByGroup || {}).sort((a, b) => b[1] - a[1]);
+  sheet.append(sheetGroup('Signature', 'model', [
+    row('EM, shields up', fmtInt(sig.em), 'Every part at maximum, quantum drive idle.', osig ? [osig.em, sig.em, '', true] : null),
+    ...groups.map(([g, v]) => row(garageWord(g), fmtInt(v), null,
+      osig ? [osig.emByGroup?.[g] || 0, v, '', true] : null, true)),
+    row('IR, shields up', fmtInt(sig.ir), 'Every part’s IR × armour × cooling load.', osig ? [osig.ir, sig.ir, '', true] : null),
+    row('EM · IR, in quantum', `${fmtInt(s.quantum.em)} · ${fmtInt(s.quantum.ir)}`, 'Drive spooled, shields down.',
+      o ? [o.quantum.em, s.quantum.em, '', true] : null),
+  ]));
+
+  const p = s.power;
+  const c = s.cooling;
+  const op = o?.power;
+  const oc = o?.cooling;
+  sheet.append(sheetGroup('Systems', 'parts', [
+    row('Power available', `${p.available} seg`, null, op ? [op.available, p.available] : null),
+    row('Drawn, shields up', `${fmt1(p.usedShields)} seg`, p.overShields ? 'Over budget: the game will brown something out.' : null,
+      op ? [op.usedShields, p.usedShields, '', true] : null),
+    row('Drawn, in quantum', `${fmt1(p.usedQuantum)} seg`, p.overQuantum ? 'Over budget in quantum.' : null,
+      op ? [op.usedQuantum, p.usedQuantum, '', true] : null),
+    row('Cooling generated', `${fmtInt(c.generated)} seg`, null, oc ? [oc.generated, c.generated] : null),
+    row('Cooling load', `${Math.round(c.loadShields * 100)}%`, c.loadShields > 1 ? 'Above 100%: the coolers cannot keep up at full draw.' : 'Used over generated, shields up. Lower is quieter.',
+      oc ? [oc.loadShields * 100, c.loadShields * 100, '%', true] : null),
+  ]));
+
+  const q = s.quantumDrive;
+  const oq = o?.quantumDrive;
+  sheet.append(sheetGroup('Quantum', 'parts', q ? [
+    row('Drive', q.drive),
+    row('Speed', fmtSpeed(q.speed), null, oq ? [oq.speed, q.speed, '', false, fmtSpeed] : null),
+    row('Spool · cooldown', `${fmt1(q.spoolTime)} s · ${fmt1(q.cooldown)} s`, null, oq ? [oq.spoolTime, q.spoolTime, ' s', true] : null),
+    row('Range', fmtDistance(q.range), 'Full tank over the drive’s fuel rate.', oq ? [oq.range, q.range, '', false, fmtDistance] : null),
+    row('Fuel per Gm', fmt1(q.fuelPerGm), null, oq ? [oq.fuelPerGm, q.fuelPerGm, '', true] : null),
+  ] : [row('Drive', 'None fitted')]));
+
+  const notes = $('#garage-notes');
+  notes.textContent = '';
+  notes.hidden = !(s.notes && s.notes.length);
+  for (const note of s.notes || []) notes.append(el('div', null, note));
+
+  renderGaragePorts(data.ports || []);
+}
+
+function sheetGroup(title, source, rows) {
+  const group = el('section', 'sheet-group');
+  const h = el('h3', null, title);
+  h.append(el('span', 'src', source === 'model' ? 'signature model' : source));
+  group.append(h);
+  for (const r of rows) if (r) group.append(r);
+  return group;
+}
+
+/**
+ * One line of the sheet.
+ *
+ * @param delta [was, now, unit, lowerIsBetter, format] - when the bench has
+ *   changed something, the old figure is struck beside the new one and the new
+ *   one coloured by whether it got better, which depends on the figure.
+ */
+function row(label, value, note, delta, sub = false) {
+  const r = el('div', `sheet-row${sub ? ' sub' : ''}`);
+  r.dataset.key = label;
+  r.append(el('span', 'k', label));
+
+  const v = el('span', 'v');
+  if (delta && Number.isFinite(delta[0]) && Number.isFinite(delta[1]) && Math.abs(delta[0] - delta[1]) > 1e-9) {
+    const [was, now, unit = '', lowerIsBetter = false, format = null] = delta;
+    const wasText = format ? format(was) : `${fmtSmart(was)}${unit}`;
+    v.append(el('span', 'was', wasText));
+    const better = lowerIsBetter ? now < was : now > was;
+    v.classList.add(better ? 'up' : 'down');
+  }
+  v.append(document.createTextNode(value));
+  r.append(v);
+
+  if (note) r.append(el('span', 'n', note));
+  return r;
+}
+
+const fmtSmart = (n) => Number.isInteger(n) ? fmtInt(n) : fmt1(n);
+
+function renderGaragePorts(ports) {
+  const heading = $('#garage-ports-heading');
+  const wrap = $('#garage-ports-wrap');
+  const body = $('#garage-ports').querySelector('tbody');
+  body.textContent = '';
+  heading.hidden = wrap.hidden = ports.length === 0;
+
+  for (const port of ports) {
+    const tr = el('tr');
+    tr.dataset.port = port.portId;
+    tr.append(el('td', null, garagePortName(port.hardpoint)));
+    tr.append(el('td', 'muted', garageWord(port.group)));
+    tr.append(el('td', 'num', port.minSize === port.maxSize ? String(port.maxSize) : `${port.minSize}–${port.maxSize}`));
+
+    const fitted = el('td');
+    fitted.append(document.createTextNode(port.name || (port.class ? port.class : 'empty')));
+    if (port.changed) fitted.append(el('small', 'muted', ` (was ${port.stockName || port.stockClass || 'empty'})`));
+    tr.append(fitted);
+
+    tr.append(el('td', 'what', partBlurb(port.fitted)));
+    body.append(tr);
+  }
+}
+
+/** The one line that says what a part does, by its kind. */
+function partBlurb(part) {
+  if (!part) return '';
+  if (part.weapon) return `${fmt1(part.weapon.dps)} DPS · ${fmt1(part.weapon.alpha)} alpha · ${fmtInt(part.weapon.range)} m`;
+  if (part.shield) return `${fmtInt(part.shield.hp)} HP · ${fmtInt(part.shield.regen)}/s regen · EM ${fmtInt(part.em)}`;
+  if (part.quantum) return `${fmtSpeed(part.quantum.speed)} · spool ${fmt1(part.quantum.spoolTime)} s · EM ${fmtInt(part.em)}`;
+  if (part.missile) return `${fmtInt(part.missile.damage)} dmg · ${fmtInt(part.missile.speed)} m/s · lock ${fmt1(part.missile.lockTime)} s`;
+  if (part.type === 'Cooler') return `${fmtInt(part.coolantGen)} coolant · EM ${fmtInt(part.em)} · IR ${fmtInt(part.ir)}`;
+  if (part.type === 'PowerPlant') return `${fmtInt(part.powerGen)} power seg · EM ${fmtInt(part.em)}`;
+  if (part.armor) return `EM ×${part.armor.em} · IR ×${part.armor.ir}`;
+  const bits = [];
+  if (part.em) bits.push(`EM ${fmtInt(part.em)}`);
+  if (part.ir) bits.push(`IR ${fmtInt(part.ir)}`);
+  if (part.powerUseMax) bits.push(`draws ${fmt1(part.powerUseMax)} seg`);
+  return bits.join(' · ');
+}
+
+onInput('#garage-mine', () => { const v = $('#garage-mine').value; if (v) openGarage(v).catch(() => {}); });
+onInput('#garage-all', () => { const v = $('#garage-all').value; if (v) openGarage(v).catch(() => {}); });
 onInput('#servers-troubled', renderServers);
 
 /**

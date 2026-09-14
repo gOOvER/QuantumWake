@@ -2910,6 +2910,50 @@ public static class ServerHost
             source = "api.uexcorp.space"
         });
 
+        // ---- the garage: a ship's numbers, and what a part would do to them ----
+
+        // Who is in the garage: the ships the logs have seen you fly, most
+        // flown first, then everything the reference knows. Class names
+        // throughout, because that is what the sheet is keyed by.
+        app.MapGet("/api/garage", (LogLibrary lib) =>
+        {
+            var community = lib.Community;
+            var mine = lib.Stats().Ships
+                .Select(s => (Ship: s, Base: community.GarageShip(s.ClassName)))
+                .Where(x => x.Base is not null)
+                .Select(x => new
+                {
+                    x.Base!.Class,
+                    x.Base.Name,
+                    x.Ship.Sorties,
+                    x.Ship.LastFlown
+                })
+                .ToList();
+
+            return new
+            {
+                known = community.HasGarage,
+                dump = community.Dump,
+                mine,
+                all = community.GarageShips.Values
+                    .Where(s => s.IsSpaceship)
+                    .OrderBy(s => s.Manufacturer).ThenBy(s => s.Name)
+                    .Select(s => new { s.Class, s.Name, s.Manufacturer, s.Role, s.Size })
+            };
+        });
+
+        // The sheet for one ship as it comes, with the ports a pilot can change.
+        // Every figure is recomputed from the parts by the model docs/garage.md
+        // describes; the dump's own totals are kept beside them only for the
+        // test that checks the two agree.
+        app.MapGet("/api/garage/{cls}", (string cls, LogLibrary lib) =>
+            GarageSheet(lib, cls, null));
+
+        // The same sheet with parts changed: port id → class. Nothing is
+        // stored; this is the bench asking "and if I put this here".
+        app.MapPost("/api/garage/{cls}/sheet", (string cls, LogLibrary lib, GarageSwapRequest body) =>
+            GarageSheet(lib, cls, body.Swaps));
+
         // Every terminal price for one commodity: the map grades its sellers
         // and buyers by these, by price or by SCU capacity.
         /*
@@ -3857,6 +3901,77 @@ static int Holes(IEnumerable<ShipSlot> slots)
             .ThenByDescending(p => p.Ore);
     }
 
+    /// <summary>
+    /// The garage's answer for one ship: what it is, the sheet for the given
+    /// fit, and the ports a pilot can change.
+    /// </summary>
+    /// <remarks>
+    /// Told apart on purpose: a reference that predates the garage needs a
+    /// refresh, a class the reference has never heard of needs nothing, and
+    /// neither is a sheet full of zeros.
+    /// </remarks>
+    static IResult GarageSheet(LogLibrary lib, string cls, IReadOnlyDictionary<string, string?>? swaps)
+    {
+        var community = lib.Community;
+
+        if (!community.HasGarage)
+            return Results.Json(new { known = false, message = "The reference data predates the garage. Refresh the community dataset in Settings." }, statusCode: 409);
+
+        var ship = community.GarageShip(cls);
+        if (ship is null)
+            return Results.NotFound(new { message = $"The reference does not know a ship called {cls}." });
+
+        var sheet = ShipSheet.Compute(ship, community.Parts, swaps);
+
+        // The bench's rows: every editable port, with what is in it now. Parts
+        // nobody can change - life support, armour, the thrusters - shape the
+        // numbers but are not offered as decisions.
+        var ports = sheet.Parts
+            .Where(p => IsEditable(ship.Loadout, p.PortId))
+            .Select(p => new
+            {
+                p.PortId, p.Hardpoint, p.Group, p.MinSize, p.MaxSize,
+                p.Class, p.Name, p.StockClass, p.Changed,
+                stockName = p.StockClass is not null && community.Parts.TryGetValue(p.StockClass, out var stock) ? stock.Name : null,
+                fitted = p.Class is not null && community.Parts.TryGetValue(p.Class, out var part) ? PartCard(part) : null
+            });
+
+        return Results.Ok(new
+        {
+            known = true,
+            dump = community.Dump,
+            ship = new
+            {
+                ship.Class, ship.Name, ship.Manufacturer, ship.Role, ship.Career, ship.Size, ship.Crew,
+                ship.HullMass, ship.Health, ship.CargoScu, ship.QuantumFuel, ship.HydrogenFuel,
+                ship.Flight, ship.PowerPools,
+                stockMass = ship.Dataset.MassTotal
+            },
+            sheet,
+            ports
+        });
+
+        static bool IsEditable(IReadOnlyList<FitPort> ports, string portId)
+        {
+            foreach (var port in ports)
+            {
+                if (port.PortId == portId) return port.Editable;
+                if (IsEditable(port.Children, portId)) return true;
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>A part as the bench shows it: identity plus the figures that matter for its kind.</summary>
+    static object PartCard(PartStats part) => new
+    {
+        part.Class, part.Type, part.SubType, part.Size, part.Grade, part.Name, part.Manufacturer, part.Uuid,
+        part.Mass, part.Em, part.Ir, part.Health,
+        part.PowerGen, part.PowerUseMax, part.CoolantGen, part.CoolantUseMax,
+        part.Weapon, part.Shield, part.Quantum, part.Missile, part.Armor
+    };
+
     /// <summary>Builds the short list of useful things at the player's live place.</summary>
     /// <remarks>
     /// A briefing is deliberately narrower than its source pages. The next three
@@ -4260,6 +4375,9 @@ public sealed record MapNoteRequest(
 
 /// <summary>Body of PUT /api/servers/{shard}/note. Blank clears the note.</summary>
 public sealed record ShardNoteRequest(string? Note);
+
+/// <summary>Body of POST /api/garage/{class}/sheet: port id → class to fit there, null to empty the port.</summary>
+public sealed record GarageSwapRequest(Dictionary<string, string?>? Swaps);
 
 /// <summary>Body of PUT /api/servers/{shard}/favorite.</summary>
 public sealed record ShardFavoriteRequest(bool Favorite);

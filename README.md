@@ -364,6 +364,22 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.13.1
+
+- **The Garage: every number about a ship, recomputed from its parts.** A
+  new page under Gear. Pick a ship - yours first, most flown at the top, or
+  any of the 269 in the reference - and read its sheet: hull, flight,
+  weapons (pilot DPS with every gun named, turret DPS, missiles), defence
+  (shield HP and regen, the pool cap when it bites, the armour's signal
+  multipliers), **signature** (EM by component group and IR, shields up and
+  in quantum), systems (power drawn against generated, cooling load) and
+  quantum (speed, spool, range, fuel). Every figure is worked out from the
+  fitted parts with the community dataset's own model, and checked against
+  its published totals on every ship: EM, IR, power, cooling, shields and
+  range agree on 269 of 269. Signatures are the shields-up,
+  everything-at-maximum scenario, and the page says so. Needs a refresh of
+  the community dataset, which now keeps the part figures it used to drop.
+
 ### 0.12.4
 
 - **Give a server the name you saw in game, without losing its real id.** Add
