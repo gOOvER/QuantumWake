@@ -451,7 +451,7 @@ The category layout is stable as data arrives:
 | Resources | Cargo & trade, Ledger, Mining, Earnings |
 | Pilot | Session, Server, Activity, Crew, Log |
 
-Server (0.12.0) names the shard the matchmaker placed you on - by its id,
+Server (0.12.1) names the shard the matchmaker placed you on - by its id,
 since the game writes no friendlier name to the log - with how long you have
 been on it, how many times before, and the note you wrote on the dashboard's
 Servers page. It is the page to read right after the loading screen: a note

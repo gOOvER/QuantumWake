@@ -4446,3 +4446,8 @@ body.overlay .ship-picture { display: none; }
   text-transform: uppercase;
   vertical-align: middle;
 }
+
+/* A caption's negative top margin tucks it under a heading. Under a table it
+   pulls the text into the last row's border - visible the moment the caption
+   runs to more than one line, as the Servers footnote does. */
+.table-wrap + .caption { margin-top: 12px; }

@@ -364,7 +364,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.12.0
+### 0.12.1
 
 - **A release is now scanned before it is published.** After the Windows build
   makes the exact app and command-line files that ship, the release workflow
