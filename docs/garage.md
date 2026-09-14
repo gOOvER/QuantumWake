@@ -196,10 +196,16 @@ current panel.
 - **Cross-section changes** - none exist; parts do not change geometry. (Some
   hulls - the Starlancer MAX among them - have no cross-section in the dataset
   at all; the sheet says so rather than showing zeros.)
-- **Pictures of parts.** The game files hold none: of 3,137 `displayIcon`s
-  in the DataCore, every one is a ship silhouette or an FPS loadout preset, and
-  not one cooler, shield, plant, drive or gun has an icon. A part's face is
-  its maker's mark.
+- **Pictures of parts from the game files.** There are none: of 3,137
+  `displayIcon`s in the DataCore, every one is a ship silhouette or an FPS
+  loadout preset, and not one cooler, shield, plant, drive or gun has an icon.
+  UEX's item records carry a `screenshot` field and it is empty for every
+  component checked (coolers, plants, drives, guns: 0 of 359). What the app
+  shows is the Star Citizen Wiki's lead image for the part's page, fetched
+  once and cached under `community/part-pictures/` - 316 of the 633 bench
+  part names had one on 14 Sep 2026 (115/153 guns, 46/74 plants, 35/73
+  coolers, 34/64 shields, 32/58 drives, 2/58 radars, 0 EMPs). The other half
+  keep the maker's mark.
 - **Turret-mounted gun ballistics** (gimbal spread, convergence) - the dump
   has the numbers, the page has no honest way to combine them.
 - **Armour and hull damage models** beyond HP and the resistance table.

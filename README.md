@@ -364,8 +364,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.4
+### 0.13.5
 
+- **The part's own picture on the bench.** Where the Star Citizen Wiki has a
+  cutout of a cooler, gun or drive, the bench and the candidate list show it
+  instead of the maker's mark - the game files carry no picture of any part,
+  so the wiki is the only place one exists. It has one for about half the
+  bench (most guns and power plants, almost no radars or missile racks); the
+  rest keep the mark. Pictures are fetched once, by the part's name, only
+  after the community dataset is on, and kept under
+  `community\part-pictures`.
 - **Add the bench to your shopping list.** Once the bench differs from stock,
   **Add to shopping list** writes the changed parts - two coolers is one line
   with a two on it - as a job on the Shopping page, named after the open build

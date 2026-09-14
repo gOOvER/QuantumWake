@@ -56,12 +56,19 @@ to be read rather than inferred, and it is theirs. As with the archive, no
 third-party extractor is used or shipped: `GameData/DataCore.cs` walks the blob
 itself.
 
-**Star Citizen Wiki API** ([api.star-citizen.wiki](https://api.star-citizen.wiki))
-and [starcitizen-api.com](https://starcitizen-api.com) were consulted during
-research as a cross-check on body and station names. Neither is called at
+**Star Citizen Wiki** ([starcitizen.tools](https://starcitizen.tools)) is
+where the Garage's pictures of parts come from: once the community dataset is
+switched on, the bench asks the wiki's MediaWiki API for the lead image of a
+part's page - the part's display name is the only thing sent - and keeps the
+thumbnail under `community/part-pictures/`. Those images are the wiki
+contributors' captures, shown as the wiki serves them under its own terms
+(CC BY-SA for the wiki's work; what is pictured is Cloud Imperium's), and
+nothing from the wiki is committed to this repository. The wiki's REST API
+([api.star-citizen.wiki](https://api.star-citizen.wiki)) and
+[starcitizen-api.com](https://starcitizen-api.com) were consulted during
+research as a cross-check on body and station names; neither is called at
 runtime and no data from either is committed — the shipped names come from
-`Data.p4k`, so the app stays offline. They are listed because they informed the
-location model.
+`Data.p4k`.
 
 ## Artwork
 

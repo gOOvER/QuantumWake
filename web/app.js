@@ -9018,15 +9018,35 @@ function partMark(part, small = false) {
   const mark = el('span', `part-mark${small ? ' small' : ''}`);
   const code = part?.makerCode || null;
   const name = part?.manufacturer || code || '';
-  mark.title = name;
-  if (code && MANUFACTURER_LOGOS.has(code)) {
-    const img = document.createElement('img');
-    img.src = `assets/manufacturers/${code}.png`;
-    img.alt = name;
-    img.loading = 'lazy';
-    mark.append(img);
+  mark.title = part?.name ? `${part.name}${name ? ` - ${name}` : ''}` : name;
+
+  // The maker's face: the Fankit logo where the app has one, a monogram
+  // where it does not.
+  const maker = () => {
+    if (code && MANUFACTURER_LOGOS.has(code)) {
+      const img = document.createElement('img');
+      img.src = `assets/manufacturers/${code}.png`;
+      img.alt = name;
+      img.loading = 'lazy';
+      return img;
+    }
+    return el('span', 'mono-mark', monogram(code, name));
+  };
+
+  // The part itself where the wiki has a picture of it, which is about half
+  // of the bench; the 404 for the other half is the cue to show the maker
+  // instead, so a radar without a picture is not a broken image.
+  if (part?.uuid) {
+    const pic = document.createElement('img');
+    pic.className = 'part-pic';
+    pic.src = `/api/garage/picture/${encodeURIComponent(part.uuid)}`;
+    pic.alt = part.name || '';
+    pic.loading = 'lazy';
+    pic.addEventListener('error', () => { mark.classList.remove('pic'); pic.replaceWith(maker()); });
+    mark.classList.add('pic');
+    mark.append(pic);
   } else {
-    mark.append(el('span', 'mono-mark', monogram(code, name)));
+    mark.append(maker());
   }
   return mark;
 }

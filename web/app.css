@@ -4483,7 +4483,7 @@ body.overlay .ship-picture { display: none; }
    the one figure that matters for its kind. Clicking it opens the panel. */
 .bench-port {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
   padding: 7px 12px;
@@ -4499,12 +4499,14 @@ body.overlay .ship-picture { display: none; }
 .bench-port .figure { font-family: var(--mono); font-size: 11.5px; color: var(--muted); text-align: right; white-space: nowrap; }
 .bench-port .figure b { display: block; color: var(--text); font-weight: normal; font-size: 12.5px; }
 
-/* The maker's mark: the Fankit logo where the app has one, a monogram of the
-   maker's code where it does not. Component makers are mostly the latter -
-   Klaus & Werner, Behring, Gorgon - and the game files carry no picture of
-   a part at all, so the mark is the only face a cooler has. */
+/* The part's face: the wiki's cutout of it where the wiki has one (about half
+   the bench), else the maker's mark - the Fankit logo where the app has one,
+   a monogram of the maker's code where it does not. Component makers are
+   mostly the latter - Klaus & Werner, Behring, Gorgon - and the game files
+   carry no picture of a part at all. One frame size for all three, so a row
+   with a picture and a row without line up. */
 .part-mark {
-  width: 34px; height: 34px;
+  width: 56px; height: 42px;
   border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
   background: var(--panel-2);
@@ -4515,13 +4517,17 @@ body.overlay .ship-picture { display: none; }
 .part-mark img { max-width: 80%; max-height: 80%; opacity: .9; }
 .part-mark .mono-mark {
   font-family: var(--display);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: .06em;
   color: var(--text);
   opacity: .85;
 }
 .part-mark.small { width: 26px; height: 26px; }
 .part-mark.small .mono-mark { font-size: 8.5px; }
+/* The part's own picture, where the wiki has one: a cutout of the cooler or
+   the gun at the bench's scale, wider than tall because the parts are. */
+.part-mark.pic { background: #0b0f14; }
+.part-mark.pic img { width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; opacity: 1; }
 
 .chip {
   display: inline-block;
@@ -4548,7 +4554,7 @@ body.overlay .ship-picture { display: none; }
 
 .candidate {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
   padding: 8px 14px;

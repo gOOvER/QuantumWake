@@ -110,6 +110,7 @@ public static class ServerHost
         builder.Services.AddSingleton<MapNoteStore>();
         builder.Services.AddSingleton<ShardNoteStore>();
         builder.Services.AddSingleton<BuildStore>();
+        builder.Services.AddSingleton<PartPictures>();
         builder.Services.AddSingleton<TombstoneStore>();
         builder.Services.AddSingleton<BackupBuilder>();
         builder.Services.AddSingleton<RestoreService>();
@@ -3032,6 +3033,25 @@ public static class ServerHost
                     pricesKnown = uex.IsEnabled
                 }
             });
+        });
+
+        // A part's picture, from the wiki once and the disk after. 404 is the
+        // answer for "no picture", and the page falls back to the maker's mark
+        // on it; the wiki has one for about half the bench.
+        app.MapGet("/api/garage/picture/{uuid}", async (string uuid, LogLibrary lib, PartPictures pictures, IHttpClientFactory httpFactory, HttpContext ctx) =>
+        {
+            if (!lib.Community.IsEnabled) return Results.NotFound();
+
+            var part = lib.Community.Parts.Values.FirstOrDefault(p => string.Equals(p.Uuid, uuid, StringComparison.OrdinalIgnoreCase));
+            if (part is null) return Results.NotFound();
+
+            var picture = await pictures.GetAsync(httpFactory.CreateClient("community"), part, ctx.RequestAborted);
+            if (picture is null) return Results.NotFound();
+
+            // A day in the browser: the file on disk is for ever, the bench
+            // reopens often, and a picture of a cooler does not change.
+            ctx.Response.Headers.CacheControl = "private, max-age=86400";
+            return Results.File(picture.Bytes, picture.ContentType);
         });
 
         // ---- saved builds: a fit under a name ----

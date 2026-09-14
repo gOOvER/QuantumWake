@@ -164,7 +164,7 @@ public class GaragePageTests
          "options":[
            {"part":{"class":"COOL_AEGS_S01_Bracer_SCItem","type":"Cooler","size":1,"grade":2,"name":"Bracer","manufacturer":"Aegis Dynamics","makerCode":"AEGS","em":1490,"ir":7260,"coolantGen":25,"powerUseMax":3,"health":230},
             "price":null,"shops":[]},
-           {"part":{"class":"COOL_JUST_S01_Glacier_SCItem","type":"Cooler","size":1,"grade":1,"name":"Glacier","manufacturer":"Juggernaut","makerCode":"JUST","em":1490,"ir":7920,"coolantGen":38,"powerUseMax":3,"health":230},
+           {"part":{"class":"COOL_JUST_S01_Glacier_SCItem","uuid":"c-glacier","type":"Cooler","size":1,"grade":1,"name":"Glacier","manufacturer":"Juggernaut","makerCode":"JUST","em":1490,"ir":7920,"coolantGen":38,"powerUseMax":3,"health":230},
             "price":12000,"shops":[{"terminal":"Dumper's Depot","placeId":"P1","place":"Area18","system":"Stanton","price":12000},{"terminal":"Cousin Crow's","placeId":"P2","place":"Orison","system":"Stanton","price":12400}]},
            {"part":{"class":"COOL_ACAS_S01_Endo_SCItem","type":"Cooler","size":1,"grade":4,"name":"Endo","manufacturer":"Ace Astrogation","makerCode":"ACAS","em":1200,"ir":5000,"coolantGen":18,"powerUseMax":2,"health":200},
             "price":null,"shops":[]}]}
@@ -232,8 +232,8 @@ public class GaragePageTests
         Assert.StartsWith("Glacier", names);
         Assert.Contains("Stock", panel);
 
-        // The monogram for a maker with no Fankit mark.
-        Assert.True(page.Truth("__dom.node('#garage-bench-panel').descendants().some(n => n.classList.contains('mono-mark') && n.textContent === 'JUST')"));
+        // The monogram for a maker with no Fankit mark, on a part with no picture to ask for.
+        Assert.True(page.Truth("__dom.node('#garage-bench-panel').descendants().some(n => n.classList.contains('mono-mark') && n.textContent === 'ACAS')"));
     }
 
     [Fact]
@@ -535,5 +535,33 @@ public class GaragePageTests
         page.Do("await fitPart('p1', 'COOL_JUST_S01_Glacier_SCItem'); await shopForBench();");
 
         Assert.Contains("need UEX prices", page.NodeText("#garage-shop-result"));
+    }
+
+    // ---- the part's picture ----
+
+    /// <summary>
+    /// A part the wiki may have a picture of shows the picture, and names the
+    /// maker's mark as what to fall back to; a part with no uuid to ask about
+    /// shows the mark straight away.
+    /// </summary>
+    [Fact]
+    public void A_candidate_shows_its_picture_and_falls_back_to_the_makers_mark()
+    {
+        var page = Bench();
+        page.Do("await selectBenchPort('p1');");
+
+        var glacier = "__dom.node('#garage-bench-panel').descendants().filter(n => n.classList.contains('candidate')).find(n => n.textContent.includes('Glacier'))";
+        Assert.Equal("/api/garage/picture/c-glacier", page.Text($"{glacier}.descendants().find(n => n.classList.contains('part-pic')).src"));
+        Assert.True(page.Truth($"{glacier}.descendants().some(n => n.classList.contains('part-mark') && n.classList.contains('pic'))"));
+
+        // The 404: the picture goes, the monogram comes, the frame shrinks back.
+        page.Do($"const pic = {glacier}.descendants().find(n => n.classList.contains('part-pic')); pic.fire('error');");
+        Assert.False(page.Truth($"{glacier}.descendants().some(n => n.classList.contains('part-pic'))"));
+        Assert.Contains("JUST", page.Text($"{glacier}.descendants().find(n => n.classList.contains('part-mark')).textContent"));
+        Assert.False(page.Truth($"{glacier}.descendants().some(n => n.classList.contains('part-mark') && n.classList.contains('pic'))"));
+
+        // Bracer's card carries no uuid, so its mark is the maker's from the start.
+        var bracer = "__dom.node('#garage-bench-panel').descendants().filter(n => n.classList.contains('candidate')).find(n => n.textContent.includes('Bracer'))";
+        Assert.False(page.Truth($"{bracer}.descendants().some(n => n.classList.contains('part-pic'))"));
     }
 }
