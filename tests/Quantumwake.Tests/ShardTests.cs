@@ -199,4 +199,37 @@ public class ShardTests
         Assert.Equal(ShardLeave.Left, stay.Ending);
         Assert.Equal(TimeSpan.FromMinutes(30), stay.Duration);
     }
+
+    /// <summary>
+    /// The menu's own channel going down is not leaving the shard. No real log
+    /// has yet shown a non-routine frontend disconnect during a stay, which is
+    /// exactly why the rule is tested rather than trusted.
+    /// </summary>
+    [Fact]
+    public void A_frontend_disconnect_does_not_end_a_stay()
+    {
+        var builder = new SessionBuilder("test.log");
+
+        builder.Add(new ShardJoinEvent(T0, "pub_use1b_11704877_010", "34.86.98.241", 64353, "1"));
+        builder.Add(new DisconnectEvent(T0.AddMinutes(5), "30016", "Remote Disconnect - Player requested disconnect", true, "SC_Frontend"));
+
+        var summary = builder.Build();
+
+        Assert.Equal("pub_use1b_11704877_010", summary.CurrentShard);
+        Assert.Equal(1, summary.Disconnects);
+
+        builder.Add(new DisconnectEvent(T0.AddMinutes(9), "30016", "Remote Disconnect - Player requested disconnect", true, "SC_Default"));
+        Assert.Equal(ShardLeave.Left, Assert.Single(builder.Build().Shards).Ending);
+    }
+
+    [Fact]
+    public void The_parser_carries_the_gamerules_on_a_disconnect()
+    {
+        var ev = ParseOne<DisconnectEvent>(
+            "<2026-04-27T01:56:52.917Z> [Notice] <Channel Disconnected> cause=30016 reason=\"Remote Disconnect - Player requested disconnect\" " +
+            "frame=19594 isRemote=1 map=\"megamap\" gamerules=\"SC_Default\" hostType=\"Replicant\" remoteAddr=35.245.203.83:64293 localAddr=<local>:16 [Team_Network][Network]");
+
+        Assert.Equal("SC_Default", ev.GameRules);
+        Assert.False(ev.IsFrontend);
+    }
 }

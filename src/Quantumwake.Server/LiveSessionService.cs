@@ -87,6 +87,9 @@ public sealed record NowState
     public string? ShardNote { get; init; }
     public bool ShardFavorite { get; init; }
 
+    /// <summary>When the current placement happened, or null between placements.</summary>
+    public DateTimeOffset? ShardSince { get; init; }
+
     /// <summary>How many times this install has been placed here before this stay.</summary>
     public int ShardVisitsBefore { get; init; }
 }
@@ -251,7 +254,7 @@ public sealed partial class LiveSessionService : BackgroundService
     /// placement. The library walks every stored session to answer, and the
     /// snapshot is rebuilt every second.
     /// </summary>
-    private (string Shard, int Visits)? _visitsBefore;
+    private (string Shard, DateTimeOffset PlacedAt, int Visits)? _visitsBefore;
 
     /// <summary>The newest screenshot already accounted for.</summary>
     private string? _lastScreenShot;
@@ -317,6 +320,15 @@ public sealed partial class LiveSessionService : BackgroundService
     /// <summary>Current snapshot, also served over REST for first paint.</summary>
     public NowState Current { get; private set; } = new();
 
+    /// <summary>
+    /// The session being played, as it stands. For the Servers list, which
+    /// otherwise knows only the copy of Game.log summarised at the last scan.
+    /// </summary>
+    public SessionSummary LiveSummary
+    {
+        get { lock (_gate) return _builder.Build(); }
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (_install is null || !_install.HasGameLog)
@@ -361,7 +373,7 @@ public sealed partial class LiveSessionService : BackgroundService
         }
     }
 
-    private void OnEvent(GameEvent ev)
+    internal void OnEvent(GameEvent ev)
     {
         lock (_gate)
         {
@@ -438,14 +450,24 @@ public sealed partial class LiveSessionService : BackgroundService
         // the card should show it without waiting for the next placement.
         var shard = summary.CurrentShard;
         var shardNote = shard is null ? null : _shards?.Get(shard);
-        if (shard is not null && _visitsBefore?.Shard != shard)
-            _visitsBefore = (shard, _library.ShardVisitsBefore(shard, summary.Id));
+
+        // Keyed by the placement, not the shard: A, leave, A again is a second
+        // visit, and a cache keyed by the shard would answer with the first
+        // count. The stored history excludes this file; the stays this session
+        // has already finished on the same shard are added here.
+        var placedAt = shard is null ? default : summary.Shards[^1].JoinedAt;
+        if (shard is not null && (_visitsBefore is null || _visitsBefore.Value.Shard != shard || _visitsBefore.Value.PlacedAt != placedAt))
+        {
+            var earlierThisSession = summary.Shards.Count(s => s.Shard == shard) - 1;
+            _visitsBefore = (shard, placedAt, _library.ShardVisitsBefore(shard, summary.Id) + earlierThisSession);
+        }
 
         return new NowState
         {
             Shard = shard,
             ShardShort = ShardName.TryParse(shard, out var shardName) ? shardName.Short : shard,
             ShardNote = shardNote?.Note,
+            ShardSince = shard is null ? null : placedAt,
             ShardFavorite = shardNote?.Favorite ?? false,
             ShardVisitsBefore = shard is not null && _visitsBefore is { } seen && seen.Shard == shard ? seen.Visits : 0,
             Connected = true,

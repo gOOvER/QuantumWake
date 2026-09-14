@@ -352,7 +352,12 @@ public sealed class SessionBuilder
                 {
                     _disconnects++;
                     Timeline(ev.Timestamp, "disconnect", "Disconnected", disconnect.Reason);
-                    LeaveShard(ev.Timestamp, disconnect.IsIdleKick ? ShardLeave.Idle : ShardLeave.Left);
+
+                    // Only the world's channel going down is leaving the shard; the
+                    // menu's channel is torn down after every join - routinely, but
+                    // the rule is written down rather than left to the reason text.
+                    if (!disconnect.IsFrontend)
+                        LeaveShard(ev.Timestamp, disconnect.IsIdleKick ? ShardLeave.Idle : ShardLeave.Left);
                 }
                 break;
 

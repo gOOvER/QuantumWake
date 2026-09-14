@@ -301,7 +301,8 @@ public sealed partial class LogEventParser
                     line.Timestamp,
                     m.Groups["cause"].Value,
                     m.Groups["reason"].Value,
-                    m.Groups["remote"].Value == "1")),
+                    m.Groups["remote"].Value == "1",
+                    m.Groups["rules"].Success ? m.Groups["rules"].Value : null)),
 
             "Join PU" => Match(JoinShardRegex, line, m =>
                 new ShardJoinEvent(
@@ -531,7 +532,7 @@ public sealed partial class LogEventParser
     private static partial Regex QuantumRouteSuccessRegex { get; }
 
     [GeneratedRegex(
-        @"cause=(?<cause>\d+) reason=""(?<reason>[^""]*)"".*?isRemote=(?<remote>\d)",
+        @"cause=(?<cause>\d+) reason=""(?<reason>[^""]*)"".*?isRemote=(?<remote>\d)(?:.*?gamerules=""(?<rules>[^""]*)"")?",
         RegexOptions.Compiled)]
     private static partial Regex DisconnectRegex { get; }
 

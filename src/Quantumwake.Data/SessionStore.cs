@@ -158,7 +158,10 @@ public sealed class SessionStore : IDisposable
     //     page would list nothing but the session played after updating.
     // 14: the join line in the timeline names the shard by its id rather than
     //     a reading of it. Only one install ever ran 13, for a day.
-    private const int PayloadVersion = 14;
+    // 15: a disconnect carries its gamerules, and only the world's channel going
+    //     down ends a stay. No stored stay changes on this install - every
+    //     non-routine disconnect in 195 logs is SC_Default - but the builder did.
+    private const int PayloadVersion = 15;
 
 
     /// <summary>

@@ -8228,6 +8228,7 @@ const SHARD_ENDINGS = {
   Backend: ['back-end gave up', true],
   LogEnded: ['log ended', true],
   Replaced: ['moved by the game', true],
+  Open: ['on it now', false],
 };
 
 function endingLabel(ending) {
@@ -8403,10 +8404,11 @@ function endingCell(row) {
 
   if (row.visits > 1) {
     const rest = Object.entries(row.endings || {})
+      .filter(([kind]) => kind !== 'Open')
       .sort((a, b) => b[1] - a[1])
       .map(([kind, n]) => `${n}× ${endingLabel(kind)}`)
       .join(', ');
-    td.append(el('small', 'muted', ` · ${rest}`));
+    if (rest) td.append(el('small', 'muted', ` · ${rest}`));
   }
 
   return td;

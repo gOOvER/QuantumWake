@@ -149,6 +149,42 @@ public class ShardNoteStoreTests : IDisposable
         Assert.Equal(2, library.ShardVisitsBefore("pub_use1b_12545750_150", "a"));
     }
 
+
+    /// <summary>
+    /// A shard joined since the last scan is in no stored session. Given the
+    /// live summary, the list carries it - with the stay marked as still open
+    /// rather than as a log that ended - and the live copy replaces the stale
+    /// stored copy of the same file rather than counting beside it.
+    /// </summary>
+    [Fact]
+    public void The_live_session_puts_a_brand_new_shard_in_the_list()
+    {
+        using var sessions = new SessionStore(":memory:");
+        var library = new LogLibrary(sessions);
+
+        var stale = new SessionBuilder("Game.log");
+        stale.Add(new Core.Events.ShardJoinEvent(Now.AddHours(-2), "pub_use1b_12545750_080", "1.2.3.4", 1, "x"));
+        stale.Add(new Core.Events.DisconnectEvent(Now.AddHours(-1), "30016", "Remote Disconnect - Player requested disconnect", true, "SC_Default"));
+        sessions.Save(stale.Build(), "f1");
+
+        var live = new SessionBuilder("Game.log");
+        live.Add(new Core.Events.ShardJoinEvent(Now.AddHours(-2), "pub_use1b_12545750_080", "1.2.3.4", 1, "x"));
+        live.Add(new Core.Events.DisconnectEvent(Now.AddHours(-1), "30016", "Remote Disconnect - Player requested disconnect", true, "SC_Default"));
+        live.Add(new Core.Events.ShardJoinEvent(Now.AddMinutes(-30), "pub_use1b_12545750_199", "1.2.3.4", 1, "x"));
+        live.Add(new Core.Events.LoginEvent(Now, "nekron"));
+
+        Assert.DoesNotContain(library.Shards(), r => r.Shard == "pub_use1b_12545750_199");
+
+        var rows = library.Shards(live.Build());
+
+        var fresh = Assert.Single(rows, r => r.Shard == "pub_use1b_12545750_199");
+        Assert.Equal(ShardLeave.Open, fresh.LastEnding);
+        Assert.Equal(TimeSpan.FromMinutes(30), fresh.Time);
+
+        var older = Assert.Single(rows, r => r.Shard == "pub_use1b_12545750_080");
+        Assert.Equal(1, older.Visits);
+    }
+
     public void Dispose()
     {
         GC.SuppressFinalize(this);

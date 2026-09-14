@@ -279,4 +279,27 @@ public class ServersPageTests
         Assert.True(page.Truth($"{first}.classList.contains('here')"));
         Assert.False(page.Truth("__dom.node('#servers-table').querySelector('tbody').children[1].classList.contains('here')"));
     }
+
+    /// <summary>The shard joined this session, absent from every stored one, still gets a row - and it says you are on it.</summary>
+    [Fact]
+    public void A_shard_first_seen_this_session_reads_as_on_it_now()
+    {
+        var page = new Page();
+        page.Serve("/api/servers", """
+            {"current":"pub_use1b_12545750_199","newestDeployment":"12545750","servers":[
+              {"shard":"pub_use1b_12545750_199","region":"US East","regionCode":"use1b","deployment":"12545750","number":"199",
+               "current":true,"visits":2,"sessions":1,"time":1800,"first":"2026-09-14T14:00:00+00:00","last":"2026-09-14T14:30:00+00:00",
+               "endings":{"Left":1,"Open":1},"lastEnding":"Open","lastSession":"Game","note":null,"favorite":false,"places":[]}]}
+            """);
+        page.Do("await loadServers();");
+
+        var row = "__dom.node('#servers-table').querySelector('tbody').children[0]";
+        Assert.True(page.Truth($"{row}.classList.contains('here')"));
+
+        var ending = page.Text($"{row}.descendants().find(n => n.classList.contains('ending')).textContent");
+        Assert.StartsWith("on it now", ending);
+        Assert.DoesNotContain("log ended", ending);
+        Assert.DoesNotContain("on it now,", ending);
+        Assert.Contains("1× left", ending);
+    }
 }

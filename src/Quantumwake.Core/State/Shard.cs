@@ -120,7 +120,15 @@ public enum ShardLeave
     LogEnded,
 
     /// <summary>Another join arrived first - the game moved the client without a disconnect between.</summary>
-    Replaced
+    Replaced,
+
+    /// <summary>
+    /// Still on it. Never written by the builder - a saved session has no
+    /// present tense - but put on the live session's open stay when it is
+    /// merged into the Servers list, so the row you are sitting on does not
+    /// read "log ended".
+    /// </summary>
+    Open
 }
 
 /// <summary>

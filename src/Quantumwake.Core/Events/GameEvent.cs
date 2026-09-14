@@ -256,12 +256,25 @@ public sealed record DisconnectEvent(
     DateTimeOffset Timestamp,
     string Cause,
     string Reason,
-    bool IsRemote) : GameEvent(Timestamp)
+    bool IsRemote,
+    // Defaulted so fixtures written before it was read still compile; a missing
+    // value reads as "not the menu", which is what every real line also says.
+    string? GameRules = null) : GameEvent(Timestamp)
 {
     public override string Kind => "net.disconnect";
 
     public bool IsRoutineTeardown =>
         Reason.Equals("Nub destroyed", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The menu's own channel going down. Not a way of leaving a shard: the
+    /// menu channel is torn down twenty milliseconds after every join, and the
+    /// only reason this is checked rather than assumed is that 241 of 241
+    /// non-routine disconnects on this install carrying SC_Default is evidence,
+    /// not a guarantee.
+    /// </summary>
+    public bool IsFrontend =>
+        string.Equals(GameRules, "SC_Frontend", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The server dropped an idle client - the one leave the pilot did not choose.</summary>
     public bool IsIdleKick =>

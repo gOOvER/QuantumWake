@@ -1716,9 +1716,25 @@ public sealed class LogLibrary : IDisposable
     /// old ones stopped existing when the new ones started.
     /// </para>
     /// </remarks>
-    public IReadOnlyList<ShardRecord> Shards()
+    /// <param name="live">
+    /// The session being played, when there is one. The store holds the copy of
+    /// Game.log it summarised at the last scan; a shard joined since then is
+    /// nowhere in it, and the page would say "on now" about a row that does not
+    /// exist. The live summary replaces the stored copy of the same file, and
+    /// its open stay is marked <see cref="ShardLeave.Open"/> rather than left
+    /// reading as a log that ended.
+    /// </param>
+    public IReadOnlyList<ShardRecord> Shards(SessionSummary? live = null)
     {
-        return Aggregate(_store.All());
+        if (live is null)
+            return Aggregate(_store.All());
+
+        var open = live.CurrentShard is null || live.Shards.Count == 0 ? null : live.Shards[^1];
+        var merged = live.Shards
+            .Select(stay => ReferenceEquals(stay, open) ? stay with { Ending = ShardLeave.Open } : stay)
+            .ToList();
+
+        return Aggregate([.. _store.All().Where(s => s.Id != live.Id), live with { Shards = merged }]);
     }
 
     /// <summary>

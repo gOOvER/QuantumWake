@@ -364,7 +364,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.38
+### 0.11.39
 
 - **A release is now scanned before it is published.** After the Windows build
   makes the exact app and command-line files that ship, the release workflow
@@ -413,6 +413,18 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   server the game has you on right now leads the table, highlighted and
   marked *on now*, and the light moves the moment the live feed sees a new
   placement. A summary tile says which it is, or that you are not on one.
+
+- **A Server page on the MFD.** Under Pilot, beside Session: the shard you
+  are on, the region, how long you have been on it, how many times before,
+  and your note - the page to glance at right after the loading screen.
+
+- **The server you just joined is on the list straight away.** The Servers
+  page used to know only the sessions already summarised, so a shard joined
+  minutes ago could be "on now" with no row to star or note; the live session
+  is now folded in, its stay reading *on it now* rather than *log ended*.
+  Rejoining the same shard within one session now counts the stay that just
+  ended, and only the world's channel going down ends a stay - the menu's
+  own channel never did in 195 logs, and now cannot.
 
 - Sessions gain a Server column and the debrief lists every stay with how it
   ended. Sessions summarised before this build have no shards recorded, so

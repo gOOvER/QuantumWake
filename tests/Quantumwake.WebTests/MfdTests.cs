@@ -549,7 +549,7 @@ public class MfdTests
     public void EveryPageIsReachableThroughADeepMenuAndHasAWayBack()
     {
         var e = Engine();
-        Assert.Equal(16, e.Evaluate("QwMfd.pageIds.length").AsNumber());
+        Assert.Equal(17, e.Evaluate("QwMfd.pageIds.length").AsNumber());
         Assert.True(e.Evaluate(
             "QwMfd.pageIds.every(id => QwMfd.trail(id)[0] === 'home'"
             + " && QwMfd.trail(id)[QwMfd.trail(id).length - 1] === id"
@@ -581,7 +581,9 @@ public class MfdTests
 
         // Navigation rides Home's fifth slot, which the four categories left empty.
         Assert.Equal("nav", e.Evaluate("QwMfd.resolveCommand('menu-5','home')").AsString());
-        Assert.Equal("log", e.Evaluate("QwMfd.resolveCommand('menu-4','pilot')").AsString());
+        // Pilot fills all five: Session, Server, Activity, Crew, Log.
+        Assert.Equal("server", e.Evaluate("QwMfd.resolveCommand('menu-2','pilot')").AsString());
+        Assert.Equal("log", e.Evaluate("QwMfd.resolveCommand('menu-5','pilot')").AsString());
         Assert.Equal("cargo", e.Evaluate("QwMfd.resolveCommand('cargo','pilot')").AsString());
         Assert.Equal("back", e.Evaluate("QwMfd.effect('back').menu").AsString());
     }
@@ -724,6 +726,35 @@ public class MfdTests
         Assert.Contains("joined", json);
         Assert.Contains("DISBANDED", json);
         Assert.Contains("Absence means nothing", json);
+    }
+
+    /// <summary>
+    /// The Server page names the shard by its id - the game writes no
+    /// friendlier name - says how long you have been on it and how often
+    /// before, and carries the note the pilot wrote, which is the whole reason
+    /// to look at it in the seat.
+    /// </summary>
+    [Fact]
+    public void ServerNamesTheShardAndRepeatsTheNote()
+    {
+        var e = Engine();
+        Assert.Contains("NO SHARD", Page(e, "server"));
+        Assert.Contains("in the menus", Page(e, "server"));
+
+        var json = Page(e, "server",
+            "{inGame:true, shard:'pub_use1b_12545750_150', shardShort:'US East 150', shardSince:'2026-09-14T14:00:00Z',"
+            + " shardVisitsBefore:3, shardFavorite:true, shardNote:'two 30ks in an hour'}",
+            view: "{now:'2026-09-14T15:30:00Z'}");
+        Assert.Contains("pub_use1b_12545750_150", json);
+        Assert.Contains("US East 150", json);
+        Assert.Contains("1h 30m", json);
+        Assert.Contains("3 times before", json);
+        Assert.Contains("favourite", json);
+        Assert.Contains("two 30ks in an hour", json);
+
+        var first = Page(e, "server", "{inGame:true, shard:'pub_use1b_12545750_199', shardVisitsBefore:0}");
+        Assert.Contains("First time on this shard", first);
+        Assert.Contains("NO NOTE", first);
     }
 
     [Fact]

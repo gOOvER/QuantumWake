@@ -1264,7 +1264,7 @@ public static class ServerHost
         app.MapGet("/api/servers", (LogLibrary lib, ShardNoteStore shards, LiveSessionService live) =>
         {
             var notes = shards.All().ToDictionary(n => n.Shard, StringComparer.Ordinal);
-            var rows = lib.Shards();
+            var rows = lib.Shards(live.LiveSummary);
 
             // A note on a shard the logs no longer carry - the backups rolled,
             // or the note came in a restore from another machine - is still the

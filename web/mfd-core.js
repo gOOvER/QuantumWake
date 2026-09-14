@@ -84,9 +84,9 @@ window.QwMfd = (() => {
   const OSBS = 20, BUTTONS = 28;
   // Keep these indices stable for displays saved before menu navigation.
   const pageIds = ['nav', 'task', 'act', 'cargo', 'contract', 'status', 'feed', 'crew', 'money', 'list',
-    'ship', 'here', 'ledger', 'mine', 'map', 'log'];
+    'ship', 'here', 'ledger', 'mine', 'map', 'log', 'server'];
   const pages = ['NAV', 'TASK', 'ACT', 'CARGO', 'CONTRACT', 'STATUS', 'FEED', 'CREW', 'MONEY', 'LIST',
-    'SHIP', 'HERE', 'LEDGER', 'MINE', 'MAP', 'LOG'];
+    'SHIP', 'HERE', 'LEDGER', 'MINE', 'MAP', 'LOG', 'SERVER'];
 
   /* One vocabulary for the display, the setup editor and the stored profile.
      Ids rather than page numbers in the file: a profile saved today still
@@ -142,6 +142,8 @@ window.QwMfd = (() => {
       icon: 'M12 21.2s6.8-6.4 6.8-11.2a6.8 6.8 0 1 0-13.6 0c0 4.8 6.8 11.2 6.8 11.2zM12 7.6a2.4 2.4 0 1 0 .1 0' },
     { id: 'map-here', label: 'Radar · lock current body', caption: 'HERE', short: 'HERE',
       icon: 'M12 3v3M12 18v3M3 12h3M18 12h3M12 7.5a4.5 4.5 0 1 0 .1 0' },
+    { id: 'server', label: 'Page · Server', caption: 'SERVER', short: 'SRVR',
+      icon: 'M4 5h16v5H4zM4 14h16v5H4zM7 7.5h.01M7 16.5h.01M12 10v4' },
     { id: 'log', label: 'Page · Log', caption: 'LOG', short: 'LOG',
       icon: 'M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6M9 8h2' },
     { id: 'prev', label: 'Previous page', caption: 'PREV', short: 'PRV', icon: 'M15 4L7 12l8 8' },
@@ -184,12 +186,13 @@ window.QwMfd = (() => {
       children: ['task', 'act', 'contract', 'list'] },
     { id: 'resources', title: 'Resources', short: 'RSRC', icon: 'cargo', hint: 'Cargo, money, mining',
       children: ['cargo', 'ledger', 'mine', 'money'] },
-    { id: 'pilot', title: 'Pilot', short: 'PLT', icon: 'status', hint: 'Session, activity, crew and log',
-      children: ['status', 'feed', 'crew', 'log'] }
+    { id: 'pilot', title: 'Pilot', short: 'PLT', icon: 'status', hint: 'Session, server, activity, crew and log',
+      children: ['status', 'server', 'feed', 'crew', 'log'] }
   ];
   const titles = { home: 'Cockpit', nav: 'Navigation', task: 'Mission', act: 'Checklist',
     cargo: 'Cargo & trade', contract: 'Contract', status: 'Session', feed: 'Activity', crew: 'Crew',
-    money: 'Earnings', list: 'Shopping', ship: 'Ship', here: 'Local intel', ledger: 'Ledger', mine: 'Mining', map: 'System map', log: 'Log' };
+    money: 'Earnings', list: 'Shopping', ship: 'Ship', here: 'Local intel', ledger: 'Ledger', mine: 'Mining', map: 'System map', log: 'Log',
+    server: 'Server' };
   const menuNodes = {}, leafParents = {};
   function indexMenu(nodes, parentId = 'home') {
     for (const node of nodes) {
@@ -787,6 +790,26 @@ window.QwMfd = (() => {
           ...party.slice(0, 6).map(p => [String(p.handle).toUpperCase(), p.moment, p.at]),
           ...(s.partyDisbanded ? [['DISBANDED', 'The channel said the group broke up.']] : []),
           floor
+        ];
+      }
+      /* The server the matchmaker put you on, and what you know about it. The
+         moment this page is worth reading is right after the loading screen:
+         a note that says "two 30ks last time" is a reason to relog now, and a
+         complaint an hour into a bunker run. The id is the name - the game
+         writes no friendlier one to the log. */
+      case 'server': {
+        if (!s.shard) return [
+          ['NO SHARD', s.inGame ? 'No placement has been logged yet this session.' : 'Not on a server - in the menus, or no game running.'],
+          ['HOW THIS IS READ', 'The game writes one <Join PU> line when the matchmaker places you.']];
+        const before = s.shardVisitsBefore || 0;
+        return [
+          ['SHARD', s.shard],
+          ['REGION', s.shardShort || 'Unknown region'],
+          ['ON IT FOR', elapsed(s.shardSince, view.now) || 'Just placed'],
+          ['BEEN HERE', before === 0 ? 'First time on this shard'
+            : `${before} time${before === 1 ? '' : 's'} before${s.shardFavorite ? ' · favourite' : ''}`],
+          ...(s.shardNote ? [['YOUR NOTE', s.shardNote]]
+            : [['NO NOTE', 'Write one on the dashboard\u2019s Servers page.']])
         ];
       }
       case 'money': {
