@@ -102,6 +102,17 @@ jobs:
             throw 'Microsoft Defender Antivirus is unavailable; refusing to publish an unscanned release.'
           }
 
+          # Hosted images can carry definitions a week or more old, and a scan
+          # with stale definitions is a weaker promise than the README makes.
+          # Best effort: a definitions outage should not block a release that
+          # the scan itself is about to check.
+          try {
+            Update-MpSignature -ErrorAction Stop
+            Write-Host "Defender definitions: $((Get-MpComputerStatus).AntivirusSignatureVersion) ($((Get-MpComputerStatus).AntivirusSignatureLastUpdated))"
+          } catch {
+            Write-Warning "Could not update Defender definitions, scanning with what the image has: $($_.Exception.Message)"
+          }
+
           $scanPath = (Resolve-Path 'dist').Path
           $scanStartedAt = Get-Date
           Start-MpScan -ScanType CustomScan -ScanPath $scanPath -ErrorAction Stop

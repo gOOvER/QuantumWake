@@ -55,6 +55,12 @@ SmartScreen stops warning once enough people have run a given build, so a fresh
 release warns and a fortnight-old one usually does not. That is a measure of the
 release's age and not of its safety.
 
+What the release pipeline does do is scan the files it is about to publish:
+after the build, Microsoft Defender is updated to the day's definitions and run
+over the executable and the command-line tool, and the release stops if it
+finds anything or is unavailable. That is a malware check on the exact bytes
+you download, not a statement about who made them — signing would be that.
+
 ### 3. Put it somewhere it can stay
 
 Anywhere you can write to — `C:\Tools`, your user folder, a games drive. Two
@@ -358,11 +364,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.37
+### 0.11.38
 
 - **A release is now scanned before it is published.** After the Windows build
   makes the exact app and command-line files that ship, the release workflow
-  runs Microsoft Defender over both before making the download or announcing
+  updates Microsoft Defender's definitions and runs it over both before making
+  the download or announcing
   it. If Defender is unavailable or removes a release file, the release stops.
   This is a malware check on the published files, not a claim that Windows
   knows the publisher - code signing remains separate.
