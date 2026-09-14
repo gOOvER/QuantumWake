@@ -358,6 +358,39 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.11.33
+
+- **The app now knows which server you were on.** Every time the matchmaker
+  places you, the game writes one line naming the shard -
+  `pub_use1b_12545750_150` - and the app now reads it. A new **Servers** page
+  under Flight lists every shard this install has been placed on: region,
+  how many times, how long, when last, and how each stay ended - left by
+  choice, kicked for idling, quit to desktop, or the log simply stopping.
+  Across the 193 backups on the reference install that is 269 placements on
+  152 distinct shards, 68 of them visited more than once.
+
+- **Write a note on a server, and star the ones worth keeping.** Click the
+  note cell to write it, the star to favourite it. Notes and favourites are
+  yours: they live in `shards.json` beside your jobs, survive every rescan and
+  cache wipe, and travel in a backup. Search reads the note as well as the
+  name, so "the good one" finds the shard you called that.
+
+- **The Now page tells you where you landed, and what you said last time.**
+  A Server card appears the moment you are placed: the shard as a pilot says
+  it - "US East 150" - how many times you have been here before, and your
+  note if there is one. That is the moment the note is worth having: relogging
+  is a decision at the hangar and a complaint at the bunker.
+
+- **Servers from an earlier deployment are shown as history, not advice.** A
+  shard lives only as long as the deployment it belongs to - the middle number
+  in the name, which is not the client's build - and a new deployment retires
+  every shard of the old one. Those stay listed, greyed and marked, one tick
+  away from the default view; the note is still yours, the server is gone.
+
+- Sessions gain a Server column and the debrief lists every stay with how it
+  ended. Sessions summarised before this build have no shards recorded, so
+  the first scan after updating re-reads every log once.
+
 ### 0.11.32
 
 - **MFD captions can be lined up with the frame's buttons without moving the

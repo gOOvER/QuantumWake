@@ -262,4 +262,44 @@ public sealed record DisconnectEvent(
 
     public bool IsRoutineTeardown =>
         Reason.Equals("Nub destroyed", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The server dropped an idle client - the one leave the pilot did not choose.</summary>
+    public bool IsIdleKick =>
+        Reason.Contains("player inactive", StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// Matchmaking placed the client on a shard.
+/// </summary>
+/// <remarks>
+/// The one line that names the server: <c>&lt;Join PU&gt; address[…] port[…]
+/// shard[pub_use1b_12545750_150] locationId[…]</c>. It is written once per
+/// placement, so a session that went back to the menu and in again carries two.
+/// The <c>sessionId</c> on the context establisher is <em>not</em> this - that
+/// is the local client's own id, the same on every shard it visits.
+/// </remarks>
+public sealed record ShardJoinEvent(
+    DateTimeOffset Timestamp,
+    string Shard,
+    string Address,
+    int Port,
+    string LocationId) : GameEvent(Timestamp)
+{
+    public override string Kind => "net.shard";
+}
+
+/// <summary>
+/// The client shutting down, and why. "User closed the app" is the window's
+/// close button from inside the game; "Quit via console command" is the menu's
+/// quit; a back-end services cause is the client giving up on its own.
+/// </summary>
+public sealed record SystemQuitEvent(
+    DateTimeOffset Timestamp,
+    string Cause,
+    string Reason) : GameEvent(Timestamp)
+{
+    public override string Kind => "session.quit";
+
+    public bool IsBackendFailure =>
+        Reason.Contains("Back-end services", StringComparison.OrdinalIgnoreCase);
 }

@@ -99,6 +99,7 @@ public static class BackupReader
             Deleted = backup.Deleted ?? [],
             Kits = backup.Kits ?? [],
             Pins = backup.Pins ?? [],
+            Shards = backup.Shards ?? [],
         };
 
         return (whole, RestorePlan.HashOf(text), null);

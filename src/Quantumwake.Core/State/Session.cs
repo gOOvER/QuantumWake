@@ -336,6 +336,20 @@ public sealed record SessionSummary
     /// </summary>
     public IReadOnlyList<ChannelNote> ChannelNotes { get; init; } = [];
 
+    /// <summary>
+    /// The shards this session was placed on, in order. Empty for a session
+    /// that never left the menu - 26 of 193 backups on this install - and for
+    /// any session summarised before this was read.
+    /// </summary>
+    public IReadOnlyList<ShardStay> Shards { get; init; } = [];
+
+    /// <summary>
+    /// The shard the client is on as of the last line, or null when it had
+    /// already left. Only meaningful for the live session: a saved one always
+    /// answers with what it ended on, which is the last stay's ending.
+    /// </summary>
+    public string? CurrentShard { get; init; }
+
     /// <summary>Confirmed spend only.</summary>
     public decimal Spend => Purchases.Where(p => p.Confirmed).Sum(p => p.Total);
 

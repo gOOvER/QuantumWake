@@ -283,6 +283,7 @@ function showView(name) {
   if (name === 'routes') loadRoutes().catch(() => {});
   if (name === 'casualties') loadCasualties().catch(() => {});
   if (name === 'crew') loadCrew().catch(() => {});
+  if (name === 'servers') loadServers().catch(() => {});
   if (name === 'points') loadPoints().catch(() => {});
   if (name === 'wikelo') loadWikelo().catch(() => {});
 
@@ -910,6 +911,7 @@ function renderNow(state) {
   sessionStarted = state.sessionStarted || null;
 
   renderNowParty(state);
+  renderNowServer(state);
   renderNowScreenCard(state.screen);
   renderNowFocus(state);
 
@@ -2544,10 +2546,47 @@ function sessionMetric(label, value, cls = '') {
   return metric;
 }
 
+/**
+ * The server a session row names: the last shard it was on, and how many
+ * others came before it. A session that never left the menu has none, and a
+ * dash says so rather than a blank that could be a session summarised before
+ * shards were read.
+ */
+function sessionShardLabel(session) {
+  if (!session.shard) return '—';
+  const more = (session.shards || 1) - 1;
+  return more > 0 ? `${session.shard} +${more}` : session.shard;
+}
+
+/** Every stay in a debrief, in order, each with how it ended. */
+function sessionShardText(detail) {
+  const stays = detail.shards || [];
+  if (!stays.length) return 'None recorded';
+
+  return stays.map((stay) => {
+    const short = shardShort(stay.shard);
+    const mins = Math.round((new Date(stay.leftAt) - new Date(stay.joinedAt)) / 60000);
+    return `${short} · ${duration(mins * 60)} · ${endingLabel(stay.ending)}`;
+  }).join('\n');
+}
+
+/** "pub_use1b_12545750_150" as a pilot says it, mirroring ShardName.Short. */
+function shardShort(full) {
+  const m = /^[a-z]+_([a-z]+)\d+[a-z]?_\d+_(\d+)$/.exec(full || '');
+  if (!m) return full || '—';
+  const region = {
+    use: 'US East', usw: 'US West', usc: 'US Central',
+    euw: 'EU West', euc: 'EU Central', eun: 'EU North',
+    ape: 'Asia-Pacific East', apse: 'Asia-Pacific Southeast', apne: 'Asia-Pacific Northeast',
+    aps: 'Asia-Pacific South', aus: 'Australia',
+  }[m[1]] || m[1].toUpperCase();
+  return `${region} ${Number(m[2])}`;
+}
+
 function renderSessionDebrief(summary) {
   const row = el('tr', 'session-detail-row');
   const cell = el('td');
-  cell.colSpan = 9;
+  cell.colSpan = 10;
   row.append(cell);
 
   const detail = sessionDetails.get(summary.id);
@@ -2598,6 +2637,7 @@ function renderSessionDebrief(summary) {
       ? `${net < 0 ? '−' : '+'}${tradeCount ? '~' : ''}${money(Math.abs(net))}`
       : 'No movements recorded', movementCount ? (net < 0 ? 'outward' : 'inward') : ''),
     sessionMetric('Crew observed*', party.size ? `${party.size} named` : 'None named'),
+    sessionMetric(detail.shards?.length > 1 ? 'Servers' : 'Server', sessionShardText(detail), 'session-metric-shards'),
   );
   debrief.append(metrics);
 
@@ -2708,7 +2748,7 @@ function renderSessions() {
   if (page.length === 0) {
     const tr = el('tr');
     const td = el('td', 'muted', 'No sessions in that range.');
-    td.colSpan = 9;
+    td.colSpan = 10;
     tr.append(td);
     body.append(tr);
   }
@@ -2732,6 +2772,7 @@ function renderSessions() {
       duration(session.menu),
       session.primaryShip || '—',
       session.lastLocation || '—',
+      sessionShardLabel(session),
     ];
     const date = el('td');
     date.append(el('span', 'session-row-toggle', open ? '⌄' : '›'));
@@ -8177,6 +8218,315 @@ async function loadCrew() {
 }
 
 onInput('#crew-period', loadCrew);
+
+/* ---------- servers ---------- */
+
+/** The last /api/servers answer, kept so a star or a note can redraw without a round trip. */
+let serverRows = [];
+let serverNewestDeployment = null;
+
+/** What each ending means to a pilot, and whether it counts against the server. */
+const SHARD_ENDINGS = {
+  Left: ['left', false],
+  Idle: ['idle kick', false],
+  Quit: ['quit to desktop', false],
+  Backend: ['back-end gave up', true],
+  LogEnded: ['log ended', true],
+  Replaced: ['moved by the game', true],
+};
+
+function endingLabel(ending) {
+  return (SHARD_ENDINGS[ending] || [String(ending || '').toLowerCase(), false])[0];
+}
+
+/**
+ * The servers this install has been placed on, with the pilot's own notes.
+ *
+ * The default filter is the current deployment, because that is the only set
+ * a note can still act on: a shard from a retired deployment cannot be joined
+ * again, and showing it first would put advice about nowhere at the top. The
+ * old ones are one untick away, greyed, with their notes intact.
+ */
+async function loadServers() {
+  const table = $('#servers-table');
+  if (!table) return;
+
+  let data;
+  try {
+    data = await getJson('/api/servers');
+  } catch {
+    return;
+  }
+
+  serverRows = data.servers || [];
+  serverNewestDeployment = data.newestDeployment || null;
+
+  fillServerRegions(serverRows);
+  renderServers();
+}
+
+/** Region choices come from the data: this install has seen four, another may see one. */
+function fillServerRegions(rows) {
+  const select = $('#servers-region');
+  if (!select) return;
+
+  const keep = select.value;
+  const regions = [...new Set(rows.map((r) => r.region))].sort();
+
+  select.textContent = '';
+  const all = el('option', null, 'All regions');
+  all.value = '';
+  select.append(all);
+
+  for (const region of regions) {
+    const option = el('option', null, region);
+    option.value = region;
+    select.append(option);
+  }
+
+  select.value = regions.includes(keep) ? keep : '';
+}
+
+function filteredServers() {
+  const term = ($('#servers-search')?.value || '').trim().toLowerCase();
+  const region = $('#servers-region')?.value || '';
+  const currentOnly = !!$('#servers-current')?.checked;
+  const starredOnly = !!$('#servers-starred')?.checked;
+
+  return serverRows.filter((r) => {
+    if (currentOnly && !r.current) return false;
+    if (starredOnly && !r.favorite) return false;
+    if (region && r.region !== region) return false;
+    if (term) {
+      const hay = `${r.shard} ${r.region} ${r.note || ''}`.toLowerCase();
+      if (!hay.includes(term)) return false;
+    }
+    return true;
+  });
+}
+
+function renderServers() {
+  const table = $('#servers-table');
+  if (!table) return;
+
+  const rows = filteredServers();
+  const all = serverRows;
+
+  // Favourites first, then the most recent - so a starred shard from tonight
+  // beats a starred one from last week, and both beat everything else.
+  rows.sort((a, b) => (b.favorite - a.favorite) || (new Date(b.last) - new Date(a.last)));
+
+  const current = all.filter((r) => r.current);
+  const visits = all.reduce((total, r) => total + r.visits, 0);
+
+  tiles('#servers-summary', [
+    ['Shards visited', all.length],
+    ['Still running', current.length],
+    ['Placements', visits],
+    ['Favourites', all.filter((r) => r.favorite).length],
+    ['Newest deployment', serverNewestDeployment || '—'],
+  ]);
+
+  const body = table.querySelector('tbody');
+  body.textContent = '';
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', all.length
+      ? 'Nothing matches those filters. Untick "Current deployment only" to see shards from earlier deployments.'
+      : 'No shard joins yet. The game writes one <Join PU> line each time it places you; '
+        + 'sessions summarised before this build read it will show up after a rescan.');
+    td.colSpan = 8;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const row of rows) body.append(serverRow(row));
+}
+
+function serverRow(row) {
+  const tr = el('tr', row.current ? null : 'gone');
+  tr.dataset.shard = row.shard;
+
+  const starCell = el('td');
+  const star = el('button', `ghost tiny star${row.favorite ? ' on' : ''}`, row.favorite ? '★' : '☆');
+  star.type = 'button';
+  star.title = row.favorite ? 'Remove from favourites' : 'Add to favourites';
+  star.addEventListener('click', () => setServerFavorite(row.shard, !row.favorite).catch(() => {}));
+  starCell.append(star);
+  tr.append(starCell);
+
+  const shard = el('td', 'shard');
+  shard.append(document.createTextNode(row.shard));
+  shard.append(el('small', null, row.current
+    ? `deployment ${row.deployment}`
+    : `deployment ${row.deployment} — retired`));
+  tr.append(shard);
+
+  tr.append(el('td', null, row.region));
+  tr.append(el('td', 'num', row.visits ? String(row.visits) : '—'));
+  tr.append(el('td', 'num', row.time ? duration(row.time) : '—'));
+
+  const last = el('td', 'muted', row.visits ? relative(row.last) : 'never seen here');
+  last.title = row.visits
+    ? dateOf(row.last)
+    : 'This note arrived from a backup; the logs on this machine never joined it.';
+  tr.append(last);
+
+  tr.append(endingCell(row));
+
+  const note = el('td', 'note-cell');
+  note.append(noteText(row));
+  tr.append(note);
+
+  return tr;
+}
+
+/**
+ * How the stays ended. The last ending is what a pilot remembers about a
+ * server, so it leads; the tally behind it says whether that was the pattern
+ * or the exception.
+ */
+function endingCell(row) {
+  const td = el('td', 'ending');
+  if (!row.visits) {
+    td.append(el('span', 'muted', '—'));
+    return td;
+  }
+
+  const [label, bad] = SHARD_ENDINGS[row.lastEnding] || [String(row.lastEnding).toLowerCase(), false];
+  td.append(el('span', bad ? 'bad' : null, label));
+
+  if (row.visits > 1) {
+    const rest = Object.entries(row.endings || {})
+      .sort((a, b) => b[1] - a[1])
+      .map(([kind, n]) => `${n}× ${endingLabel(kind)}`)
+      .join(', ');
+    td.append(el('small', 'muted', ` · ${rest}`));
+  }
+
+  return td;
+}
+
+function noteText(row) {
+  const text = el('div', `note-text${row.note ? '' : ' empty'}`, row.note || 'Add a note…');
+  text.title = 'Click to edit';
+  text.tabIndex = 0;
+  text.addEventListener('click', () => editServerNote(row, text));
+  text.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); editServerNote(row, text); }
+  });
+  return text;
+}
+
+/** Swaps the text for a box; Escape abandons, blur or Ctrl+Enter saves. */
+function editServerNote(row, text) {
+  const box = el('textarea');
+  box.value = row.note || '';
+  box.maxLength = 1000;
+  box.placeholder = 'Laggy elevators, two 30ks, good for bunkers…';
+
+  let done = false;
+  const finish = (save) => {
+    if (done) return;
+    done = true;
+    if (save && box.value.trim() !== (row.note || '')) {
+      saveServerNote(row.shard, box.value).catch(() => box.replaceWith(noteText(row)));
+    } else {
+      box.replaceWith(noteText(row));
+    }
+  };
+
+  box.addEventListener('blur', () => finish(true));
+  box.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') finish(false);
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) finish(true);
+  });
+
+  text.replaceWith(box);
+  box.focus();
+}
+
+async function saveServerNote(shard, note) {
+  const res = await fetch(`/api/servers/${encodeURIComponent(shard)}/note`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ note }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const saved = await res.json();
+  applyServerChange(shard, { note: saved.note || null, favorite: !!saved.favorite });
+}
+
+async function setServerFavorite(shard, favorite) {
+  const res = await fetch(`/api/servers/${encodeURIComponent(shard)}/favorite`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ favorite }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const saved = await res.json();
+  applyServerChange(shard, { note: saved.note || null, favorite: !!saved.favorite });
+}
+
+/** Folds a saved change into the rows in hand and redraws both places that show it. */
+function applyServerChange(shard, change) {
+  const row = serverRows.find((r) => r.shard === shard);
+  if (row) Object.assign(row, change);
+  renderServers();
+
+  if (nowState && nowState.shard === shard) {
+    nowState = { ...nowState, shardNote: change.note, shardFavorite: change.favorite };
+    renderNowServer(nowState);
+  }
+}
+
+/**
+ * The Now card: which server you are on, and what you said about it last time.
+ *
+ * Shown from the moment of placement, because that is when the information
+ * is worth having - once you have flown out to a bunker, "you noted this one
+ * as unstable" is a complaint rather than a warning.
+ */
+function renderNowServer(state) {
+  const card = $('#now-server-card');
+  if (!card) return;
+
+  card.hidden = !state.shard;
+  if (card.hidden) return;
+
+  $('#now-server').textContent = state.shardShort || state.shard;
+  $('#now-server-name').textContent = state.shard;
+
+  const before = state.shardVisitsBefore || 0;
+  const parts = [before === 0
+    ? 'First time on this shard.'
+    : `Placed here ${before} time${before === 1 ? '' : 's'} before.`];
+  if (state.shardNote) parts.push(`Your note: “${state.shardNote}”`);
+
+  const note = $('#now-server-note');
+  note.textContent = parts.join(' ');
+  note.className = `note${state.shardNote ? ' warn' : ''}`;
+
+  const star = $('#now-server-star');
+  star.textContent = state.shardFavorite ? '★ Favourite' : '☆ Favourite';
+  star.className = `ghost tiny${state.shardFavorite ? ' on' : ''}`;
+  star.onclick = () => setServerFavorite(state.shard, !state.shardFavorite).catch(() => {});
+
+  $('#now-server-open').onclick = () => {
+    const search = $('#servers-search');
+    if (search) search.value = state.shard;
+    const current = $('#servers-current');
+    if (current) current.checked = false;
+    showView('servers');
+  };
+}
+
+onInput('#servers-search', renderServers);
+onInput('#servers-region', renderServers);
+onInput('#servers-current', renderServers);
+onInput('#servers-starred', renderServers);
 
 /**
  * The one-line version of the price chart, for the expanded Market row.

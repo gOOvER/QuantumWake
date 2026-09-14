@@ -116,6 +116,20 @@ class El {
     this.children.unshift(node);
   }
 
+  /* Swap this node for another in place. The Servers table edits a note by
+     replacing the text with a box and the box with the text, and a stub that
+     could only remove-and-append would put the box at the end of the cell. */
+  replaceWith(node) {
+    const parent = this.parentElement;
+    if (!parent) return;
+    const at = parent.children.indexOf(this);
+    if (node instanceof El) {
+      node.remove();
+      node.parentElement = parent;
+    }
+    parent.children.splice(at, 1, node);
+    this.parentElement = null;
+  }
   remove() {
     const parent = this.parentElement;
     if (!parent) return;

@@ -32,7 +32,8 @@ public sealed class RestoreService(
     TombstoneStore deleted,
     LogLibrary library,
     KitStore kits,
-    ScreenReadingStore readings)
+    ScreenReadingStore readings,
+    ShardNoteStore shards)
 {
     /// <summary>Ids for the things there is only ever one of.</summary>
     private static class Single
@@ -111,6 +112,9 @@ public sealed class RestoreService(
 
         Compare(TombstoneStore.Kinds.Pins, file.Pins ?? [], readings.Pinned(),
             p => p.StampId, p => p.Label ?? p.Believed ?? "Copied location", p => p.ChangedAt);
+
+        Compare(TombstoneStore.Kinds.Shards, file.Shards ?? [], shards.All(),
+            s => s.Shard, s => s.Shard, s => s.ChangedAt);
 
         // The singular settings. There is only one of each, so there is nothing
         // to match on - the question is only whether the file's differs.
@@ -228,6 +232,13 @@ public sealed class RestoreService(
                 restored++;
             }
 
+            foreach (var shard in (file.Shards ?? []).Where(s => Wanted(TombstoneStore.Kinds.Shards, s.Shard)))
+            {
+                shards.Put(shard);
+                deleted.Forget(TombstoneStore.Kinds.Shards, shard.Shard);
+                restored++;
+            }
+
             if (file.Goal is { } goal && Wanted(Single.Goal, Single.Goal))
             {
                 goals.Save(goal);
@@ -286,6 +297,7 @@ public sealed class RestoreService(
         foreach (var id in notes.All().Select(n => $"{TombstoneStore.Kinds.Notes}:{n.Id}")) here.Add(id);
         foreach (var id in kits.All().Select(k => $"{TombstoneStore.Kinds.Kits}:{k.Id}")) here.Add(id);
         foreach (var id in readings.Pinned().Select(p => $"{TombstoneStore.Kinds.Pins}:{p.StampId}")) here.Add(id);
+        foreach (var id in shards.All().Select(s => $"{TombstoneStore.Kinds.Shards}:{s.Shard}")) here.Add(id);
 
         foreach (var stone in file.Deleted)
         {
@@ -299,9 +311,9 @@ public sealed class RestoreService(
     private (IReadOnlyList<Job> Jobs, IReadOnlyList<Checklist> Lists, IReadOnlyList<Trip> Trips,
         IReadOnlyList<MiningRun> Runs, IReadOnlyList<MapNote> Notes, Goal? Goal, Wipe? Wipe,
         TextOverlayOptions Labels, IReadOnlyList<Tombstone> Deleted, IReadOnlyList<Kit> Kits,
-        IReadOnlyList<PinnedLocation> Pins) Photograph() =>
+        IReadOnlyList<PinnedLocation> Pins, IReadOnlyList<ShardNote> Shards) Photograph() =>
         (jobs.All(), checklists.All(), trips.All(), mining.All(), notes.All(),
-         goals.Current, wipe.Current, labels.Current, deleted.All(), kits.All(), readings.Pinned());
+         goals.Current, wipe.Current, labels.Current, deleted.All(), kits.All(), readings.Pinned(), shards.All());
 
     /// <summary>
     /// Puts a photograph back, and says whether all of it landed.
@@ -315,7 +327,7 @@ public sealed class RestoreService(
     private bool PutBack((IReadOnlyList<Job> Jobs, IReadOnlyList<Checklist> Lists, IReadOnlyList<Trip> Trips,
         IReadOnlyList<MiningRun> Runs, IReadOnlyList<MapNote> Notes, Goal? Goal, Wipe? Wipe,
         TextOverlayOptions Labels, IReadOnlyList<Tombstone> Deleted, IReadOnlyList<Kit> Kits,
-        IReadOnlyList<PinnedLocation> Pins) before)
+        IReadOnlyList<PinnedLocation> Pins, IReadOnlyList<ShardNote> Shards) before)
     {
         var whole = true;
 
@@ -359,6 +371,7 @@ public sealed class RestoreService(
         Drop(notes.All(), before.Notes, n => n.Id, id => notes.Remove(id));
         Drop(kits.All(), before.Kits, k => k.Id, id => kits.Remove(id));
         Drop(readings.Pinned(), before.Pins, p => p.StampId, id => readings.Unpin(id));
+        Drop(shards.All(), before.Shards, s => s.Shard, id => shards.Remove(id));
 
         foreach (var job in before.Jobs) Try(() => jobs.Put(job));
         foreach (var list in before.Lists) Try(() => checklists.Put(list));
@@ -367,6 +380,7 @@ public sealed class RestoreService(
         foreach (var note in before.Notes) Try(() => notes.Put(note));
         foreach (var kit in before.Kits) Try(() => kits.Put(kit));
         foreach (var pin in before.Pins) Try(() => readings.PutPin(pin));
+        foreach (var shard in before.Shards) Try(() => shards.Put(shard));
 
         Try(() => goals.Save(before.Goal));
         Try(() => labels.Save(before.Labels));

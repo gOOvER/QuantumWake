@@ -221,6 +221,27 @@ other people alone, so somebody already online when you group up, who stays
 until you log off, produces nothing whatever. Every figure built on this is a
 floor, never a total.
 
+## 6c. Which server — taken in 0.11.33
+
+`<Join PU>` names the shard once per placement (269 in 193 backups, 152
+distinct); `<Channel Disconnected>` and `<SystemQuit>` say how the stay ended.
+Read now - see [log-format-reference.md](log-format-reference.md), *Shard
+placement*. Two things looked at and left:
+
+- **`<Update Shard Id>`** repeats the name 0.3 s after the join and adds
+  nothing. Not read.
+- **Crash detection.** The crash handler writes its dump to the log without
+  timestamps (`Copying game.log...`, 8 files), and `LogEnvelope.TryParse`
+  drops any line that has none. Reading them would mean a second path through
+  the reader for a signal that fires in 4% of files; for now a crash ends a
+  stay the same way a killed process does, and the page says "log ended"
+  rather than picking one. Worth revisiting if anyone needs the distinction.
+- **The context establisher's `sessionId`** is the local client's GUID, not
+  the shard. The CLI called it "shard sessions" until 0.11.33; it now says
+  "client sessions".
+
+---
+
 ## 7. Lower value
 
 - **`<Connection Flow>`** (1,388) — comms channels opened with NPC modules

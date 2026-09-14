@@ -152,7 +152,11 @@ public sealed class SessionStore : IDisposable
     //     beside the sentence and nothing later can supply one, so every
     //     existing install would have gone on reading
     //     "Bought cds_legacy_armor_heavy_helmet_01_01_12" for ever.
-    private const int PayloadVersion = 12;
+    // 13: shard stays are kept - which server each session was placed on and
+    //     how it left. 269 joins across 167 backups on this install, every one
+    //     of them in a session already summarised; without this the Servers
+    //     page would list nothing but the session played after updating.
+    private const int PayloadVersion = 13;
 
 
     /// <summary>

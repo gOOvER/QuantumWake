@@ -166,6 +166,10 @@ CONTEXT = re.compile(r'<Context Establisher Done> establisher="([^"]+)" '
 
 Gamerules distribution across backups: `SC_Frontend` 37,182 · `SC_Default` 15,421 ·
 `EA_FreeFlight` 155.
+The `sessionId` is the **local client's** id — it matches the `Local:` GUID on
+the `<Init>` line and stays the same across every shard the client visits. It
+is not the server. The server is named by `<Join PU>`, below.
+
 
 ### Ships flown  ← best vehicle signal
 
@@ -273,6 +277,58 @@ DISCONNECT = re.compile(r'<Channel Disconnected> cause=(\d+) reason="([^"]+)" '
 
 Note `reason="Nub destroyed"` is routine teardown, not an error — don't surface
 it as a crash.
+
+### Shard placement (which server)
+
+```
+<2026-04-27T01:51:16.504Z> [Notice] <Join PU> address[34.86.98.241] port[64353] shard[pub_use1b_11704877_010] locationId[562954248454145] [Team_GameServices][GIM][Matchmaking]
+<2026-04-27T01:51:16.783Z> [Notice] <Update Shard Id> New Shard Id: pub_use1b_11704877_010. Old Shard Id [Team_OnlineTech][Telemetry][Services]
+```
+
+```python
+JOIN_PU = re.compile(r'<Join PU> address\[([^\]]*)\] port\[(\d+)\] shard\[([^\]]+)\] locationId\[([^\]]*)\]')
+```
+
+The one line that names the server. Written once per placement, so a session
+that went back to the menu and in again carries two. `<Update Shard Id>` repeats
+the name 0.3 s later and adds nothing; the parser reads `<Join PU>` only.
+
+Across the 193 backups: 269 joins in 167 files (the other 26 never left the
+menu), 152 distinct shards, regions `use1b` 224 · `euw1b` 31 · `ape1a` 9 ·
+`apse2a` 5. 64 sessions carry more than one join. 68 shards were joined more
+than once, at most six times. One join arrived with no disconnect between it
+and the previous one.
+
+The name is `env_region_deployment_number`. The deployment is **not** the
+client's build: the log header's `Build(12572603)` and the shard's `12545750`
+disagree in 14 of the 19 pairings seen. Shards from an older deployment never
+recur once a newer one has been joined, so "still exists" is judged against the
+newest deployment in the joins, never the game version.
+
+### How a stay ended
+
+`<Channel Disconnected>` with `gamerules="SC_Default"` closes a stay:
+
+```
+cause=30016 reason="Remote Disconnect - Player requested disconnect"   216
+cause=30016 reason="DisconnectCmd: disconnect light ExitToMenu"         19
+cause=30028 reason="Remote Disconnect - player inactive"                  3
+```
+
+`<SystemQuit>` closes one too, when it arrives with the stay still open:
+
+```
+<2026-09-01T02:00:00.000Z> [Notice] <SystemQuit> CSystem::Quit invoked with - cause=30016, reason=User closed the app, exitCode=0, thread id=10360, main thread id=10360 [Team_Unknown][System]
+```
+
+`Quit via console command` 171 · `User closed the app` 11 · `[Error]` with
+`cause=30024, reason=Back-end services are unresponsive` 1.
+
+A crash writes its dump **without timestamps** (`Copying game.log...`, `All crash
+related data successfully handed over to crash info collector process` — 8
+files) and the envelope reader drops those lines, so a crash, a killed process
+and a lost server all end the same way: the log stops with the stay open. That
+ending is reported as "log ended", not as any one of the three.
 
 ---
 

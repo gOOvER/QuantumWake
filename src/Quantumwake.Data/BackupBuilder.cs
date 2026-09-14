@@ -35,7 +35,8 @@ public sealed class BackupBuilder(
     ItemLabelStore labels,
     TombstoneStore deleted,
     KitStore kits,
-    ScreenReadingStore readings)
+    ScreenReadingStore readings,
+    ShardNoteStore shards)
 {
     /// <summary>The format this build writes and can read back.</summary>
     public const int Version = 1;
@@ -70,7 +71,8 @@ public sealed class BackupBuilder(
         kits.All().Count,
         goals.Current is not null,
         wipe.Current is not null,
-        readings.Pinned().Count);
+        readings.Pinned().Count,
+        shards.All().Count);
 
     private ExportBackup Contents() => new(
         // Pinned and Tracked belong to the machine, not to the work.
@@ -87,7 +89,8 @@ public sealed class BackupBuilder(
         // The points, but not the readings they came from: a point is named
         // and annotated by the pilot, a reading is observed and comes back
         // from the screenshot folder.
-        [.. readings.Pinned()]);
+        [.. readings.Pinned()],
+        [.. shards.All()]);
 }
 
 /// <summary>How much a backup would carry, for saying so before it is taken.</summary>
@@ -101,4 +104,5 @@ public sealed record BackupCounts(
     int Kits,
     bool Goal,
     bool Wipe,
-    int Pins = 0);
+    int Pins = 0,
+    int Shards = 0);
