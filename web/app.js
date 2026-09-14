@@ -813,6 +813,31 @@ let nowState = null;
 let briefingFor = null;
 let pilotBriefing = null;
 
+/*
+ * How long a screenshot's disagreement with the logs leads the hub. It is a
+ * finding, not a fault: the wallet check exists to find money the log never
+ * saw, and a non-stock fitting is a fact about the ship. Nothing on the page
+ * resolves it, so it must not sit above "Next stop" for the rest of the
+ * evening - it used to, as "Screen needs review", until a newer frame was
+ * read. Half an hour is long enough to notice and short enough to forget.
+ */
+const SCREEN_FOCUS_MS = 30 * 60 * 1000;
+
+/** What the newest screenshot disagrees with the logs on, if it is recent and from this session. */
+function recentScreenDisagreement(state) {
+  const screen = state?.screen;
+  const differs = (screen?.checks || []).find(check => check.verdict === 'differs');
+  if (!differs) return null;
+
+  // The shot's own time, against this session and the clock: a frame from
+  // three days ago that happened to be re-read last is not the state of now.
+  const at = new Date(screen.shotAt || 0).getTime();
+  const started = state?.sessionStarted ? new Date(state.sessionStarted).getTime() : 0;
+  if (!at || at < started || Date.now() - at > SCREEN_FOCUS_MS) return null;
+
+  return `${differs.subject}: ${differs.note || differs.belief || differs.claim}`;
+}
+
 /** The one decision worth leading the hub with, before the configurable cards. */
 function renderNowFocus(state, briefing = pilotBriefing) {
   const strip = $('#now-focus');
@@ -821,12 +846,12 @@ function renderNowFocus(state, briefing = pilotBriefing) {
   const open = $('#now-focus-open');
   if (!strip || !title || !detail || !open) return;
 
-  const differs = (state?.screen?.checks || []).filter(check => check.verdict === 'differs').length;
+  const differing = recentScreenDisagreement(state);
   const nextStop = (briefing?.stops || []).find(stop => !stop.done);
   let focus = null;
 
   if (state?.travelling) focus = { title: 'In quantum', detail: state.travellingTo || 'Destination not identified', view: 'map', action: 'Map' };
-  else if (differs) focus = { title: 'Screen needs review', detail: `${differs} screen detail${differs === 1 ? '' : 's'} disagrees with the logs`, view: 'log', action: 'Review' };
+  else if (differing) focus = { title: 'Screenshot differs from the logs', detail: differing, view: 'log', action: 'Log' };
   else if (nextStop) focus = { title: 'Next stop', detail: nextStop.place || briefing.tripTitle || 'Tracked flight plan', view: 'map', action: 'Map' };
   else if (state?.contracts?.length) focus = { title: 'Active contract', detail: state.contracts[0].name || 'Open contract', view: 'contracts', action: 'Contracts' };
   else if (state?.location) focus = { title: 'At location', detail: state.location, view: 'map', action: 'Map' };

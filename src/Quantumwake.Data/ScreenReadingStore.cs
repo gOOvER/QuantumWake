@@ -154,10 +154,25 @@ public sealed class ScreenReadingStore
         lock (_gate) return [.. _sightings];
     }
 
-    /// <summary>The newest reading the pilot has not dismissed.</summary>
+    /// <summary>The newest reading the pilot has not dismissed - newest by when it was taken.</summary>
+    /// <remarks>
+    /// By the shot's own time and not by when it was read. The list is kept
+    /// in read order, and taking its head made whatever was re-read last the
+    /// "current" screen: a kiosk from three days back re-read once sat on the
+    /// Now page as the state of things, and its wallet was checked against a
+    /// baseline taken after it.
+    /// </remarks>
     public ScreenSighting? Latest
     {
-        get { lock (_gate) return _sightings.FirstOrDefault(s => !s.Dismissed); }
+        get
+        {
+            lock (_gate)
+            {
+                // OrderBy is stable, so of two shots stamped the same second
+                // the one read most recently still wins.
+                return _sightings.Where(s => !s.Dismissed).OrderByDescending(s => s.ShotAt).FirstOrDefault();
+            }
+        }
     }
 
     /// <summary>Every paste, newest first.</summary>
@@ -319,14 +334,31 @@ public sealed class ScreenReadingStore
         lock (_gate) return _sightings.Any(s => string.Equals(s.Shot, shot, StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>The last wallet figure that actually read, for the next to be checked against.</summary>
-    public WalletBaseline? LastWallet()
+    /// <summary>The newest wallet figure that actually read: where the ledger carries forward from.</summary>
+    public WalletBaseline? LastWallet() => LastWallet(DateTimeOffset.MaxValue);
+
+    /// <summary>
+    /// The newest wallet figure taken before a given moment, for a shot from
+    /// that moment to be checked against.
+    /// </summary>
+    /// <remarks>
+    /// Strictly before, and by the shot's time. The check reads "the last
+    /// baseline plus the ledger's movement since" - which is only a sentence
+    /// when the baseline came first. Taking the last one <i>read</i> let a
+    /// frame from three days ago be set against a baseline from this morning,
+    /// and report two million aUEC leaving without a line in the log "since"
+    /// a moment after the frame was taken. A shot re-read is excluded from
+    /// its own baseline by the same rule.
+    /// </remarks>
+    public WalletBaseline? LastWallet(DateTimeOffset before)
     {
         lock (_gate)
         {
             return _sightings
                 .Where(s => !s.Dismissed)
                 .Where(s => s.Wallet?.Balance is not null)
+                .Where(s => s.ShotAt < before)
+                .OrderByDescending(s => s.ShotAt)
                 .Select(s => new WalletBaseline(s.ShotAt, s.Wallet!.Balance!.Value, s.Shot))
                 .FirstOrDefault();
         }

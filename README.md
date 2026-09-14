@@ -358,7 +358,19 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.30
+### 0.11.31
+
+- **"Screen needs review" no longer sits on the Now page with nothing to
+  resolve.** The current screenshot is now the newest one taken, not the one
+  read last - re-reading an old frame put a three-day-old kiosk on the Now
+  page as the state of things. Its wallet was then checked against a baseline
+  taken *after* it, and reported two million aUEC leaving the wallet "since" a
+  moment the frame predates; each shot is now checked against the newest
+  wallet read before it. And a disagreement between a screenshot and the
+  logs is a finding, not a fault - the wallet check exists to find money the
+  log never saw - so the hub now says what differs, and only for a shot from
+  this session and the last half hour, instead of asking for a review that
+  had nothing to do.
 
 - **Turn a haul into a planning workspace.** Trade Routes now scores
   repeatability from report freshness, capacity and alternate buyers; keeps the
