@@ -440,4 +440,100 @@ public class GaragePageTests
         Assert.Equal("DRAK_Cutlass_Black", page.Text("garageClass"));
         Assert.Contains("GET /api/garage/DRAK_Cutlass_Black", page.Fetched());
     }
+
+    // ---- the shopping list ----
+
+    private const string Shopped = """
+        {"job":{"id":"j1","title":"Aegis Gladius fit","kind":"list","source":"garage:AEGS_Gladius","destination":"Area18","destinationId":"P1",
+                "items":[{"name":"Glacier","needed":1,"unit":""}]},
+         "proposal":{"terminal":"Dumper's Depot","place":"Area18","placeId":"P1","system":"Stanton","covered":1,"of":1,"total":12000,"missing":[],"pricesKnown":true}}
+        """;
+
+    /// <summary>The button follows the bench: a stock fit has nothing to buy.</summary>
+    [Fact]
+    public void Shopping_is_offered_only_once_the_bench_differs_from_stock()
+    {
+        var page = Bench();
+        Assert.True(page.Truth("__dom.node('#garage-shop').hidden"));
+
+        page.Do("await fitPart('p1', 'COOL_JUST_S01_Glacier_SCItem');");
+        Assert.False(page.Truth("__dom.node('#garage-shop').hidden"));
+
+        page.Do("await resetGarage();");
+        Assert.True(page.Truth("__dom.node('#garage-shop').hidden"));
+    }
+
+    [Fact]
+    public void Adding_to_the_list_posts_the_swaps_and_says_where_to_go()
+    {
+        var page = Bench();
+        page.Serve("/api/garage/AEGS_Gladius/shop", Shopped);
+        page.Do("await fitPart('p1', 'COOL_JUST_S01_Glacier_SCItem'); await shopForBench();");
+
+        var body = page.BodyOf("/api/garage/AEGS_Gladius/shop");
+        Assert.Contains("\"p1\":\"COOL_JUST_S01_Glacier_SCItem\"", body);
+        Assert.Contains("\"title\":\"Aegis Gladius fit\"", body);
+
+        var result = page.NodeText("#garage-shop-result");
+        Assert.False(page.Truth("__dom.node('#garage-shop-result').hidden"));
+        Assert.Contains("Aegis Gladius fit", result);
+        Assert.Contains("1 part on 1 line", result);
+        Assert.Contains("Dumper's Depot, Area18", result);
+        Assert.Contains("1 of 1 line", result);
+        Assert.Contains("12,000 aUEC", result);
+        Assert.Contains("Open Shopping", result);
+    }
+
+    /// <summary>A list made from an open build carries the build's name, so the two can be told apart later.</summary>
+    [Fact]
+    public void A_list_from_an_open_build_is_named_after_it()
+    {
+        var page = WithBuilds();
+        page.Serve("/api/garage/AEGS_Gladius/shop", Shopped.Replace("Aegis Gladius fit", "Quiet fit"));
+        page.Do("await openBuild('b1'); await shopForBench();");
+
+        Assert.Contains("\"title\":\"Quiet fit\"", page.BodyOf("/api/garage/AEGS_Gladius/shop"));
+    }
+
+    /// <summary>What the stop lacks is said, not left for the Shopping page to discover.</summary>
+    [Fact]
+    public void A_stop_that_lacks_part_of_the_list_says_which()
+    {
+        var page = Bench();
+        page.Serve("/api/garage/AEGS_Gladius/shop", Shopped
+            .Replace("\"items\":[{\"name\":\"Glacier\",\"needed\":1,\"unit\":\"\"}]", "\"items\":[{\"name\":\"Glacier\",\"needed\":1,\"unit\":\"\"},{\"name\":\"Endo\",\"needed\":2,\"unit\":\"\"}]")
+            .Replace("\"of\":1", "\"of\":2")
+            .Replace("\"missing\":[]", "\"missing\":[\"Endo\"]"));
+        page.Do("await fitPart('p1', 'COOL_JUST_S01_Glacier_SCItem'); await shopForBench();");
+
+        var result = page.NodeText("#garage-shop-result");
+        Assert.Contains("3 parts on 2 lines", result);
+        Assert.Contains("1 of 2 lines", result);
+        Assert.Contains("Not sold there: Endo", result);
+    }
+
+    [Fact]
+    public void A_list_nobody_sells_is_written_without_a_destination()
+    {
+        var page = Bench();
+        page.Serve("/api/garage/AEGS_Gladius/shop", Shopped
+            .Replace("\"terminal\":\"Dumper's Depot\"", "\"terminal\":null")
+            .Replace("\"covered\":1", "\"covered\":0"));
+        page.Do("await fitPart('p1', 'COOL_JUST_S01_Glacier_SCItem'); await shopForBench();");
+
+        Assert.Contains("No terminal UEX knows sells any of it", page.NodeText("#garage-shop-result"));
+    }
+
+    /// <summary>With UEX off there can be no destination, and the line says that is why.</summary>
+    [Fact]
+    public void Without_prices_the_missing_destination_is_explained()
+    {
+        var page = Bench();
+        page.Serve("/api/garage/AEGS_Gladius/shop", Shopped
+            .Replace("\"terminal\":\"Dumper's Depot\"", "\"terminal\":null")
+            .Replace("\"pricesKnown\":true", "\"pricesKnown\":false"));
+        page.Do("await fitPart('p1', 'COOL_JUST_S01_Glacier_SCItem'); await shopForBench();");
+
+        Assert.Contains("need UEX prices", page.NodeText("#garage-shop-result"));
+    }
 }

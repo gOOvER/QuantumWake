@@ -9137,6 +9137,7 @@ function renderBench(data) {
   $('#garage-changes').textContent = changed ? `${changed} part${changed === 1 ? '' : 's'} changed` : 'Stock fit';
   $('#garage-changes').className = changed ? 'changed' : 'muted';
   $('#garage-reset').hidden = !changed;
+  $('#garage-shop').hidden = !changed;
 
   const list = $('#garage-bench-ports');
   list.textContent = '';
@@ -9480,6 +9481,63 @@ $('#garage-save-form')?.addEventListener('submit', (e) => {
   saveBuild(name || 'Untitled build').catch(() => {});
 });
 onInput('#garage-compare', () => { garageCompare = $('#garage-compare').value; refitGarage().catch(() => {}); });
+
+/**
+ * The bench's changes as a shopping list. The server writes the job and
+ * proposes the stop that sells the most of it; this says what it did and
+ * links to the list, and nothing else - from here it is the Shopping page's
+ * flow, the Now page's, the MFD's.
+ */
+async function shopForBench() {
+  const result = $('#garage-shop-result');
+  result.hidden = true;
+  if (!garageClass || !Object.keys(garageSwaps).length) return;
+
+  const open = garageBuilds.find((b) => b.id === garageOpenBuild);
+  const title = open ? open.name : `${garageStock?.ship?.name || garageClass} fit`;
+
+  const res = await fetch(`/api/garage/${encodeURIComponent(garageClass)}/shop`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ swaps: garageSwaps, title }),
+  });
+
+  result.textContent = '';
+  result.hidden = false;
+
+  if (!res.ok) {
+    const problem = await res.json().catch(() => null);
+    result.append(el('span', 'muted', problem?.message || 'The list could not be written.'));
+    return;
+  }
+
+  const { job, proposal } = await res.json();
+  const items = (job.items || []).reduce((n, i) => n + (i.needed || 1), 0);
+
+  const line = el('span');
+  line.append(document.createTextNode(`Added "${job.title}" - ${items} part${items === 1 ? '' : 's'} on ${job.items.length} line${job.items.length === 1 ? '' : 's'}. `));
+  const link = el('a', null, 'Open Shopping');
+  link.href = '#jobs';
+  link.addEventListener('click', (e) => { e.preventDefault(); showView('jobs'); });
+  line.append(link);
+  result.append(line);
+
+  // The stop, and what it lacks. "Nowhere" is said rather than left blank:
+  // with UEX off there is no answer, and without a counter the list is still
+  // a list.
+  if (proposal.terminal) {
+    const where = `${proposal.terminal}${proposal.place ? `, ${proposal.place}` : ''}`;
+    let note = `Destination: ${where} - ${proposal.covered} of ${proposal.of} line${proposal.of === 1 ? '' : 's'}`;
+    if (proposal.total > 0) note += `, ${fmtInt(proposal.total)} aUEC`;
+    if (proposal.missing?.length) note += `. Not sold there: ${proposal.missing.join(', ')}`;
+    result.append(el('span', 'muted', note + '.'));
+  } else {
+    result.append(el('span', 'muted', proposal.pricesKnown
+      ? 'No terminal UEX knows sells any of it; the list has no destination.'
+      : 'Destinations need UEX prices (Settings); the list was written without one.'));
+  }
+}
+
+$('#garage-shop')?.addEventListener('click', () => shopForBench().catch(() => {}));
 
 onInput('#garage-mine', () => { const v = $('#garage-mine').value; if (v) openGarage(v).catch(() => {}); });
 onInput('#garage-all', () => { const v = $('#garage-all').value; if (v) openGarage(v).catch(() => {}); });

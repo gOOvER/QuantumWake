@@ -4604,3 +4604,9 @@ body.overlay .ship-picture { display: none; }
    so hidden has to be said again with more weight. */
 #view-garage [hidden] { display: none !important; }
 .builds + .caption { margin-top: 10px; }
+
+/* What "Add to shopping list" did, said once where the button was pressed:
+   the job's name, the stop proposed, and what that stop does not have. */
+.shop-result { margin: 8px 0 0; padding: 8px 12px; border: 1px solid var(--cyan-deep); border-radius: 5px; font-size: 12.5px; color: var(--text); }
+.shop-result .muted { display: block; margin-top: 2px; }
+.shop-result a { color: var(--cyan); }

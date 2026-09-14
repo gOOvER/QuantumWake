@@ -2960,6 +2960,80 @@ public static class ServerHost
         // costs and where. A part nobody sells is still offered: the bench is
         // for finding out what a part would do, and the shop is the next
         // question, not a gate on the first.
+        // ---- shopping for a fit ----
+
+        // The bench's changes as a shopping list: one line per distinct part
+        // with how many, a job of kind "list" like any the pilot writes by hand,
+        // and the destination that sells the most of it proposed - or none,
+        // said plainly, when UEX is off or nothing on the list is stocked.
+        // From here it is the ordinary flow: the Now page, the overlay, the
+        // MFD's List page.
+        app.MapPost("/api/garage/{cls}/shop", (string cls, LogLibrary lib, UexData uex, JobStore jobs, GarageShopRequest body) =>
+        {
+            var community = lib.Community;
+            var ship = community.GarageShip(cls);
+            if (ship is null) return Results.NotFound();
+
+            var swaps = body.Swaps ?? new Dictionary<string, string?>();
+
+            // Only what actually changed, and only what can be bought: a port
+            // emptied is not a purchase, and a port put back to stock is not
+            // a change.
+            var wanted = new Dictionary<string, (PartStats Part, int Count)>(StringComparer.Ordinal);
+            foreach (var (portId, toClass) in swaps)
+            {
+                if (toClass is null) continue;
+                var port = FindPort(ship.Loadout, portId);
+                if (port is null || string.Equals(port.Class, toClass, StringComparison.Ordinal)) continue;
+                if (!community.Parts.TryGetValue(toClass, out var part)) continue;
+
+                var so = wanted.GetValueOrDefault(toClass);
+                wanted[toClass] = (part, so.Count + 1);
+            }
+
+            if (wanted.Count == 0)
+                return Results.BadRequest(new { message = "Nothing on the bench differs from stock, so there is nothing to buy." });
+
+            var lines = wanted.Values
+                .Select(w => new ShoppingLine(
+                    w.Part.Name,
+                    w.Count,
+                    uex.ItemMarket(w.Part.Uuid)
+                        .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
+                        .Select(g => (g.Key, g.Min(r => r.Buy)))
+                        .ToList()))
+                .ToList();
+
+            var proposal = GarageShopping.Propose(lines);
+            var place = lib.Terminals.Resolve(proposal.Terminal);
+
+            var title = string.IsNullOrWhiteSpace(body.Title) ? $"{ship.Name} fit" : body.Title.Trim();
+            var job = jobs.Add(
+                title,
+                "list",
+                $"garage:{ship.Class}",
+                [.. wanted.Values.Select(w => new JobItem(w.Part.Name, w.Count))],
+                place?.Name,
+                place?.RawId);
+
+            return Results.Ok(new
+            {
+                job,
+                proposal = new
+                {
+                    proposal.Terminal,
+                    place = place?.Name,
+                    placeId = place?.RawId,
+                    system = place?.System,
+                    proposal.Covered,
+                    proposal.Of,
+                    proposal.Total,
+                    proposal.Missing,
+                    pricesKnown = uex.IsEnabled
+                }
+            });
+        });
+
         // ---- saved builds: a fit under a name ----
 
         app.MapGet("/api/garage/builds", (BuildStore builds, string? ship) =>
@@ -4338,6 +4412,9 @@ public sealed record GarageSwapRequest(Dictionary<string, string?>? Swaps);
 
 /// <summary>Body of POST and PUT /api/garage/builds. On PUT, null leaves a field alone.</summary>
 public sealed record BuildRequest(string? ShipClass, string? Name, Dictionary<string, string?>? Swaps, string? Note);
+
+/// <summary>Body of POST /api/garage/{class}/shop: the bench's swaps, and a title for the job.</summary>
+public sealed record GarageShopRequest(Dictionary<string, string?>? Swaps, string? Title);
 
 /// <summary>Body of PUT /api/servers/{shard}/favorite.</summary>
 public sealed record ShardFavoriteRequest(bool Favorite);

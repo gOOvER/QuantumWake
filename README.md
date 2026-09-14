@@ -364,8 +364,17 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.3
+### 0.13.4
 
+- **Add the bench to your shopping list.** Once the bench differs from stock,
+  **Add to shopping list** writes the changed parts - two coolers is one line
+  with a two on it - as a job on the Shopping page, named after the open build
+  or "*ship* fit", and proposes the one stop for it: the terminal that sells
+  the most of the list, the cheapest such terminal when two tie, from the UEX
+  prices you already have. It says what that stop lacks ("Not sold there:
+  Endo") rather than sending you somewhere for half of it, and with UEX off
+  the list is still written, just without a destination, and says why.
+  Emptied ports and ports put back to stock are not purchases and are left off.
 - **Save a build, open it later, set two side by side.** *Save build…* keeps
   the bench's fit under a name - "Starlancer, quiet fit" - in `builds.json`
   beside your jobs: it survives rescans, travels in a backup, and is
