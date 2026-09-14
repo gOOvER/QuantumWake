@@ -221,7 +221,7 @@ other people alone, so somebody already online when you group up, who stays
 until you log off, produces nothing whatever. Every figure built on this is a
 floor, never a total.
 
-## 6c. Which server — taken in 0.11.33
+## 6c. Which server — taken in 0.12.0
 
 `<Join PU>` names the shard once per placement (269 in 193 backups, 152
 distinct); `<Channel Disconnected>` and `<SystemQuit>` say how the stay ended.
@@ -240,9 +240,9 @@ placement*. Two things looked at and left:
   its UI - is nowhere in the log: not in the session it was seen in, not in
   194 backups, not in the cached game data. Only the id is written, so the id
   is what the app calls the server. A hand-typed alias was built and taken
-  out again in 0.11.34: it is a note by another name.
+  out again before 0.12.0 shipped: it is a note by another name.
 - **The context establisher's `sessionId`** is the local client's GUID, not
-  the shard. The CLI called it "shard sessions" until 0.11.33; it now says
+  the shard. The CLI called it "shard sessions" until 0.12.0; it now says
   "client sessions".
 
 ---

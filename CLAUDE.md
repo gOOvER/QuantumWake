@@ -178,7 +178,7 @@ and stand down; observing the document keeps it alive for ever.
 **The virtual clock never settles on the real dashboard any more.** `watchScan`
 polls `/api/scan/status` for ever and the session clock ticks every second, so
 `--virtual-time-budget` runs until the process is killed and no PNG appears.
-What worked in 0.11.33: no budget, `--timeout=8000`, and a throwaway copy of
+What worked in 0.12.0: no budget, `--timeout=8000`, and a throwaway copy of
 `index.html` in the served `web\` folder that stubs `EventSource`, makes
 `setInterval` a no-op, and ends the body with
 `<script src="/api/stream?hold"></script>` — a script the server never finishes
