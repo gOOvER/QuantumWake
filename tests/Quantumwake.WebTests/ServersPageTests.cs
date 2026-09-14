@@ -16,7 +16,7 @@ public class ServersPageTests
           {"shard":"pub_use1b_12545750_150","region":"US East","regionCode":"use1b","deployment":"12545750","number":"150",
            "current":true,"visits":3,"sessions":3,"time":7200,"first":"2026-09-01T00:00:00+00:00","last":"2026-09-13T00:00:00+00:00",
            "endings":{"Left":2,"LogEnded":1},"lastEnding":"LogEnded","lastSession":"a","note":"laggy elevators","favorite":false,
-           "places":[{"name":"Port Tressler","system":"Stanton","visits":3},{"name":"Everus Harbor","system":"Stanton","visits":1},{"name":"Bloom LEO Rest Stop","system":"Stanton","visits":1},{"name":"Levski","system":"Nyx","visits":1}]},
+           "places":[{"name":"Levski","system":"Nyx","visits":1,"last":"2026-09-13T00:00:00+00:00"},{"name":"Port Tressler","system":"Stanton","visits":3,"last":"2026-09-12T00:00:00+00:00"},{"name":"Everus Harbor","system":"Stanton","visits":1,"last":"2026-09-11T00:00:00+00:00"},{"name":"Bloom LEO Rest Stop","system":"Stanton","visits":1,"last":"2026-09-10T00:00:00+00:00"}]},
           {"shard":"pub_euw1b_12545750_003","region":"EU West","regionCode":"euw1b","deployment":"12545750","number":"003",
            "current":true,"visits":1,"sessions":1,"time":600,"first":"2026-09-10T00:00:00+00:00","last":"2026-09-10T00:00:00+00:00",
            "endings":{"Left":1},"lastEnding":"Left","lastSession":"b","note":null,"favorite":true,"places":[]},
@@ -207,17 +207,23 @@ public class ServersPageTests
     // ---- where you went ----
 
     [Fact]
-    public void Places_show_three_names_and_a_count_for_the_rest()
+    public void Places_show_the_latest_and_unfold_the_rest_on_request()
     {
         var page = Loaded();
-        var row = "__dom.node('#servers-table').querySelector('tbody').children[1]";
-        var cell = page.Text($"{row}.descendants().find(n => n.classList.contains('places')).textContent");
+        var cell = "__dom.node('#servers-table').querySelector('tbody').children[1].descendants().find(n => n.classList.contains('places'))";
 
-        Assert.Equal("Port Tressler, Everus Harbor, Bloom LEO Rest Stop +1", cell);
+        // Latest first - Levski was yesterday - with the other three behind a button.
+        Assert.Equal("Levski", page.Text($"{cell}.descendants().find(n => n.classList.contains('place')).textContent"));
+        Assert.Equal("+3 more", page.Text($"{cell}.descendants().find(n => n.classList.contains('more')).textContent"));
+        Assert.True(page.Truth($"{cell}.descendants().find(n => n.classList.contains('place-list')).hidden"));
 
-        var title = page.Text($"{row}.descendants().find(n => n.classList.contains('places')).title");
-        Assert.Contains("Port Tressler ×3", title);
-        Assert.Contains("Levski", title);
+        page.Do($"{cell}.descendants().find(n => n.classList.contains('more')).fire('click');");
+
+        Assert.False(page.Truth($"{cell}.descendants().find(n => n.classList.contains('place-list')).hidden"));
+        var list = page.Text($"{cell}.descendants().find(n => n.classList.contains('place-list')).textContent");
+        Assert.Contains("Port Tressler ×3", list);
+        Assert.Contains("Bloom LEO Rest Stop", list);
+        Assert.Equal("fewer", page.Text($"{cell}.descendants().find(n => n.classList.contains('more')).textContent"));
     }
 
     /// <summary>A stay with no arrival says so, rather than showing a blank that could mean "not read".</summary>

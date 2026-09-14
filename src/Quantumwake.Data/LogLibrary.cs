@@ -268,7 +268,7 @@ public sealed record Wingman(
 /// <param name="Endings">How each stay ended, by <see cref="ShardLeave"/> name.</param>
 /// <param name="LastEnding">How the most recent stay ended - the one thing a pilot remembers about a server.</param>
 /// <param name="Places">
-/// Where the pilot went while on this shard, most visited first. Arrivals
+/// Where the pilot went while on this shard, most recent first. Arrivals
 /// whose timestamp falls inside one of the stays - so a place reached in the
 /// menu, or on the previous shard of the same session, is not credited here.
 /// </param>
@@ -289,8 +289,8 @@ public sealed record ShardRecord(
     string? LastSession,
     IReadOnlyList<ShardPlace> Places);
 
-/// <summary>A place reached while on a shard, and how many separate arrivals.</summary>
-public sealed record ShardPlace(string Name, string? System, int Visits);
+/// <summary>A place reached while on a shard, how many separate arrivals, and the latest.</summary>
+public sealed record ShardPlace(string Name, string? System, int Visits, DateTimeOffset Last);
 
 /// <summary>One commodity in the community catalogue, with this install's own trade record against it.</summary>
 /// <param name="Sold">Facility keys where kiosks accept it.</param>
@@ -1785,7 +1785,7 @@ public sealed class LogLibrary : IDisposable
     }
 
     /// <summary>
-    /// Arrivals inside the stays, tallied by place and named by the most recent
+    /// Arrivals inside the stays, tallied by place, newest first, and named by the most recent
     /// spelling - a place is renamed by the resolver now and then, and the
     /// newest is likeliest to be how the map labels it today.
     /// </summary>
@@ -1798,9 +1798,9 @@ public sealed class LogLibrary : IDisposable
             .Select(g =>
             {
                 var newest = g.OrderByDescending(p => p.At).First();
-                return new ShardPlace(newest.DisplayName, newest.System, g.Count());
+                return new ShardPlace(newest.DisplayName, newest.System, g.Count(), newest.At);
             })
-            .OrderByDescending(p => p.Visits)
+            .OrderByDescending(p => p.Last)
             .ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>

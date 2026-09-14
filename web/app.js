@@ -8397,9 +8397,10 @@ function endingCell(row) {
 }
 
 /**
- * Where the pilot went while on this shard, most visited first. Three names
- * in the cell and the rest behind a count: a long evening's route is a debrief,
- * not a column, and the hover carries the whole list for whoever wants it.
+ * Where the pilot went while on this shard: the latest place, and a button
+ * for the rest. An evening on one shard can touch a dozen places, and a
+ * column that listed them all would be a route, not a cell - so the most
+ * recent one stands for the stay, and the rest unfold in place on request.
  */
 function placesCell(row) {
   const td = el('td', 'places');
@@ -8413,11 +8414,28 @@ function placesCell(row) {
     return td;
   }
 
-  const shown = places.slice(0, 3).map((p) => p.name).join(', ');
-  const more = places.length - 3;
-  td.append(document.createTextNode(shown));
-  if (more > 0) td.append(el('small', 'muted', ` +${more}`));
-  td.title = places.map((p) => `${p.name}${p.visits > 1 ? ` ×${p.visits}` : ''}`).join('\n');
+  const [latest, ...rest] = places;
+  td.append(el('span', 'place', latest.name));
+  if (latest.visits > 1) td.append(el('small', 'muted', ` ×${latest.visits}`));
+
+  if (!rest.length) return td;
+
+  const list = el('ul', 'place-list');
+  list.hidden = true;
+  for (const p of rest) {
+    const li = el('li', null, p.name);
+    if (p.visits > 1) li.append(el('small', 'muted', ` ×${p.visits}`));
+    list.append(li);
+  }
+
+  const more = el('button', 'ghost tiny more', `+${rest.length} more`);
+  more.type = 'button';
+  more.addEventListener('click', () => {
+    list.hidden = !list.hidden;
+    more.textContent = list.hidden ? `+${rest.length} more` : 'fewer';
+  });
+
+  td.append(more, list);
   return td;
 }
 

@@ -4425,3 +4425,6 @@ body.overlay .ship-picture { display: none; }
 /* One stay per line: a session that bounced between three shards should read
    as three lines, not one ellipsised string. */
 .session-metric.session-metric-shards .session-metric-value { white-space: pre-line; font-size: 12px; }
+#servers-table td.places .more { margin-left: 6px; }
+#servers-table .place-list { margin: 6px 0 0; padding: 0 0 0 14px; list-style: disc; }
+#servers-table .place-list li { line-height: 1.5; }
