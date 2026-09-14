@@ -12,7 +12,7 @@ namespace Quantumwake.WebTests;
 public class ServersPageTests
 {
     private const string Servers = """
-        {"current":"pub_use1b_12545750_150","newestDeployment":"12545750","servers":[
+        {"current":null,"newestDeployment":"12545750","servers":[
           {"shard":"pub_use1b_12545750_150","region":"US East","regionCode":"use1b","deployment":"12545750","number":"150",
            "current":true,"visits":3,"sessions":3,"time":7200,"first":"2026-09-01T00:00:00+00:00","last":"2026-09-13T00:00:00+00:00",
            "endings":{"Left":2,"LogEnded":1},"lastEnding":"LogEnded","lastSession":"a","note":"laggy elevators","favorite":false,
@@ -243,5 +243,40 @@ public class ServersPageTests
         page.Do("__dom.node('#servers-search').value = 'levski'; renderServers();");
 
         Assert.Equal("pub_use1b_12545750_150", Rows(page));
+    }
+
+    // ---- the shard you are on ----
+
+    /// <summary>The live shard leads the table and is marked, whatever the sort would otherwise say.</summary>
+    [Fact]
+    public void The_current_shard_leads_and_is_lit()
+    {
+        var page = new Page();
+        page.Serve("/api/servers", Servers.Replace("\"current\":null", "\"current\":\"pub_use1b_12545750_150\""));
+        page.Do("await loadServers();");
+
+        // Not a favourite, so it would otherwise sort second - but it is where the client is.
+        Assert.StartsWith("pub_use1b_12545750_150|", Rows(page));
+
+        var first = "__dom.node('#servers-table').querySelector('tbody').children[0]";
+        Assert.True(page.Truth($"{first}.classList.contains('here')"));
+        Assert.Contains("on now", page.Text($"{first}.textContent"));
+        Assert.Contains("pub_use1b_12545750_150", page.NodeText("#servers-summary"));
+    }
+
+    /// <summary>A placement arriving over the live stream moves the light without a reload.</summary>
+    [Fact]
+    public void A_new_placement_moves_the_light()
+    {
+        var page = Loaded();
+        page.Serve("/api/briefing", "{}");
+        page.Serve("/api/trips", "[]");
+
+        page.Do("renderNow({ connected:true, inGame:true, confidence:'None', recentEvents:[], shard:'pub_euw1b_12545750_003' });");
+
+        var first = "__dom.node('#servers-table').querySelector('tbody').children[0]";
+        Assert.Equal("pub_euw1b_12545750_003", page.Text($"{first}.dataset.shard"));
+        Assert.True(page.Truth($"{first}.classList.contains('here')"));
+        Assert.False(page.Truth("__dom.node('#servers-table').querySelector('tbody').children[1].classList.contains('here')"));
     }
 }

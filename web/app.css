@@ -4428,3 +4428,21 @@ body.overlay .ship-picture { display: none; }
 #servers-table td.places .more { margin-left: 6px; }
 #servers-table .place-list { margin: 6px 0 0; padding: 0 0 0 14px; list-style: disc; }
 #servers-table .place-list li { line-height: 1.5; }
+
+/* The row for the shard the client is on right now. Lit rather than merely
+   sorted first: a favourite or a fresh join would otherwise sit beside it
+   looking the same, and the whole reason to open the page is to find it. */
+#servers-table tr.here td { background: rgba(53, 200, 240, .07); }
+#servers-table tr.here td:first-child { box-shadow: inset 3px 0 0 var(--cyan); }
+#servers-table .here-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border: 1px solid var(--cyan);
+  border-radius: 3px;
+  color: var(--cyan);
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}

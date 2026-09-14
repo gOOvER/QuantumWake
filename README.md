@@ -358,7 +358,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.35
+### 0.11.36
 
 - **The app now knows which server you were on.** Every time the matchmaker
   places you, the game writes one line naming the shard -
@@ -394,6 +394,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   same session are not credited. The game shows each shard a friendlier
   name on screen - `amazing_view` - but writes only the id to the log, so the
   id is the name here: Sessions and the debrief show it in full.
+
+- **The shard you are on is lit.** On the Servers page the row for the
+  server the game has you on right now leads the table, highlighted and
+  marked *on now*, and the light moves the moment the live feed sees a new
+  placement. A summary tile says which it is, or that you are not on one.
 
 - Sessions gain a Server column and the debrief lists every stay with how it
   ended. Sessions summarised before this build have no shards recorded, so

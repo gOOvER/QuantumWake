@@ -912,6 +912,12 @@ function renderNow(state) {
 
   renderNowParty(state);
   renderNowServer(state);
+
+  // The Servers page lights the row you are on; a placement mid-visit moves it.
+  if ((state.shard || null) !== serverCurrent && serverRows.length) {
+    serverCurrent = state.shard || null;
+    renderServers();
+  }
   renderNowScreenCard(state.screen);
   renderNowFocus(state);
 
@@ -8211,6 +8217,9 @@ onInput('#crew-period', loadCrew);
 let serverRows = [];
 let serverNewestDeployment = null;
 
+/** The shard the live stream says the client is on, so the row can be lit and re-lit as it changes. */
+let serverCurrent = null;
+
 /** What each ending means to a pilot, and whether it counts against the server. */
 const SHARD_ENDINGS = {
   Left: ['left', false],
@@ -8246,6 +8255,7 @@ async function loadServers() {
 
   serverRows = data.servers || [];
   serverNewestDeployment = data.newestDeployment || null;
+  serverCurrent = data.current || null;
 
   fillServerRegions(serverRows);
   renderServers();
@@ -8300,7 +8310,10 @@ function renderServers() {
 
   // Favourites first, then the most recent - so a starred shard from tonight
   // beats a starred one from last week, and both beat everything else.
-  rows.sort((a, b) => (b.favorite - a.favorite) || (new Date(b.last) - new Date(a.last)));
+  // The shard you are on right now leads whatever else is true of it: it is
+  // the one row a pilot came to the page to find. Then favourites, then newest.
+  rows.sort((a, b) => ((b.shard === serverCurrent) - (a.shard === serverCurrent))
+    || (b.favorite - a.favorite) || (new Date(b.last) - new Date(a.last)));
 
   const current = all.filter((r) => r.current);
   const visits = all.reduce((total, r) => total + r.visits, 0);
@@ -8310,6 +8323,7 @@ function renderServers() {
     ['Still running', current.length],
     ['Placements', visits],
     ['Favourites', all.filter((r) => r.favorite).length],
+    ['On now', serverCurrent || 'not on a shard'],
     ['Newest deployment', serverNewestDeployment || '—'],
   ]);
 
@@ -8334,6 +8348,7 @@ function renderServers() {
 function serverRow(row) {
   const tr = el('tr', row.current ? null : 'gone');
   tr.dataset.shard = row.shard;
+  if (row.shard === serverCurrent) tr.classList.add('here');
 
   const starCell = el('td');
   const star = el('button', `ghost tiny star${row.favorite ? ' on' : ''}`, row.favorite ? '★' : '☆');
@@ -8345,6 +8360,7 @@ function serverRow(row) {
 
   const shard = el('td', 'shard');
   shard.append(document.createTextNode(row.shard));
+  if (row.shard === serverCurrent) shard.append(el('span', 'here-badge', 'on now'));
   shard.append(el('small', null, row.current
     ? `deployment ${row.deployment}`
     : `deployment ${row.deployment} — retired`));
