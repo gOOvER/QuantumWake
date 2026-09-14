@@ -358,7 +358,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.33
+### 0.11.34
 
 - **The app now knows which server you were on.** Every time the matchmaker
   places you, the game writes one line naming the shard -
@@ -386,6 +386,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   in the name, which is not the client's build - and a new deployment retires
   every shard of the old one. Those stay listed, greyed and marked, one tick
   away from the default view; the note is still yours, the server is gone.
+
+- **Each server lists where you went while on it.** A Visited column on
+  Servers names the places you landed during your stays on that shard, most
+  visited first - three in the cell, the rest on hover - and search finds a
+  shard by a place. Arrivals made in the menu or on a previous shard of the
+  same session are not credited. The game shows each shard a friendlier
+  name on screen - `amazing_view` - but writes only the id to the log, so the
+  id is the name here: Sessions and the debrief show it in full.
 
 - Sessions gain a Server column and the debrief lists every stay with how it
   ended. Sessions summarised before this build have no shards recorded, so

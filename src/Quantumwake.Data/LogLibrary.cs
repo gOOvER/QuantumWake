@@ -267,6 +267,11 @@ public sealed record Wingman(
 /// </param>
 /// <param name="Endings">How each stay ended, by <see cref="ShardLeave"/> name.</param>
 /// <param name="LastEnding">How the most recent stay ended - the one thing a pilot remembers about a server.</param>
+/// <param name="Places">
+/// Where the pilot went while on this shard, most visited first. Arrivals
+/// whose timestamp falls inside one of the stays - so a place reached in the
+/// menu, or on the previous shard of the same session, is not credited here.
+/// </param>
 public sealed record ShardRecord(
     string Shard,
     string Region,
@@ -281,7 +286,11 @@ public sealed record ShardRecord(
     DateTimeOffset Last,
     IReadOnlyDictionary<string, int> Endings,
     ShardLeave LastEnding,
-    string? LastSession);
+    string? LastSession,
+    IReadOnlyList<ShardPlace> Places);
+
+/// <summary>A place reached while on a shard, and how many separate arrivals.</summary>
+public sealed record ShardPlace(string Name, string? System, int Visits);
 
 /// <summary>One commodity in the community catalogue, with this install's own trade record against it.</summary>
 /// <param name="Sold">Facility keys where kiosks accept it.</param>
@@ -1730,7 +1739,7 @@ public sealed class LogLibrary : IDisposable
     private static IReadOnlyList<ShardRecord> Aggregate(IReadOnlyList<SessionSummary> sessions)
     {
         var stays = sessions
-            .SelectMany(s => s.Shards.Select(stay => (Session: s.Id, Stay: stay)))
+            .SelectMany(s => s.Shards.Select(stay => (Session: s.Id, Stay: stay, Places: s.Locations)))
             .Where(x => ShardName.TryParse(x.Stay.Shard, out _))
             .ToList();
 
@@ -1768,11 +1777,31 @@ public sealed class LogLibrary : IDisposable
                         g.GroupBy(x => x.Stay.Ending.ToString())
                             .ToDictionary(e => e.Key, e => e.Count(), StringComparer.Ordinal),
                         last.Stay.Ending,
-                        last.Session);
+                        last.Session,
+                        PlacesOn(g.Select(x => (x.Stay, x.Places))));
                 })
                 .OrderByDescending(r => r.Last)
         ];
     }
+
+    /// <summary>
+    /// Arrivals inside the stays, tallied by place and named by the most recent
+    /// spelling - a place is renamed by the resolver now and then, and the
+    /// newest is likeliest to be how the map labels it today.
+    /// </summary>
+    private static IReadOnlyList<ShardPlace> PlacesOn(
+        IEnumerable<(ShardStay Stay, IReadOnlyList<LocationVisit> Places)> stays) =>
+        [.. stays
+            .SelectMany(x => x.Places.Where(p => p.At >= x.Stay.JoinedAt && p.At <= x.Stay.LeftAt))
+            .Where(p => p.Kind != LocationKind.Unknown && !string.IsNullOrWhiteSpace(p.DisplayName))
+            .GroupBy(p => p.RawId, StringComparer.Ordinal)
+            .Select(g =>
+            {
+                var newest = g.OrderByDescending(p => p.At).First();
+                return new ShardPlace(newest.DisplayName, newest.System, g.Count());
+            })
+            .OrderByDescending(p => p.Visits)
+            .ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>
     /// Blueprints the player has been given, earliest sighting first. The game

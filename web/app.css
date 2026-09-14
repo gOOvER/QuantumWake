@@ -4395,8 +4395,8 @@ body.overlay .ship-picture { display: none; }
    told not to plan around it. */
 #servers-table tr.gone td { color: var(--muted); }
 #servers-table tr.gone .shard { text-decoration: line-through; text-decoration-color: var(--muted); }
-#servers-table .shard { font-family: var(--mono); font-size: 12px; }
-#servers-table .shard small { display: block; font-family: inherit; color: var(--muted); }
+#servers-table .shard small { display: block; color: var(--muted); }
+#servers-table td.places { max-width: 260px; }
 #servers-table td.ending { white-space: nowrap; }
 #servers-table td.ending .bad { color: var(--red); }
 

@@ -15,10 +15,11 @@ public class ServersPageTests
         {"current":"pub_use1b_12545750_150","newestDeployment":"12545750","servers":[
           {"shard":"pub_use1b_12545750_150","region":"US East","regionCode":"use1b","deployment":"12545750","number":"150",
            "current":true,"visits":3,"sessions":3,"time":7200,"first":"2026-09-01T00:00:00+00:00","last":"2026-09-13T00:00:00+00:00",
-           "endings":{"Left":2,"LogEnded":1},"lastEnding":"LogEnded","lastSession":"a","note":"laggy elevators","favorite":false},
+           "endings":{"Left":2,"LogEnded":1},"lastEnding":"LogEnded","lastSession":"a","note":"laggy elevators","favorite":false,
+           "places":[{"name":"Port Tressler","system":"Stanton","visits":3},{"name":"Everus Harbor","system":"Stanton","visits":1},{"name":"Bloom LEO Rest Stop","system":"Stanton","visits":1},{"name":"Levski","system":"Nyx","visits":1}]},
           {"shard":"pub_euw1b_12545750_003","region":"EU West","regionCode":"euw1b","deployment":"12545750","number":"003",
            "current":true,"visits":1,"sessions":1,"time":600,"first":"2026-09-10T00:00:00+00:00","last":"2026-09-10T00:00:00+00:00",
-           "endings":{"Left":1},"lastEnding":"Left","lastSession":"b","note":null,"favorite":true},
+           "endings":{"Left":1},"lastEnding":"Left","lastSession":"b","note":null,"favorite":true,"places":[]},
           {"shard":"pub_use1b_12326004_010","region":"US East","regionCode":"use1b","deployment":"12326004","number":"010",
            "current":false,"visits":6,"sessions":5,"time":36000,"first":"2026-07-01T00:00:00+00:00","last":"2026-08-01T00:00:00+00:00",
            "endings":{"Left":6},"lastEnding":"Left","lastSession":"c","note":"the good one","favorite":true}
@@ -201,5 +202,40 @@ public class ServersPageTests
 
         Assert.Contains("First time on this shard", page.NodeText("#now-server-note"));
         Assert.StartsWith("☆", page.NodeText("#now-server-star"));
+    }
+
+    // ---- where you went ----
+
+    [Fact]
+    public void Places_show_three_names_and_a_count_for_the_rest()
+    {
+        var page = Loaded();
+        var row = "__dom.node('#servers-table').querySelector('tbody').children[1]";
+        var cell = page.Text($"{row}.descendants().find(n => n.classList.contains('places')).textContent");
+
+        Assert.Equal("Port Tressler, Everus Harbor, Bloom LEO Rest Stop +1", cell);
+
+        var title = page.Text($"{row}.descendants().find(n => n.classList.contains('places')).title");
+        Assert.Contains("Port Tressler ×3", title);
+        Assert.Contains("Levski", title);
+    }
+
+    /// <summary>A stay with no arrival says so, rather than showing a blank that could mean "not read".</summary>
+    [Fact]
+    public void A_shard_with_no_arrivals_says_nowhere_named()
+    {
+        var page = Loaded();
+        var cell = page.Text("__dom.node('#servers-table').querySelector('tbody').children[0].descendants().find(n => n.classList.contains('places')).textContent");
+
+        Assert.Equal("nowhere named", cell);
+    }
+
+    [Fact]
+    public void Search_finds_a_shard_by_a_place_visited_on_it()
+    {
+        var page = Loaded();
+        page.Do("__dom.node('#servers-search').value = 'levski'; renderServers();");
+
+        Assert.Equal("pub_use1b_12545750_150", Rows(page));
     }
 }

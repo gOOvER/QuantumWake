@@ -236,6 +236,11 @@ placement*. Two things looked at and left:
   the reader for a signal that fires in 4% of files; for now a crash ends a
   stay the same way a killed process does, and the page says "log ended"
   rather than picking one. Worth revisiting if anyone needs the distinction.
+- **The on-screen shard name** - the game labels a shard `amazing_view` in
+  its UI - is nowhere in the log: not in the session it was seen in, not in
+  194 backups, not in the cached game data. Only the id is written, so the id
+  is what the app calls the server. A hand-typed alias was built and taken
+  out again in 0.11.34: it is a note by another name.
 - **The context establisher's `sessionId`** is the local client's GUID, not
   the shard. The CLI called it "shard sessions" until 0.11.33; it now says
   "client sessions".

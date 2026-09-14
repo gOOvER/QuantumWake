@@ -105,9 +105,16 @@ public class ShardNoteStoreTests : IDisposable
         a.Add(new Core.Events.DisconnectEvent(Now.AddDays(-30).AddHours(2), "30016", "Remote Disconnect - Player requested disconnect", true));
 
         var b = new SessionBuilder("b.log");
+        // Arrivals in order: New Babbage before the first join is menu time and
+        // must not count; Port Tressler twice inside the stays, New Babbage
+        // between, since the builder folds consecutive arrivals at one place.
+        b.Add(new Core.Events.LocationInventoryEvent(Now.AddDays(-1).AddMinutes(-5), "nekron", "Stanton4_NewBabbage"));
         b.Add(new Core.Events.ShardJoinEvent(Now.AddDays(-1), "pub_use1b_12545750_150", "1.2.3.4", 1, "x"));
+        b.Add(new Core.Events.LocationInventoryEvent(Now.AddDays(-1).AddMinutes(10), "nekron", "RR_MIC_LEO"));
+        b.Add(new Core.Events.LocationInventoryEvent(Now.AddDays(-1).AddMinutes(40), "nekron", "Stanton4_NewBabbage"));
         b.Add(new Core.Events.DisconnectEvent(Now.AddDays(-1).AddHours(1), "30028", "Remote Disconnect - player inactive", true));
         b.Add(new Core.Events.ShardJoinEvent(Now.AddDays(-1).AddHours(1).AddMinutes(5), "pub_use1b_12545750_150", "1.2.3.4", 1, "x"));
+        b.Add(new Core.Events.LocationInventoryEvent(Now.AddDays(-1).AddHours(2), "nekron", "RR_MIC_LEO"));
         b.Add(new Core.Events.LoginEvent(Now.AddDays(-1).AddHours(3), "nekron"));
 
         sessions.Save(a.Build(), "fa");
@@ -126,6 +133,12 @@ public class ShardNoteStoreTests : IDisposable
         Assert.Equal(ShardLeave.LogEnded, newest.LastEnding);
         Assert.Equal(1, newest.Endings["Idle"]);
         Assert.Equal("US East", newest.Region);
+
+        Assert.Equal(2, newest.Places.Count);
+        var place = newest.Places[0];
+        Assert.Equal("Port Tressler", place.Name);
+        Assert.Equal(2, place.Visits);
+        Assert.Empty(rows[1].Places);
 
         var older = rows[1];
         Assert.False(older.Current);

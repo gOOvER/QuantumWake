@@ -745,9 +745,9 @@ public static class ServerHost
             s.GameVersion,
             s.PrimaryShip,
             s.LastLocation,
-            // The last shard as a pilot says it, and how many the session saw:
-            // the list has room for one name, the debrief has room for all.
-            shard = s.Shards.Count > 0 && ShardName.TryParse(s.Shards[^1].Shard, out var shard) ? shard.Short : null,
+            // The last shard, by the name the game uses - the id is the name, there
+            // is no friendlier one in the log - and how many the session saw.
+            shard = s.Shards.Count > 0 ? s.Shards[^1].Shard : null,
             shards = s.Shards.Count,
             ships = s.Ships.Count,
             locations = s.Locations.Count,
@@ -1274,7 +1274,7 @@ public static class ServerHost
                 .Select(n => ShardName.TryParse(n.Shard, out var name)
                     ? new ShardRecord(n.Shard, name.Region, name.RegionCode, name.Deployment, name.Number,
                         false, 0, 0, TimeSpan.Zero, n.CreatedAt, n.CreatedAt,
-                        new Dictionary<string, int>(), ShardLeave.LogEnded, null)
+                        new Dictionary<string, int>(), ShardLeave.LogEnded, null, [])
                     : null)
                 .Where(r => r is not null)!;
 
@@ -1287,7 +1287,7 @@ public static class ServerHost
                     r.Shard, r.Region, r.RegionCode, r.Deployment, r.Number, r.Current,
                     r.Visits, r.Sessions,
                     time = r.Time.TotalSeconds,
-                    r.First, r.Last, r.Endings, r.LastEnding, r.LastSession,
+                    r.First, r.Last, r.Endings, r.LastEnding, r.LastSession, r.Places,
                     note = notes.GetValueOrDefault(r.Shard)?.Note,
                     favorite = notes.GetValueOrDefault(r.Shard)?.Favorite ?? false,
                     noted = notes.GetValueOrDefault(r.Shard)?.UpdatedAt

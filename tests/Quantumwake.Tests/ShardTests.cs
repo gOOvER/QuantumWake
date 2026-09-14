@@ -112,7 +112,7 @@ public class ShardTests
         Assert.Equal(ShardLeave.Left, stay.Ending);
         Assert.Equal(TimeSpan.FromMinutes(40), stay.Duration);
         Assert.Null(summary.CurrentShard);
-        Assert.Contains(summary.Timeline, t => t.Kind == "shard" && t.Text == "Joined US East 10");
+        Assert.Contains(summary.Timeline, t => t.Kind == "shard" && t.Text == "Joined pub_use1b_11704877_010" && t.Detail == "US East");
     }
 
     [Fact]

@@ -362,9 +362,10 @@ public sealed class SessionBuilder
                 // first stay or credit its time to the second shard.
                 LeaveShard(ev.Timestamp, ShardLeave.Replaced);
                 _shard = (join.Shard, ev.Timestamp);
-                Timeline(ev.Timestamp, "shard",
-                    ShardName.TryParse(join.Shard, out var name) ? $"Joined {name.Short}" : "Joined a shard",
-                    join.Shard);
+                // The id is the name: it is what the game calls the server and what
+                // a pilot would compare with a friend. The region reads beside it.
+                Timeline(ev.Timestamp, "shard", $"Joined {join.Shard}",
+                    ShardName.TryParse(join.Shard, out var name) ? name.Region : null);
                 break;
 
             case SystemQuitEvent quit:

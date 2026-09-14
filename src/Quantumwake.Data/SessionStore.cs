@@ -156,7 +156,9 @@ public sealed class SessionStore : IDisposable
     //     how it left. 269 joins across 167 backups on this install, every one
     //     of them in a session already summarised; without this the Servers
     //     page would list nothing but the session played after updating.
-    private const int PayloadVersion = 13;
+    // 14: the join line in the timeline names the shard by its id rather than
+    //     a reading of it. Only one install ever ran 13, for a day.
+    private const int PayloadVersion = 14;
 
 
     /// <summary>

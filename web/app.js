@@ -2564,23 +2564,9 @@ function sessionShardText(detail) {
   if (!stays.length) return 'None recorded';
 
   return stays.map((stay) => {
-    const short = shardShort(stay.shard);
     const mins = Math.round((new Date(stay.leftAt) - new Date(stay.joinedAt)) / 60000);
-    return `${short} · ${duration(mins * 60)} · ${endingLabel(stay.ending)}`;
+    return `${stay.shard} · ${duration(mins * 60)} · ${endingLabel(stay.ending)}`;
   }).join('\n');
-}
-
-/** "pub_use1b_12545750_150" as a pilot says it, mirroring ShardName.Short. */
-function shardShort(full) {
-  const m = /^[a-z]+_([a-z]+)\d+[a-z]?_\d+_(\d+)$/.exec(full || '');
-  if (!m) return full || '—';
-  const region = {
-    use: 'US East', usw: 'US West', usc: 'US Central',
-    euw: 'EU West', euc: 'EU Central', eun: 'EU North',
-    ape: 'Asia-Pacific East', apse: 'Asia-Pacific Southeast', apne: 'Asia-Pacific Northeast',
-    aps: 'Asia-Pacific South', aus: 'Australia',
-  }[m[1]] || m[1].toUpperCase();
-  return `${region} ${Number(m[2])}`;
 }
 
 function renderSessionDebrief(summary) {
@@ -8298,7 +8284,7 @@ function filteredServers() {
     if (starredOnly && !r.favorite) return false;
     if (region && r.region !== region) return false;
     if (term) {
-      const hay = `${r.shard} ${r.region} ${r.note || ''}`.toLowerCase();
+      const hay = `${r.shard} ${r.region} ${r.note || ''} ${(r.places || []).map((p) => p.name).join(' ')}`.toLowerCase();
       if (!hay.includes(term)) return false;
     }
     return true;
@@ -8336,7 +8322,7 @@ function renderServers() {
       ? 'Nothing matches those filters. Untick "Current deployment only" to see shards from earlier deployments.'
       : 'No shard joins yet. The game writes one <Join PU> line each time it places you; '
         + 'sessions summarised before this build read it will show up after a rescan.');
-    td.colSpan = 8;
+    td.colSpan = 9;
     tr.append(td);
     body.append(tr);
     return;
@@ -8375,6 +8361,7 @@ function serverRow(row) {
   tr.append(last);
 
   tr.append(endingCell(row));
+  tr.append(placesCell(row));
 
   const note = el('td', 'note-cell');
   note.append(noteText(row));
@@ -8406,6 +8393,31 @@ function endingCell(row) {
     td.append(el('small', 'muted', ` · ${rest}`));
   }
 
+  return td;
+}
+
+/**
+ * Where the pilot went while on this shard, most visited first. Three names
+ * in the cell and the rest behind a count: a long evening's route is a debrief,
+ * not a column, and the hover carries the whole list for whoever wants it.
+ */
+function placesCell(row) {
+  const td = el('td', 'places');
+  const places = row.places || [];
+
+  if (!places.length) {
+    td.append(el('span', 'muted', row.visits ? 'nowhere named' : '—'));
+    td.title = row.visits
+      ? 'No arrival was logged while on this shard - a stay spent in a ship, or too short to land.'
+      : '';
+    return td;
+  }
+
+  const shown = places.slice(0, 3).map((p) => p.name).join(', ');
+  const more = places.length - 3;
+  td.append(document.createTextNode(shown));
+  if (more > 0) td.append(el('small', 'muted', ` +${more}`));
+  td.title = places.map((p) => `${p.name}${p.visits > 1 ? ` ×${p.visits}` : ''}`).join('\n');
   return td;
 }
 
