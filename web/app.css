@@ -4404,6 +4404,118 @@ body.overlay .ship-picture { display: none; }
 .garage-title { font-family: var(--display); font-size: 24px; letter-spacing: .02em; color: var(--text); }
 .garage-head .small { font-size: 11.5px; margin-top: 2px; }
 
+/* The fitted layout is an instrument panel, not a fictional cutaway. The
+   game data gives us the real component ports but not their 3D coordinates,
+   so the cards orbit the game's ship picture and lead into the precise bench. */
+.garage-rig {
+  margin: 0 0 16px;
+  border: 1px solid var(--rule-hot);
+  background:
+    radial-gradient(ellipse at 50% 56%, rgba(53, 200, 240, .11), transparent 38%),
+    linear-gradient(145deg, rgba(53, 200, 240, .055), rgba(4, 10, 17, .78) 48%, rgba(53, 200, 240, .035));
+  clip-path: var(--chamfer);
+  overflow: hidden;
+}
+.garage-rig-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 14px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rule);
+  background: rgba(4, 10, 17, .48);
+}
+.garage-eyebrow { color: var(--cyan-hot); font: 10px var(--mono); letter-spacing: .19em; text-transform: uppercase; }
+.garage-rig-head p { margin: 3px 0 0; color: var(--muted); font-size: 11.5px; }
+.garage-rig-count { font: 10px var(--mono); color: var(--dim); white-space: nowrap; }
+.garage-rig-body {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) minmax(300px, 1.35fr) minmax(190px, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+}
+.garage-rig-slots { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.garage-rig-slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px;
+  border: 1px solid var(--rule);
+  background: rgba(5, 13, 22, .74);
+  color: var(--text);
+  text-align: left;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+  clip-path: var(--chamfer);
+}
+.garage-rig-left .garage-rig-slot { text-align: right; flex-direction: row-reverse; }
+.garage-rig-slot::after {
+  content: "";
+  position: absolute;
+  top: 50%; width: 14px; height: 1px;
+  background: var(--cyan-deep);
+  box-shadow: 0 0 7px rgba(53, 200, 240, .32);
+}
+.garage-rig-left .garage-rig-slot::after { right: -14px; }
+.garage-rig-right .garage-rig-slot::after { left: -14px; }
+.garage-rig-slot:hover, .garage-rig-slot.selected { border-color: var(--cyan); background: rgba(20, 55, 71, .72); }
+.garage-rig-slot:hover::after, .garage-rig-slot.selected::after { background: var(--cyan-hot); }
+.garage-rig-slot.changed { border-color: var(--cyan-deep); }
+.garage-rig-slot .part-mark { width: 38px; height: 34px; border-radius: 4px; }
+.garage-rig-slot .part-mark .mono-mark { font-size: 8px; }
+.garage-rig-slot-body { display: grid; gap: 1px; min-width: 0; }
+.garage-rig-slot-kind { color: var(--dim); font: 8.5px var(--mono); letter-spacing: .11em; text-transform: uppercase; }
+.garage-rig-slot-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; }
+.garage-rig-slot-name .chip { font-size: 8px; padding: 0 3px; margin-left: 4px; }
+.garage-rig-slot-spec { color: var(--cyan-hot); font: 9.5px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.garage-ship-stage {
+  position: relative;
+  min-height: 252px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-inline: 1px solid rgba(53, 200, 240, .12);
+}
+.garage-ship-grid {
+  position: absolute; inset: 0;
+  opacity: .45;
+  background-image: linear-gradient(rgba(53, 200, 240, .12) 1px, transparent 1px), linear-gradient(90deg, rgba(53, 200, 240, .12) 1px, transparent 1px);
+  background-size: 26px 26px;
+  mask-image: radial-gradient(ellipse, black, transparent 74%);
+}
+.garage-ship-stage::before, .garage-ship-stage::after { content: ""; position: absolute; background: rgba(53, 200, 240, .35); }
+.garage-ship-stage::before { width: 76%; height: 1px; top: 50%; }
+.garage-ship-stage::after { width: 1px; height: 78%; left: 50%; }
+.garage-ship-model { position: relative; z-index: 2; }
+.garage-ship-model .ship-picture { width: 285px; flex-basis: 285px; }
+.garage-ship-model .ship-outline { width: 270px; height: 154px; filter: drop-shadow(0 0 18px rgba(53, 200, 240, .38)); }
+.garage-ship-model .ship-render-wrap { width: 285px; height: 192px; flex-basis: 285px; }
+.garage-ship-model .ship-render { filter: drop-shadow(0 0 16px rgba(53, 200, 240, .3)); }
+.garage-ship-model .ship-paint { display: none; }
+.garage-ship-summary { position: absolute; z-index: 3; bottom: 9px; display: flex; gap: 6px; max-width: calc(100% - 18px); }
+.garage-ship-stat { min-width: 74px; padding: 4px 6px; border: 1px solid rgba(53, 200, 240, .28); background: rgba(4, 10, 17, .78); text-align: center; }
+.garage-ship-stat span { display: block; color: var(--dim); font: 8px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.garage-ship-stat b { display: block; margin-top: 2px; color: var(--cyan-hot); font: 10px var(--mono); white-space: nowrap; }
+@media (max-width: 900px) {
+  .garage-rig-body { grid-template-columns: 1fr; }
+  .garage-ship-stage { order: -1; min-height: 220px; border-inline: 0; border-bottom: 1px solid rgba(53, 200, 240, .12); }
+  .garage-rig-slots { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+  .garage-rig-left .garage-rig-slot { text-align: left; flex-direction: row; }
+  .garage-rig-slot::after { display: none; }
+}
+@media (max-width: 520px) {
+  .garage-rig-head { align-items: flex-start; flex-direction: column; }
+  .garage-ship-model .ship-picture { width: 230px; flex-basis: 230px; }
+  .garage-ship-model .ship-outline { width: 220px; height: 126px; }
+  .garage-ship-model .ship-render-wrap { width: 230px; height: 155px; flex-basis: 230px; }
+  .garage-rig-slots { grid-template-columns: 1fr; }
+}
+
 /* The sheet is groups of label/value rows, laid out as cards so a pilot can
    find "Signature" without reading "Hull" first. Three across on a wide
    screen, one on a phone. */

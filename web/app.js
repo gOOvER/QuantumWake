@@ -8867,6 +8867,7 @@ function renderGarage(data, stock) {
   $('#garage-sub').textContent = [data.ship.manufacturer, data.ship.role, data.ship.career,
     `size ${data.ship.size}`, `crew ${data.ship.crew}`].filter(Boolean).join(' · ');
   $('#garage-source').textContent = `Community dataset${data.dump ? ` · dump ${data.dump}` : ''} · recomputed from the fitted parts`;
+  renderGarageRig(data);
 
   const s = data.sheet;
   const o = stock?.sheet || null;
@@ -8957,6 +8958,73 @@ function renderGarage(data, stock) {
   for (const note of s.notes || []) notes.append(el('div', null, note));
 
   renderBench(data);
+}
+
+/**
+ * The bench is where alternatives are compared; this is the fitted ship at a
+ * glance. Ports stay as real, clickable cards rather than being painted onto
+ * an approximate hull drawing - the data knows attachment names, not 3D
+ * coordinates, and inventing coordinates would make a useful fit look exact.
+ */
+function renderGarageRig(data) {
+  const rig = $('#garage-rig');
+  const ports = (data.ports || []).filter((p) => BENCH_KINDS.includes(p.group));
+  rig.hidden = ports.length === 0;
+  if (!ports.length) return;
+
+  const left = $('#garage-rig-left');
+  const right = $('#garage-rig-right');
+  left.textContent = '';
+  right.textContent = '';
+
+  const leftKinds = new Set(['PowerPlant', 'Cooler', 'Shield', 'QuantumDrive', 'Radar', 'EMP', 'QuantumInterdictionGenerator']);
+  const rows = benchGroups(benchRows(ports));
+  for (const [kind, group] of rows) {
+    const side = leftKinds.has(kind) ? left : right;
+    for (const port of group) side.append(garageRigSlot(port, data.ship));
+  }
+
+  const model = $('#garage-ship-model');
+  model.textContent = '';
+  const code = makerAliases.get(String(data.ship.manufacturer || '').toLowerCase())
+    || String(data.ship.class || '').split('_')[0];
+  const maker = { code, name: MANUFACTURERS[code] || data.ship.manufacturer || 'Unknown maker' };
+  model.append(shipPicture({ name: data.ship.name, className: data.ship.class }, maker));
+
+  $('#garage-rig-count').textContent = `${ports.length} fitted port${ports.length === 1 ? '' : 's'}`;
+  const summary = $('#garage-ship-summary');
+  summary.textContent = '';
+  for (const [label, value] of [
+    ['Shield', `${fmtInt(data.sheet.shield.hp)} HP`],
+    ['Pilot DPS', fmt1(data.sheet.weapons.fixedDps)],
+    ['Quantum', data.sheet.quantumDrive?.drive || '—'],
+  ]) {
+    const stat = el('div', 'garage-ship-stat');
+    stat.append(el('span', null, label), el('b', null, value));
+    summary.append(stat);
+  }
+}
+
+function garageRigSlot(port, ship) {
+  const button = el('button', `garage-rig-slot${port.changed ? ' changed' : ''}${port.portIds.includes(garageSelectedPort) ? ' selected' : ''}`);
+  button.type = 'button';
+  button.dataset.port = port.portIds[0];
+  const many = port.portIds.length > 1;
+  const name = port.name || port.class || 'Empty port';
+  button.title = `${garageWord(port.group)} · ${garagePortName(port.hardpoint)} · ${name}`;
+  button.append(partMark(port.fitted, true));
+
+  const body = el('span', 'garage-rig-slot-body');
+  body.append(el('span', 'garage-rig-slot-kind', garageWord(port.group)));
+  const part = el('span', 'garage-rig-slot-name', name);
+  if (port.fitted) part.append(partChip(port.fitted));
+  if (many) part.append(el('span', 'chip count', `×${port.portIds.length}`));
+  body.append(part);
+  const figures = partFigures(port.fitted, ship).slice(0, 2);
+  if (figures.length) body.append(el('span', 'garage-rig-slot-spec', figures.map((f) => `${f[2]} ${f[0]}`).join(' · ')));
+  button.append(body);
+  button.addEventListener('click', () => selectBenchPort(port.portIds[0]).catch(() => {}));
+  return button;
 }
 
 function sheetGroup(title, source, rows) {
@@ -9198,6 +9266,9 @@ function renderBench(data) {
 async function selectBenchPort(portId) {
   garageSelectedPort = portId;
   for (const rowEl of $$('#garage-bench-ports .bench-port')) rowEl.classList.toggle('selected', rowEl.dataset.port === portId);
+  // The fitted-layout cards are another way into this same port, so the
+  // selected state must move in both views rather than leaving two answers.
+  renderGarageRig(garageStock);
 
   const panel = $('#garage-bench-panel');
   panel.textContent = '';

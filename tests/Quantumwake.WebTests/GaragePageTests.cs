@@ -59,6 +59,23 @@ public class GaragePageTests
     }
 
     [Fact]
+    public void The_fitted_layout_centres_the_ship_and_keeps_components_clickable()
+    {
+        var page = Opened();
+
+        Assert.False(page.Truth("__dom.node('#garage-rig').hidden"));
+        Assert.Contains("Bracer", page.NodeText("#garage-rig-left"));
+        Assert.Contains("Beacon", page.NodeText("#garage-rig-left"));
+        Assert.True(page.Truth("__dom.node('#garage-ship-model').descendants().some(n => n.classList.contains('ship-picture'))"));
+
+        page.Serve("/api/garage/AEGS_Gladius/options?port=p1", CoolerOptions);
+        page.Do("await __dom.node('#garage-rig-left').descendants().find(n => n.classList.contains('garage-rig-slot')).fire('click');");
+
+        Assert.Contains("GET /api/garage/AEGS_Gladius/options?port=p1", page.Fetched());
+        Assert.True(page.Truth("__dom.node('#garage-rig-left').descendants().some(n => n.classList.contains('garage-rig-slot') && n.classList.contains('selected'))"));
+    }
+
+    [Fact]
     public void Every_group_is_drawn_and_names_its_source()
     {
         var page = Opened();
