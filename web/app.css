@@ -4377,3 +4377,84 @@ body.overlay .ship-picture { display: none; }
 .mfd-steps { margin: 10px 0 12px; padding-left: 20px; font-size: 12.5px; line-height: 1.6; }
 .mfd-steps li { margin-bottom: 5px; }
 .mfd-steps li::marker { color: var(--cyan); font-size: 11px; }
+
+/* ---------- servers ---------- */
+
+/* The star is a button that has to read as one state or the other at a
+   glance; colour does that, the glyph change is for people who cannot see it. */
+#servers-table .star,
+#now-server-star {
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 6px;
+}
+#servers-table .star.on,
+#now-server-star.on { color: var(--amber); }
+
+/* A shard from a retired deployment is history: the row stays, the eye is
+   told not to plan around it. */
+#servers-table tr.gone td { color: var(--muted); }
+#servers-table tr.gone .shard { text-decoration: line-through; text-decoration-color: var(--muted); }
+#servers-table .shard small { display: block; color: var(--muted); }
+#servers-table .shard .seen-name { cursor: text; margin-top: 3px; }
+#servers-table .shard .seen-name.empty { font-style: italic; }
+#servers-table .shard .search { display: block; min-width: 14ch; width: 100%; margin-top: 3px; padding: 2px 5px; font-size: 10px; }
+#servers-table .server-actions { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
+#servers-table .server-disposition .select { min-width: 62px; padding: 2px 4px; font-size: 10px; }
+#servers-table .server-disposition .select.good { color: var(--cyan); }
+#servers-table .server-disposition .select.avoid { color: var(--amber); }
+#servers-table td.places { max-width: 260px; }
+#servers-table td.ending { white-space: nowrap; }
+#servers-table td.ending .bad { color: var(--red); }
+
+/* The note is edited in place. A textarea per row would make the table a form;
+   a single line that becomes editable on click keeps it a table. */
+#servers-table .note-cell { min-width: 220px; max-width: 420px; }
+#servers-table .note-cell .note-text { cursor: text; white-space: pre-wrap; }
+#servers-table .note-cell .note-text.empty { color: var(--muted); font-style: italic; }
+#servers-table .note-cell textarea {
+  width: 100%;
+  min-height: 52px;
+  resize: vertical;
+  font: inherit;
+  font-size: 12.5px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 5px 7px;
+}
+
+#now-server-card .mono { font-family: var(--mono); font-size: 11px; }
+#now-server-card .actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+#now-server-card .note.warn { color: var(--amber); }
+
+/* One stay per line: a session that bounced between three shards should read
+   as three lines, not one ellipsised string. */
+.session-metric.session-metric-shards .session-metric-value { white-space: pre-line; font-size: 12px; }
+#servers-table td.places .more { margin-left: 6px; }
+#servers-table .place-list { margin: 6px 0 0; padding: 0 0 0 14px; list-style: disc; }
+#servers-table .place-list li { line-height: 1.5; }
+
+/* The row for the shard the client is on right now. Lit rather than merely
+   sorted first: a favourite or a fresh join would otherwise sit beside it
+   looking the same, and the whole reason to open the page is to find it. */
+#servers-table tr.here td { background: rgba(53, 200, 240, .07); }
+#servers-table tr.here td:first-child { box-shadow: inset 3px 0 0 var(--cyan); }
+#servers-table .here-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border: 1px solid var(--cyan);
+  border-radius: 3px;
+  color: var(--cyan);
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+/* A caption's negative top margin tucks it under a heading. Under a table it
+   pulls the text into the last row's border - visible the moment the caption
+   runs to more than one line, as the Servers footnote does. */
+.table-wrap + .caption { margin-top: 12px; }

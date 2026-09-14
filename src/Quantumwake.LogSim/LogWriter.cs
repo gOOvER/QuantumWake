@@ -345,6 +345,17 @@ public sealed class LogWriter : IDisposable
             "rescue service beacons to revive you before the 'Time to Death' timer expires.",
             id);
 
+    /// <summary>
+    /// Matchmaking placing the client. Written once per placement, just before
+    /// the menu channel's "Nub destroyed" teardown.
+    /// </summary>
+    public void JoinShard(DateTimeOffset at, string shard) =>
+        Line(at, $"[Notice] <Join PU> address[35.245.92.221] port[64291] shard[{shard}] " +
+                 $"locationId[844429225164801] [Team_GameServices][GIM][Matchmaking]");
+
+    public void Quit(DateTimeOffset at, string reason = "Quit via console command") =>
+        Line(at, $"[Notice] <SystemQuit> CSystem::Quit invoked with - cause=30016, reason={reason}, " +
+                 $"exitCode=0, thread id=10360, main thread id=10360 [Team_Unknown][System]");
     public void Disconnect(DateTimeOffset at, string reason, string gameRules, bool remote = false) =>
         Line(at, $"[Notice] <Channel Disconnected> cause=30010 reason=\"{reason}\" frame=10136 " +
                  $"isRemote={(remote ? 1 : 0)} viewState=eCVS_InGame map=\"megamap\" gamerules=\"{gameRules}\" " +

@@ -69,6 +69,31 @@ public sealed record NowState
 
     /// <summary>What the kiosks recorded moving this session, or null when nothing has.</summary>
     public NowCargo? Cargo { get; init; }
+
+    /// <summary>
+    /// The shard the client is on, or null between placements. Not the region
+    /// picked in the launcher: the name the matchmaker answered with.
+    /// </summary>
+    public string? Shard { get; init; }
+
+    /// <summary>The shard as a pilot says it - "US East 150" - or null.</summary>
+    public string? ShardShort { get; init; }
+
+    /// <summary>
+    /// What the pilot wrote about this shard last time, and whether they starred
+    /// it. The reason the shard is on the Now page at all: the moment to decide
+    /// whether to stay is the moment of landing on it.
+    /// </summary>
+    public string? ShardNote { get; init; }
+    public bool ShardFavorite { get; init; }
+    public string? ShardSeenName { get; init; }
+    public string? ShardDisposition { get; init; }
+
+    /// <summary>When the current placement happened, or null between placements.</summary>
+    public DateTimeOffset? ShardSince { get; init; }
+
+    /// <summary>How many times this install has been placed here before this stay.</summary>
+    public int ShardVisitsBefore { get; init; }
 }
 
 /// <summary>One contract this session opened and has not closed.</summary>
@@ -223,6 +248,16 @@ public sealed partial class LiveSessionService : BackgroundService
     private readonly ScreenReadingStore? _screen;
     private readonly ScreenSettingsStore? _screenSettings;
 
+    /// <summary>The pilot's server notes. Optional like the rest; absent means the Now card names the shard and nothing more.</summary>
+    private readonly ShardNoteStore? _shards;
+
+    /// <summary>
+    /// Earlier visits to the shard the client is on, looked up once per
+    /// placement. The library walks every stored session to answer, and the
+    /// snapshot is rebuilt every second.
+    /// </summary>
+    private (string Shard, DateTimeOffset PlacedAt, int Visits)? _visitsBefore;
+
     /// <summary>The newest screenshot already accounted for.</summary>
     private string? _lastScreenShot;
 
@@ -253,6 +288,10 @@ public sealed partial class LiveSessionService : BackgroundService
     /// Whether the pilot has the screen panel switched on. Optional like the
     /// rest; absent means nothing is filtered, which is what the tests want.
     /// </param>
+    /// <param name="shards">
+    /// What the pilot wrote about servers. Optional like the rest; absent means
+    /// the Now card names the shard and has nothing to add.
+    /// </param>
     public LiveSessionService(
         IHubContext<LiveHub> hub,
         LogLibrary library,
@@ -260,7 +299,8 @@ public sealed partial class LiveSessionService : BackgroundService
         GameInstall? install = null,
         TripStore? trips = null,
         ScreenReadingStore? screen = null,
-        ScreenSettingsStore? screenSettings = null)
+        ScreenSettingsStore? screenSettings = null,
+        ShardNoteStore? shards = null)
     {
         _hub = hub;
         _library = library;
@@ -269,6 +309,7 @@ public sealed partial class LiveSessionService : BackgroundService
         _trips = trips;
         _screen = screen;
         _screenSettings = screenSettings;
+        _shards = shards;
         _builder = new SessionBuilder(install?.GameLogPath ?? "live");
 
         // Whatever was already read is not news. Seeding this here is what
@@ -280,6 +321,15 @@ public sealed partial class LiveSessionService : BackgroundService
 
     /// <summary>Current snapshot, also served over REST for first paint.</summary>
     public NowState Current { get; private set; } = new();
+
+    /// <summary>
+    /// The session being played, as it stands. For the Servers list, which
+    /// otherwise knows only the copy of Game.log summarised at the last scan.
+    /// </summary>
+    public SessionSummary LiveSummary
+    {
+        get { lock (_gate) return _builder.Build(); }
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -325,7 +375,7 @@ public sealed partial class LiveSessionService : BackgroundService
         }
     }
 
-    private void OnEvent(GameEvent ev)
+    internal void OnEvent(GameEvent ev)
     {
         lock (_gate)
         {
@@ -397,8 +447,33 @@ public sealed partial class LiveSessionService : BackgroundService
         // next reordering of these lines would not have.
         var screen = ScreenNow();
 
+        // Looked up per snapshot rather than cached on the join: the pilot
+        // may write the note *because* of what this stay is doing to them, and
+        // the card should show it without waiting for the next placement.
+        var shard = summary.CurrentShard;
+        var shardNote = shard is null ? null : _shards?.Get(shard);
+
+        // Keyed by the placement, not the shard: A, leave, A again is a second
+        // visit, and a cache keyed by the shard would answer with the first
+        // count. The stored history excludes this file; the stays this session
+        // has already finished on the same shard are added here.
+        var placedAt = shard is null ? default : summary.Shards[^1].JoinedAt;
+        if (shard is not null && (_visitsBefore is null || _visitsBefore.Value.Shard != shard || _visitsBefore.Value.PlacedAt != placedAt))
+        {
+            var earlierThisSession = summary.Shards.Count(s => s.Shard == shard) - 1;
+            _visitsBefore = (shard, placedAt, _library.ShardVisitsBefore(shard, summary) + earlierThisSession);
+        }
+
         return new NowState
         {
+            Shard = shard,
+            ShardShort = ShardName.TryParse(shard, out var shardName) ? shardName.Short : shard,
+            ShardNote = shardNote?.Note,
+            ShardSince = shard is null ? null : placedAt,
+            ShardFavorite = shardNote?.Favorite ?? false,
+            ShardSeenName = shardNote?.SeenName,
+            ShardDisposition = shardNote?.Disposition,
+            ShardVisitsBefore = shard is not null && _visitsBefore is { } seen && seen.Shard == shard ? seen.Visits : 0,
             Connected = true,
             InGame = location.InGame,
             GameRules = location.GameRules,

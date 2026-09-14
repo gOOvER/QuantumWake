@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
 using Quantumwake.Core.GameData;
 using Quantumwake.Core.Logging;
+using Quantumwake.Core.State;
 using Quantumwake.Data;
 
 namespace Quantumwake.Server;
@@ -107,6 +108,7 @@ public static class ServerHost
         builder.Services.AddSingleton<ChecklistStore>();
         builder.Services.AddSingleton<TripStore>();
         builder.Services.AddSingleton<MapNoteStore>();
+        builder.Services.AddSingleton<ShardNoteStore>();
         builder.Services.AddSingleton<TombstoneStore>();
         builder.Services.AddSingleton<BackupBuilder>();
         builder.Services.AddSingleton<RestoreService>();
@@ -743,6 +745,10 @@ public static class ServerHost
             s.GameVersion,
             s.PrimaryShip,
             s.LastLocation,
+            // The last shard, by the name the game uses - the id is the name, there
+            // is no friendlier one in the log - and how many the session saw.
+            shard = s.Shards.Count > 0 ? s.Shards[^1].Shard : null,
+            shards = s.Shards.Count,
             ships = s.Ships.Count,
             locations = s.Locations.Count,
             jumps = s.Jumps.Count,
@@ -1250,6 +1256,93 @@ public static class ServerHost
         // once per ship here, so folding it in would either repeat every other
         // count or need the page to flatten it back out.
         app.MapGet("/api/crew/ships", (LogLibrary lib, int? days) => lib.SharedShips(days ?? 0));
+
+        // Every shard the logs have placed this install on, with what the pilot
+        // wrote about each. One request rather than two because the page's
+        // whole point is the join: a visit without its note is a row of
+        // numbers, and a note without its visits is advice about nowhere.
+        app.MapGet("/api/servers", (LogLibrary lib, ShardNoteStore shards, LiveSessionService live) =>
+        {
+            var notes = shards.All().ToDictionary(n => n.Shard, StringComparer.Ordinal);
+            // The live summary replaces the last stored Game.log copy, so the
+            // row on screen is the active stay, with its real duration and
+            // an explicit Open ending rather than a guessed disconnection.
+            var liveSummary = live.LiveSummary;
+            var rows = lib.Shards(liveSummary);
+            var currentShard = liveSummary.CurrentShard;
+
+            // A note on a shard the logs no longer carry - the backups rolled,
+            // or the note came in a restore from another machine - is still the
+            // pilot's, and still shown, with nothing counted against it.
+            var orphans = notes.Values
+                .Where(n => rows.All(r => r.Shard != n.Shard))
+                .Select(n => ShardName.TryParse(n.Shard, out var name)
+                    ? new ShardRecord(n.Shard, name.Region, name.RegionCode, name.Deployment, name.Number,
+                        false, 0, 0, TimeSpan.Zero, n.CreatedAt, n.CreatedAt,
+                        new Dictionary<string, int>(), ShardLeave.LogEnded, null, [], TimeSpan.Zero)
+                    : null)
+                .OfType<ShardRecord>();
+
+            return new
+            {
+                current = currentShard,
+                newestDeployment = rows.FirstOrDefault(r => r.Current)?.Deployment,
+                servers = rows.Concat(orphans).Select(r => new
+                {
+                    r.Shard, r.Region, r.RegionCode, r.Deployment, r.Number, r.Current,
+                    r.Visits, r.Sessions,
+                    time = r.Time.TotalSeconds,
+                    r.First, r.Last, r.Endings, r.LastEnding, r.LastSession, r.Places,
+                    lastDuration = r.LastDuration.TotalSeconds,
+                    note = notes.GetValueOrDefault(r.Shard)?.Note,
+                    favorite = notes.GetValueOrDefault(r.Shard)?.Favorite ?? false,
+                    seenName = notes.GetValueOrDefault(r.Shard)?.SeenName,
+                    disposition = notes.GetValueOrDefault(r.Shard)?.Disposition,
+                    noted = notes.GetValueOrDefault(r.Shard)?.UpdatedAt
+                })
+            };
+        });
+
+        app.MapPut("/api/servers/{shard}/note", (string shard, ShardNoteStore shards, TombstoneStore deleted, ShardNoteRequest body) =>
+        {
+            var kept = shards.SetNote(shard, body.Note);
+
+            // Emptied is deleted: a restore must not bring the old note back.
+            if (kept is null) deleted.Record(TombstoneStore.Kinds.Shards, shard);
+            else deleted.Forget(TombstoneStore.Kinds.Shards, shard);
+
+            return Results.Ok(new { shard, note = kept?.Note, favorite = kept?.Favorite ?? false,
+                seenName = kept?.SeenName, disposition = kept?.Disposition });
+        });
+
+        app.MapPut("/api/servers/{shard}/favorite", (string shard, ShardNoteStore shards, TombstoneStore deleted, ShardFavoriteRequest body) =>
+        {
+            var kept = shards.SetFavorite(shard, body.Favorite);
+
+            if (kept is null) deleted.Record(TombstoneStore.Kinds.Shards, shard);
+            else deleted.Forget(TombstoneStore.Kinds.Shards, shard);
+
+            return Results.Ok(new { shard, note = kept?.Note, favorite = kept?.Favorite ?? false,
+                seenName = kept?.SeenName, disposition = kept?.Disposition });
+        });
+
+        app.MapPut("/api/servers/{shard}/seen-name", (string shard, ShardNoteStore shards, TombstoneStore deleted, ShardSeenNameRequest body) =>
+        {
+            var kept = shards.SetSeenName(shard, body.Name);
+            if (kept is null) deleted.Record(TombstoneStore.Kinds.Shards, shard);
+            else deleted.Forget(TombstoneStore.Kinds.Shards, shard);
+            return Results.Ok(new { shard, note = kept?.Note, favorite = kept?.Favorite ?? false,
+                seenName = kept?.SeenName, disposition = kept?.Disposition });
+        });
+
+        app.MapPut("/api/servers/{shard}/disposition", (string shard, ShardNoteStore shards, TombstoneStore deleted, ShardDispositionRequest body) =>
+        {
+            var kept = shards.SetDisposition(shard, body.Disposition);
+            if (kept is null) deleted.Record(TombstoneStore.Kinds.Shards, shard);
+            else deleted.Forget(TombstoneStore.Kinds.Shards, shard);
+            return Results.Ok(new { shard, note = kept?.Note, favorite = kept?.Favorite ?? false,
+                seenName = kept?.SeenName, disposition = kept?.Disposition });
+        });
 
         // What the logs are still carrying. Unscoped by wipe on purpose - see
         // LogLibrary.Signals.
@@ -4164,6 +4257,18 @@ public sealed record MapNoteRequest(
     string? Title,
     string? Note,
     List<string>? Tags);
+
+/// <summary>Body of PUT /api/servers/{shard}/note. Blank clears the note.</summary>
+public sealed record ShardNoteRequest(string? Note);
+
+/// <summary>Body of PUT /api/servers/{shard}/favorite.</summary>
+public sealed record ShardFavoriteRequest(bool Favorite);
+
+/// <summary>Body of PUT /api/servers/{shard}/seen-name. This is the pilot's observation, not a CIG directory entry.</summary>
+public sealed record ShardSeenNameRequest(string? Name);
+
+/// <summary>Body of PUT /api/servers/{shard}/disposition. Only good, avoid, or blank are kept.</summary>
+public sealed record ShardDispositionRequest(string? Disposition);
 
 /// <summary>Body of POST /api/mining/log/{id}/submit.</summary>
 public sealed record RefineryRequest(

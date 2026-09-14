@@ -251,6 +251,48 @@ public sealed record Wingman(
     int Joined = 0,
     int Left = 0);
 
+/// <summary>
+/// One server this install has been placed on, across every session.
+/// </summary>
+/// <param name="Region">Read off the name - see <see cref="ShardName"/>.</param>
+/// <param name="Current">
+/// Whether the shard belongs to the newest deployment this install has joined.
+/// A shard from an older one is gone, and a note on it is history rather than
+/// advice. Judged against joins, never the client's version, because the two
+/// numbers are not the same thing.
+/// </param>
+/// <param name="Time">
+/// Time on the shard, summed over stays. A floor: a stay the log never closed
+/// is counted to its last line, not to whenever the client actually went.
+/// </param>
+/// <param name="Endings">How each stay ended, by <see cref="ShardLeave"/> name.</param>
+/// <param name="LastEnding">How the most recent stay ended - the one thing a pilot remembers about a server.</param>
+/// <param name="Places">
+/// Where the pilot went while on this shard, most recent first. Arrivals
+/// whose timestamp falls inside one of the stays - so a place reached in the
+/// menu, or on the previous shard of the same session, is not credited here.
+/// </param>
+public sealed record ShardRecord(
+    string Shard,
+    string Region,
+    string RegionCode,
+    string Deployment,
+    string Number,
+    bool Current,
+    int Visits,
+    int Sessions,
+    TimeSpan Time,
+    DateTimeOffset First,
+    DateTimeOffset Last,
+    IReadOnlyDictionary<string, int> Endings,
+    ShardLeave LastEnding,
+    string? LastSession,
+    IReadOnlyList<ShardPlace> Places,
+    TimeSpan LastDuration);
+
+/// <summary>A place reached while on a shard, how many separate arrivals, and the latest.</summary>
+public sealed record ShardPlace(string Name, string? System, int Visits, DateTimeOffset Last);
+
 /// <summary>One commodity in the community catalogue, with this install's own trade record against it.</summary>
 /// <param name="Sold">Facility keys where kiosks accept it.</param>
 /// <param name="Bought">Facility keys where kiosks stock it.</param>
@@ -1658,6 +1700,131 @@ public sealed class LogLibrary : IDisposable
                 .ThenBy(w => w.Handle, StringComparer.OrdinalIgnoreCase)
         ];
     }
+
+    /// <summary>
+    /// Every shard this install has been placed on, most recently joined first.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Unscoped by the wipe line on purpose. A wipe resets the character, not
+    /// the servers, and the point of the page is remembering which ones were
+    /// worth avoiding - a memory that should survive a fresh start.
+    /// </para>
+    /// <para>
+    /// "Current" is relative to the newest deployment in the joins themselves.
+    /// The moment a join on a newer deployment lands, every shard from the older
+    /// one flips to history in the same read - which is the truth, since the
+    /// old ones stopped existing when the new ones started.
+    /// </para>
+    /// </remarks>
+    /// <param name="live">
+    /// The session being played, when there is one. The store holds the copy of
+    /// Game.log it summarised at the last scan; a shard joined since then is
+    /// nowhere in it, and the page would say "on now" about a row that does not
+    /// exist. The live summary replaces the stored copy of the same file, and
+    /// its open stay is marked <see cref="ShardLeave.Open"/> rather than left
+    /// reading as a log that ended.
+    /// </param>
+    public IReadOnlyList<ShardRecord> Shards(SessionSummary? live = null)
+    {
+        if (live is null)
+            return Aggregate(_store.All());
+
+        var open = live.CurrentShard is null || live.Shards.Count == 0 ? null : live.Shards[^1];
+        var merged = live.Shards
+            .Select(stay => ReferenceEquals(stay, open) ? stay with { Ending = ShardLeave.Open } : stay)
+            .ToList();
+
+        // Replace the stored copy of this same session, not everything under
+        // the file's name: after a restart the store holds the finished session
+        // under "Game" while the live builder is a fresh one for the new file,
+        // and dropping the former would lose an evening until the next scan.
+        return Aggregate([.. _store.All().Where(s => !(s.Id == live.Id && s.StartedAt == live.StartedAt)), live with { Shards = merged }]);
+    }
+
+    /// <summary>
+    /// How many times this install had been placed on a shard before the
+    /// session being played, which is what "you have been here before" means on the
+    /// Now page.
+    /// </summary>
+    /// <remarks>
+    /// The live Game.log is summarised into the store like any other file, so
+    /// without the exclusion the current stay would count itself and the first
+    /// visit anywhere would read as the second.
+    /// </remarks>
+    public int ShardVisitsBefore(string shard, SessionSummary live) =>
+        _store.All()
+            // The same session, not the same file name - see Shards(live).
+            .Where(s => !(s.Id == live.Id && s.StartedAt == live.StartedAt))
+            .Sum(s => s.Shards.Count(stay => stay.Shard == shard));
+
+    private static IReadOnlyList<ShardRecord> Aggregate(IReadOnlyList<SessionSummary> sessions)
+    {
+        var stays = sessions
+            .SelectMany(s => s.Shards.Select(stay => (Session: s.Id, Stay: stay, Places: s.Locations)))
+            .Where(x => ShardName.TryParse(x.Stay.Shard, out _))
+            .ToList();
+
+        if (stays.Count == 0)
+            return [];
+
+        // Newest by the time it was first joined rather than by number: the
+        // ids climb over time on this install, but nothing says they must.
+        var newest = stays
+            .GroupBy(x => ShardName.DeploymentOf(x.Stay.Shard)!)
+            .OrderByDescending(g => g.Max(x => x.Stay.JoinedAt))
+            .First().Key;
+
+        return
+        [
+            .. stays
+                .GroupBy(x => x.Stay.Shard, StringComparer.Ordinal)
+                .Select(g =>
+                {
+                    ShardName.TryParse(g.Key, out var name);
+                    var last = g.OrderByDescending(x => x.Stay.JoinedAt).First();
+
+                    return new ShardRecord(
+                        g.Key,
+                        name!.Region,
+                        name.RegionCode,
+                        name.Deployment,
+                        name.Number,
+                        name.Deployment == newest,
+                        g.Count(),
+                        g.Select(x => x.Session).Distinct().Count(),
+                        TimeSpan.FromTicks(g.Sum(x => x.Stay.Duration.Ticks)),
+                        g.Min(x => x.Stay.JoinedAt),
+                        last.Stay.LeftAt,
+                        g.GroupBy(x => x.Stay.Ending.ToString())
+                            .ToDictionary(e => e.Key, e => e.Count(), StringComparer.Ordinal),
+                        last.Stay.Ending,
+                        last.Session,
+                        PlacesOn(g.Select(x => (x.Stay, x.Places))),
+                        last.Stay.Duration);
+                })
+                .OrderByDescending(r => r.Last)
+        ];
+    }
+
+    /// <summary>
+    /// Arrivals inside the stays, tallied by place, newest first, and named by the most recent
+    /// spelling - a place is renamed by the resolver now and then, and the
+    /// newest is likeliest to be how the map labels it today.
+    /// </summary>
+    private static IReadOnlyList<ShardPlace> PlacesOn(
+        IEnumerable<(ShardStay Stay, IReadOnlyList<LocationVisit> Places)> stays) =>
+        [.. stays
+            .SelectMany(x => x.Places.Where(p => p.At >= x.Stay.JoinedAt && p.At <= x.Stay.LeftAt))
+            .Where(p => p.Kind != LocationKind.Unknown && !string.IsNullOrWhiteSpace(p.DisplayName))
+            .GroupBy(p => p.RawId, StringComparer.Ordinal)
+            .Select(g =>
+            {
+                var newest = g.OrderByDescending(p => p.At).First();
+                return new ShardPlace(newest.DisplayName, newest.System, g.Count(), newest.At);
+            })
+            .OrderByDescending(p => p.Last)
+            .ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>
     /// Blueprints the player has been given, earliest sighting first. The game

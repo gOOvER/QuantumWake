@@ -89,6 +89,55 @@ jobs:
             -p:Version=${{ steps.version.outputs.version }} -o dist/cli
           if ($LASTEXITCODE -ne 0) { throw 'cli publish failed' }
 
+      - name: Scan release files with Microsoft Defender
+        shell: pwsh
+        run: |
+          # The release has two deliverables - the single-file app and the CLI
+          # bundled beside it - so scan dist rather than only the file people
+          # most often download. This comes after publish and before Archive:
+          # scan source before it becomes an executable and we have not checked
+          # what actually leaves CI.
+          $status = Get-MpComputerStatus -ErrorAction Stop
+          if (-not $status.AntivirusEnabled) {
+            throw 'Microsoft Defender Antivirus is unavailable; refusing to publish an unscanned release.'
+          }
+
+          # Hosted images can carry definitions a week or more old, and a scan
+          # with stale definitions is a weaker promise than the README makes.
+          # Best effort: a definitions outage should not block a release that
+          # the scan itself is about to check.
+          try {
+            Update-MpSignature -ErrorAction Stop
+            Write-Host "Defender definitions: $((Get-MpComputerStatus).AntivirusSignatureVersion) ($((Get-MpComputerStatus).AntivirusSignatureLastUpdated))"
+          } catch {
+            Write-Warning "Could not update Defender definitions, scanning with what the image has: $($_.Exception.Message)"
+          }
+
+          $scanPath = (Resolve-Path 'dist').Path
+          $scanStartedAt = Get-Date
+          Start-MpScan -ScanType CustomScan -ScanPath $scanPath -ErrorAction Stop
+
+          $threats = @(Get-MpThreatDetection -ErrorAction Stop | Where-Object {
+            $_.InitialDetectionTime -ge $scanStartedAt -and
+            ($_.Resources | Where-Object { $_ -like "*$scanPath*" } | Measure-Object).Count -gt 0
+          })
+          if ($threats) {
+            $names = ($threats | ForEach-Object ThreatName | Select-Object -Unique) -join ', '
+            throw "Microsoft Defender detected a threat in the release files: $names"
+          }
+
+          # Defender quarantines a detected file. Checking the published files
+          # again turns that into a clear release failure rather than allowing
+          # Archive to create a partial download with no explanation.
+          $expected = @('dist/app/QuantumWake.exe')
+          $expected += @(Get-ChildItem dist/cli -File | ForEach-Object FullName)
+          $missing = $expected | Where-Object { -not (Test-Path $_) }
+          if ($missing) {
+            throw "Microsoft Defender removed a release file: $($missing -join ', ')"
+          }
+
+          Write-Host "Microsoft Defender scanned the release files in $scanPath."
+
       - name: Archive
         id: archive
         shell: pwsh

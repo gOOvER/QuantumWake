@@ -175,6 +175,21 @@ it exists, rather than trusting the exit code and an `ls`.
 screenshot is produced at all. To drive a page, wrap the render function once
 and stand down; observing the document keeps it alive for ever.
 
+**The virtual clock never settles on the real dashboard any more.** `watchScan`
+polls `/api/scan/status` for ever and the session clock ticks every second, so
+`--virtual-time-budget` runs until the process is killed and no PNG appears.
+What worked in 0.12.0: no budget, `--timeout=8000`, and a throwaway copy of
+`index.html` in the served `web\` folder that stubs `EventSource`, makes
+`setInterval` a no-op, and ends the body with
+`<script src="/api/stream?hold"></script>` — a script the server never finishes
+sending holds the load event open until the timeout, by which point boot has
+run and every fetch has landed. To put the Now page in a state, have the
+stubbed `EventSource` deliver one frame from its constructor.
+
+**Write the PNG into the scratchpad directory, not `%TEMP%`.** Under the
+sandbox a `--screenshot=` path in `%TEMP%\claude` produced nothing and Chrome
+still exited zero; the same command with the scratchpad path wrote the file.
+
 Two more about the setup. The server serves `bin\Release\net10.0\web`, **not**
 the repo's `web/` — rebuild after every asset edit, and stop the server
 first or the copy is locked. And stub `window.EventSource` in any throwaway

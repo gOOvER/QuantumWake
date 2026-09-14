@@ -137,6 +137,11 @@ public sealed class SessionBuilder
     private int _kills;
     private int _deaths;
 
+    private readonly List<ShardStay> _shards = [];
+
+    /// <summary>The shard the client is on right now, until something ends the stay.</summary>
+    private (string Shard, DateTimeOffset Since)? _shard;
+
     /// <summary>When something last happened to the player's body, if it has.</summary>
     private DateTimeOffset? _lastCasualty;
 
@@ -347,9 +352,47 @@ public sealed class SessionBuilder
                 {
                     _disconnects++;
                     Timeline(ev.Timestamp, "disconnect", "Disconnected", disconnect.Reason);
+
+                    // Only the world's channel going down is leaving the shard; the
+                    // menu's channel is torn down after every join - routinely, but
+                    // the rule is written down rather than left to the reason text.
+                    if (!disconnect.IsFrontend)
+                        LeaveShard(ev.Timestamp, disconnect.IsIdleKick ? ShardLeave.Idle : ShardLeave.Left);
                 }
                 break;
+
+            case ShardJoinEvent join:
+                // The game can move a client without a disconnect between - once
+                // in 269 joins on this install - and that must not lose the
+                // first stay or credit its time to the second shard.
+                LeaveShard(ev.Timestamp, ShardLeave.Replaced);
+                _shard = (join.Shard, ev.Timestamp);
+                // The id is the name: it is what the game calls the server and what
+                // a pilot would compare with a friend. The region reads beside it.
+                Timeline(ev.Timestamp, "shard", $"Joined {join.Shard}",
+                    ShardName.TryParse(join.Shard, out var name) ? name.Region : null);
+                break;
+
+            case SystemQuitEvent quit:
+                LeaveShard(ev.Timestamp, quit.IsBackendFailure ? ShardLeave.Backend : ShardLeave.Quit);
+                break;
         }
+    }
+
+    /// <summary>Closes the current stay, if there is one. Idempotent on purpose.</summary>
+    /// <remarks>
+    /// Every leave signal calls this, and most sessions carry several of them
+    /// in a row - the disconnect, then the quit a minute later from the menu.
+    /// The first one to arrive is the one that ended the stay; the rest describe
+    /// a client that had already left.
+    /// </remarks>
+    private void LeaveShard(DateTimeOffset at, ShardLeave ending)
+    {
+        if (_shard is not { } stay)
+            return;
+
+        _shards.Add(new ShardStay(stay.Shard, stay.Since, at, ending));
+        _shard = null;
     }
 
     private void SwitchGameRules(string rules, DateTimeOffset at)
@@ -1217,7 +1260,15 @@ public sealed class SessionBuilder
             Kills = _kills,
 
             Disconnects = _disconnects,
-            GameRules = _gameRules
+            GameRules = _gameRules,
+
+            // The stay still open is closed at the last line, in the copy rather
+            // than in the builder: the live feed rebuilds on every event, and
+            // the stay is still going.
+            Shards = _shard is { } open
+                ? [.. _shards, new ShardStay(open.Shard, open.Since, _lastSeen, ShardLeave.LogEnded)]
+                : _shards,
+            CurrentShard = _shard?.Shard
         };
     }
 

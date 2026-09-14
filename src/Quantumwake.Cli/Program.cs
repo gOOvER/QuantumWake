@@ -383,6 +383,8 @@ internal sealed class Report
     private readonly HashSet<string> _notificationIds = [];
     private readonly HashSet<string> _incapacitationFiles = [];
     private readonly HashSet<string> _sessionIds = [];
+    private readonly Dictionary<string, int> _shards = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _shardRegions = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (int Count, string Sample)> _unmatchedByTag = [];
 
     private string _currentFile = "";
@@ -424,6 +426,11 @@ internal sealed class Report
 
             case ContextEvent context:
                 _sessionIds.Add(context.SessionId);
+                break;
+
+            case ShardJoinEvent join:
+                Bump(_shards, join.Shard);
+                Bump(_shardRegions, ShardName.TryParse(join.Shard, out var shard) ? shard.Region : "(unparsed)");
                 break;
 
             case LocationInventoryEvent location:
@@ -536,7 +543,10 @@ internal sealed class Report
 
         Section("Sessions");
         Console.WriteLine($"  session headers : {_sessionHeaders}");
-        Console.WriteLine($"  shard sessions  : {_sessionIds.Count}");
+        Console.WriteLine($"  client sessions : {_sessionIds.Count}");
+        Console.WriteLine($"  shard joins     : {_shards.Values.Sum()} on {_shards.Count} distinct shards");
+        foreach (var (region, count) in _shardRegions.OrderByDescending(p => p.Value))
+            Console.WriteLine($"  {region,-24} {count,6} joins");
         foreach (var (rules, count) in _gameRules.OrderByDescending(p => p.Value))
             Console.WriteLine($"  {rules,-16} {count,6} loading screens");
 

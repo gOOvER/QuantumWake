@@ -152,7 +152,16 @@ public sealed class SessionStore : IDisposable
     //     beside the sentence and nothing later can supply one, so every
     //     existing install would have gone on reading
     //     "Bought cds_legacy_armor_heavy_helmet_01_01_12" for ever.
-    private const int PayloadVersion = 12;
+    // 13: shard stays are kept - which server each session was placed on and
+    //     how it left. 269 joins across 167 backups on this install, every one
+    //     of them in a session already summarised; without this the Servers
+    //     page would list nothing but the session played after updating.
+    // 14: the join line in the timeline names the shard by its id rather than
+    //     a reading of it. Only one install ever ran 13, for a day.
+    // 15: a disconnect carries its gamerules, and only the world's channel going
+    //     down ends a stay. No stored stay changes on this install - every
+    //     non-routine disconnect in 195 logs is SC_Default - but the builder did.
+    private const int PayloadVersion = 15;
 
 
     /// <summary>

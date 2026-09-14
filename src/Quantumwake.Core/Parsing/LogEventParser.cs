@@ -301,7 +301,22 @@ public sealed partial class LogEventParser
                     line.Timestamp,
                     m.Groups["cause"].Value,
                     m.Groups["reason"].Value,
-                    m.Groups["remote"].Value == "1")),
+                    m.Groups["remote"].Value == "1",
+                    m.Groups["rules"].Success ? m.Groups["rules"].Value : null)),
+
+            "Join PU" => Match(JoinShardRegex, line, m =>
+                new ShardJoinEvent(
+                    line.Timestamp,
+                    m.Groups["shard"].Value,
+                    m.Groups["address"].Value,
+                    int.TryParse(m.Groups["port"].ValueSpan, out var port) ? port : 0,
+                    m.Groups["location"].Value)),
+
+            "SystemQuit" => Match(SystemQuitRegex, line, m =>
+                new SystemQuitEvent(
+                    line.Timestamp,
+                    m.Groups["cause"].Value,
+                    m.Groups["reason"].Value.Trim())),
 
             _ => null
         };
@@ -517,9 +532,20 @@ public sealed partial class LogEventParser
     private static partial Regex QuantumRouteSuccessRegex { get; }
 
     [GeneratedRegex(
-        @"cause=(?<cause>\d+) reason=""(?<reason>[^""]*)"".*?isRemote=(?<remote>\d)",
+        @"cause=(?<cause>\d+) reason=""(?<reason>[^""]*)"".*?isRemote=(?<remote>\d)(?:.*?gamerules=""(?<rules>[^""]*)"")?",
         RegexOptions.Compiled)]
     private static partial Regex DisconnectRegex { get; }
+
+    [GeneratedRegex(
+        @"address\[(?<address>[^\]]*)\]\s+port\[(?<port>\d+)\]\s+shard\[(?<shard>[^\]]+)\]\s+locationId\[(?<location>[^\]]*)\]",
+        RegexOptions.Compiled)]
+    private static partial Regex JoinShardRegex { get; }
+
+    // The reason runs up to the next comma: "reason=User closed the app, exitCode=0".
+    [GeneratedRegex(
+        @"cause=(?<cause>\d+),\s*reason=(?<reason>[^,]*)",
+        RegexOptions.Compiled)]
+    private static partial Regex SystemQuitRegex { get; }
 
     [GeneratedRegex(
         @"^Loading screen for (?<screen>\S+) : (?<rules>\S+) closed after (?<seconds>[\d.]+) seconds",

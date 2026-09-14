@@ -55,6 +55,12 @@ SmartScreen stops warning once enough people have run a given build, so a fresh
 release warns and a fortnight-old one usually does not. That is a measure of the
 release's age and not of its safety.
 
+What the release pipeline does do is scan the files it is about to publish:
+after the build, Microsoft Defender is updated to the day's definitions and run
+over the executable and the command-line tool, and the release stops if it
+finds anything or is unavailable. That is a malware check on the exact bytes
+you download, not a statement about who made them — signing would be that.
+
 ### 3. Put it somewhere it can stay
 
 Anywhere you can write to — `C:\Tools`, your user folder, a games drive. Two
@@ -357,6 +363,86 @@ trademarks of Cloud Imperium Rights LLC. Quantum Wake is an unofficial fan
 project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
+
+### 0.12.4
+
+- **Give a server the name you saw in game, without losing its real id.** Add
+  a local “Seen in game” label such as `amazing_view`; it is clearly your
+  observation, not a claimed translation. The full log shard id remains beside
+  it, searchable and one click away with **Copy ID**. The Now card and the MFD
+  navigation page and the MFD Server page use the label when you have recorded one.
+
+- **Keep a personal good/avoid call and a concise support line.** A server can
+  be marked Good or Avoid for this install only. **Copy report** puts a
+  privacy-safe line on the clipboard with the shard id, region, time and log
+  ending - no account, IP address or log contents. A new Back-end failures
+  filter and summary count only explicit back-end disconnects; an unclosed log
+  still stays labelled as ambiguous.
+
+- **A release is now scanned before it is published.** After the Windows build
+  makes the exact app and command-line files that ship, the release workflow
+  updates Microsoft Defender's definitions and runs it over both before making
+  the download or announcing
+  it. If Defender is unavailable or removes a release file, the release stops.
+  This is a malware check on the published files, not a claim that Windows
+  knows the publisher - code signing remains separate.
+
+- **The app now knows which server you were on.** Every time the matchmaker
+  places you, the game writes one line naming the shard -
+  `pub_use1b_12545750_150` - and the app now reads it. A new **Servers** page
+  under Flight lists every shard this install has been placed on: region,
+  how many times, how long, when last, and how each stay ended - left by
+  choice, kicked for idling, quit to desktop, or the log simply stopping.
+  Across the 193 backups on the reference install that is 269 placements on
+  152 distinct shards, 68 of them visited more than once.
+
+- **Write a note on a server, and star the ones worth keeping.** Click the
+  note cell to write it, the star to favourite it. Notes and favourites are
+  yours: they live in `shards.json` beside your jobs, survive every rescan and
+  cache wipe, and travel in a backup. Search reads the note as well as the
+  name, so "the good one" finds the shard you called that.
+
+- **The Now page tells you where you landed, and what you said last time.**
+  A Server card appears the moment you are placed: the shard as a pilot says
+  it - "US East 150" - how many times you have been here before, and your
+  note if there is one. That is the moment the note is worth having: relogging
+  is a decision at the hangar and a complaint at the bunker.
+
+- **Servers from an earlier deployment are shown as history, not advice.** A
+  shard lives only as long as the deployment it belongs to - the middle number
+  in the name, which is not the client's build - and a new deployment retires
+  every shard of the old one. Those stay listed, greyed and marked, one tick
+  away from the default view; the note is still yours, the server is gone.
+
+- **Each server lists where you went while on it.** A Visited column on
+  Servers names the last place you landed during your stays on that shard,
+  with a "+N more" button that unfolds the rest in place, and search finds a
+  shard by a place. Arrivals made in the menu or on a previous shard of the
+  same session are not credited. The game may show a friendlier name on
+  screen - `amazing_view` - while writing only the id to the log. You can save
+  that observation locally; Sessions and the debrief keep the canonical id in
+  full.
+
+- **The shard you are on is lit.** On the Servers page the row for the
+  server the game has you on right now leads the table, highlighted and
+  marked *on now*, and the light moves the moment the live feed sees a new
+  placement. A summary tile says which it is, or that you are not on one.
+
+- **A Server page on the MFD.** Under Pilot, beside Session: the shard you
+  are on, the region, how long you have been on it, how many times before,
+  and your note - the page to glance at right after the loading screen.
+
+- **The server you just joined is on the list straight away.** The Servers
+  page used to know only the sessions already summarised, so a shard joined
+  minutes ago could be "on now" with no row to star or note; the live session
+  is now folded in, its stay reading *on it now* rather than *log ended*.
+  Rejoining the same shard within one session now counts the stay that just
+  ended, and only the world's channel going down ends a stay - the menu's
+  own channel never did in 195 logs, and now cannot.
+
+- Sessions gain a Server column and the debrief lists every stay with how it
+  ended. Sessions summarised before this build have no shards recorded, so
+  the first scan after updating re-reads every log once.
 
 ### 0.11.32
 

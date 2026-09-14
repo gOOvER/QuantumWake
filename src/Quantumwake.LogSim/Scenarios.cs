@@ -502,6 +502,7 @@ public static class ScenarioRunner
             Log.Context(Now, "SC_Frontend", SessionId);
             Log.LoadingScreen(Now.AddSeconds(1), "Frontend_Main", "SC_Frontend", 3.44);
             Advance(10);
+            Log.JoinShard(Now, "pub_use1b_12344265_042");
             Log.Context(Now, "SC_Default", SessionId);
             Log.LoadingScreen(Now.AddSeconds(1), "PU_Megamap", "SC_Default", 21.30);
             Advance(25);

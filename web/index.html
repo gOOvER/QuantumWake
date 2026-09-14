@@ -41,6 +41,7 @@
       <div class="group-menu">
         <button data-view="logbook">Logbook</button>
         <button data-view="sessions">Sessions</button>
+        <button data-view="servers">Servers</button>
         <button data-view="fleet">Fleet</button>
         <button data-view="hangar">Hangar</button>
         <button data-view="places">Places</button>
@@ -289,6 +290,17 @@
         <div class="note" id="combat-note"></div>
       </article>
 
+      <article class="card" id="now-server-card" data-card="server" hidden>
+        <div class="card-label">Server</div>
+        <div class="card-source source-slot" id="now-server-source" data-sources="logs"></div>
+        <div class="value" id="now-server">—</div>
+        <div class="sub mono" id="now-server-name"></div>
+        <div class="note" id="now-server-note"></div>
+        <div class="actions">
+          <button type="button" class="ghost tiny" id="now-server-star">☆ Favourite</button>
+          <button type="button" class="ghost tiny" id="now-server-open">Servers…</button>
+        </div>
+      </article>
       <article class="card" id="now-party-card" data-card="party" hidden>
         <div class="card-label">Party</div>
         <ul class="feed" id="now-party-list"></ul>
@@ -661,6 +673,59 @@
     </div>
   </section>
 
+  <section id="view-servers" class="view">
+    <div class="section-bar">
+      <h2>Servers</h2>
+      <div class="controls">
+        <input id="servers-search" class="search" type="search" placeholder="Search shard or note…" />
+        <select id="servers-region" class="select" title="Region">
+          <option value="">All regions</option>
+        </select>
+        <label class="toggle"><input type="checkbox" id="servers-current" checked /> Current deployment only</label>
+        <label class="toggle"><input type="checkbox" id="servers-starred" /> Favourites only</label>
+        <label class="toggle"><input type="checkbox" id="servers-troubled" /> Back-end failures seen</label>
+      </div>
+    </div>
+    <p class="muted caption">
+      Every shard the matchmaker has placed you on, read from the one line that
+      names it &mdash; <code>&lt;Join PU&gt; &hellip; shard[pub_use1b_12545750_150]</code>.
+      The game picks the server; this page cannot. What it can do is tell you
+      which one you landed on and what you wrote about it last time, so
+      relogging is a decision rather than a guess.
+      <b>A shard lives only as long as its deployment</b> &mdash; the middle
+      number &mdash; and a new deployment retires every shard of the old one.
+      Those stay listed as history, greyed, because the note is still yours.
+    </p>
+
+    <div class="summary-strip" id="servers-summary"></div>
+
+    <div class="table-wrap">
+      <table id="servers-table">
+        <thead>
+          <tr>
+            <th title="Favourite"></th>
+            <th>Your call</th>
+            <th>Shard</th>
+            <th>Region</th>
+            <th class="num">Visits</th>
+            <th class="num">Time</th>
+            <th>Last</th>
+            <th>How it ended</th>
+            <th>Visited</th>
+            <th>Your note</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="muted caption" id="servers-footnote">
+      <em>Time</em> is a floor: a stay the log never closed is counted to its
+      last line. <em>Log ended</em> means the client stopped writing while still
+      on the shard &mdash; a crash, a killed process and a lost server all look
+      the same, and the page does not pick one.
+    </p>
+  </section>
+
   <section id="view-casualties" class="view">
     <div class="section-bar">
       <h2>Casualties</h2>
@@ -889,7 +954,7 @@
         <thead>
           <tr>
             <th>Date</th><th>In game</th><th>Menus</th>
-            <th>Ship</th><th>Last location</th>
+            <th>Ship</th><th>Last location</th><th>Server</th>
             <th class="num">Jumps</th><th class="num">Contracts</th>
             <th class="num">Deaths</th><th class="num">Incap</th>
           </tr>

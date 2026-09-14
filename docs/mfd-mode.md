@@ -444,16 +444,19 @@ assignments without changing the firmware.
 
 The category layout is stable as data arrives:
 
-| Category | Submenu | Screens |
-| --- | --- | --- |
-| Flight | Route | Navigation, System map |
-| Flight | Ship & local | Ship, Local intel |
-| Operations | Plan & task | Flight plan, Checklist |
-| Operations | Jobs & list | Contract, Shopping |
-| Resources | Trade | Cargo & trade, Ledger |
-| Resources | Industry | Mining, Earnings |
-| Pilot | Session | Session, Activity |
-| Pilot | People | Crew |
+| Category | Screens |
+| --- | --- |
+| Flight | Navigation, System map, Ship, Local intel |
+| Operations | Flight plan, Checklist, Contract, Shopping |
+| Resources | Cargo & trade, Ledger, Mining, Earnings |
+| Pilot | Session, Server, Activity, Crew, Log |
+
+Server (0.12.4) names the shard the matchmaker placed you on - by its id,
+since the game writes no friendlier name to the log - with how long you have
+been on it, how many times before, and the note you wrote on the dashboard's
+Servers page. It is the page to read right after the loading screen: a note
+that says "two 30ks last time" is a reason to relog now and a complaint an
+hour later. Pilot is the one category that fills all five buttons.
 
 DONE and MORE disappear where they have no action; Up/Down dim when there is
 nothing to move. Home and Back retain their positions across menus. Direct page

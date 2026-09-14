@@ -169,7 +169,9 @@ internal sealed class Simulation
         Noise(6);
         Advance(_options.MenuSeconds / 2, _options.MenuSeconds);
 
-        // Into the persistent universe.
+        // Into the persistent universe. The deployment number is made up, as the
+        // real ones are from the client's point of view - it never matches the header.
+        _log.JoinShard(_now, $"pub_use1b_12344265_{_random.Next(1, 200):D3}");
         _log.Context(_now, "SC_Default", sessionId);
         _log.LoadingScreen(_now.AddSeconds(2), "PU_Megamap", "SC_Default", 21.3);
         Advance(20, 30);
@@ -196,6 +198,7 @@ internal sealed class Simulation
         Noise(4);
         Advance(5, 20);
         _log.Disconnect(_now, "Nub destroyed", "SC_Frontend");
+        _log.Quit(_now.AddSeconds(1));
     }
 
     /// <summary>One trip: pick a ship, take a contract, fly somewhere, land.</summary>
