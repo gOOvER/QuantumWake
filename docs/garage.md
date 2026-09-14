@@ -205,7 +205,12 @@ current panel.
   once and cached under `community/part-pictures/` - 316 of the 633 bench
   part names had one on 14 Sep 2026 (115/153 guns, 46/74 plants, 35/73
   coolers, 34/64 shields, 32/58 drives, 2/58 radars, 0 EMPs). The other half
-  keep the maker's mark.
+  keep the maker's mark - and the mark itself has the same story: the Fankit
+  covers 15 of the 60 makers on the bench (the hull makers), the wiki's
+  manufacturer pages 57 of 59, so `GET /api/garage/maker/{code}` fetches
+  those the same way into `community/maker-marks/`. Two have no logo page
+  (ArcCorp, Broad & Rabiee) and one leads with a photograph (Vanduul Clans);
+  they keep the monogram.
 - **Turret-mounted gun ballistics** (gimbal spread, convergence) - the dump
   has the numbers, the page has no honest way to combine them.
 - **Armour and hull damage models** beyond HP and the resistance table.

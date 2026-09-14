@@ -27,7 +27,7 @@ public class PartPicturesTests : IDisposable
             {
                 var asked = WebUtility.UrlDecode(url[(url.IndexOf("titles=", StringComparison.Ordinal) + 7)..]).Split('|');
                 var pages = asked.Select((t, i) => pictures.TryGetValue(t, out var src)
-                    ? $"\"{i + 1}\":{{\"pageid\":{i + 1},\"title\":\"{t}\",\"thumbnail\":{{\"source\":\"{src}\",\"width\":240,\"height\":180}}}}"
+                    ? $"\"{i + 1}\":{{\"pageid\":{i + 1},\"title\":\"{t}\",\"thumbnail\":{{\"source\":\"{src.Split('|')[0]}\",\"width\":240,\"height\":180}},\"original\":{{\"source\":\"{src.Split('|')[^1]}\"}}}}"
                     : $"\"-{i + 1}\":{{\"title\":\"{t}\",\"missing\":\"\"}}");
                 var body = "{\"batchcomplete\":\"\",\"query\":{\"pages\":{" + string.Join(',', pages) + "}}}";
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
@@ -97,6 +97,55 @@ public class PartPicturesTests : IDisposable
         Assert.Null(await new PartPictures(_root).GetAsync(http, Part("Glacier", "")));
         Assert.Null(await new PartPictures(_root).GetAsync(http, Part(" ", "u4")));
         Assert.Empty(wiki.Requests);
+    }
+
+    /// <summary>The wiki renders an SVG mark to a PNG thumbnail; that is what is kept, under the maker's code.</summary>
+    [Fact]
+    public async Task A_makers_logo_is_fetched_by_name_and_kept_by_code()
+    {
+        var wiki = new Wiki(new Dictionary<string, string> { ["Juno Starwerk"] = "https://media.starcitizen.tools/thumb/juno.png|https://media.starcitizen.tools/8/8b/Juno_Starwerk_-_JP0907.svg?1rlf1" });
+        using var http = new HttpClient(wiki);
+
+        var logo = await new PartPictures(_root).GetMakerAsync(http, "just", "Juno Starwerk");
+
+        Assert.NotNull(logo);
+        Assert.EndsWith("titles=Juno Starwerk", WebUtility.UrlDecode(wiki.Requests[0]));
+        Assert.True(File.Exists(Path.Combine(_root, "maker-marks", "JUST.png")));
+    }
+
+    /// <summary>A manufacturer page led by a photograph - the Vanduul fleet - has no logo to show.</summary>
+    [Fact]
+    public async Task A_photograph_leading_a_makers_page_is_not_a_logo()
+    {
+        var wiki = new Wiki(new Dictionary<string, string> { ["Vanduul Clans"] = "https://media.starcitizen.tools/thumb/fleet.jpg|https://media.starcitizen.tools/a/a1/Vanduul_fleet.jpg?6hrjr" });
+        using var http = new HttpClient(wiki);
+
+        Assert.Null(await new PartPictures(_root).GetMakerAsync(http, "VNCL", "Vanduul Clans"));
+        Assert.Single(wiki.Requests);
+
+        // And a part's picture may be a JPEG: the rule is for logos only.
+        wiki.Requests.Clear();
+        var wiki2 = new Wiki(new Dictionary<string, string> { ["NightFall"] = "https://media.starcitizen.tools/thumb/nightfall.webp|https://media.starcitizen.tools/f/f2/Nightfall_cooler.jpg?4zu68" });
+        using var http2 = new HttpClient(wiki2);
+        Assert.NotNull(await new PartPictures(_root).GetAsync(http2, Part("NightFall", "u9")));
+    }
+
+    /// <summary>Black ink becomes pale; a colour that is the mark stays.</summary>
+    [Fact]
+    public void A_logo_drawn_for_a_white_page_is_redrawn_for_a_dark_one()
+    {
+        const string juno = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"><defs><style>.cls-2{fill:#fff}</style></defs><path d="M1 1z"/><path fill="#79242f" d="M2 2z"/><path style="fill:#241f21" d="M3 3z"/></svg>""";
+
+        var lit = PartPictures.LightenSvg(juno);
+
+        Assert.StartsWith("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 800 600\" fill=\"#e6edf3\">", lit);
+        Assert.Contains("fill=\"#79242f\"", lit);
+        Assert.Contains(".cls-2{fill:#fff}", lit);
+        Assert.Contains("style=\"fill:#e6edf3\"", lit);
+        Assert.DoesNotContain("#241f21", lit);
+
+        // A root that already names its fill is left to it.
+        Assert.Equal("<svg fill=\"#fed925\"><path d=\"M1 1z\"/></svg>", PartPictures.LightenSvg("<svg fill=\"#fed925\"><path d=\"M1 1z\"/></svg>"));
     }
 
     public void Dispose()

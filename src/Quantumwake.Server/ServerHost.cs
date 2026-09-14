@@ -3054,6 +3054,24 @@ public static class ServerHost
             return Results.File(picture.Bytes, picture.ContentType);
         });
 
+        // A component maker's logo, for the forty-five the Fankit does not
+        // cover. The maker's name comes from the dataset's own list, else from
+        // any part that names it; 404 puts the monogram back.
+        app.MapGet("/api/garage/maker/{code}", async (string code, LogLibrary lib, PartPictures pictures, IHttpClientFactory httpFactory, HttpContext ctx) =>
+        {
+            if (!lib.Community.IsEnabled) return Results.NotFound();
+
+            var name = lib.Community.Manufacturers.GetValueOrDefault(code)
+                ?? lib.Community.Parts.Values.FirstOrDefault(p => string.Equals(p.MakerCode, code, StringComparison.OrdinalIgnoreCase))?.Manufacturer;
+            if (string.IsNullOrWhiteSpace(name)) return Results.NotFound();
+
+            var picture = await pictures.GetMakerAsync(httpFactory.CreateClient("community"), code, name, ctx.RequestAborted);
+            if (picture is null) return Results.NotFound();
+
+            ctx.Response.Headers.CacheControl = "private, max-age=86400";
+            return Results.File(picture.Bytes, picture.ContentType);
+        });
+
         // ---- saved builds: a fit under a name ----
 
         app.MapGet("/api/garage/builds", (BuildStore builds, string? ship) =>

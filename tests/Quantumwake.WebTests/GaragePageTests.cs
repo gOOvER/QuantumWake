@@ -252,7 +252,12 @@ public class GaragePageTests
         Assert.StartsWith("Glacier", names);
         Assert.Contains("Stock", panel);
 
-        // The monogram for a maker with no Fankit mark, on a part with no picture to ask for.
+        // A maker with no Fankit mark, on a part with no picture to ask for: the
+        // wiki's logo is asked for by code, and the monogram stands in when the
+        // wiki has none.
+        var endo = "__dom.node('#garage-bench-panel').descendants().find(n => n.classList.contains('maker-pic'))";
+        Assert.Equal("/api/garage/maker/ACAS", page.Text($"{endo}.src"));
+        page.Do($"{endo}.fire('error');");
         Assert.True(page.Truth("__dom.node('#garage-bench-panel').descendants().some(n => n.classList.contains('mono-mark') && n.textContent === 'ACAS')"));
     }
 
@@ -610,6 +615,9 @@ public class GaragePageTests
         // The 404: the picture goes, the monogram comes, the frame shrinks back.
         page.Do($"const pic = {glacier}.descendants().find(n => n.classList.contains('part-pic')); pic.fire('error');");
         Assert.False(page.Truth($"{glacier}.descendants().some(n => n.classList.contains('part-pic'))"));
+        // Juno Starwerk has no Fankit mark, so the maker's face is the wiki's logo, and the monogram after that.
+        Assert.Equal("/api/garage/maker/JUST", page.Text($"{glacier}.descendants().find(n => n.classList.contains('maker-pic')).src"));
+        page.Do($"{glacier}.descendants().find(n => n.classList.contains('maker-pic')).fire('error');");
         Assert.Contains("JUST", page.Text($"{glacier}.descendants().find(n => n.classList.contains('part-mark')).textContent"));
         Assert.False(page.Truth($"{glacier}.descendants().some(n => n.classList.contains('part-mark') && n.classList.contains('pic'))"));
 

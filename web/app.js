@@ -9094,17 +9094,24 @@ function partMark(part, small = false) {
   const name = part?.manufacturer || code || '';
   mark.title = part?.name ? `${part.name}${name ? ` - ${name}` : ''}` : name;
 
-  // The maker's face: the Fankit logo where the app has one, a monogram
-  // where it does not.
+  // The maker's face: the Fankit logo where the app has one (the hull
+  // makers), the wiki's logo for the component makers the Fankit does not
+  // cover, a monogram when the wiki has none either - or when it answers
+  // 404, which swaps the monogram in after the fact.
+  const mono = () => el('span', 'mono-mark', monogram(code, name));
   const maker = () => {
-    if (code && MANUFACTURER_LOGOS.has(code)) {
-      const img = document.createElement('img');
+    if (!code) return mono();
+    const img = document.createElement('img');
+    img.alt = name;
+    img.loading = 'lazy';
+    if (MANUFACTURER_LOGOS.has(code)) {
       img.src = `assets/manufacturers/${code}.png`;
-      img.alt = name;
-      img.loading = 'lazy';
-      return img;
+    } else {
+      img.className = 'maker-pic';
+      img.src = `/api/garage/maker/${encodeURIComponent(code)}`;
+      img.addEventListener('error', () => img.replaceWith(mono()));
     }
-    return el('span', 'mono-mark', monogram(code, name));
+    return img;
   };
 
   // The part itself where the wiki has a picture of it, which is about half

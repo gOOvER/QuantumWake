@@ -364,8 +364,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.8
+### 0.13.9
 
+- **Every component maker has a logo now, not a four-letter monogram.** The
+  Fankit only ships marks for the fifteen hull makers; Behring, Juno Starwerk,
+  Klaus & Werner and the other forty-five that make coolers, shields and guns
+  had none, which is why half the bench read ACOM, JUST, CHCO. Their logos
+  come from the Star Citizen Wiki's manufacturer pages - 57 of the 59 have
+  one - fetched once, by the maker's name, and kept under
+  `community\maker-marks`. A page led by a photograph rather than a mark
+  (the Vanduul Clans) keeps its monogram, as does a part with no maker.
 - **The Garage now starts with the ship, not a wall of numbers.** Its game
   picture is centred in a fitted-layout panel, with the components currently
   slotted into it arranged as clickable cards around it. Each card carries the
