@@ -358,7 +358,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.31
+### 0.11.32
+
+- **MFD captions can be lined up with the frame's buttons without moving the
+  opening.** The on-screen labels sat a fixed way in from each edge, so on a
+  monitor smaller than the frame the first label missed the first button, and
+  the only way to line them up was to drag the whole display out past the
+  opening. Four new fields in MFD setup - from left, right, top and bottom, in
+  pixels - move each row of captions on its own. Blank keeps the old placement.
 
 - **"Screen needs review" no longer sits on the Now page with nothing to
   resolve.** The current screenshot is now the newest one taken, not the one

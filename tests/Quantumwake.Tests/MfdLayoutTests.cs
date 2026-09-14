@@ -102,6 +102,34 @@ public class MfdLayoutTests
         Assert.Equal(0, panel.Y);
     }
 
+    /// <summary>
+    /// The captions' insets are clamped to the panel like its rectangle, and
+    /// a side left blank stays blank - blank is "the page's default", and a
+    /// file that says nothing about insets must read as it always did.
+    /// </summary>
+    [Fact]
+    public void CaptionInsetsAreClampedToThePanelAndBlankStaysBlank()
+    {
+        var layout = MfdLayout.Default(Monitors);
+        Assert.Null(layout.Panels[0].Inset);
+
+        layout.Panels[0] = layout.Panels[0] with { Width = 600, Height = 600, Inset = new MfdInset(-5, null, 900, 40) };
+        var panel = layout.Validate(Monitors).Panels[0];
+
+        Assert.Equal(new MfdInset(0, null, 270, 40), panel.Inset);
+
+        layout.Panels[0] = layout.Panels[0] with { Inset = new MfdInset(null, null, null, null) };
+        Assert.Null(layout.Validate(Monitors).Panels[0].Inset);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(
+            layout with { Panels = [layout.Panels[0] with { Inset = new MfdInset(12, null, 12, null) }, layout.Panels[1]] },
+            MfdLayout.JsonOptions);
+        Assert.Contains("\"inset\"", json);
+        var read = System.Text.Json.JsonSerializer.Deserialize<MfdLayout>(json, MfdLayout.JsonOptions)!.Validate(Monitors);
+        Assert.Equal(new MfdInset(12, null, 12, null), read.Panels[0].Inset);
+        Assert.Null(read.Panels[1].Inset);
+    }
+
     [Fact]
     public void MissingMonitorRetainsItsPlacementInsteadOfMovingOntoGame()
     {

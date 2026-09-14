@@ -574,8 +574,20 @@ async function confirmSelected() {
     saved = 'Not saved: ' + marking;
   } finally { confirming = false; lastRows = ''; render(); }
 }
-window.chrome?.webview?.addEventListener('message', ({ data }) => {
+/* Where this frame's captions sit, from the host: the panel's own insets in
+   pixels, or nothing for the stylesheet's defaults. Set on the element rather
+   than baked into the page so a change in setup lands on a running frame. */
+function applyInset(inset) {
+  const mfd = byId('mfd');
+  for (const edge of ['left', 'right', 'top', 'bottom']) {
+    const value = inset?.[edge];
+    if (value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))) mfd.style.setProperty('--inset-' + edge, Math.round(Number(value)) + 'px');
+    else mfd.style.removeProperty('--inset-' + edge);
+  }
+}
+function hostMessage(data) {
   if (data.type === 'button') press(data.button);
+  if (data.type === 'inset') applyInset(data.inset);
   if (data.type === 'display') {
     bindings = QwMfd.buttons(data.buttons);
     if (Number.isFinite(data.brightness)) brightness = QwMfd.brightnessAt(QwMfd.brightnessLevel(data.brightness));
@@ -591,7 +603,8 @@ window.chrome?.webview?.addEventListener('message', ({ data }) => {
     byId('alignment').hidden = !data.enabled;
     byId('alignment-name').textContent = panelId.toUpperCase() + ' MFD';
   }
-});
+}
+window.chrome?.webview?.addEventListener('message', ({ data }) => hostMessage(data));
 async function refreshBriefing() {
   if (briefingBusy) return;
   briefingBusy = true;

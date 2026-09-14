@@ -266,6 +266,21 @@ Each display remembers only which page it is showing, in the WebView profile -
 that is the one thing that genuinely differs between two frames in one cockpit.
 Brightness and text size are shared and saved with the layout.
 
+**The captions can be moved without moving the opening.** The rectangle is
+the opening; the frame's twenty buttons are wherever the bezel puts them, and
+on a monitor smaller than the frame - the 1366 x 768 panel this was found on -
+the first button sits nearer the edge than the page's own layout, which put the
+captions 14% of the width in from the sides and 12% of the height in from the
+top and bottom. Resizing did not help, because the captions moved with the
+rectangle, and the only way to put the first caption under the first button
+was to drag the rectangle out past the opening, which put the display under
+the bezel. Four fields under Width and Height - from left, right, top and
+bottom, in pixels - now set where each row of captions starts and ends. Blank
+keeps the default, and the placeholder says what that comes to on this panel.
+They are stored per panel as `inset` in `mfd.json`, clamped to 45% of the side
+so two rows can never cross, and reach a running frame the moment they change.
+
+
 Both halves of that were wrong once, and together they made the editor feel
 dead. Updates only reached the frames when a drag ended, so aligning to a few
 pixels meant dropping the rectangle, looking up, and starting again; and `save`

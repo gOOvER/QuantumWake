@@ -38,7 +38,7 @@ class El {
     this.attrs = {};
     this.dataset = {};
     // setProperty for the custom properties the MFD sets its text scale with.
-    this.style = { setProperty(name, value) { this[name] = value; } };
+    this.style = { setProperty(name, value) { this[name] = value; }, removeProperty(name) { delete this[name]; } };
     this.classList = new ClassList();
     this.listeners = {};
     this.own = '';

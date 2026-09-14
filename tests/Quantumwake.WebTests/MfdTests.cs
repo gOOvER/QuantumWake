@@ -43,6 +43,27 @@ public class MfdTests
         Assert.Equal(480, e.Evaluate("p.height").AsNumber());
     }
 
+    /// <summary>
+    /// The bezel's buttons are wherever the bezel puts them. A side given in
+    /// pixels is kept and clamped; a side left blank is null, which the page
+    /// reads as its default; and the default is what the old grid gave.
+    /// </summary>
+    [Fact]
+    public void CaptionInsetsAreKeptPerSideClampedAndBlankByDefault()
+    {
+        var e = Engine();
+        e.Execute("var p = QwMfd.fit({x:0,y:0,width:600,height:500,inset:{left:'20',right:9999,top:'',bottom:-3}},monitors[1]);");
+        Assert.Equal(20, e.Evaluate("p.inset.left").AsNumber());
+        Assert.Equal(270, e.Evaluate("p.inset.right").AsNumber());
+        Assert.True(e.Evaluate("p.inset.top === null").AsBoolean());
+        Assert.Equal(0, e.Evaluate("p.inset.bottom").AsNumber());
+
+        Assert.True(e.Evaluate("QwMfd.fit({x:0,y:0,width:600,height:500},monitors[1]).inset === null").AsBoolean());
+        Assert.True(e.Evaluate("QwMfd.fit({x:0,y:0,width:600,height:500,inset:{left:null}},monitors[1]).inset === null").AsBoolean());
+        Assert.Equal(84, e.Evaluate("QwMfd.defaultInset({width:600,height:500},'left')").AsNumber());
+        Assert.Equal(60, e.Evaluate("QwMfd.defaultInset({width:600,height:500},'bottom')").AsNumber());
+    }
+
     [Theory]
     [InlineData(1, "slot", 1)] [InlineData(3, "slot", 3)] [InlineData(5, "slot", 5)]
     [InlineData(12, "scroll", 1)] [InlineData(14, "scroll", -1)]

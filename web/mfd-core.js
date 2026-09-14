@@ -34,13 +34,37 @@ window.QwMfd = (() => {
   const dozed = (sleepAfterMinutes, idleMs) =>
     sleepAfterMinutes > 0 && idleMs >= sleepAfterMinutes * 60000;
   const integer = (n, fallback) => Number.isFinite(Number(n)) ? Math.round(Number(n)) : fallback;
+
+  /* Where the button captions sit along each edge, in pixels in from that
+     edge, or null for the page's own default - 14% of the width for the
+     top and bottom rows, 12% of the height for the side columns. The frame's
+     opening is the window; its buttons are wherever the bezel puts them, and
+     on a monitor smaller than the frame that is nearer the edge than the
+     default. Without this the only way to line the first caption up with the
+     first button was to drag the panel out past the opening, which put the
+     display under the bezel. Capped at 45% so two rows can never cross. */
+  const DEFAULT_INSET = { left: .14, right: .14, top: .12, bottom: .12 };
+  function inset(panel) {
+    const given = panel.inset || {};
+    const axis = (key, size) => {
+      const value = given[key];
+      return value === null || value === undefined || value === '' || !Number.isFinite(Number(value))
+        ? null : clamp(Math.round(Number(value)), 0, Math.floor(size * .45));
+    };
+    return { left: axis('left', panel.width), right: axis('right', panel.width),
+      top: axis('top', panel.height), bottom: axis('bottom', panel.height) };
+  }
+  const defaultInset = (panel, key) => Math.round(DEFAULT_INSET[key] * (key === 'left' || key === 'right' ? panel.width : panel.height));
+
   function fit(panel, monitor) {
     if (!monitor) return { ...panel };
     const width = clamp(integer(panel.width, 480), Math.min(220, monitor.width), monitor.width);
     const height = clamp(integer(panel.height, 480), Math.min(220, monitor.height), monitor.height);
-    return { ...panel, width, height,
+    const placed = { ...panel, width, height,
       x: clamp(integer(panel.x, 0), 0, monitor.width - width),
       y: clamp(integer(panel.y, 0), 0, monitor.height - height) };
+    const edges = inset(placed);
+    return Object.values(edges).some(v => v !== null) ? { ...placed, inset: edges } : { ...placed, inset: null };
   }
   function move(panel, x, y, monitors) {
     const monitor = monitors.find(m => x + panel.width / 2 >= m.x && y + panel.height / 2 >= m.y
@@ -946,7 +970,7 @@ window.QwMfd = (() => {
         ? `A medical bed used ${bed.times} times · the game never states a regen point`
         : `${respawn.agreeing} of ${respawn.of} deaths woke there · the game never states a regen point` };
   }
-  return { fit, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, radarFocus, radarHere, routeLine, panelRole, missionCard, makerOf, makers, dormant, actionLine, sameTask, taskId, rowIcon,
+  return { fit, inset, defaultInset, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, radarFocus, radarHere, routeLine, panelRole, missionCard, makerOf, makers, dormant, actionLine, sameTask, taskId, rowIcon,
     groups, menuNodes, menuNode, parent, title, validScreen, menuItems, previewPage, trail, resolveCommand, restoreScreen, readingView,
     pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, dozed, DOZE, prettyItem, pageOf, pageStep, pageLabel, LEDGER_PAGE, BRIGHTNESS, brightnessLevel, brightnessAt,
     cycleBrightness, stepBrightness, OSBS, BUTTONS };
