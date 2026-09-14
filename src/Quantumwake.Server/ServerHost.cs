@@ -2954,6 +2954,57 @@ public static class ServerHost
         app.MapPost("/api/garage/{cls}/sheet", (string cls, LogLibrary lib, GarageSwapRequest body) =>
             GarageSheet(lib, cls, body.Swaps));
 
+        // What could go in one port: every part of a kind the port takes, in
+        // a size it takes, with its figures and - when UEX is on - what it
+        // costs and where. A part nobody sells is still offered: the bench is
+        // for finding out what a part would do, and the shop is the next
+        // question, not a gate on the first.
+        app.MapGet("/api/garage/{cls}/options", (string cls, string port, LogLibrary lib, UexData uex) =>
+        {
+            var community = lib.Community;
+            var ship = community.GarageShip(cls);
+            if (ship is null) return Results.NotFound();
+
+            var target = FindPort(ship.Loadout, port);
+            if (target is null) return Results.NotFound(new { message = $"{ship.Name} has no port {port}." });
+
+            var kinds = target.Accepts.Where(GarageKinds.Contains).ToHashSet(StringComparer.Ordinal);
+            var options = community.Parts.Values
+                .Where(p => kinds.Contains(p.Type) && p.Size >= target.MinSize && p.Size <= target.MaxSize)
+                .Where(p => !p.Name.Equals(p.Class, StringComparison.Ordinal) && !p.Name.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase))
+                .Select(p => new
+                {
+                    part = PartCard(p),
+                    price = uex.ItemPrice(p.Uuid),
+                    shops = uex.ItemMarket(p.Uuid)
+                        .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
+                        .Select(g => g.MinBy(r => r.Buy)!)
+                        .OrderBy(r => r.Buy)
+                        .Take(4)
+                        .Select(r =>
+                        {
+                            var place = lib.Terminals.Resolve(r.Terminal);
+                            return new
+                            {
+                                terminal = r.Terminal,
+                                placeId = place?.RawId ?? string.Empty,
+                                place = place?.Name,
+                                system = place?.System,
+                                price = r.Buy
+                            };
+                        })
+                        .ToList()
+                })
+                .ToList();
+
+            return Results.Ok(new
+            {
+                port = new { target.PortId, target.Hardpoint, kinds, target.MinSize, target.MaxSize, fitted = target.Class },
+                pricesKnown = uex.IsEnabled,
+                options
+            });
+        });
+
         // Every terminal price for one commodity: the map grades its sellers
         // and buyers by these, by price or by SCU capacity.
         /*
@@ -3963,10 +4014,30 @@ static int Holes(IEnumerable<ShipSlot> slots)
         }
     }
 
+    /// <summary>The kinds the bench offers - what a shop counter sells and a pilot swaps.</summary>
+    static readonly HashSet<string> GarageKinds = new(StringComparer.Ordinal)
+    {
+        "QuantumDrive", "Shield", "PowerPlant", "Cooler",
+        "WeaponGun", "MissileLauncher", "Missile",
+        "Radar", "EMP", "QuantumInterdictionGenerator", "WeaponMining",
+    };
+
+    /// <summary>A port anywhere in the tree, by the dump's id for it.</summary>
+    static FitPort? FindPort(IReadOnlyList<FitPort> ports, string portId)
+    {
+        foreach (var port in ports)
+        {
+            if (port.PortId == portId) return port;
+            if (FindPort(port.Children, portId) is { } found) return found;
+        }
+
+        return null;
+    }
+
     /// <summary>A part as the bench shows it: identity plus the figures that matter for its kind.</summary>
     static object PartCard(PartStats part) => new
     {
-        part.Class, part.Type, part.SubType, part.Size, part.Grade, part.Name, part.Manufacturer, part.Uuid,
+        part.Class, part.Type, part.SubType, part.Size, part.Grade, part.Name, part.Manufacturer, part.MakerCode, part.Uuid,
         part.Mass, part.Em, part.Ir, part.Health,
         part.PowerGen, part.PowerUseMax, part.CoolantGen, part.CoolantUseMax,
         part.Weapon, part.Shield, part.Quantum, part.Missile, part.Armor

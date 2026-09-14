@@ -8827,6 +8827,10 @@ function fillGaragePicker(select, prompt, entries) {
 /** Puts a ship on the bench: its stock sheet, and its ports. */
 async function openGarage(cls) {
   garageClass = cls;
+  // A new ship is a clean bench: swaps belong to the ship they were made on.
+  garageSwaps = {};
+  garageSelectedPort = null;
+  garageOptions = null;
   for (const id of ['#garage-mine', '#garage-all']) {
     const select = $(id);
     if (select && [...select.options].some((o) => o.value === cls)) select.value = cls;
@@ -8869,9 +8873,11 @@ function renderGarage(data, stock) {
 
   sheet.append(sheetGroup('Hull', 'ships.json', [
     row('Hull HP', fmtInt(ship.health)),
-    row('Mass', `${fmtInt(s.mass)} kg`, 'The dataset’s stock figure, moved by what you changed.', o ? [o.mass, s.mass, 'kg'] : null),
-    row('Cross-section', `${fmtInt(s.crossSection.x)} · ${fmtInt(s.crossSection.y)} · ${fmtInt(s.crossSection.z)}`,
-      'Front · side · top. Geometry: parts do not change it.'),
+    row('Mass', `${fmtInt(s.mass)} kg`, 'The dataset’s stock figure, moved by what you changed.', o ? [o.mass, s.mass, ' kg'] : null),
+    s.crossSection.x || s.crossSection.y || s.crossSection.z
+      ? row('Cross-section', `${fmtInt(s.crossSection.x)} · ${fmtInt(s.crossSection.y)} · ${fmtInt(s.crossSection.z)}`,
+        'Front · side · top. Geometry: parts do not change it.')
+      : row('Cross-section', '—', 'The dataset carries none for this hull.'),
     row('Cargo', ship.cargoScu ? `${fmt1(ship.cargoScu)} SCU` : '—'),
     row('Fuel', `${fmtInt(ship.hydrogenFuel)} H · ${fmtInt(ship.quantumFuel)} Q`),
   ]));
@@ -8946,7 +8952,7 @@ function renderGarage(data, stock) {
   notes.hidden = !(s.notes && s.notes.length);
   for (const note of s.notes || []) notes.append(el('div', null, note));
 
-  renderGaragePorts(data.ports || []);
+  renderBench(data);
 }
 
 function sheetGroup(title, source, rows) {
@@ -8987,46 +8993,353 @@ function row(label, value, note, delta, sub = false) {
 
 const fmtSmart = (n) => Number.isInteger(n) ? fmtInt(n) : fmt1(n);
 
-function renderGaragePorts(ports) {
-  const heading = $('#garage-ports-heading');
-  const wrap = $('#garage-ports-wrap');
-  const body = $('#garage-ports').querySelector('tbody');
-  body.textContent = '';
-  heading.hidden = wrap.hidden = ports.length === 0;
+/* ---------- the bench ---------- */
 
+/** Port id → class fitted instead of stock. Empty means the stock fit. */
+let garageSwaps = {};
+let garageSelectedPort = null;
+let garageOptions = null;
+
+/** The kinds in the order a pilot thinks about them, and the figure that heads each. */
+const BENCH_KINDS = ['PowerPlant', 'Cooler', 'Shield', 'QuantumDrive', 'WeaponGun', 'MissileLauncher', 'Missile', 'Radar',
+  'EMP', 'QuantumInterdictionGenerator', 'WeaponMining'];
+
+
+/**
+ * The maker's mark for a part: the Fankit logo where the app has one, and a
+ * monogram of the maker's code otherwise. The game files hold no picture of a
+ * component, so this is the only face a cooler has.
+ */
+function partMark(part, small = false) {
+  const mark = el('span', `part-mark${small ? ' small' : ''}`);
+  const code = part?.makerCode || null;
+  const name = part?.manufacturer || code || '';
+  mark.title = name;
+  if (code && MANUFACTURER_LOGOS.has(code)) {
+    const img = document.createElement('img');
+    img.src = `assets/manufacturers/${code}.png`;
+    img.alt = name;
+    img.loading = 'lazy';
+    mark.append(img);
+  } else {
+    mark.append(el('span', 'mono-mark', monogram(code, name)));
+  }
+  return mark;
+}
+
+
+/** A maker's code, else the initials of its name: Wen-Cassel Propulsion → WCP. */
+function monogram(code, name) {
+  if (code) return code.toUpperCase().slice(0, 4);
+  const initials = String(name || '').split(/[\s\-&]+/).filter(Boolean).map((w) => w[0]).join('');
+  return (initials || '?').toUpperCase().slice(0, 4);
+}
+
+/** The size-and-grade chip: S2 · B. */
+function partChip(part) {
+  const grade = gradeLetter(part?.grade);
+  return el('span', `chip${/^[A-D]$/.test(grade) ? ` grade-${grade.toLowerCase()}` : ''}`, `S${part?.size ?? '?'} · ${grade}`);
+}
+
+/**
+ * The figures that matter for a kind, as [label, value, formatted, lowerIsBetter].
+ * These head the port row and the candidate rows, so the two read alike.
+ */
+function partFigures(part, ship) {
+  if (!part) return [];
+  const t = part.type;
+  if (part.weapon) {
+    return [['DPS', part.weapon.dps, fmt1(part.weapon.dps)], ['alpha', part.weapon.alpha, fmt1(part.weapon.alpha)],
+      ['range', part.weapon.range, `${fmtInt(part.weapon.range)} m`], ['sustained', part.weapon.sustainedDps, fmt1(part.weapon.sustainedDps)]];
+  }
+  if (part.shield) {
+    return [['HP', part.shield.hp, fmtInt(part.shield.hp)], ['regen', part.shield.regen, `${fmtInt(part.shield.regen)}/s`],
+      ['EM', part.em, fmtInt(part.em), true], ['draw', part.powerUseMax, `${fmt1(part.powerUseMax)} seg`, true]];
+  }
+  if (part.quantum) {
+    const range = ship?.quantumFuel && part.quantum.fuelRate ? ship.quantumFuel / part.quantum.fuelRate : null;
+    return [['speed', part.quantum.speed, fmtSpeed(part.quantum.speed)], ['spool', part.quantum.spoolTime, `${fmt1(part.quantum.spoolTime)} s`, true],
+      ...(range ? [['range', range, fmtDistance(range)]] : []), ['EM', part.em, fmtInt(part.em), true]];
+  }
+  if (part.missile) {
+    return [['dmg', part.missile.damage, fmtInt(part.missile.damage)], ['speed', part.missile.speed, `${fmtInt(part.missile.speed)} m/s`],
+      ['lock', part.missile.lockTime, `${fmt1(part.missile.lockTime)} s`, true], ['range', part.missile.range, fmtDistance(part.missile.range)]];
+  }
+  if (t === 'Cooler') {
+    return [['coolant', part.coolantGen, fmtInt(part.coolantGen)], ['IR', part.ir, fmtInt(part.ir), true], ['EM', part.em, fmtInt(part.em), true],
+      ['draw', part.powerUseMax, `${fmt1(part.powerUseMax)} seg`, true]];
+  }
+  if (t === 'PowerPlant') {
+    return [['power', part.powerGen, `${fmtInt(part.powerGen)} seg`], ['EM', part.em, fmtInt(part.em), true], ['HP', part.health, fmtInt(part.health)]];
+  }
+  const bits = [];
+  if (part.em) bits.push(['EM', part.em, fmtInt(part.em), true]);
+  if (part.ir) bits.push(['IR', part.ir, fmtInt(part.ir), true]);
+  if (part.powerUseMax) bits.push(['draw', part.powerUseMax, `${fmt1(part.powerUseMax)} seg`, true]);
+  if (part.health) bits.push(['HP', part.health, fmtInt(part.health)]);
+  return bits;
+}
+
+/** The one figure a port row leads with. */
+function headFigure(part, ship) {
+  const [first] = partFigures(part, ship);
+  return first ? `${first[2]} ${first[0]}` : '';
+}
+
+/** Ports by kind, in bench order, then by hardpoint name so two coolers sit together. */
+function benchGroups(ports) {
+  const order = new Map(BENCH_KINDS.map((k, i) => [k, i]));
+  const groups = new Map();
   for (const port of ports) {
-    const tr = el('tr');
-    tr.dataset.port = port.portId;
-    tr.append(el('td', null, garagePortName(port.hardpoint)));
-    tr.append(el('td', 'muted', garageWord(port.group)));
-    tr.append(el('td', 'num', port.minSize === port.maxSize ? String(port.maxSize) : `${port.minSize}–${port.maxSize}`));
+    const kind = port.group;
+    if (!groups.has(kind)) groups.set(kind, []);
+    groups.get(kind).push(port);
+  }
+  return [...groups.entries()]
+    .sort((a, b) => (order.get(a[0]) ?? 99) - (order.get(b[0]) ?? 99))
+    .map(([kind, list]) => [kind, list.sort((a, b) => a.hardpoint.localeCompare(b.hardpoint))]);
+}
 
-    const fitted = el('td');
-    fitted.append(document.createTextNode(port.name || (port.class ? port.class : 'empty')));
-    if (port.changed) fitted.append(el('small', 'muted', ` (was ${port.stockName || port.stockClass || 'empty'})`));
-    tr.append(fitted);
+/**
+ * Identical ports fold into one row. Sixteen missile ports carrying the same
+ * missile are one decision, not sixteen: the row says ×16, and a part fitted
+ * from it goes on all of them. Two coolers with different parts stay apart.
+ */
+function benchRows(ports) {
+  const rows = new Map();
+  for (const port of ports) {
+    const key = [port.group, port.minSize, port.maxSize, port.stockClass || '', port.class || ''].join('|');
+    if (!rows.has(key)) rows.set(key, { ...port, portIds: [] });
+    rows.get(key).portIds.push(port.portId);
+  }
+  return [...rows.values()];
+}
 
-    tr.append(el('td', 'what', partBlurb(port.fitted)));
-    body.append(tr);
+/** Every port folded into the row that holds this one. */
+function siblingsOf(portId) {
+  const rows = benchRows((garageStock?.ports || []).filter((p) => BENCH_KINDS.includes(p.group)));
+  return rows.find((r) => r.portIds.includes(portId))?.portIds || [portId];
+}
+
+function renderBench(data) {
+  const ports = (data.ports || []).filter((p) => BENCH_KINDS.includes(p.group));
+  const bar = $('#garage-bench-bar');
+  const bench = $('#garage-bench');
+  const caption = $('#garage-bench-caption');
+  bar.hidden = bench.hidden = caption.hidden = ports.length === 0;
+  if (!ports.length) return;
+
+  const changed = ports.filter((p) => p.changed).length;
+  $('#garage-changes').textContent = changed ? `${changed} part${changed === 1 ? '' : 's'} changed` : 'Stock fit';
+  $('#garage-changes').className = changed ? 'changed' : 'muted';
+  $('#garage-reset').hidden = !changed;
+
+  const list = $('#garage-bench-ports');
+  list.textContent = '';
+
+  for (const [kind, group] of benchGroups(ports)) {
+    list.append(el('div', 'bench-kind', `${garageWord(kind)}${group.length > 1 ? ` · ${group.length}` : ''}`));
+    for (const port of benchRows(group)) {
+      const many = port.portIds.length > 1;
+      const selected = port.portIds.includes(garageSelectedPort);
+      const rowEl = el('div', `bench-port${port.changed ? ' changed' : ''}${selected ? ' selected' : ''}`);
+      rowEl.dataset.port = port.portIds[0];
+      rowEl.dataset.count = String(port.portIds.length);
+      rowEl.append(partMark(port.fitted));
+
+      const mid = el('div');
+      const name = el('div', 'part-name', port.name || (port.class ? port.class : 'empty'));
+      if (port.fitted) name.append(partChip(port.fitted));
+      if (many) name.append(el('span', 'chip count', `×${port.portIds.length}`));
+      mid.append(name);
+      const sub = el('div', 'port-name', many ? `${garagePortName(port.hardpoint)} and ${port.portIds.length - 1} more` : garagePortName(port.hardpoint));
+      if (port.changed) sub.append(el('span', 'was', `was ${port.stockName || port.stockClass || 'empty'}`));
+      mid.append(sub);
+      rowEl.append(mid);
+
+      const figure = el('div', 'figure');
+      const [first, second] = partFigures(port.fitted, data.ship);
+      if (first) figure.append(el('b', null, `${first[2]} ${first[0]}`));
+      if (second) figure.append(document.createTextNode(`${second[2]} ${second[0]}`));
+      rowEl.append(figure);
+
+      rowEl.addEventListener('click', () => selectBenchPort(port.portIds[0]).catch(() => {}));
+      list.append(rowEl);
+    }
   }
 }
 
-/** The one line that says what a part does, by its kind. */
-function partBlurb(part) {
-  if (!part) return '';
-  if (part.weapon) return `${fmt1(part.weapon.dps)} DPS · ${fmt1(part.weapon.alpha)} alpha · ${fmtInt(part.weapon.range)} m`;
-  if (part.shield) return `${fmtInt(part.shield.hp)} HP · ${fmtInt(part.shield.regen)}/s regen · EM ${fmtInt(part.em)}`;
-  if (part.quantum) return `${fmtSpeed(part.quantum.speed)} · spool ${fmt1(part.quantum.spoolTime)} s · EM ${fmtInt(part.em)}`;
-  if (part.missile) return `${fmtInt(part.missile.damage)} dmg · ${fmtInt(part.missile.speed)} m/s · lock ${fmt1(part.missile.lockTime)} s`;
-  if (part.type === 'Cooler') return `${fmtInt(part.coolantGen)} coolant · EM ${fmtInt(part.em)} · IR ${fmtInt(part.ir)}`;
-  if (part.type === 'PowerPlant') return `${fmtInt(part.powerGen)} power seg · EM ${fmtInt(part.em)}`;
-  if (part.armor) return `EM ×${part.armor.em} · IR ×${part.armor.ir}`;
-  const bits = [];
-  if (part.em) bits.push(`EM ${fmtInt(part.em)}`);
-  if (part.ir) bits.push(`IR ${fmtInt(part.ir)}`);
-  if (part.powerUseMax) bits.push(`draws ${fmt1(part.powerUseMax)} seg`);
-  return bits.join(' · ');
+/** Opens the candidates for one port. */
+async function selectBenchPort(portId) {
+  garageSelectedPort = portId;
+  for (const rowEl of $$('#garage-bench-ports .bench-port')) rowEl.classList.toggle('selected', rowEl.dataset.port === portId);
+
+  const panel = $('#garage-bench-panel');
+  panel.textContent = '';
+  panel.append(el('p', 'muted', 'Looking up what fits…'));
+
+  try {
+    garageOptions = await getJson(`/api/garage/${encodeURIComponent(garageClass)}/options?port=${encodeURIComponent(portId)}`);
+  } catch {
+    panel.textContent = '';
+    panel.append(el('p', 'muted', 'Could not read what fits this port.'));
+    return;
+  }
+
+  renderBenchPanel();
 }
+
+function renderBenchPanel() {
+  const panel = $('#garage-bench-panel');
+  panel.textContent = '';
+  if (!garageOptions || !garageStock) return;
+
+  const port = (garageStock.ports || []).find((p) => p.portId === garageOptions.port.portId) || null;
+  const current = currentClassOf(port);
+  const fittedPart = garageOptions.options.find((o) => o.part.class === current)?.part || port?.fitted || null;
+  const ship = garageStock.ship;
+
+  const head = el('div', 'panel-head');
+  head.append(el('div', 'panel-title', `${garageWord(port?.group || garageOptions.port.kinds[0])} · ${garagePortName(garageOptions.port.hardpoint)}`));
+  const sizes = garageOptions.port.minSize === garageOptions.port.maxSize ? `size ${garageOptions.port.maxSize}` : `sizes ${garageOptions.port.minSize}–${garageOptions.port.maxSize}`;
+  const many = siblingsOf(garageOptions.port.portId).length;
+  head.append(el('div', 'panel-sub', `${sizes}${many > 1 ? ` · ${many} ports alike, fitted together` : ''} · now fitted: ${fittedPart?.name || 'nothing'}${garageOptions.pricesKnown ? '' : ' · prices need UEX (Settings)'}`));
+  panel.append(head);
+
+  const tools = el('div', 'panel-tools');
+  const search = el('input', 'search');
+  search.type = 'search';
+  search.placeholder = 'Filter by name or maker…';
+  search.value = garageOptions.filter || '';
+  search.addEventListener('input', () => { garageOptions.filter = search.value; renderBenchPanel(); });
+  tools.append(search);
+  tools.append(el('span', 'muted', `${garageOptions.options.length} fit · sorted by ${partFigures(fittedPart || garageOptions.options[0]?.part, ship)[0]?.[0] || 'name'}`));
+  panel.append(tools);
+
+  const term = (garageOptions.filter || '').trim().toLowerCase();
+  const keyIndex = 0;
+  const rows = garageOptions.options
+    .filter((o) => !term || `${o.part.name} ${o.part.manufacturer || ''} ${o.part.makerCode || ''}`.toLowerCase().includes(term))
+    .sort((a, b) => {
+      const fa = partFigures(a.part, ship)[keyIndex];
+      const fb = partFigures(b.part, ship)[keyIndex];
+      if (!fa || !fb) return 0;
+      // Sorted so the best of the kind is on top: more DPS, less spool.
+      return fa[3] ? fa[1] - fb[1] : fb[1] - fa[1];
+    });
+
+  if (!rows.length) {
+    panel.append(el('p', 'muted', 'Nothing in the reference fits this port.'));
+    return;
+  }
+
+  const fittedFigures = partFigures(fittedPart, ship);
+
+  for (const option of rows) {
+    const part = option.part;
+    const isCurrent = part.class === current;
+    const isStock = part.class === port?.stockClass;
+
+    const rowEl = el('div', `candidate${isCurrent ? ' fitted' : ''}`);
+    rowEl.append(partMark(part));
+
+    const mid = el('div');
+    const name = el('div', 'c-name', part.name);
+    name.append(partChip(part));
+    mid.append(name);
+    mid.append(el('div', 'c-maker', part.manufacturer || part.makerCode || ''));
+
+    // Each figure beside how it compares with what is in the port now, coloured
+    // by whether that is better for the figure: less IR good, less DPS not.
+    const figures = el('div', 'c-figures');
+    partFigures(part, ship).forEach(([label, value, text, lowerIsBetter], i) => {
+      const span = el('span');
+      span.append(el('b', null, text), document.createTextNode(` ${label}`));
+      const ref = fittedFigures[i];
+      if (ref && !isCurrent && Number.isFinite(ref[1]) && Math.abs(ref[1] - value) > 1e-9) {
+        const better = lowerIsBetter ? value < ref[1] : value > ref[1];
+        const diff = value - ref[1];
+        span.append(el('span', better ? 'd-up' : 'd-down', ` ${diff > 0 ? '+' : '−'}${fmtSmart(Math.abs(diff))}`));
+      }
+      figures.append(span);
+    });
+    mid.append(figures);
+
+    const shop = el('div', 'c-shop');
+    if (option.shops && option.shops.length) {
+      const best = option.shops[0];
+      shop.append(el('b', null, `${fmtInt(best.price)} aUEC`));
+      shop.append(document.createTextNode(` · ${best.terminal}${best.place ? `, ${best.place}` : ''}${option.shops.length > 1 ? ` +${option.shops.length - 1}` : ''}`));
+    } else {
+      shop.textContent = garageOptions.pricesKnown ? 'Not sold at any terminal UEX knows.' : '';
+    }
+    mid.append(shop);
+    rowEl.append(mid);
+
+    const act = el('div', 'c-act');
+    if (isCurrent) {
+      act.append(el('span', 'state', isStock ? 'Stock' : 'Fitted'));
+    } else {
+      const fit = el('button', 'ghost tiny', isStock ? 'Back to stock' : 'Fit');
+      fit.type = 'button';
+      fit.addEventListener('click', () => fitPart(garageOptions.port.portId, isStock ? null : part.class).catch(() => {}));
+      act.append(fit);
+    }
+    rowEl.append(act);
+
+    panel.append(rowEl);
+  }
+}
+
+/** What is in a port now: the swap if there is one, else stock. */
+function currentClassOf(port) {
+  if (!port) return null;
+  return Object.prototype.hasOwnProperty.call(garageSwaps, port.portId) ? garageSwaps[port.portId] : port.stockClass;
+}
+
+/**
+ * Puts a part in a port - and in every port folded into the same bench row,
+ * since a row of sixteen missiles is one decision. A null class takes them
+ * back to stock, and a bench with nothing changed is the stock sheet again,
+ * deltas and all.
+ */
+async function fitPart(portId, cls) {
+  for (const id of siblingsOf(portId)) {
+    if (cls === null) delete garageSwaps[id];
+    else garageSwaps[id] = cls;
+  }
+  await refitGarage();
+}
+
+async function resetGarage() {
+  garageSwaps = {};
+  await refitGarage();
+}
+
+async function refitGarage() {
+  if (!garageClass || !garageStock) return;
+
+  if (!Object.keys(garageSwaps).length) {
+    renderGarage(garageStock, null);
+    renderBench(garageStock);
+    renderBenchPanel();
+    return;
+  }
+
+  const res = await fetch(`/api/garage/${encodeURIComponent(garageClass)}/sheet`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ swaps: garageSwaps }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const data = await res.json();
+  garageSheet = data.sheet;
+  renderGarage(data, garageStock);
+  renderBench({ ...data, ship: garageStock.ship });
+  renderBenchPanel();
+}
+
+$('#garage-reset')?.addEventListener('click', () => resetGarage().catch(() => {}));
 
 onInput('#garage-mine', () => { const v = $('#garage-mine').value; if (v) openGarage(v).catch(() => {}); });
 onInput('#garage-all', () => { const v = $('#garage-all').value; if (v) openGarage(v).catch(() => {}); });

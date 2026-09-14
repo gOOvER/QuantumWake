@@ -1893,20 +1893,24 @@
 
     <div id="garage-notes" class="garage-notes" hidden></div>
 
-    <h2 class="spaced" id="garage-ports-heading" hidden>Fitted parts</h2>
-    <div class="table-wrap" id="garage-ports-wrap" hidden>
-      <table id="garage-ports">
-        <thead>
-          <tr>
-            <th>Port</th>
-            <th>Takes</th>
-            <th class="num">Size</th>
-            <th>Fitted</th>
-            <th>What it does</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+    <div class="bench-bar" id="garage-bench-bar" hidden>
+      <h2 class="spaced">Bench</h2>
+      <div class="bench-state">
+        <span id="garage-changes" class="muted">Stock fit</span>
+        <button type="button" class="ghost tiny" id="garage-reset" hidden>Reset to stock</button>
+      </div>
+    </div>
+    <p class="muted caption" id="garage-bench-caption" hidden>
+      Pick a port, then a part that fits it. The sheet above moves as you do:
+      every figure that changed shows what it was, coloured by whether it got
+      better <em>for that figure</em> &mdash; less IR is better, less DPS is not.
+      Nothing is saved yet; that is the next step.
+    </p>
+    <div class="bench" id="garage-bench" hidden>
+      <div class="bench-ports" id="garage-bench-ports"></div>
+      <div class="bench-panel" id="garage-bench-panel">
+        <p class="muted">Pick a port on the left.</p>
+      </div>
     </div>
   </section>
 

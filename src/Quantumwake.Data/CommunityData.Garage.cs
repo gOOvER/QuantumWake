@@ -126,7 +126,8 @@ public sealed partial class CommunityData
                 Missile(std),
                 Armor(std),
                 Str(entry, "subType"),
-                networked);
+                networked,
+                At(std, "Manufacturer", "Code") is { ValueKind: JsonValueKind.String } mc && mc.GetString() is { Length: > 0 } code && code != "UNKN" ? code : null);
         }
 
         return result;

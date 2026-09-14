@@ -4513,3 +4513,118 @@ body.overlay .ship-picture { display: none; }
 .garage-notes div + div { margin-top: 4px; }
 
 #garage-ports td.what { color: var(--muted); font-size: 12px; }
+
+/* ---------- the bench ---------- */
+
+.bench-bar { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.bench-bar h2 { margin-bottom: 0; }
+.bench-state { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.bench-state .changed { color: var(--cyan); }
+
+.bench { display: grid; grid-template-columns: minmax(280px, 2fr) minmax(320px, 3fr); gap: var(--gap); align-items: start; }
+@media (max-width: 900px) { .bench { grid-template-columns: 1fr; } }
+
+.bench-ports, .bench-panel {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.bench-kind {
+  padding: 8px 12px 4px;
+  font-size: 10.5px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--dim);
+  border-top: 1px solid var(--rule);
+}
+.bench-kind:first-child { border-top: 0; }
+
+/* A port row: the maker's mark, what is in it, the size and grade chip and
+   the one figure that matters for its kind. Clicking it opens the panel. */
+.bench-port {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 12px;
+  cursor: pointer;
+  border-top: 1px solid var(--rule);
+}
+.bench-port:hover { background: var(--panel-2); }
+.bench-port.selected { background: rgba(53, 200, 240, .08); box-shadow: inset 3px 0 0 var(--cyan); }
+.bench-port.changed .part-name { color: var(--cyan); }
+.bench-port .part-name { font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bench-port .port-name { font-size: 11px; color: var(--muted); }
+.bench-port .port-name .was { color: var(--dim); margin-left: 6px; }
+.bench-port .figure { font-family: var(--mono); font-size: 11.5px; color: var(--muted); text-align: right; white-space: nowrap; }
+.bench-port .figure b { display: block; color: var(--text); font-weight: normal; font-size: 12.5px; }
+
+/* The maker's mark: the Fankit logo where the app has one, a monogram of the
+   maker's code where it does not. Component makers are mostly the latter -
+   Klaus & Werner, Behring, Gorgon - and the game files carry no picture of
+   a part at all, so the mark is the only face a cooler has. */
+.part-mark {
+  width: 34px; height: 34px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--panel-2);
+  border: 1px solid var(--rule);
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+.part-mark img { max-width: 80%; max-height: 80%; opacity: .9; }
+.part-mark .mono-mark {
+  font-family: var(--display);
+  font-size: 10px;
+  letter-spacing: .06em;
+  color: var(--text);
+  opacity: .85;
+}
+.part-mark.small { width: 26px; height: 26px; }
+.part-mark.small .mono-mark { font-size: 8.5px; }
+
+.chip {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--rule-hot);
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.chip.grade-a { border-color: var(--cyan); color: var(--cyan); }
+.chip.grade-b { border-color: var(--green); color: var(--green); }
+.chip.grade-c { border-color: var(--rule-hot); color: var(--text); }
+.chip.grade-d { border-color: var(--rule); color: var(--muted); }
+
+.bench-panel .panel-head { padding: 12px 14px 8px; border-bottom: 1px solid var(--rule); }
+.bench-panel .panel-title { font-size: 14px; color: var(--text); }
+.bench-panel .panel-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.bench-panel .panel-tools { display: flex; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--rule); flex-wrap: wrap; align-items: center; }
+.bench-panel .panel-tools .search { flex: 1; min-width: 140px; }
+.bench-panel .panel-tools .muted { font-size: 11px; }
+
+.candidate {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 14px;
+  border-top: 1px solid var(--rule);
+}
+.candidate:first-child { border-top: 0; }
+.candidate.fitted { background: rgba(53, 200, 240, .06); }
+.candidate .c-name { font-size: 13px; color: var(--text); }
+.candidate .c-maker { font-size: 11px; color: var(--muted); }
+.candidate .c-figures { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-top: 3px; display: flex; gap: 10px; flex-wrap: wrap; }
+.candidate .c-figures b { color: var(--text); font-weight: normal; }
+.candidate .c-figures .d-up { color: var(--cyan); }
+.candidate .c-figures .d-down { color: var(--amber); }
+.candidate .c-shop { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.candidate .c-shop b { color: var(--text); font-weight: normal; font-family: var(--mono); }
+.candidate .c-act { text-align: right; }
+.candidate .c-act .state { font-size: 11px; color: var(--cyan); letter-spacing: .08em; text-transform: uppercase; }
+.chip.count { border-color: var(--cyan-deep); color: var(--cyan); }

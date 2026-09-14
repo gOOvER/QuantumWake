@@ -35,7 +35,9 @@ public sealed record PartStats(
     string? SubType = null,
     // The dump counts emissions and draw only for parts on the resource
     // network; a part without one still weighs and still shoots.
-    bool Networked = true);
+    bool Networked = true,
+    // The maker's code - KLWE, BEHR, AEGS - which is what the marks are filed under.
+    string? MakerCode = null);
 
 public sealed record WeaponStats(
     double Dps,

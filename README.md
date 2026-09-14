@@ -364,7 +364,20 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.1
+### 0.13.2
+
+- **The bench: try a part and watch the sheet move.** Under the sheet, every
+  port a shop sells parts for, grouped by kind with the maker's mark, the
+  fitted part, its size and grade, and the figure that matters for its kind.
+  Pick one and every part that fits is listed best-first, each figure shown
+  beside how it compares with what is fitted now - more coolant in cyan,
+  more IR in amber - with its price and where it is sold when UEX is on. Fit
+  it and the sheet above redraws with the old figure struck beside the new,
+  coloured by whether it got better *for that figure*. Identical ports fold
+  into one row - sixteen missiles are one decision - and a fit goes on all of
+  them. Nothing is saved yet; that is next. The game files carry no picture
+  of a component, so a part's face is its maker: the Fankit mark where the
+  app has one, a monogram of the maker's initials where it does not.
 
 - **The Garage: every number about a ship, recomputed from its parts.** A
   new page under Gear. Pick a ship - yours first, most flown at the top, or

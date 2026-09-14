@@ -193,7 +193,13 @@ current panel.
 
 ## Deliberately out of scope
 
-- **Cross-section changes** - none exist; parts do not change geometry.
+- **Cross-section changes** - none exist; parts do not change geometry. (Some
+  hulls - the Starlancer MAX among them - have no cross-section in the dataset
+  at all; the sheet says so rather than showing zeros.)
+- **Pictures of parts.** The game files hold none: of 3,137 `displayIcon`s
+  in the DataCore, every one is a ship silhouette or an FPS loadout preset, and
+  not one cooler, shield, plant, drive or gun has an icon. A part's face is
+  its maker's mark.
 - **Turret-mounted gun ballistics** (gimbal spread, convergence) - the dump
   has the numbers, the page has no honest way to combine them.
 - **Armour and hull damage models** beyond HP and the resistance table.
@@ -211,8 +217,8 @@ current panel.
    the match table.~~ Done: `Core/GameData/Garage.cs`, `GarageSheetTests`, `--garage-check`.
 3. ~~`GET /api/garage/{class}` and the sheet page - read-only, every group
    labelled.~~ Done, 0.13.1; `POST .../sheet` exists for step 4.
-4. The bench and the delta: `POST .../sheet`, the was → now rendering, the
-   budget lines.
+4. ~~The bench and the delta: `POST .../sheet`, the was → now rendering, the
+   budget lines.~~ Done, 0.13.2, plus `GET .../options` and folded rows.
 5. Builds: store, backup, restore, the Fleet card's button re-pointed.
 6. Shopping: the job, the destination proposal.
 7. Screenshots, docs, release notes under `### 0.13.0`.

@@ -31,9 +31,9 @@ public class GaragePageTests
                   "crossSection":{"x":6923,"y":1731,"z":8654},
                   "parts":[],"notes":["Draws 24.1 power segments with shields up; the plant provides 16. The game will brown out something."]},
          "ports":[{"portId":"p1","hardpoint":"Hardpoint_cooler_left","group":"Cooler","minSize":1,"maxSize":1,"class":"COOL_AEGS_S01_Bracer_SCItem","name":"Bracer","stockClass":"COOL_AEGS_S01_Bracer_SCItem","changed":false,
-                   "fitted":{"type":"Cooler","name":"Bracer","em":1490,"ir":7260,"coolantGen":25}},
+                   "fitted":{"type":"Cooler","name":"Bracer","size":1,"grade":2,"manufacturer":"Aegis Dynamics","makerCode":"AEGS","em":1490,"ir":7260,"coolantGen":25,"powerUseMax":3}},
                   {"portId":"p2","hardpoint":"hardpoint_quantum_drive","group":"QuantumDrive","minSize":1,"maxSize":1,"class":"QDRV_WETK_S01_Beacon_SCItem","name":"Beacon","stockClass":"QDRV_WETK_S01_Beacon_SCItem","changed":false,
-                   "fitted":{"type":"QuantumDrive","name":"Beacon","em":15000,"ir":0,"quantum":{"speed":161410900,"spoolTime":4.4}}}]}
+                   "fitted":{"type":"QuantumDrive","name":"Beacon","size":1,"grade":3,"manufacturer":"Wei-Tek","makerCode":"WETK","em":15000,"ir":0,"quantum":{"speed":161410900,"spoolTime":4.4,"fuelRate":1.862e-8}}}]}
         """;
 
     private static Page Opened()
@@ -118,19 +118,6 @@ public class GaragePageTests
     }
 
     [Fact]
-    public void The_ports_table_lists_what_is_fitted_and_what_it_does()
-    {
-        var page = Opened();
-        var text = page.NodeText("#garage-ports");
-
-        Assert.Contains("cooler left", text);
-        Assert.Contains("Bracer", text);
-        Assert.Contains("25 coolant", text);
-        Assert.Contains("IR 7,260", text);
-        Assert.Contains("Quantum drive", text);
-    }
-
-    [Fact]
     public void A_reference_that_predates_the_garage_asks_for_a_refresh()
     {
         var page = new Page();
@@ -166,5 +153,166 @@ public class GaragePageTests
 
         var dps = $"{rows}.find(r => r.dataset.key === 'Pilot DPS')";
         Assert.True(page.Truth($"{dps}.descendants().some(n => n.classList.contains('v') && n.classList.contains('down'))"));
+    }
+
+    // ---- the bench ----
+
+    private const string CoolerOptions = """
+        {"port":{"portId":"p1","hardpoint":"Hardpoint_cooler_left","kinds":["Cooler"],"minSize":1,"maxSize":1,"fitted":"COOL_AEGS_S01_Bracer_SCItem"},
+         "pricesKnown":true,
+         "options":[
+           {"part":{"class":"COOL_AEGS_S01_Bracer_SCItem","type":"Cooler","size":1,"grade":2,"name":"Bracer","manufacturer":"Aegis Dynamics","makerCode":"AEGS","em":1490,"ir":7260,"coolantGen":25,"powerUseMax":3,"health":230},
+            "price":null,"shops":[]},
+           {"part":{"class":"COOL_JUST_S01_Glacier_SCItem","type":"Cooler","size":1,"grade":1,"name":"Glacier","manufacturer":"Juggernaut","makerCode":"JUST","em":1490,"ir":7920,"coolantGen":38,"powerUseMax":3,"health":230},
+            "price":12000,"shops":[{"terminal":"Dumper's Depot","placeId":"P1","place":"Area18","system":"Stanton","price":12000},{"terminal":"Cousin Crow's","placeId":"P2","place":"Orison","system":"Stanton","price":12400}]},
+           {"part":{"class":"COOL_ACAS_S01_Endo_SCItem","type":"Cooler","size":1,"grade":4,"name":"Endo","manufacturer":"Ace Astrogation","makerCode":"ACAS","em":1200,"ir":5000,"coolantGen":18,"powerUseMax":2,"health":200},
+            "price":null,"shops":[]}]}
+        """;
+
+    private static Page Bench()
+    {
+        var page = Opened();
+        page.Serve("/api/garage/AEGS_Gladius/options?port=p1", CoolerOptions);
+        page.Serve("/api/garage/AEGS_Gladius/sheet", Gladius
+            .Replace("\"ir\":8711", "\"ir\":8502")
+            .Replace("\"name\":\"Bracer\",\"stockClass\":\"COOL_AEGS_S01_Bracer_SCItem\",\"changed\":false",
+                "\"class\":\"COOL_JUST_S01_Glacier_SCItem\",\"name\":\"Glacier\",\"stockName\":\"Bracer\",\"stockClass\":\"COOL_AEGS_S01_Bracer_SCItem\",\"changed\":true"));
+        return page;
+    }
+
+    [Fact]
+    public void The_bench_lists_the_ports_by_kind_with_a_mark_and_the_figure_that_matters()
+    {
+        var page = Bench();
+        var text = page.NodeText("#garage-bench-ports");
+
+        Assert.Contains("Cooler", text);
+        Assert.Contains("Bracer", text);
+        Assert.Contains("S1 · B", text);
+        Assert.Contains("25 coolant", text);
+        Assert.Contains("Quantum drive", text);
+        Assert.Contains("Beacon", text);
+
+        // Aegis has a Fankit mark; the stub sees the image's alt text.
+        Assert.True(page.Truth("__dom.node('#garage-bench-ports').descendants().some(n => n.tagName === 'img' && n.src === 'assets/manufacturers/AEGS.png')"));
+        Assert.Equal("Stock fit", page.NodeText("#garage-changes"));
+        Assert.True(page.Truth("__dom.node('#garage-reset').hidden"));
+    }
+
+    /// <summary>
+    /// Picking a port lists what fits, best first for the kind, each figure
+    /// beside how it compares with the part in the port now - more coolant in
+    /// cyan, more IR in amber - and a price and shop when UEX knows one.
+    /// </summary>
+    [Fact]
+    public void Picking_a_port_shows_candidates_compared_with_the_fitted_part()
+    {
+        var page = Bench();
+        page.Do("await selectBenchPort('p1');");
+
+        Assert.Contains("GET /api/garage/AEGS_Gladius/options?port=p1", page.Fetched());
+        var panel = page.NodeText("#garage-bench-panel");
+
+        Assert.Contains("Cooler · cooler left", panel);
+        Assert.Contains("now fitted: Bracer", panel);
+        Assert.Contains("Glacier", panel);
+        Assert.Contains("Juggernaut", panel);
+        Assert.Contains("12,000 aUEC", panel);
+        Assert.Contains("Dumper's Depot", panel);
+        Assert.Contains("+1", panel);
+
+        // Glacier makes 38 coolant to the Bracer's 25: up, and coloured so.
+        var glacier = "__dom.node('#garage-bench-panel').descendants().filter(n => n.classList.contains('candidate')).find(n => n.textContent.includes('Glacier'))";
+        Assert.True(page.Truth($"{glacier}.descendants().some(n => n.classList.contains('d-up') && n.textContent.includes('+13'))"));
+        Assert.True(page.Truth($"{glacier}.descendants().some(n => n.classList.contains('d-down') && n.textContent.includes('+660'))"));
+
+        // Best coolant first; the fitted one is marked, not offered.
+        var names = page.Text("__dom.node('#garage-bench-panel').descendants().filter(n => n.classList.contains('c-name')).map(n => n.textContent).join('|')");
+        Assert.StartsWith("Glacier", names);
+        Assert.Contains("Stock", panel);
+
+        // The monogram for a maker with no Fankit mark.
+        Assert.True(page.Truth("__dom.node('#garage-bench-panel').descendants().some(n => n.classList.contains('mono-mark') && n.textContent === 'JUST')"));
+    }
+
+    [Fact]
+    public void Fitting_a_part_posts_the_swap_and_moves_the_sheet()
+    {
+        var page = Bench();
+        page.Do("await selectBenchPort('p1'); await fitPart('p1', 'COOL_JUST_S01_Glacier_SCItem');");
+
+        Assert.Contains("POST /api/garage/AEGS_Gladius/sheet", page.Fetched());
+        Assert.Contains("\"p1\":\"COOL_JUST_S01_Glacier_SCItem\"", page.BodyOf("/api/garage/AEGS_Gladius/sheet"));
+
+        // The sheet shows what IR was, and the bench says one part changed.
+        var ir = "__dom.node('#garage-sheet').descendants().filter(n => n.classList.contains('sheet-row')).find(r => r.dataset.key === 'IR, shields up')";
+        Assert.Contains("8,711", page.Text($"{ir}.textContent"));
+        Assert.Contains("8,502", page.Text($"{ir}.textContent"));
+        Assert.Equal("1 part changed", page.NodeText("#garage-changes"));
+        Assert.False(page.Truth("__dom.node('#garage-reset').hidden"));
+        Assert.Contains("was Bracer", page.NodeText("#garage-bench-ports"));
+    }
+
+    [Fact]
+    public void Reset_takes_the_bench_back_to_stock_without_asking_the_server()
+    {
+        var page = Bench();
+        page.Do("await selectBenchPort('p1'); await fitPart('p1', 'COOL_JUST_S01_Glacier_SCItem'); await resetGarage();");
+
+        Assert.Equal("Stock fit", page.NodeText("#garage-changes"));
+        Assert.Equal(1, page.Fetched().Count(f => f.StartsWith("POST /api/garage/AEGS_Gladius/sheet")));
+        Assert.DoesNotContain("was Bracer", page.NodeText("#garage-bench-ports"));
+    }
+
+    /// <summary>Changing ships empties the bench: swaps belong to the hull they were made on.</summary>
+    [Fact]
+    public void Opening_another_ship_clears_the_swaps()
+    {
+        var page = Bench();
+        page.Serve("/api/garage/DRAK_Cutlass_Black", Gladius.Replace("AEGS_Gladius", "DRAK_Cutlass_Black").Replace("Aegis Gladius", "Drake Cutlass Black"));
+        page.Do("await selectBenchPort('p1'); await fitPart('p1', 'COOL_JUST_S01_Glacier_SCItem'); await openGarage('DRAK_Cutlass_Black');");
+
+        Assert.Equal("Drake Cutlass Black", page.NodeText("#garage-title"));
+        Assert.Equal("Stock fit", page.NodeText("#garage-changes"));
+        Assert.True(page.Truth("Object.keys(garageSwaps).length === 0"));
+    }
+
+    /// <summary>Sixteen missile ports carrying the same missile are one row and one decision.</summary>
+    [Fact]
+    public void Identical_ports_fold_into_one_row_and_are_fitted_together()
+    {
+        var page = new Page();
+        page.Serve("/api/garage", Garage);
+        var missiles = string.Join(",", Enumerable.Range(1, 4).Select(i =>
+            "{\"portId\":\"m" + i + "\",\"hardpoint\":\"missile_0" + i + "_attach\",\"group\":\"Missile\",\"minSize\":3,\"maxSize\":3,\"class\":\"MISL_S03_A\",\"name\":\"Thunderbolt III\",\"stockClass\":\"MISL_S03_A\",\"changed\":false,\"fitted\":{\"type\":\"Missile\",\"name\":\"Thunderbolt III\",\"size\":3,\"grade\":1,\"makerCode\":\"FSKI\",\"missile\":{\"damage\":2900,\"speed\":858,\"lockTime\":1.2,\"range\":20000}}}"));
+        page.Serve("/api/garage/AEGS_Gladius", Gladius.Replace("\"ports\":[", $"\"ports\":[{missiles},"));
+        page.Serve("/api/garage/AEGS_Gladius/options?port=m1", """
+            {"port":{"portId":"m1","hardpoint":"missile_01_attach","kinds":["Missile"],"minSize":3,"maxSize":3,"fitted":"MISL_S03_A"},"pricesKnown":false,
+             "options":[{"part":{"class":"MISL_S03_B","type":"Missile","size":3,"grade":1,"name":"Arrester III","makerCode":"FSKI","missile":{"damage":3200,"speed":700,"lockTime":1.6,"range":22000}},"price":null,"shops":[]}]}
+            """);
+        page.Serve("/api/garage/AEGS_Gladius/sheet", Gladius);
+        page.Do("await loadGarage();");
+
+        var rows = "__dom.node('#garage-bench-ports').descendants().filter(n => n.classList.contains('bench-port'))";
+        Assert.Equal("1", page.Text($"String({rows}.filter(r => r.textContent.includes('Thunderbolt')).length)"));
+        Assert.Contains("×4", page.NodeText("#garage-bench-ports"));
+        Assert.Contains("and 3 more", page.NodeText("#garage-bench-ports"));
+
+        page.Do("await selectBenchPort('m1'); await fitPart('m1', 'MISL_S03_B');");
+
+        Assert.Contains("4 ports alike, fitted together", page.NodeText("#garage-bench-panel"));
+        var body = page.BodyOf("/api/garage/AEGS_Gladius/sheet");
+        foreach (var id in new[] { "m1", "m2", "m3", "m4" })
+            Assert.Contains($"\"{id}\":\"MISL_S03_B\"", body);
+    }
+
+    /// <summary>A maker with no Fankit mark gets its initials, not the first four letters of its name.</summary>
+    [Fact]
+    public void A_maker_without_a_mark_is_a_monogram_of_initials()
+    {
+        var page = new Page();
+        Assert.Equal("WCP", page.Text("monogram(null, 'Wen-Cassel Propulsion')"));
+        Assert.Equal("KLWE", page.Text("monogram('KLWE', 'Klaus & Werner')"));
+        Assert.Equal("JS", page.Text("monogram(null, 'Juno Starwerk')"));
     }
 }
