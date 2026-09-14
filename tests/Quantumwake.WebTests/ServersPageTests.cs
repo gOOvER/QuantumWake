@@ -369,4 +369,23 @@ public class ServersPageTests
         Assert.DoesNotContain("on it now,", ending);
         Assert.Contains("1× left", ending);
     }
+
+    /// <summary>A note-only row has no visit; the pasted line must not invent one the way the table refuses to.</summary>
+    [Fact]
+    public void The_report_for_a_shard_never_joined_here_says_so()
+    {
+        var page = new Page();
+        page.Serve("/api/servers", """
+            {"current":null,"newestDeployment":null,"servers":[
+              {"shard":"pub_use1b_11111111_001","region":"US East","regionCode":"use1b","deployment":"11111111","number":"001",
+               "current":false,"visits":0,"sessions":0,"time":0,"first":"2026-09-01T00:00:00+00:00","last":"2026-09-01T00:00:00+00:00",
+               "endings":{},"lastEnding":"LogEnded","lastSession":null,"note":"from the other pc","favorite":false,"places":[],"lastDuration":0}]}
+            """);
+        page.Do("await loadServers();");
+
+        var report = page.Text("serverReport(serverRows[0])");
+        Assert.Contains("no visit recorded on this machine", report);
+        Assert.DoesNotContain("log ended", report);
+        Assert.DoesNotContain("2026", report);
+    }
 }

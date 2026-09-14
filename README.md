@@ -364,7 +364,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.12.3
+### 0.12.4
 
 - **Give a server the name you saw in game, without losing its real id.** Add
   a local “Seen in game” label such as `amazing_view`; it is clearly your
@@ -378,10 +378,6 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   ending - no account, IP address or log contents. A new Back-end failures
   filter and summary count only explicit back-end disconnects; an unclosed log
   still stays labelled as ambiguous.
-
-- **The server you are on no longer waits for a log rotation to appear.** A
-  live placement is shown immediately in the Servers table and marked *on
-  now*. Its initial visit count and time are provisional until the log closes.
 
 - **A release is now scanned before it is published.** After the Windows build
   makes the exact app and command-line files that ship, the release workflow

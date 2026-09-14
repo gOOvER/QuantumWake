@@ -8463,18 +8463,51 @@ function serverActions(row) {
 }
 
 function serverReport(row) {
+  // A note-only row - a shard these logs never joined - has no visit to
+  // report. The cells say "never seen here"; the pasted line must not invent
+  // a date and an ending the table itself refuses to show.
+  if (!row.visits) return `Quantumwake server report: shard ${row.shard}; region ${row.region}; no visit recorded on this machine.`;
   const ending = row.shard === serverCurrent ? 'still connected' : endingLabel(row.lastEnding);
   const when = row.shard === serverCurrent ? 'now' : dateOf(row.last);
   const stay = row.lastDuration ? ` after ${duration(row.lastDuration)}` : '';
   return `Quantumwake server report: shard ${row.shard}; region ${row.region}; ${when}; ${ending}${stay}.`;
 }
 
+/**
+ * Puts text on the clipboard and says so on the button.
+ *
+ * navigator.clipboard exists only in a secure context, and the app has a LAN
+ * mode: on the tablet at http://192.168.x.x the API is simply absent, so the
+ * old-style selection copy is the fallback rather than a silent nothing. A
+ * refusal - document not focused, permission denied - is reported the same
+ * way, on the button, because an unhandled rejection tells the pilot nothing.
+ */
 async function copyServerText(value, button) {
-  if (!navigator.clipboard?.writeText) return;
-  await navigator.clipboard.writeText(value);
   const was = button.textContent;
-  button.textContent = 'Copied';
-  setTimeout(() => { button.textContent = was; }, 1200);
+  const say = (text) => {
+    button.textContent = text;
+    setTimeout(() => { button.textContent = was; }, 1200);
+  };
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+    } else {
+      const box = el('textarea');
+      box.value = value;
+      box.setAttribute('readonly', '');
+      box.style.position = 'fixed';
+      box.style.opacity = '0';
+      document.body.append(box);
+      box.select();
+      const ok = document.execCommand && document.execCommand('copy');
+      box.remove();
+      if (!ok) throw new Error('copy refused');
+    }
+    say('Copied');
+  } catch {
+    say('Could not copy');
+  }
 }
 
 /**
