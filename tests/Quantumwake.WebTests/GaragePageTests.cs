@@ -504,6 +504,39 @@ public class GaragePageTests
         Assert.Contains("Open Shopping", result);
     }
 
+    [Fact]
+    public void Fitting_a_buyable_candidate_creates_a_list_for_that_component_only()
+    {
+        var page = Bench();
+        page.Serve("/api/jobs", """{"id":"j2","title":"Aegis Gladius · Glacier","items":[{"name":"Glacier","needed":1}]}""");
+        page.Do("""
+            await selectBenchPort('p1');
+            const glacier = __dom.node('#garage-bench-panel').descendants().find(n => n.classList.contains('candidate') && n.textContent.includes('Glacier'));
+            await glacier.descendants().find(n => n.tagName === 'button' && n.textContent === 'Fit').fire('click');
+            """);
+
+        var body = page.BodyOf("/api/jobs");
+        Assert.Contains("\"source\":\"garage:AEGS_Gladius\"", body);
+        Assert.Contains("\"name\":\"Glacier\"", body);
+        Assert.Contains("\"needed\":1", body);
+        Assert.Contains("\"destination\":\"Area18\"", body);
+        Assert.Contains("\"title\":\"Aegis Gladius · Glacier\"", body);
+        Assert.Contains("Added \"Aegis Gladius · Glacier\"", page.NodeText("#garage-shop-result"));
+    }
+
+    [Fact]
+    public void Fitting_an_unlisted_candidate_does_not_create_an_unroutable_list()
+    {
+        var page = Bench();
+        page.Do("""
+            await selectBenchPort('p1');
+            const endo = __dom.node('#garage-bench-panel').descendants().find(n => n.classList.contains('candidate') && n.textContent.includes('Endo'));
+            await endo.descendants().find(n => n.tagName === 'button' && n.textContent === 'Fit').fire('click');
+            """);
+
+        Assert.DoesNotContain(page.Fetched(), url => url.StartsWith("POST /api/jobs"));
+    }
+
     /// <summary>A list made from an open build carries the build's name, so the two can be told apart later.</summary>
     [Fact]
     public void A_list_from_an_open_build_is_named_after_it()

@@ -9395,7 +9395,11 @@ function renderBenchPanel() {
     } else {
       const fit = el('button', 'ghost tiny', isStock ? 'Back to stock' : 'Fit');
       fit.type = 'button';
-      fit.addEventListener('click', () => fitPart(garageOptions.port.portId, isStock ? null : part.class).catch(() => {}));
+      // Fitting from this list is an intentional purchase decision. A known
+      // seller lets it become its own shopping line; unknown sellers stay a
+      // useful bench comparison without leaving an un-routable list behind.
+      const autoShop = !isStock && option.shops?.length ? { name: part.name, shop: option.shops[0] } : null;
+      fit.addEventListener('click', () => fitPart(garageOptions.port.portId, isStock ? null : part.class, autoShop).catch(() => {}));
       act.append(fit);
     }
     rowEl.append(act);
@@ -9416,12 +9420,19 @@ function currentClassOf(port) {
  * back to stock, and a bench with nothing changed is the stock sheet again,
  * deltas and all.
  */
-async function fitPart(portId, cls) {
-  for (const id of siblingsOf(portId)) {
+async function fitPart(portId, cls, autoShop = null) {
+  const portIds = siblingsOf(portId);
+  for (const id of portIds) {
     if (cls === null) delete garageSwaps[id];
     else garageSwaps[id] = cls;
   }
   await refitGarage();
+
+  // A folded row may represent sixteen missile ports, but it is still one
+  // shopping decision and one shopping-list line with the matching count.
+  if (autoShop && cls !== null) {
+    await addFittedPartToShopping(portIds, autoShop);
+  }
 }
 
 /* ---------- saved builds ---------- */
@@ -9641,6 +9652,48 @@ async function shopForBench() {
       ? 'No terminal UEX knows sells any of it; the list has no destination.'
       : 'Destinations need UEX prices (Settings); the list was written without one.'));
   }
+}
+
+/**
+ * The candidate route has already named a seller for this exact part. Adding
+ * the one line directly keeps every automatic fit separate; posting the whole
+ * bench here would add earlier components again whenever another part changes.
+ */
+async function addFittedPartToShopping(portIds, part) {
+  const result = $('#garage-shop-result');
+  result.hidden = true;
+  if (!garageClass || !part?.shop) return;
+
+  const ship = garageStock?.ship?.name || garageClass;
+  const title = `${ship} · ${part.name}`;
+  const res = await fetch('/api/jobs', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      title, kind: 'list', source: `garage:${garageClass}`,
+      items: [{ name: part.name, needed: portIds.length, unit: '' }],
+      destination: part.shop.place || null, destinationId: part.shop.placeId || null,
+    }),
+  });
+
+  result.textContent = '';
+  result.hidden = false;
+  if (!res.ok) {
+    result.append(el('span', 'muted', 'The fitted part could not be added to Shopping.'));
+    return;
+  }
+
+  const job = await res.json();
+  const line = el('span');
+  line.append(document.createTextNode(`Added "${job.title}" - ${portIds.length} part${portIds.length === 1 ? '' : 's'}. `));
+  const link = el('a', null, 'Open Shopping');
+  link.href = '#jobs';
+  link.addEventListener('click', (e) => { e.preventDefault(); showView('jobs'); });
+  line.append(link);
+  result.append(line);
+
+  const where = `${part.shop.terminal}${part.shop.place ? `, ${part.shop.place}` : ''}`;
+  const total = Number(part.shop.price) * portIds.length;
+  result.append(el('span', 'muted', `Destination: ${where}${total > 0 ? ` · ${fmtInt(total)} aUEC` : ''}.`));
 }
 
 $('#garage-shop')?.addEventListener('click', () => shopForBench().catch(() => {}));
