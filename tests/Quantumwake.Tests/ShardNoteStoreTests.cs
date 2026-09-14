@@ -136,6 +136,27 @@ public class ShardNoteStoreTests : IDisposable
         Assert.Equal(2, library.ShardVisitsBefore("pub_use1b_12545750_150", "a"));
     }
 
+    /// <summary>
+    /// The name the game shows is not in the log, so it is taught. It keeps
+    /// the record alive on its own and survives a restart like the rest.
+    /// </summary>
+    [Fact]
+    public void A_taught_name_is_kept_against_the_id()
+    {
+        var store = new ShardNoteStore(_root);
+        var named = store.SetName("pub_use1b_12545750_150", " amazing_view ");
+
+        Assert.NotNull(named);
+        Assert.Equal("amazing_view", named.Name);
+        Assert.False(named.IsEmpty);
+
+        var back = Assert.Single(new ShardNoteStore(_root).All());
+        Assert.Equal("amazing_view", back.Name);
+
+        Assert.Null(store.SetName("pub_use1b_12545750_150", ""));
+        Assert.Empty(store.All());
+    }
+
     public void Dispose()
     {
         GC.SuppressFinalize(this);

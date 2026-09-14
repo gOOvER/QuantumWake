@@ -733,7 +733,7 @@ public static class ServerHost
         // days=0 (or absent) means all time; the views each pick their own window.
         app.MapGet("/api/stats", (LogLibrary lib, int? days) => lib.Stats(days ?? 0));
 
-        app.MapGet("/api/sessions", (LogLibrary lib) => lib.Sessions().Select(s => new
+        app.MapGet("/api/sessions", (LogLibrary lib, ShardNoteStore shardNotes) => lib.Sessions().Select(s => new
         {
             s.Id,
             s.StartedAt,
@@ -745,9 +745,20 @@ public static class ServerHost
             s.GameVersion,
             s.PrimaryShip,
             s.LastLocation,
-            // The last shard as a pilot says it, and how many the session saw:
-            // the list has room for one name, the debrief has room for all.
-            shard = s.Shards.Count > 0 && ShardName.TryParse(s.Shards[^1].Shard, out var shard) ? shard.Short : null,
+            // The last shard - by the name the pilot taught it if they have,
+            // else as a pilot says the id - and how many the session saw: the
+            // list has room for one name, the debrief has room for all.
+            shard = s.Shards.Count > 0
+                ? shardNotes.Get(s.Shards[^1].Shard)?.Name
+                    ?? (ShardName.TryParse(s.Shards[^1].Shard, out var shard) ? shard.Short : s.Shards[^1].Shard)
+                : null,
+            shardId = s.Shards.Count > 0 ? s.Shards[^1].Shard : null,
+            // Every taught name this session can use, so the debrief can name
+            // each stay without a second request.
+            shardNames = s.Shards.Select(x => x.Shard).Distinct()
+                .Select(x => (Shard: x, Name: shardNotes.Get(x)?.Name))
+                .Where(x => x.Name is not null)
+                .ToDictionary(x => x.Shard, x => x.Name!),
             shards = s.Shards.Count,
             ships = s.Ships.Count,
             locations = s.Locations.Count,
@@ -1289,32 +1300,33 @@ public static class ServerHost
                     time = r.Time.TotalSeconds,
                     r.First, r.Last, r.Endings, r.LastEnding, r.LastSession,
                     note = notes.GetValueOrDefault(r.Shard)?.Note,
+                    name = notes.GetValueOrDefault(r.Shard)?.Name,
                     favorite = notes.GetValueOrDefault(r.Shard)?.Favorite ?? false,
                     noted = notes.GetValueOrDefault(r.Shard)?.UpdatedAt
                 })
             };
         });
 
-        app.MapPut("/api/servers/{shard}/note", (string shard, ShardNoteStore shards, TombstoneStore deleted, ShardNoteRequest body) =>
+        // The three edits share one answer and one piece of bookkeeping:
+        // emptied is deleted, so a restore must not bring the old record back.
+        static IResult ShardEdited(string shard, ShardNote? kept, TombstoneStore deleted)
         {
-            var kept = shards.SetNote(shard, body.Note);
-
-            // Emptied is deleted: a restore must not bring the old note back.
             if (kept is null) deleted.Record(TombstoneStore.Kinds.Shards, shard);
             else deleted.Forget(TombstoneStore.Kinds.Shards, shard);
 
-            return Results.Ok(new { shard, note = kept?.Note, favorite = kept?.Favorite ?? false });
-        });
+            return Results.Ok(new { shard, note = kept?.Note, name = kept?.Name, favorite = kept?.Favorite ?? false });
+        }
+
+        app.MapPut("/api/servers/{shard}/note", (string shard, ShardNoteStore shards, TombstoneStore deleted, ShardNoteRequest body) =>
+            ShardEdited(shard, shards.SetNote(shard, body.Note), deleted));
+
+        // The name the game shows on screen and never logs - "amazing_view" -
+        // taught once and kept against the id.
+        app.MapPut("/api/servers/{shard}/name", (string shard, ShardNoteStore shards, TombstoneStore deleted, ShardAliasRequest body) =>
+            ShardEdited(shard, shards.SetName(shard, body.Name), deleted));
 
         app.MapPut("/api/servers/{shard}/favorite", (string shard, ShardNoteStore shards, TombstoneStore deleted, ShardFavoriteRequest body) =>
-        {
-            var kept = shards.SetFavorite(shard, body.Favorite);
-
-            if (kept is null) deleted.Record(TombstoneStore.Kinds.Shards, shard);
-            else deleted.Forget(TombstoneStore.Kinds.Shards, shard);
-
-            return Results.Ok(new { shard, note = kept?.Note, favorite = kept?.Favorite ?? false });
-        });
+            ShardEdited(shard, shards.SetFavorite(shard, body.Favorite), deleted));
 
         // What the logs are still carrying. Unscoped by wipe on purpose - see
         // LogLibrary.Signals.
@@ -4232,6 +4244,9 @@ public sealed record MapNoteRequest(
 
 /// <summary>Body of PUT /api/servers/{shard}/note. Blank clears the note.</summary>
 public sealed record ShardNoteRequest(string? Note);
+
+/// <summary>Body of PUT /api/servers/{shard}/name. Blank forgets the name.</summary>
+public sealed record ShardAliasRequest(string? Name);
 
 /// <summary>Body of PUT /api/servers/{shard}/favorite.</summary>
 public sealed record ShardFavoriteRequest(bool Favorite);

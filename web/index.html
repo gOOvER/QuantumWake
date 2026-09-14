@@ -294,12 +294,17 @@
         <div class="card-label">Server</div>
         <div class="card-source source-slot" id="now-server-source" data-sources="logs"></div>
         <div class="value" id="now-server">—</div>
-        <div class="sub mono" id="now-server-name"></div>
+        <div class="sub mono" id="now-server-id"></div>
         <div class="note" id="now-server-note"></div>
         <div class="actions">
           <button type="button" class="ghost tiny" id="now-server-star">☆ Favourite</button>
+          <button type="button" class="ghost tiny" id="now-server-name">Name…</button>
           <button type="button" class="ghost tiny" id="now-server-open">Servers…</button>
         </div>
+        <form class="now-server-name-form" id="now-server-name-form" hidden>
+          <input type="text" id="now-server-name-input" class="search" maxlength="60" placeholder="The name the game shows — amazing_view" />
+          <button type="submit" class="ghost tiny">Save</button>
+        </form>
       </article>
       <article class="card" id="now-party-card" data-card="party" hidden>
         <div class="card-label">Party</div>
@@ -677,7 +682,7 @@
     <div class="section-bar">
       <h2>Servers</h2>
       <div class="controls">
-        <input id="servers-search" class="search" type="search" placeholder="Search shard or note…" />
+        <input id="servers-search" class="search" type="search" placeholder="Search name, shard or note…" />
         <select id="servers-region" class="select" title="Region">
           <option value="">All regions</option>
         </select>
@@ -694,6 +699,9 @@
       <b>A shard lives only as long as its deployment</b> &mdash; the middle
       number &mdash; and a new deployment retires every shard of the old one.
       Those stay listed as history, greyed, because the note is still yours.
+      The game also shows each shard a <b>name</b> on screen &mdash; <code>amazing_view</code>
+      &mdash; and never writes it to the log, so type it once in the Name column and
+      it is kept against the id for every visit before and after.
     </p>
 
     <div class="summary-strip" id="servers-summary"></div>
@@ -703,6 +711,7 @@
         <thead>
           <tr>
             <th title="Favourite"></th>
+            <th>Name</th>
             <th>Shard</th>
             <th>Region</th>
             <th class="num">Visits</th>

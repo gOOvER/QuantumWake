@@ -2176,6 +2176,7 @@ async function loadHistory() {
   $('#render-errors').hidden = true;
 
   allSessions = sessions;
+  for (const s of sessions) for (const [id, name] of Object.entries(s.shardNames || {})) shardAliases.set(id, name);
   sessionPage = 0;
 
   // A Points page opened straight from the URL drew its cards before the
@@ -2559,12 +2560,15 @@ function sessionShardLabel(session) {
 }
 
 /** Every stay in a debrief, in order, each with how it ended. */
+/** Names the pilot taught, by shard id, gathered from whatever answered last. */
+const shardAliases = new Map();
+
 function sessionShardText(detail) {
   const stays = detail.shards || [];
   if (!stays.length) return 'None recorded';
 
   return stays.map((stay) => {
-    const short = shardShort(stay.shard);
+    const short = shardAliases.get(stay.shard) || shardShort(stay.shard);
     const mins = Math.round((new Date(stay.leftAt) - new Date(stay.joinedAt)) / 60000);
     return `${short} · ${duration(mins * 60)} · ${endingLabel(stay.ending)}`;
   }).join('\n');
@@ -8259,6 +8263,7 @@ async function loadServers() {
   }
 
   serverRows = data.servers || [];
+  for (const r of serverRows) { if (r.name) shardAliases.set(r.shard, r.name); else shardAliases.delete(r.shard); }
   serverNewestDeployment = data.newestDeployment || null;
 
   fillServerRegions(serverRows);
@@ -8298,7 +8303,7 @@ function filteredServers() {
     if (starredOnly && !r.favorite) return false;
     if (region && r.region !== region) return false;
     if (term) {
-      const hay = `${r.shard} ${r.region} ${r.note || ''}`.toLowerCase();
+      const hay = `${r.name || ''} ${r.shard} ${r.region} ${r.note || ''}`.toLowerCase();
       if (!hay.includes(term)) return false;
     }
     return true;
@@ -8336,7 +8341,7 @@ function renderServers() {
       ? 'Nothing matches those filters. Untick "Current deployment only" to see shards from earlier deployments.'
       : 'No shard joins yet. The game writes one <Join PU> line each time it places you; '
         + 'sessions summarised before this build read it will show up after a rescan.');
-    td.colSpan = 8;
+    td.colSpan = 9;
     tr.append(td);
     body.append(tr);
     return;
@@ -8356,6 +8361,12 @@ function serverRow(row) {
   star.addEventListener('click', () => setServerFavorite(row.shard, !row.favorite).catch(() => {}));
   starCell.append(star);
   tr.append(starCell);
+
+  // The name the game shows, taught by the pilot. Edited in place like the
+  // note, and shown first because it is the word a pilot actually uses.
+  const name = el('td', 'name-cell');
+  name.append(inlineText(row, 'name', 'Name it…', 60, saveServerName));
+  tr.append(name);
 
   const shard = el('td', 'shard');
   shard.append(document.createTextNode(row.shard));
@@ -8409,75 +8420,85 @@ function endingCell(row) {
   return td;
 }
 
-function noteText(row) {
-  const text = el('div', `note-text${row.note ? '' : ' empty'}`, row.note || 'Add a note…');
+/**
+ * A cell the pilot writes into - the note, or the name - shown as text and
+ * swapped for a box on click. One helper for both because they differ only
+ * in which field they hold and how long it may be.
+ */
+function inlineText(row, field, placeholder, maxLength, save) {
+  const value = row[field];
+  const text = el('div', `note-text${value ? '' : ' empty'}`, value || placeholder);
   text.title = 'Click to edit';
   text.tabIndex = 0;
-  text.addEventListener('click', () => editServerNote(row, text));
+  text.addEventListener('click', () => editInline(row, field, placeholder, maxLength, save, text));
   text.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); editServerNote(row, text); }
+    if (e.key === 'Enter') { e.preventDefault(); editInline(row, field, placeholder, maxLength, save, text); }
   });
   return text;
 }
 
 /** Swaps the text for a box; Escape abandons, blur or Ctrl+Enter saves. */
-function editServerNote(row, text) {
-  const box = el('textarea');
-  box.value = row.note || '';
-  box.maxLength = 1000;
-  box.placeholder = 'Laggy elevators, two 30ks, good for bunkers…';
+function editInline(row, field, placeholder, maxLength, save, text) {
+  // A name is one line and Enter should save it; a note may run on, so Enter
+  // breaks the line and Ctrl+Enter saves.
+  const oneLine = field === 'name';
+  const box = el(oneLine ? 'input' : 'textarea');
+  if (oneLine) box.type = 'text';
+  box.value = row[field] || '';
+  box.maxLength = maxLength;
+  box.placeholder = placeholder;
 
   let done = false;
-  const finish = (save) => {
+  const finish = (keep) => {
     if (done) return;
     done = true;
-    if (save && box.value.trim() !== (row.note || '')) {
-      saveServerNote(row.shard, box.value).catch(() => box.replaceWith(noteText(row)));
+    if (keep && box.value.trim() !== (row[field] || '')) {
+      save(row.shard, box.value).catch(() => box.replaceWith(inlineText(row, field, placeholder, maxLength, save)));
     } else {
-      box.replaceWith(noteText(row));
+      box.replaceWith(inlineText(row, field, placeholder, maxLength, save));
     }
   };
 
   box.addEventListener('blur', () => finish(true));
   box.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') finish(false);
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) finish(true);
+    if (e.key === 'Enter' && (oneLine || e.ctrlKey || e.metaKey)) { e.preventDefault(); finish(true); }
   });
 
   text.replaceWith(box);
   box.focus();
 }
 
-async function saveServerNote(shard, note) {
-  const res = await fetch(`/api/servers/${encodeURIComponent(shard)}/note`, {
+/** The note cell, for the table. */
+function noteText(row) {
+  return inlineText(row, 'note', 'Add a note…', 1000, saveServerNote);
+}
+
+/** One PUT per field, all answering with the whole record so the row redraws from one shape. */
+async function putServerField(shard, path, body) {
+  const res = await fetch(`/api/servers/${encodeURIComponent(shard)}/${path}`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ note }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
   const saved = await res.json();
-  applyServerChange(shard, { note: saved.note || null, favorite: !!saved.favorite });
+  applyServerChange(shard, { note: saved.note || null, name: saved.name || null, favorite: !!saved.favorite });
 }
 
-async function setServerFavorite(shard, favorite) {
-  const res = await fetch(`/api/servers/${encodeURIComponent(shard)}/favorite`, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ favorite }),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-  const saved = await res.json();
-  applyServerChange(shard, { note: saved.note || null, favorite: !!saved.favorite });
-}
+const saveServerNote = (shard, note) => putServerField(shard, 'note', { note });
+const saveServerName = (shard, name) => putServerField(shard, 'name', { name });
+const setServerFavorite = (shard, favorite) => putServerField(shard, 'favorite', { favorite });
 
 /** Folds a saved change into the rows in hand and redraws both places that show it. */
 function applyServerChange(shard, change) {
   const row = serverRows.find((r) => r.shard === shard);
   if (row) Object.assign(row, change);
+  if (change.name) shardAliases.set(shard, change.name); else shardAliases.delete(shard);
   renderServers();
 
   if (nowState && nowState.shard === shard) {
-    nowState = { ...nowState, shardNote: change.note, shardFavorite: change.favorite };
+    nowState = { ...nowState, shardNote: change.note, shardAlias: change.name, shardFavorite: change.favorite };
     renderNowServer(nowState);
   }
 }
@@ -8496,8 +8517,13 @@ function renderNowServer(state) {
   card.hidden = !state.shard;
   if (card.hidden) return;
 
-  $('#now-server').textContent = state.shardShort || state.shard;
-  $('#now-server-name').textContent = state.shard;
+  // The taught name leads when there is one - it is the word the pilot uses -
+  // with the id's reading beneath; otherwise the reading leads and the id
+  // sits beneath it.
+  $('#now-server').textContent = state.shardAlias || state.shardShort || state.shard;
+  $('#now-server-id').textContent = state.shardAlias
+    ? `${state.shardShort || ''} · ${state.shard}`.replace(/^ · /, '')
+    : state.shard;
 
   const before = state.shardVisitsBefore || 0;
   const parts = [before === 0
@@ -8513,6 +8539,23 @@ function renderNowServer(state) {
   star.textContent = state.shardFavorite ? '★ Favourite' : '☆ Favourite';
   star.className = `ghost tiny${state.shardFavorite ? ' on' : ''}`;
   star.onclick = () => setServerFavorite(state.shard, !state.shardFavorite).catch(() => {});
+
+  const nameButton = $('#now-server-name');
+  const form = $('#now-server-name-form');
+  const input = $('#now-server-name-input');
+  nameButton.textContent = state.shardAlias ? 'Rename…' : 'Name…';
+  nameButton.onclick = () => {
+    form.hidden = !form.hidden;
+    if (!form.hidden) {
+      input.value = state.shardAlias || '';
+      input.focus();
+    }
+  };
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    form.hidden = true;
+    saveServerName(state.shard, input.value).catch(() => {});
+  };
 
   $('#now-server-open').onclick = () => {
     const search = $('#servers-search');
