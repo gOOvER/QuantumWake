@@ -117,8 +117,10 @@ public class ShardNoteStoreTests : IDisposable
         b.Add(new Core.Events.LocationInventoryEvent(Now.AddDays(-1).AddHours(2), "nekron", "RR_MIC_LEO"));
         b.Add(new Core.Events.LoginEvent(Now.AddDays(-1).AddHours(3), "nekron"));
 
-        sessions.Save(a.Build(), "fa");
-        sessions.Save(b.Build(), "fb");
+        var builtA = a.Build();
+        var builtB = b.Build();
+        sessions.Save(builtA, "fa");
+        sessions.Save(builtB, "fb");
 
         var rows = library.Shards();
 
@@ -145,8 +147,8 @@ public class ShardNoteStoreTests : IDisposable
         Assert.Equal("12326004", older.Deployment);
 
         // Visits before a session exclude that session's own stays.
-        Assert.Equal(0, library.ShardVisitsBefore("pub_use1b_12545750_150", "b"));
-        Assert.Equal(2, library.ShardVisitsBefore("pub_use1b_12545750_150", "a"));
+        Assert.Equal(0, library.ShardVisitsBefore("pub_use1b_12545750_150", builtB));
+        Assert.Equal(2, library.ShardVisitsBefore("pub_use1b_12545750_150", builtA));
     }
 
 
@@ -183,6 +185,32 @@ public class ShardNoteStoreTests : IDisposable
 
         var older = Assert.Single(rows, r => r.Shard == "pub_use1b_12545750_080");
         Assert.Equal(1, older.Visits);
+    }
+
+
+    /// <summary>
+    /// After a restart the store holds the finished session under the file's
+    /// name and the live builder is a fresh one for the new file. The finished
+    /// session must stay in the list - it is a different session, not a stale
+    /// copy of this one.
+    /// </summary>
+    [Fact]
+    public void A_fresh_live_session_does_not_hide_the_finished_one_saved_under_the_same_name()
+    {
+        using var sessions = new SessionStore(":memory:");
+        var library = new LogLibrary(sessions);
+
+        var finished = new SessionBuilder("Game.log");
+        finished.Add(new Core.Events.ShardJoinEvent(Now.AddHours(-3), "pub_use1b_12545750_080", "1.2.3.4", 1, "x"));
+        finished.Add(new Core.Events.DisconnectEvent(Now.AddHours(-2), "30016", "Remote Disconnect - Player requested disconnect", true, "SC_Default"));
+        sessions.Save(finished.Build(), "live:1");
+
+        var fresh = new SessionBuilder("Game.log");
+        fresh.Add(new Core.Events.LoginEvent(Now, "nekron"));
+
+        var rows = library.Shards(fresh.Build());
+
+        Assert.Single(rows, r => r.Shard == "pub_use1b_12545750_080");
     }
 
     public void Dispose()

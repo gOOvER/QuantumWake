@@ -459,7 +459,7 @@ public sealed partial class LiveSessionService : BackgroundService
         if (shard is not null && (_visitsBefore is null || _visitsBefore.Value.Shard != shard || _visitsBefore.Value.PlacedAt != placedAt))
         {
             var earlierThisSession = summary.Shards.Count(s => s.Shard == shard) - 1;
-            _visitsBefore = (shard, placedAt, _library.ShardVisitsBefore(shard, summary.Id) + earlierThisSession);
+            _visitsBefore = (shard, placedAt, _library.ShardVisitsBefore(shard, summary) + earlierThisSession);
         }
 
         return new NowState

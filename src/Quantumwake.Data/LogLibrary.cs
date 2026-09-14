@@ -1734,12 +1734,16 @@ public sealed class LogLibrary : IDisposable
             .Select(stay => ReferenceEquals(stay, open) ? stay with { Ending = ShardLeave.Open } : stay)
             .ToList();
 
-        return Aggregate([.. _store.All().Where(s => s.Id != live.Id), live with { Shards = merged }]);
+        // Replace the stored copy of this same session, not everything under
+        // the file's name: after a restart the store holds the finished session
+        // under "Game" while the live builder is a fresh one for the new file,
+        // and dropping the former would lose an evening until the next scan.
+        return Aggregate([.. _store.All().Where(s => !(s.Id == live.Id && s.StartedAt == live.StartedAt)), live with { Shards = merged }]);
     }
 
     /// <summary>
     /// How many times this install had been placed on a shard before the
-    /// session named, which is what "you have been here before" means on the
+    /// session being played, which is what "you have been here before" means on the
     /// Now page.
     /// </summary>
     /// <remarks>
@@ -1747,9 +1751,10 @@ public sealed class LogLibrary : IDisposable
     /// without the exclusion the current stay would count itself and the first
     /// visit anywhere would read as the second.
     /// </remarks>
-    public int ShardVisitsBefore(string shard, string? excludingSession) =>
+    public int ShardVisitsBefore(string shard, SessionSummary live) =>
         _store.All()
-            .Where(s => s.Id != excludingSession)
+            // The same session, not the same file name - see Shards(live).
+            .Where(s => !(s.Id == live.Id && s.StartedAt == live.StartedAt))
             .Sum(s => s.Shards.Count(stay => stay.Shard == shard));
 
     private static IReadOnlyList<ShardRecord> Aggregate(IReadOnlyList<SessionSummary> sessions)
