@@ -147,6 +147,7 @@ position tracker.*
 | **Flight plan and checklist** | What is my next stop, what has to happen there, and what can be checked off? |
 | **Sessions, contracts and crew** | How long did I play, which contracts changed, and who did the log name? |
 | **Fleet, loadout and stash** | Which ships and gear have appeared, what fits, and where something was last seen? |
+| **Hangar and Garage** | How big is each ship against the others, how do two compare on every number, and what would a different part do to a ship's sheet - DPS, shields, signatures, power - before buying it? |
 | **Ledger, cargo and market** | Which transactions were confirmed, what did a counter record, and where is a commodity traded? |
 | **Mining, crafting and items** | What the installed game data says about deposits, recipes, parts and shops. |
 | **Screen readings** | What a saved screenshot or copied `/showlocation` says, checked against the logbook where possible. |
@@ -364,7 +365,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.24
+### 0.13.25
 
 - **Comparing two ships in the Hangar compares their numbers now, not just
   their outlines.** Pick the pair in the Hangar's own *Compare … with …* bar
