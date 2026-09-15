@@ -364,7 +364,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.21
+### 0.13.22
 
 - **Comparing two ships in the Hangar compares their numbers now, not just
   their outlines.** Pick the pair in the Hangar's own *Compare … with …* bar
@@ -380,7 +380,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   Size and use carry no verdict. The comparison can be cleared from the
   Hangar, which it could not be before, and picking the same ship twice is
   refused. A hull the community dataset cannot draw keeps its size and use
-  and the note says why the rest is missing.
+  and the note says why the rest is missing. The to-scale deck draws a
+  compared pair to fit - both on one shelf whatever the zoom, and no bigger
+  than the game's 256-pixel paint render can stand - where a hull wider than
+  it is long (the Hermes is 73 m across) used to overrun half the deck and
+  push the other ship under the fold, so the comparison seemed to show one
+  ship, very large and blurred.
 
 - **Start the Garage bench from a screenshot of the ship.** When the screen
   reader has read a Vehicle Loadout Manager frame of the open ship, the

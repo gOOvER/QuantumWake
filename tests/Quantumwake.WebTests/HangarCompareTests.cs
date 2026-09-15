@@ -157,4 +157,28 @@ public class HangarCompareTests
         Assert.Contains("Drake Corsair: the community dataset cannot draw its sheet", page.NodeText("#hangar-compare-note"));
         Assert.Equal("—", page.Text("(() => { const r = __dom.node('#hangar-compare-table tbody').descendants().filter(n => n.tagName === 'tr').find(n => n.children[0].textContent === 'Hull HP'); return r.children[2].textContent; })()"));
     }
+    /// <summary>
+    /// A compared pair is drawn to fit: both on one shelf whatever the zoom,
+    /// and no bigger than the pictures can stand. A hull wider than it is
+    /// long used to overrun its half of the deck and push the other ship
+    /// under the fold, which read as the comparison showing one ship.
+    /// </summary>
+    [Fact]
+    public void A_compared_pair_shares_one_shelf_at_a_capped_scale_whatever_the_zoom()
+    {
+        var page = Loaded();
+        // A hull wider than long, like the Hermes, and 4x zoom asked for.
+        page.Serve("/api/fleet/hangar", Fleet.Replace("\"beam\":16.5,\"length\":20", "\"beam\":73,\"length\":58"));
+        page.Do("__dom.node('#hangar-zoom').value = '4'; hangarComparison = new Set(['Aegis Gladius', 'Drake Corsair']); await loadHangar();");
+
+        var ys = page.Text("__dom.node('#hangar-canvas').byClass('hangar-ship').map(g => g.getAttribute('transform').split(' ')[1]).join('|')");
+        Assert.Equal(2, ys.Split('|').Length);
+        Assert.Equal(ys.Split('|')[0], ys.Split('|')[1]);
+
+        // 73 m across at the capped scale is at most 384 px; zoom is not offered.
+        var tallest = page.Number("Math.max(...__dom.node('#hangar-canvas').byClass('hangar-ship').map(g => Number(g.querySelector('image').getAttribute('height'))))");
+        Assert.True(tallest <= 384.5, $"tallest {tallest}");
+        Assert.True(page.Truth("__dom.node('#hangar-zoom').hidden"));
+        Assert.Contains("Compared · 2", page.NodeText("#hangar-canvas"));
+    }
 }

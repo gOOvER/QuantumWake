@@ -5735,8 +5735,26 @@ function renderHangar() {
   // The two widest cells also need the gap between them. Without taking it
   // out here, their right edges exceed the deck by the gap and the second
   // ship silently wraps onto its own oversized shelf.
-  const scale = ((width - 40 - HANGAR_SHIP_GAP) / 2 / longest) * zoom;   // px per metre
-  const groups = hangarScaleGroups(pictured);
+  let scale = ((width - 40 - HANGAR_SHIP_GAP) / 2 / longest) * zoom;   // px per metre
+
+  // A pair is drawn to fit: both on one shelf whatever the zoom, and never
+  // blown up past what the pictures can stand. The rule above sizes by
+  // length alone, and a hull wider than it is long - the Hermes is 58 m long
+  // and 73 m across - overran its half and pushed the other ship under the
+  // fold, which read as the comparison showing one ship, very large. The cap
+  // is the paint render's own 256 px at one and a half times: past that the
+  // finish is a blur, and the silhouette gains nothing from being bigger.
+  const comparing = pictured.length === 2 && hangarComparison.size === 2;
+  if (comparing) {
+    const across = pictured.reduce((sum, s) => sum + Math.max(s.length, 90 / scale), 0);
+    const fit = (width - 40 - HANGAR_SHIP_GAP) / across;
+    const cap = 384 / Math.max(...pictured.map((s) => Math.max(s.length, s.beam)));
+    scale = Math.min(fit, cap);
+  }
+  if (zoomSelect) zoomSelect.hidden = comparing || mode !== 'scale';
+  if (layoutSelect) layoutSelect.hidden = comparing || mode !== 'scale';
+
+  const groups = comparing ? [['Compared', pictured]] : hangarScaleGroups(pictured);
 
   // Ships on one shelf and ground vehicles on another, at the same scale. A
   // missing game icon is a missing shape, not permission to invent one or to
