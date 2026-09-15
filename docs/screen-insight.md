@@ -868,6 +868,18 @@ The pilot enabled reading their screenshots, not their archive, and the
 button for the newest one is still there for that. The setting names the
 folder it follows.
 
+The archive is read on request, not never. On this install the only
+photographs of the Hermes' loadout - eight Vehicle Loadout Manager frames and
+the Fleet Manager's loadout estimate, 8 September 21:48-21:53 - were taken the
+evening the watch shipped, and the watch began after them; the store's
+earliest reading was 10 September and the Garage had nothing to offer. The
+Log tab's **Read N older screenshots** button reads what the folder holds that
+the store does not, newest first, forty a press, and says what came of them.
+34 unread on this install read in about five seconds: 14 loadouts, 5 unknown,
+the rest kiosks, maps, contracts and the Fleet Manager. A file the engine
+refuses is kept as a refusal rather than left unread, or it would head the
+list at every press. (0.13.29)
+
 Readings are kept, newest first, three hundred at most, dated by the
 screenshot and never by the read. A frame with no reader keeps every line the
 engine returned, because that text is what the next reader gets written from

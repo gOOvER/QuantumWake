@@ -365,7 +365,26 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.28
+### 0.13.29
+
+- **Screenshots from before the app was watching can now be read.** The
+  folder watch reads nothing that was already there when it was switched on,
+  which meant a loadout photographed the evening before was never seen: on
+  this install the only photographs of the Hermes' fit — eight Vehicle Loadout
+  Manager frames and its loadout estimate — sat unread for a week while the
+  Garage said nothing. The Log tab now offers **Read N older screenshots**,
+  newest first, forty a press, and says what each batch turned out to be.
+
+- **The Garage says when it has no photograph of a ship**, and where the
+  older screenshots are read, instead of hiding the section. Reading the
+  Fleet Manager's loadout estimate now fills every port of a counted kind
+  (*Cooler ×2* is both coolers), and its *Quantum Drives* row — which the
+  engine reads with an O — reaches the quantum drive port.
+
+- **A paint picked anywhere shows everywhere.** Choosing a paint on the
+  Garage, the Hangar or a Fleet card redraws every picture of that hull on
+  the page; before, a pick made on one page reached the others only after a
+  reload.
 
 - **The Hangar's cards open the Garage too.** Each ship card in the Hangar
   gallery carries the same *Garage* button as its Fleet card, so a ship you

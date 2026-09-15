@@ -2610,6 +2610,11 @@ public static class ServerHost
             // Where the watch looks, said out loud: the pilot is agreeing to a
             // folder being followed, and should be able to see which.
             folder = install is null ? null : Screenshots.FolderFor(install.RootPath),
+
+            // How many screenshots in that folder the app has never read. The
+            // watch reads nothing from before it began, so this is what the
+            // "read older" button has to offer - and zero is what hides it.
+            unread = insight.Unread(install?.RootPath).Count,
         }));
 
         app.MapPost("/api/screen/settings", (
@@ -2800,6 +2805,32 @@ public static class ServerHost
                 return Results.NotFound(new { trouble = "that screenshot is no longer in the game's folder" });
 
             return Results.Ok(await insight.ReadShotAsync(path, token));
+        });
+
+        // The archive, on request. The watch reads nothing from before it
+        // began - the pilot enabled reading their screenshots, not their
+        // history - but the one loadout photograph of a ship is often from the
+        // evening before the app was installed. A bounded batch, newest first,
+        // and the count still waiting, so the button can say what is left and
+        // a folder of two thousand shots is not one request.
+        app.MapPost("/api/screen/readings/older", async (
+            ScreenInsightService insight,
+            ScreenSettingsStore settings,
+            int? take,
+            CancellationToken token) =>
+        {
+            if (settings.Current.Mode != ScreenMode.Screenshots)
+                return Results.BadRequest(new { trouble = "screenshot analysis is switched off" });
+
+            if (insight.Excuse(install?.RootPath) is { } excuse)
+                return Results.BadRequest(new { trouble = excuse });
+
+            var (read, remaining) = await insight.ReadOlderAsync(install?.RootPath, take is > 0 ? take.Value : 40, token);
+            return Results.Ok(new
+            {
+                read = read.Select(s => new { s.Shot, s.ShotAt, s.Kind, s.Summary }).ToList(),
+                remaining,
+            });
         });
 
         app.MapGet("/api/runs/settings", (RunSettingsStore settings) => settings.Current);

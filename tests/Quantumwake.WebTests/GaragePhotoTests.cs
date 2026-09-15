@@ -49,13 +49,21 @@ public class GaragePhotoTests
         return page;
     }
 
+    /// <summary>
+    /// No reading is said, not hidden: a bench that never mentions photographs
+    /// looks like it cannot use one, and the pilot whose only photograph of
+    /// the ship predates the watch is told where the older screenshots are read.
+    /// </summary>
     [Fact]
-    public void Without_a_reading_of_the_ship_nothing_is_offered()
+    public void Without_a_reading_of_the_ship_the_section_says_so_and_offers_nothing()
     {
         var page = Opened(null);
 
         Assert.Contains("GET /api/garage/AEGS_Gladius/photographed", page.Fetched());
-        Assert.True(page.Truth("__dom.node('#garage-photo').hidden"));
+        Assert.False(page.Truth("__dom.node('#garage-photo').hidden"));
+        Assert.Equal("No photograph of the Aegis Gladius has been read", page.NodeText("#garage-photo-title"));
+        Assert.Contains("Read older screenshots", page.NodeText("#garage-photo-sub"));
+        Assert.True(page.Truth("__dom.node('#garage-photo-tools').hidden"));
         Assert.Equal("Stock fit", page.NodeText("#garage-changes"));
     }
 

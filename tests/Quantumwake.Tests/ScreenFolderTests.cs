@@ -64,6 +64,26 @@ public class ScreenFolderTests
         Assert.Equal([earlier, later], ready);
     }
 
+    /// <summary>
+    /// The archive on request: everything settled and never read, however
+    /// old, newest first - the pilot asking for the older ones wants last
+    /// night's loadout before last month's, and a bounded read has to start
+    /// at the useful end. What the watch has already read is not offered again.
+    /// </summary>
+    [Fact]
+    public void The_archive_is_everything_unread_newest_first_whatever_the_baseline()
+    {
+        var old = Shot("ScreenShot-old.jpg", TimeSpan.FromDays(3));
+        var older = Shot("ScreenShot-older.jpg", TimeSpan.FromDays(9));
+        var read = Shot("ScreenShot-read.jpg", TimeSpan.FromDays(1));
+        var fresh = Shot("ScreenShot-fresh.jpg", TimeSpan.FromMilliseconds(300));
+        var empty = Shot("ScreenShot-empty.jpg", TimeSpan.FromDays(2), length: 0);
+
+        var unread = ScreenFolder.Unread([older, read, fresh, old, empty], Now, path => path.EndsWith("read.jpg"));
+
+        Assert.Equal([old, older], unread);
+    }
+
     [Theory]
     [InlineData("ScreenShot-2026-09-07_21-30-17-B52.jpg", true)]
     [InlineData("shot.PNG", true)]

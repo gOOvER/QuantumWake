@@ -62,6 +62,52 @@ public class ScreenPanelTests
 
         Assert.False(page.Truth("__dom.node('#screen-scan').hidden"));
         Assert.Contains("clipboard and screenshots", page.NodeText("#screen-mode-status"));
+
+        // Nothing unread in the folder: no button for it, rather than one
+        // that reads nothing.
+        Assert.True(page.Truth("__dom.node('#screen-read-older').hidden"));
+    }
+
+    /// <summary>
+    /// The watch reads nothing from before it began, so the older screenshots
+    /// are a button with the count on it: the one photograph of a ship's
+    /// loadout is often from the evening before the app was installed. Each
+    /// press reads a batch, says what came of it, and re-counts from the
+    /// folder rather than from what it thinks it did.
+    /// </summary>
+    [Fact]
+    public void The_older_screenshots_are_offered_by_count_and_read_a_batch_at_a_time()
+    {
+        var page = new Page();
+        page.Serve("/api/screen/settings", """
+            {"mode":"Screenshots","watch":false,"watchScreenshots":true,"canReadScreenshots":true,"canReadClipboard":true,
+             "folder":"E:\\rsi\\StarCitizen\\LIVE\\screenshots","unread":45}
+            """);
+        page.Serve("/api/screen/readings?take=50", """{"readings":[],"clipboard":[],"total":0,"pastes":0}""");
+        page.Do("await renderScreenPanel();");
+
+        Assert.False(page.Truth("__dom.node('#screen-read-older').hidden"));
+        Assert.Equal("Read 45 older screenshots", page.NodeText("#screen-read-older"));
+        Assert.Contains("45 already there were never read", page.NodeText("#screen-folder"));
+
+        page.Serve("/api/screen/readings/older?take=40", """
+            {"read":[{"shot":"a.jpg","shotAt":"2026-09-09T01:49:20Z","kind":"Loadout","summary":"RSI Hermes, 8 parts named"},
+                     {"shot":"b.jpg","shotAt":"2026-09-09T01:53:11Z","kind":"Loadout","summary":"RSI Hermes, 11 parts named"},
+                     {"shot":"c.jpg","shotAt":"2026-09-09T01:50:40Z","kind":"Tooltip","summary":"Arlington Rifle"}],
+             "remaining":5}
+            """);
+        page.Serve("/api/screen/settings", """
+            {"mode":"Screenshots","watch":false,"watchScreenshots":true,"canReadScreenshots":true,"canReadClipboard":true,
+             "folder":"E:\\rsi\\StarCitizen\\LIVE\\screenshots","unread":5}
+            """);
+        page.Do("await readOlderScreenshots();");
+
+        Assert.Contains("POST /api/screen/readings/older?take=40", page.Fetched());
+        var status = page.NodeText("#screen-status");
+        Assert.Contains("3 read", status);
+        Assert.Contains("2 loadout", status);
+        Assert.Contains("5 older still unread", status);
+        Assert.Equal("Read 5 older screenshots", page.NodeText("#screen-read-older"));
     }
 
     /// <summary>

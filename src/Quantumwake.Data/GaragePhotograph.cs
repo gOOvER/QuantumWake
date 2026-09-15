@@ -76,7 +76,30 @@ public static class GaragePhotograph
         ["weapon"] = "WeaponGun",
     };
 
-    private static readonly Regex Label = new(@"^(?<kind>.+?)\s*(?<n>\d+)?$", RegexOptions.Compiled);
+    /// <summary>
+    /// A port label as the Vehicle Loadout Manager prints it - <c>Cooler 2</c>,
+    /// an ordinal - or as the loadout estimate does - <c>Cooler ×2</c>, a
+    /// count of ports carrying the same part.
+    /// </summary>
+    private static readonly Regex Label = new(@"^(?<kind>.+?)\s*(?:×\s*(?<count>\d+)|(?<n>\d+))?$", RegexOptions.Compiled);
+
+    /// <summary>
+    /// The dump's group for a screen's word, or null. The estimate's type
+    /// column pluralises some kinds (<c>Quantum Drives</c>), and the engine
+    /// reads its Q as an O on the Fleet Manager's amber - a confusion of the
+    /// two glyphs, not of the frame, so it is undone here rather than taught
+    /// to the reader as a name.
+    /// </summary>
+    private static string? KindOf(string word)
+    {
+        var text = word.Trim();
+        if (text.StartsWith("ouantum", StringComparison.OrdinalIgnoreCase))
+            text = "q" + text[1..];
+
+        if (Kinds.TryGetValue(text, out var kind)) return kind;
+        if (text.EndsWith('s') && Kinds.TryGetValue(text[..^1], out kind)) return kind;
+        return null;
+    }
 
     /// <summary>
     /// Matches a reading to a ship. Null when the reading is not of this ship:
@@ -106,8 +129,7 @@ public static class GaragePhotograph
         foreach (var fitting in reading.Fittings)
         {
             var match = Label.Match(fitting.Slot.Trim());
-            var kind = Kinds.GetValueOrDefault(match.Groups["kind"].Value.Trim());
-            var ordinal = match.Groups["n"].Success ? int.Parse(match.Groups["n"].Value) : 1;
+            var kind = KindOf(match.Groups["kind"].Value);
 
             if (kind is null)
             {
@@ -115,24 +137,54 @@ public static class GaragePhotograph
                 continue;
             }
 
-            var port = byGroup.TryGetValue(kind, out var list) && ordinal >= 1 && ordinal <= list.Count ? list[ordinal - 1] : null;
-            if (port is null)
+            byGroup.TryGetValue(kind, out var list);
+            list ??= [];
+
+            // An ordinal names one port; a count from the estimate names the
+            // first that many of the kind, which is a claim about the ship
+            // (it has that many, all alike) rather than about which is which -
+            // and the estimate does not say which, so the dump's order stands
+            // in, as it does for left and right.
+            var targets = new List<FitPort>();
+            if (match.Groups["count"].Success)
             {
-                ports.Add(Skipped(fitting, $"the ship has no {Kinds.First(k => k.Value == kind).Key} {ordinal} the bench can change"));
+                targets.AddRange(list.Take(int.Parse(match.Groups["count"].Value)));
+            }
+            else
+            {
+                var ordinal = match.Groups["n"].Success ? int.Parse(match.Groups["n"].Value) : 1;
+                if (ordinal >= 1 && ordinal <= list.Count) targets.Add(list[ordinal - 1]);
+                if (targets.Count == 0)
+                {
+                    ports.Add(Skipped(fitting, $"the ship has no {Kinds.First(k => k.Value == kind).Key} {ordinal} the bench can change"));
+                    continue;
+                }
+            }
+
+            if (targets.Count == 0)
+            {
+                ports.Add(Skipped(fitting, $"the ship has no {Kinds.First(k => k.Value == kind).Key} the bench can change"));
                 continue;
             }
 
+            foreach (var port in targets) Apply(fitting, port);
+        }
+
+        return new PhotographedFit(sighting.Shot, sighting.ShotAt, reading.Ship, reading.Scope, swaps, ports);
+
+        void Apply(ScreenFitting fitting, FitPort port)
+        {
             if (fitting.IsEmpty)
             {
                 swaps[port.PortId] = null;
                 ports.Add(new PhotographedPort(fitting.Slot, port.PortId, null, null, true, port.Class is not null, null));
-                continue;
+                return;
             }
 
             if (fitting.NothingRead)
             {
                 ports.Add(Skipped(fitting, "nothing read under it", port.PortId));
-                continue;
+                return;
             }
 
             if (fitting.ClassName is null)
@@ -140,19 +192,19 @@ public static class GaragePhotograph
                 ports.Add(Skipped(fitting, fitting.Name is null
                     ? $"read “{fitting.Read}”, which names no one part"
                     : $"read as {fitting.Name}, which more than one class answers to", port.PortId));
-                continue;
+                return;
             }
 
             if (!parts.TryGetValue(fitting.ClassName, out var part))
             {
                 ports.Add(Skipped(fitting, $"{fitting.Name ?? fitting.ClassName} is not in the reference", port.PortId));
-                continue;
+                return;
             }
 
             if (!port.Accepts.Contains(part.Type, StringComparer.Ordinal) || part.Size < port.MinSize || part.Size > port.MaxSize)
             {
                 ports.Add(Skipped(fitting, $"{part.Name} (S{part.Size} {part.Type}) does not fit that port", port.PortId));
-                continue;
+                return;
             }
 
             swaps[port.PortId] = part.Class;
@@ -160,8 +212,6 @@ public static class GaragePhotograph
                 fitting.Slot, port.PortId, part.Name, part.Class, true,
                 !string.Equals(part.Class, port.Class, StringComparison.Ordinal), null));
         }
-
-        return new PhotographedFit(sighting.Shot, sighting.ShotAt, reading.Ship, reading.Scope, swaps, ports);
     }
 
     /// <summary>

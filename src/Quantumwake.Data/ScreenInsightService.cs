@@ -98,6 +98,72 @@ public sealed class ScreenInsightService(
     }
 
     /// <summary>
+    /// The screenshots in the game's folder that have never been read, newest
+    /// first. Empty when there is no folder, or no reader to count for.
+    /// </summary>
+    public IReadOnlyList<ScreenFile> Unread(string? installRoot)
+    {
+        if (Excuse(installRoot) is not null) return [];
+
+        var folder = Screenshots.FolderFor(installRoot!);
+        if (!Directory.Exists(folder)) return [];
+
+        try
+        {
+            return ScreenFolder.Unread(
+                new DirectoryInfo(folder).EnumerateFiles()
+                    .Where(f => ScreenFolder.IsScreenshot(f.Name))
+                    .Select(f => new ScreenFile(f.FullName, f.Length, new DateTimeOffset(f.LastWriteTimeUtc, TimeSpan.Zero))),
+                DateTimeOffset.UtcNow,
+                path => readings.Has(Path.GetFileName(path)));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// Reads the newest unread screenshots, at most <paramref name="take"/> of
+    /// them, and says how many are still waiting. The archive on demand: the
+    /// watch reads nothing that was there before it began, and the loadout a
+    /// pilot photographed the evening before they installed the app is still
+    /// the only photograph of that ship.
+    /// </summary>
+    public async Task<(IReadOnlyList<ScreenSighting> Read, int Remaining)> ReadOlderAsync(
+        string? installRoot, int take, CancellationToken token = default)
+    {
+        var waiting = Unread(installRoot);
+        var read = new List<ScreenSighting>();
+
+        foreach (var file in waiting.Take(Math.Max(0, take)))
+        {
+            token.ThrowIfCancellationRequested();
+
+            ScreenSighting sighting;
+
+            try
+            {
+                sighting = await ReadShotAsync(file.Path, token);
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                sighting = Nothing(Path.GetFileName(file.Path), file.LastWrite,
+                    $"could not read that screenshot ({e.GetType().Name})");
+            }
+
+            // A file the engine refused is not half-written here as it is
+            // under the watch - it is days old - so the refusal is kept.
+            // Otherwise the same file heads the list at every press, and a
+            // bounded read never gets past it.
+            if (!readings.Has(sighting.Shot)) readings.Add(sighting);
+            read.Add(sighting);
+        }
+
+        return (read, Math.Max(0, waiting.Count - read.Count));
+    }
+
+    /// <summary>
     /// Reads one screenshot, works out which screen it is, checks what it
     /// says against the logs, and remembers the result.
     /// </summary>

@@ -5014,14 +5014,29 @@ function applyScreenMode() {
   const folderLabel = $('#screen-watch-folder-label');
   if (folderLabel) folderLabel.hidden = !shots;
 
+  // The archive, offered by count. The watch reads nothing from before it
+  // began, and the one photograph of a ship's loadout is often from the
+  // evening before the app was installed - so the older ones are a button,
+  // with the number on it, and no button at all when there are none.
+  const older = $('#screen-read-older');
+  if (older) {
+    const unread = Number(screenSettings.unread) || 0;
+    older.hidden = !shots || !screenSettings.canReadScreenshots || unread === 0;
+    older.textContent = `Read ${unread} older screenshot${unread === 1 ? '' : 's'}`;
+  }
+
   // The folder being followed, named. The pilot is agreeing to a directory
   // being watched and should be able to see which one.
   const folder = $('#screen-folder');
   if (folder) {
     const watching = shots && screenSettings.watchScreenshots && screenSettings.folder;
+    const unread = Number(screenSettings.unread) || 0;
     folder.hidden = !watching;
     folder.textContent = watching
-      ? `Reading new screenshots from ${screenSettings.folder} as they land. Nothing already there is read.`
+      ? `Reading new screenshots from ${screenSettings.folder} as they land.`
+        + (unread
+          ? ` ${unread} already there ${unread === 1 ? 'was' : 'were'} never read - the button above reads them, newest first.`
+          : ' Nothing already there is read unless you ask.')
       : '';
   }
 
@@ -5405,6 +5420,33 @@ async function scanScreenshot() {
 
   screenSay(`${s.shot} · ${SCREEN_KINDS[s.kind] || s.kind} · read in ${s.tookMs} ms`);
   screenShow((box) => renderSighting(box, s));
+  renderScreenLog().catch(() => {});
+}
+
+/**
+ * The archive, a batch at a time. Each press reads the newest forty the app
+ * has never read and says what came of them and how many are left; the
+ * button relabels itself from the settings answer rather than counting
+ * down here, so what it says is what the folder holds.
+ */
+async function readOlderScreenshots() {
+  const unread = Number(screenSettings.unread) || 0;
+  screenSay(`reading ${Math.min(unread, 40)} of ${unread} older screenshot${unread === 1 ? '' : 's'}…`);
+  screenShow(() => {});
+
+  const got = await getJson2('/api/screen/readings/older?take=40');
+  const read = got.read || [];
+  const kinds = new Map();
+  for (const s of read) kinds.set(s.kind, (kinds.get(s.kind) || 0) + 1);
+  const told = [...kinds].map(([kind, n]) => `${n} ${SCREEN_KINDS[kind] || kind}`).join(', ');
+
+  screenSay(`${read.length} read${told ? ` (${told})` : ''}`
+    + (got.remaining ? ` · ${got.remaining} older still unread` : ' · nothing older left unread'));
+
+  try {
+    screenSettings = await getJson('/api/screen/settings');
+  } catch { /* the button keeps its last count; the next open corrects it */ }
+  applyScreenMode();
   renderScreenLog().catch(() => {});
 }
 
@@ -7367,6 +7409,19 @@ $('#screen-scan')?.addEventListener('click', async (e) => {
   }
 });
 
+$('#screen-read-older')?.addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  button.disabled = true;
+
+  try {
+    await readOlderScreenshots();
+  } catch (err) {
+    screenSay(`could not read the older screenshots: ${err.message}`);
+  } finally {
+    button.disabled = false;
+  }
+});
+
 async function renderOverlayLayout() {
   let data;
   try {
@@ -9247,11 +9302,12 @@ async function loadGaragePhoto(cls) {
   garagePhotoApplied = false;
   box.hidden = true;
 
-  let fit;
+  let fit = null;
   try {
     fit = await getJson(`/api/garage/${encodeURIComponent(cls)}/photographed`);
   } catch {
-    return;
+    // No reading of this ship. The section stays, with the reason: a bench
+    // that never mentions photographs looks like it cannot use one.
   }
   if (cls !== garageClass) return;
 
@@ -9263,8 +9319,20 @@ function renderGaragePhoto() {
   const box = $('#garage-photo');
   if (!box) return;
   const fit = garagePhoto;
-  if (!fit) { box.hidden = true; return; }
+  const tools = $('#garage-photo-tools');
   box.hidden = false;
+
+  if (!fit) {
+    const name = garageStock?.ship?.name || 'this ship';
+    $('#garage-photo-title').textContent = `No photograph of the ${name} has been read`;
+    $('#garage-photo-sub').textContent = `Open it at a Vehicle Loadout Manager, or its loadout estimate at a Fleet Manager, `
+      + `with screenshots being read, and the bench can start from what the screen shows. `
+      + `A screenshot from before the app was watching is read from the Log tab - "Read older screenshots".`;
+    $('#garage-photo-unsettled').textContent = '';
+    if (tools) tools.hidden = true;
+    return;
+  }
+  if (tools) tools.hidden = false;
 
   const when = new Date(fit.shotAt).toLocaleString();
   $('#garage-photo-title').textContent = `${fit.ship}, as photographed ${when}`;
@@ -14127,6 +14195,20 @@ function hangarPaintFor(ship) {
 }
 
 /**
+ * Every ship picture drawn this page load, so a paint picked anywhere is
+ * seen everywhere the hull is pictured. Boxes a re-render has discarded are
+ * dropped as they are found, so the set stays the size of the page.
+ */
+const shipPictureBoxes = new Set();
+
+function redrawShipPictures(vehicleClass) {
+  for (const box of shipPictureBoxes) {
+    if (box.isConnected === false) { shipPictureBoxes.delete(box); continue; }
+    if (box.dataset.className === vehicleClass) box.redraw?.();
+  }
+}
+
+/**
  * The ship's picture on its card: the game's own render of the hull in the
  * paint the pilot chose, or the game's silhouette tinted by maker. A small
  * button opens the paints the game pictures for that hull. Until the pilot
@@ -14206,10 +14288,13 @@ function shipPicture(ship, maker, options = {}) {
     });
   }
 
-  // The chooser redraws this box, wherever it sits - a Fleet card or a
-  // Hangar card - rather than every Fleet card, which was why a pick made on
-  // the Hangar showed only after a reload.
+  // The chooser redraws every box of this hull, wherever each sits - the
+  // Fleet card, the Hangar card, the Garage's model - rather than only its
+  // own. Fleet does not re-render on entry, and a pick made on the Garage
+  // used to reach its card only after a reload.
   box.redraw = () => { chosen = shipPaints[ship.className]; failed = false; draw(); };
+  box.dataset.className = ship.className || '';
+  shipPictureBoxes.add(box);
   return box;
 }
 
@@ -14231,7 +14316,7 @@ async function openPaintChooser(ship, box, button) {
 
   select.addEventListener('change', () => {
     rememberShipPaint(ship.className, select.value || null);
-    box.redraw?.();
+    redrawShipPictures(ship.className);
     renderHangar();
   });
 

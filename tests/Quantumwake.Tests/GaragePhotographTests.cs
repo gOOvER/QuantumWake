@@ -118,6 +118,45 @@ public class GaragePhotographTests
         Assert.Equal(new Dictionary<string, string?> { ["s1"] = null, ["c-r"] = "COOL_Glacier" }, fit.Swaps);
     }
 
+    /// <summary>
+    /// The Fleet Manager's loadout estimate is a table of parts by type, not a
+    /// tree of ports: <c>Cooler ×2</c> is two ports carrying the same cooler,
+    /// and the estimate says nothing about which is which, so the first two of
+    /// the kind take it. Its type column pluralises (<c>Quantum Drives</c>) and
+    /// the engine reads that Q as an O on the Hermes' estimate of 8 September -
+    /// both are still the quantum drive.
+    /// </summary>
+    [Fact]
+    public void The_estimates_counted_types_fill_that_many_ports_of_the_kind()
+    {
+        var parts = new Dictionary<string, PartStats>(Parts, StringComparer.Ordinal)
+        {
+            ["QDRV_Hemera"] = Part("QDRV_Hemera", "QuantumDrive", 1, "Hemera"),
+        };
+        var ship = Gladius() with
+        {
+            Loadout =
+            [
+                .. Gladius().Loadout,
+                Port("p-qd", "hardpoint_quantum_drive", "QDRV_Atlas", "QuantumDrive", 1),
+            ],
+        };
+
+        var fit = GaragePhotograph.Match(ship, Frame("Aegis Gladius",
+            Read("Cooler ×2", "COOL_Glacier", "Glacier"),
+            Read("Ouantum Drives", "QDRV_Hemera", "Hemera"),
+            Read("Power Plant", "POWR_Regulus", "Regulus")), parts, Ships);
+
+        Assert.NotNull(fit);
+        Assert.Equal(new Dictionary<string, string?>
+        {
+            ["p-cool-l"] = "COOL_Glacier", ["p-cool-r"] = "COOL_Glacier", ["p-qd"] = "QDRV_Hemera", ["p-plant"] = "POWR_Regulus",
+        }, fit.Swaps);
+        Assert.Equal(4, fit.Applied);
+        Assert.Equal(3, fit.Changed);
+        Assert.Equal(2, fit.Ports.Count(p => p.Slot == "Cooler ×2"));
+    }
+
     /// <summary>The M6A that reads as the M8A too: a name without a class is a tie, and a tie is not fitted.</summary>
     [Fact]
     public void A_reading_two_classes_answer_to_is_not_applied()

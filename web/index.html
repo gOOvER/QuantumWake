@@ -876,11 +876,13 @@
           <div class="option-head">
             <button class="ghost" id="screen-parse">Read copied location</button>
             <button class="ghost" id="screen-scan" hidden>Read last screenshot</button>
+            <button class="ghost" id="screen-read-older" hidden
+                    title="Read the screenshots already in the folder that the watch never saw - newest first, forty at a time"></button>
             <label class="muted" title="Check the clipboard on its own every few seconds">
               <input type="checkbox" id="screen-watch"> Watch clipboard
             </label>
             <label class="muted" id="screen-watch-folder-label" hidden
-                   title="Read each new screenshot as the game saves it. Nothing already in the folder is read.">
+                   title="Read each new screenshot as the game saves it. Nothing already in the folder is read unless you ask for the older ones.">
               <input type="checkbox" id="screen-watch-folder"> Watch screenshots
             </label>
           </div>
@@ -1971,7 +1973,7 @@
         <p class="muted" id="garage-photo-sub"></p>
         <ul class="garage-photo-unsettled" id="garage-photo-unsettled"></ul>
       </div>
-      <div class="garage-photo-tools">
+      <div class="garage-photo-tools" id="garage-photo-tools">
         <button type="button" class="ghost tiny" id="garage-photo-apply">Start from the photographed fit</button>
         <span class="muted" id="garage-photo-state"></span>
       </div>
@@ -2842,7 +2844,7 @@
         </details>
         <details class="faq-item">
           <summary>Does screenshot reading capture my screen?</summary>
-          <p>No. The optional reader only reads a screenshot file you saved in Star Citizen's screenshots folder, after you turn it on, and only files saved after that — nothing already there is read. It does not capture the display, read game memory or send the image away. The dashboard keeps a dated reading; the overlay and MFDs receive only a small summary.</p>
+          <p>No. The optional reader only reads a screenshot file you saved in Star Citizen's screenshots folder, after you turn it on, and only files saved after that — nothing already there is read unless you press <b>Read older screenshots</b> on the Log tab. It does not capture the display, read game memory or send the image away. The dashboard keeps a dated reading; the overlay and MFDs receive only a small summary.</p>
         </details>
         <details class="faq-item">
           <summary>Which screens can it read?</summary>
