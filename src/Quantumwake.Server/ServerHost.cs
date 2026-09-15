@@ -3139,34 +3139,47 @@ public static class ServerHost
                 .Select(i => i.Type)
                 .Where(t => t.Length > 0)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            // A recipe in the install means the component has a craft route,
+            // not that the pilot already owns its blueprint. The bench needs
+            // that distinction when there is no shop counter to send them to.
+            var craftable = lib.GameCommodities.Blueprints
+                .Where(b => b.Kind.Equals("creation", StringComparison.OrdinalIgnoreCase))
+                .Select(b => b.OutputClass)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var options = community.Parts.Values
                 .Where(p => kinds.Contains(p.Type) && p.Size >= target.MinSize && p.Size <= target.MaxSize)
                 .Where(p => !p.Name.Equals(p.Class, StringComparison.Ordinal) && !p.Name.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase))
-                .Select(p => new
+                .Select(p =>
                 {
-                    part = PartCard(p),
-                    flightReady = lib.GameCommodities.Item(p.Class) is { } facts && tagged.Contains(facts.Type)
-                        ? facts.Tags.Contains("flightReady", StringComparison.OrdinalIgnoreCase)
-                        : (bool?)null,
-                    price = uex.ItemPrice(p.Uuid),
-                    shops = uex.ItemMarket(p.Uuid)
-                        .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
-                        .Select(g => g.MinBy(r => r.Buy)!)
-                        .OrderBy(r => r.Buy)
-                        .Take(4)
-                        .Select(r =>
-                        {
-                            var place = lib.Terminals.Resolve(r.Terminal);
-                            return new
+                    var facts = lib.GameCommodities.Item(p.Class);
+                    return new
+                    {
+                        part = PartCard(p),
+                        componentClass = ComponentClass(facts?.Description),
+                        craftable = craftable.Contains(p.Class),
+                        flightReady = facts is not null && tagged.Contains(facts.Type)
+                            ? facts.Tags.Contains("flightReady", StringComparison.OrdinalIgnoreCase)
+                            : (bool?)null,
+                        price = uex.ItemPrice(p.Uuid),
+                        shops = uex.ItemMarket(p.Uuid)
+                            .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
+                            .Select(g => g.MinBy(r => r.Buy)!)
+                            .OrderBy(r => r.Buy)
+                            .Take(4)
+                            .Select(r =>
                             {
-                                terminal = r.Terminal,
-                                placeId = place?.RawId ?? string.Empty,
-                                place = place?.Name,
-                                system = place?.System,
-                                price = r.Buy
-                            };
-                        })
-                        .ToList()
+                                var place = lib.Terminals.Resolve(r.Terminal);
+                                return new
+                                {
+                                    terminal = r.Terminal,
+                                    placeId = place?.RawId ?? string.Empty,
+                                    place = place?.Name,
+                                    system = place?.System,
+                                    price = r.Buy
+                                };
+                            })
+                            .ToList()
+                    };
                 })
                 .ToList();
 
@@ -4066,6 +4079,25 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
         part.PowerGen, part.PowerUseMax, part.CoolantGen, part.CoolantUseMax,
         part.Weapon, part.Shield, part.Quantum, part.Missile, part.Armor
     };
+
+    /// <summary>The component class stated in the game's own item description.</summary>
+    static string? ComponentClass(string? description)
+    {
+        if (string.IsNullOrWhiteSpace(description)) return null;
+
+        // DataCore's item prose stores line breaks as the literal two-character
+        // sequence "\\n", while the community file uses real newlines.
+        var line = description.Replace("\\n", "\n").Split('\n').FirstOrDefault(line =>
+            line.TrimStart().StartsWith("Class:", StringComparison.OrdinalIgnoreCase));
+        if (line is null) return null;
+
+        var value = line[(line.IndexOf(':') + 1)..].Trim();
+        return value.Equals("Civilian", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("Industrial", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("Military", StringComparison.OrdinalIgnoreCase)
+            ? value
+            : null;
+    }
 
     /// <summary>Builds the short list of useful things at the player's live place.</summary>
     /// <remarks>

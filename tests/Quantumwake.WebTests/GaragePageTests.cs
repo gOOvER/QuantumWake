@@ -476,6 +476,21 @@ public class GaragePageTests
         Assert.False(page.Truth($"{glacier}.descendants().some(n => n.classList.contains('unready'))"));
     }
 
+    [Fact]
+    public void A_component_class_and_recipe_are_distinguished_from_a_terminal_purchase()
+    {
+        var page = Bench();
+        page.Serve("/api/garage/AEGS_Gladius/options?port=p1", CoolerOptions.Replace(
+            "\"price\":null,\"shops\":[]",
+            "\"componentClass\":\"Military\",\"craftable\":true,\"price\":null,\"shops\":[]"));
+        page.Do("await selectBenchPort('p1');");
+
+        var bracer = "__dom.node('#garage-bench-panel').descendants().filter(n => n.classList.contains('candidate')).find(n => n.textContent.includes('Bracer'))";
+        Assert.Contains("Military", page.Text($"{bracer}.textContent"));
+        Assert.Contains("Blueprint recipe", page.Text($"{bracer}.textContent"));
+        Assert.Contains("No terminal aUEC seller recorded", page.Text($"{bracer}.textContent"));
+    }
+
     /// <summary>The Fleet card's button opens the Garage on that ship rather than a panel of its own.</summary>
     [Fact]
     public void The_fleet_card_opens_the_garage_on_the_ship()
@@ -587,7 +602,7 @@ public class GaragePageTests
         page.Do("__dom.node('#garage-optimise-goal').value = 'stealth'; __dom.node('#garage-optimise-buyable').checked = true; await optimiseGarage();");
 
         Assert.Contains("\"p1\":\"COOL_JUST_S01_Glacier_SCItem\"", page.BodyOf("/api/garage/AEGS_Gladius/sheet"));
-        Assert.Contains("known UEX sellers", page.NodeText("#garage-optimise-status"));
+        Assert.Contains("terminal aUEC sellers", page.NodeText("#garage-optimise-status"));
     }
 
     [Theory]

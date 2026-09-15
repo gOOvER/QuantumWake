@@ -364,7 +364,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.14
+### 0.13.15
 
 - **Every component maker has a logo now, not a four-letter monogram - the
   game's own.** The Fankit only ships marks for the fifteen hull makers;
@@ -409,6 +409,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   industrial and military marks. The raw `flightReady` tag no longer labels a
   part or excludes it from Auto-fit: a missing tag is not proof that the part
   cannot be used.
+
+- **Components now name their own class and acquisition route.** A Military,
+  Industrial or Civilian mark comes from the installed game's description,
+  rather than from the ship carrying it. Terminal aUEC, Blueprint recipe and
+  no-terminal-seller states are distinct; Auto-fit's optional filter now says
+  exactly what it can guarantee: a known NPC-terminal aUEC seller.
 
 - **The ship sheet is now legible at a glance.** Hull, flight, weapons,
   defence, signature, systems and quantum read as distinct instrument cards:

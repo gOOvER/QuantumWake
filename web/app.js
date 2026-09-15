@@ -9198,6 +9198,22 @@ function partChip(part) {
   return el('span', `chip${/^[A-D]$/.test(grade) ? ` grade-${grade.toLowerCase()}` : ''}`, `S${part?.size ?? '?'} · ${grade}`);
 }
 
+/** The game's class line makes a part's intended discipline visible on the bench. */
+function componentClassChip(componentClass) {
+  if (!componentClass) return null;
+  const key = String(componentClass).toLowerCase();
+  const chip = el('span', `component-class ${key}`, componentClass);
+  chip.title = 'Component class from the game\'s item description';
+  return chip;
+}
+
+/** A route is useful only when its kind is stated: a shop and a recipe answer different plans. */
+function acquisitionChip(kind, text, title) {
+  const chip = el('span', `acquisition ${kind}`, text);
+  chip.title = title;
+  return chip;
+}
+
 /**
  * The figures that matter for a kind, as [label, value, formatted, lowerIsBetter].
  * These head the port row and the candidate rows, so the two read alike.
@@ -9417,6 +9433,8 @@ function renderBenchPanel() {
     const mid = el('div');
     const name = el('div', 'c-name', part.name);
     name.append(partChip(part));
+    const componentClass = componentClassChip(option.componentClass);
+    if (componentClass) name.append(componentClass);
     mid.append(name);
     mid.append(el('div', 'c-maker', part.manufacturer || part.makerCode || ''));
 
@@ -9439,10 +9457,16 @@ function renderBenchPanel() {
     const shop = el('div', 'c-shop');
     if (option.shops && option.shops.length) {
       const best = option.shops[0];
+      shop.append(acquisitionChip('terminal', 'Terminal aUEC', 'Known NPC terminal seller from the UEX market feed.'));
       shop.append(el('b', null, `${fmtInt(best.price)} aUEC`));
       shop.append(document.createTextNode(` · ${best.terminal}${best.place ? `, ${best.place}` : ''}${option.shops.length > 1 ? ` +${option.shops.length - 1}` : ''}`));
-    } else {
-      shop.textContent = garageOptions.pricesKnown ? 'Not sold at any terminal UEX knows.' : '';
+    } else if (garageOptions.pricesKnown) {
+      if (option.craftable) {
+        shop.append(acquisitionChip('craft', 'Blueprint recipe', 'The installed game data contains a recipe; see Crafting for its materials and whether you own the blueprint.'));
+        shop.append(document.createTextNode(' No terminal aUEC seller recorded.'));
+      } else {
+        shop.append(acquisitionChip('unlisted', 'No terminal seller', 'No NPC terminal seller is recorded in the UEX market feed.'));
+      }
     }
     mid.append(shop);
     rowEl.append(mid);
@@ -9555,7 +9579,7 @@ async function optimiseGarage() {
     }
 
     if (changed) await refitGarage();
-    const scope = buyableOnly ? ' from known UEX sellers' : '';
+    const scope = buyableOnly ? ' from known terminal aUEC sellers' : '';
     status.textContent = changed
       ? `Optimised ${changed} port${changed === 1 ? '' : 's'} for ${GARAGE_OPTIMISE_GOALS[goal]}${scope}. Review the sheet, then add the changed parts to Shopping when you are ready to buy.`
       : `Nothing on this fit changed for ${GARAGE_OPTIMISE_GOALS[goal]}${scope}.`;
