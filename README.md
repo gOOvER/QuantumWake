@@ -364,7 +364,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.11
+### 0.13.12
 
 - **Every component maker has a logo now, not a four-letter monogram - the
   game's own.** The Fankit only ships marks for the fifteen hull makers;
@@ -415,6 +415,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   bank rather than leaving Quantum stranded below the others. Brighter system
   accents, a large card mark, subtle watermark and contained readouts give
   each card a clearer identity without hiding the data.
+
+- **Each Garage system now has its own visual shorthand.** Hull is a frame,
+  flight an arrow, weapons a reticle, defence a shield, signature a scanner,
+  systems a circuit, and quantum a drive vector. They pair with the cards'
+  coloured accents so the section you want is recognisable before reading it.
 
 - **The part's own picture on the bench.** Where the Star Citizen Wiki has a
   cutout of a cooler, gun or drive, the bench and the candidate list show it

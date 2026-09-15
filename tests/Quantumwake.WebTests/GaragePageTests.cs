@@ -100,6 +100,8 @@ public class GaragePageTests
         Assert.Equal("hull|flight|weapons|defence|signature|systems|quantum",
             page.Text($"{cards}.map(n => n.dataset.group).join('|')"));
         Assert.True(page.Truth($"{cards}.every(n => n.descendants().some(c => c.classList.contains('sheet-icon')))"));
+        Assert.Equal("hull|flight|weapons|defence|signature|systems|quantum",
+            page.Text($"{cards}.map(n => n.descendants().find(c => c.classList.contains('sheet-icon')).dataset.icon).join('|')"));
     }
 
     /// <summary>The figures a stealth pilot came for, with the scenario stated beside them.</summary>

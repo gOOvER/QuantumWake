@@ -9040,7 +9040,7 @@ function sheetGroup(title, source, rows) {
   group.dataset.group = groupKey;
   const h = el('h3');
   const label = el('span', 'sheet-title');
-  label.append(el('span', 'sheet-icon', SHEET_GROUP_ICONS[groupKey] || '◆'), document.createTextNode(title));
+  label.append(garageSheetIcon(groupKey), document.createTextNode(title));
   h.append(el('span', 'src', source === 'model' ? 'signature model' : source));
   h.prepend(label);
   group.append(h);
@@ -9048,12 +9048,32 @@ function sheetGroup(title, source, rows) {
   return group;
 }
 
-// The groups are different questions a pilot asks of a fit. The small marks
-// make that separation readable at a glance without pretending they are game
-// instrument icons or adding decorative artwork to the data sheet.
-const SHEET_GROUP_ICONS = {
-  hull: '◆', flight: '↗', weapons: '✦', defence: '◈', signature: '◌', systems: '▦', quantum: '≋',
+// These are diagrammatic system marks rather than imported game artwork: they
+// distinguish the questions the sheet answers while keeping the numbers as the
+// information a pilot is actually here to read.
+const SHEET_GROUP_ICON_SHAPES = {
+  hull: [['polygon', { points: '12,2 20,7 20,17 12,22 4,17 4,7' }], ['path', { d: 'M4 7l8 5 8-5M12 12v10' }]],
+  flight: [['path', { d: 'M3 13 12 3l9 10-6-1-3 9-3-9z' }]],
+  weapons: [['circle', { cx: 12, cy: 12, r: 4 }], ['circle', { cx: 12, cy: 12, r: 9 }], ['path', { d: 'M12 1v4m0 14v4M1 12h4m14 0h4' }]],
+  defence: [['path', { d: 'M12 2 20 5v6c0 5.4-3.3 9.2-8 11-4.7-1.8-8-5.6-8-11V5z' }], ['path', { d: 'm8.5 12 2.2 2.2 4.8-5' }]],
+  signature: [['circle', { cx: 12, cy: 12, r: 9 }], ['circle', { cx: 12, cy: 12, r: 3 }], ['path', { d: 'M12 12 19 5M12 3v2M3 12h2' }]],
+  systems: [['path', { d: 'M4 7h6V4h4v5h6M4 17h6v3h4v-5h6' }], ['circle', { cx: 4, cy: 7, r: 1.5 }], ['circle', { cx: 20, cy: 17, r: 1.5 }]],
+  quantum: [['path', { d: 'M3 12h14M11 7l6 5-6 5M4 7h6M4 17h6' }], ['circle', { cx: 4, cy: 12, r: 1.5 }]],
 };
+
+function garageSheetIcon(group) {
+  const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  icon.setAttribute('class', 'sheet-icon');
+  icon.setAttribute('viewBox', '0 0 24 24');
+  icon.setAttribute('aria-hidden', 'true');
+  icon.dataset.icon = group;
+  for (const [tag, attrs] of SHEET_GROUP_ICON_SHAPES[group] || SHEET_GROUP_ICON_SHAPES.hull) {
+    const shape = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const [name, value] of Object.entries(attrs)) shape.setAttribute(name, value);
+    icon.append(shape);
+  }
+  return icon;
+}
 
 /**
  * One line of the sheet.
