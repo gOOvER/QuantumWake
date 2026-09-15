@@ -364,7 +364,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.23
+### 0.13.24
 
 - **Comparing two ships in the Hangar compares their numbers now, not just
   their outlines.** Pick the pair in the Hangar's own *Compare … with …* bar
@@ -387,7 +387,10 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   push the other ship under the fold, so the comparison seemed to show one
   ship, very large and blurred. If only one of the two has an installed
   top-down icon, it now stays just as compact while the other is explicitly
-  named below as unavailable to draw.
+  named below as unavailable to draw. When the game has that missing hull's
+  Gallery render, the comparison now uses it inside the hull's verified
+  length × beam box, labelled *gallery render*, so both selected vessels are
+  present without pretending a perspective picture is a top-down silhouette.
 
 - **Start the Garage bench from a screenshot of the ship.** When the screen
   reader has read a Vehicle Loadout Manager frame of the open ship, the

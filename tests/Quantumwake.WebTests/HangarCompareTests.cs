@@ -201,4 +201,24 @@ public class HangarCompareTests
         Assert.Contains("Compared · 1", page.NodeText("#hangar-canvas"));
         Assert.Contains("Drake Corsair", page.NodeText("#hangar-unsized"));
     }
+
+    /// <summary>
+    /// A picked pair is more useful with both hulls present. When one lacks a
+    /// top-down icon but the game has its Gallery paint render, that render
+    /// sits in the same verified size box and says what it is rather than
+    /// pretending to be a silhouette.
+    /// </summary>
+    [Fact]
+    public void A_compared_ship_without_an_icon_uses_its_gallery_render_inside_its_scale_box()
+    {
+        var page = Loaded();
+        page.Serve("/api/fleet/hangar", Fleet.Replace("\"length\":53,\"height\":25,\"icon\":true", "\"length\":53,\"height\":25,\"icon\":false"));
+        page.Do("shipPictureStyle = 'paint'; resolvedHullPaints.set('DRAK_Corsair', [{ item: 'Paint_Corsair_Gallery' }]); hangarComparison = new Set(['Aegis Gladius', 'Drake Corsair']); await loadHangar();");
+
+        Assert.Equal(2, (int)page.Number("__dom.node('#hangar-canvas').byClass('hangar-ship').length"));
+        const string corsair = "__dom.node('#hangar-canvas').byClass('hangar-ship').find(g => g.textContent.includes('Drake Corsair'))";
+        Assert.Contains("/api/fleet/paints/Paint_Corsair_Gallery/render", page.Text($"{corsair}.querySelector('image').getAttribute('href')"));
+        Assert.Contains("gallery render", page.Text($"{corsair}.textContent"));
+        Assert.True(page.Truth("__dom.node('#hangar-unsized').hidden"));
+    }
 }

@@ -5687,8 +5687,15 @@ function renderHangar() {
 
   const ships = hangarOrdered();
   const sized = ships.filter((s) => s.length > 0 && s.beam > 0);
-  const pictured = sized.filter((s) => s.icon);
-  const iconless = sized.filter((s) => !s.icon);
+  // A general scale deck only uses top-down game icons. In a picked pair,
+  // though, leaving a hull out because the install has no such icon makes a
+  // comparison look broken even when the game supplies its gallery render.
+  // That render is visibly labelled below but fits the same verified box, so
+  // the dimensions remain honest and both selected vessels stay present.
+  const comparing = hangarComparison.size === 2;
+  const canDrawToScale = (ship) => ship.icon || (comparing && Boolean(hangarPaintFor(ship)));
+  const pictured = sized.filter(canDrawToScale);
+  const iconless = sized.filter((s) => !canDrawToScale(s));
   const missing = ships.filter((s) => !(s.length > 0 && s.beam > 0));
 
   const unticked = (hangarShips?.ships || []).length - ships.length;
@@ -5718,7 +5725,9 @@ function renderHangar() {
 
   if (!pictured.length) {
     canvas.append(el('p', 'muted', ships.length
-      ? 'None of the ships flown has a top-down game icon, so there is nothing to draw to scale.'
+      ? comparing
+        ? 'Neither selected ship has a top-down game icon or gallery render, so there is nothing to draw to scale.'
+        : 'None of the ships flown has a top-down game icon, so there is nothing to draw to scale.'
       : 'No ship has been flown in the logs yet, so there is nothing to draw.'));
     showScaleOmissions(unsized, iconless, missing);
     return;
@@ -5745,7 +5754,6 @@ function renderHangar() {
   // That read as one enormous, blurred ship instead of an honest partial
   // comparison. The cap is the paint render's own 256 px at one and a half
   // times; past that the finish is a blur and the silhouette gains nothing.
-  const comparing = hangarComparison.size === 2;
   if (comparing) {
     const across = pictured.reduce((sum, s) => sum + Math.max(s.length, 90 / scale), 0);
     const fit = (width - 40 - HANGAR_SHIP_GAP) / across;
@@ -5775,7 +5783,7 @@ function renderHangar() {
     bar.append(svgEl('line', { x1: 2, y1: 2, x2: 2, y2: 12 }));
     bar.append(svgEl('line', { x1: metres * scale + 2, y1: 2, x2: metres * scale + 2, y2: 12 }));
     scaleBox.append(bar);
-    scaleBox.append(el('span', 'muted', ` ${metres} m — sizes are the game's bounding boxes. Silhouettes are its own vehicle icons, tinted by maker; a hull without one is listed below rather than drawn as a guess.`));
+    scaleBox.append(el('span', 'muted', ` ${metres} m — sizes are the game's bounding boxes. Silhouettes are its own vehicle icons, tinted by maker; in a comparison, a hull without one may use its Gallery render inside that same box and is labelled below its name.`));
   }
 
   showScaleOmissions(unsized, iconless, missing);
@@ -6248,7 +6256,8 @@ function drawToScale(ships, width, scale) {
     const group = svgEl('g', { class: 'hangar-ship', transform: `translate(${sx} ${sy})` });
     const title = svgEl('title', {});
     group.append(title);
-    title.textContent = `${ship.name} · ${ship.length} × ${ship.beam} × ${ship.height} m · ${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}`;
+    title.textContent = `${ship.name} · ${ship.length} × ${ship.beam} × ${ship.height} m · ${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}`
+      + (!ship.icon ? ' · Gallery render fitted to this scale box; no top-down icon is installed' : '');
 
     // Centred in the cell so a small ship's name does not hang off its left edge.
     const offset = (cell - w) / 2;
@@ -6287,7 +6296,8 @@ function drawToScale(ships, width, scale) {
     group.append(name);
 
     const dims = svgEl('text', { class: 'hangar-dims', x: cell / 2, y: baseline + 13, 'text-anchor': 'middle' });
-    dims.textContent = `${ship.length} m · ${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}`;
+    dims.textContent = `${ship.length} m · ${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}`
+      + (!ship.icon ? ' · gallery render' : '');
     group.append(dims);
 
     svg.append(group);
