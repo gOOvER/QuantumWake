@@ -364,7 +364,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.17
+### 0.13.18
+
+- **One Garage fit, one shopping list.** Fitting a component sold at a terminal
+  now adds it to the ship's existing fit list instead of creating a second,
+  one-part list. Using *Add changed parts to Shopping* refreshes that same
+  list, and folds in the older automatic one-part list when it finds one.
 
 - **Terminal aUEC only now filters an open Bench as well as Auto-fit.** Toggle
   it while comparing a port and the Bench immediately leaves only compatible

@@ -53,6 +53,9 @@ public sealed record Job(
     public DateTimeOffset ChangedAt => ModifiedAt ?? CreatedAt;
 }
 
+/// <summary>The single current list and any obsolete automatic Garage lists it replaced.</summary>
+public sealed record ListReplacement(Job Job, bool Created, IReadOnlyList<string> ConsolidatedIds);
+
 /// <summary>
 /// The player's own plans, kept in a file beside the caches.
 /// </summary>
@@ -112,6 +115,81 @@ public sealed class JobStore
         }
 
         return job;
+    }
+
+    /// <summary>
+    /// Writes the current contents of one authored list, reusing its open
+    /// source-and-title match rather than creating a second version of it.
+    /// </summary>
+    /// <remarks>
+    /// A garage fit changes one component at a time. Treating every change as
+    /// a new list makes a useful automatic shopping reminder look like the
+    /// pilot wants the same component twice.
+    /// </remarks>
+    public ListReplacement ReplaceOpenList(
+        string title,
+        string source,
+        IReadOnlyList<JobItem> items,
+        string? destination = null,
+        string? destinationId = null,
+        IReadOnlySet<string>? supersededTitles = null)
+    {
+        lock (_gate)
+        {
+            var index = _jobs.FindIndex(j =>
+                !j.Done
+                && j.Kind == "list"
+                && string.Equals(j.Source, source, StringComparison.Ordinal)
+                && string.Equals(j.Title, title, StringComparison.Ordinal));
+            var created = index < 0;
+
+            if (created)
+            {
+                _jobs.Insert(0, new Job(
+                    Guid.NewGuid().ToString("N")[..8],
+                    title,
+                    "list",
+                    source,
+                    DateTimeOffset.UtcNow,
+                    Done: false,
+                    [.. items],
+                    Pinned: false,
+                    Destination: string.IsNullOrWhiteSpace(destination) ? null : destination.Trim(),
+                    DestinationId: string.IsNullOrWhiteSpace(destinationId) ? null : destinationId.Trim()));
+                index = 0;
+            }
+            else
+            {
+                _jobs[index] = _jobs[index] with
+                {
+                    Items = [.. items],
+                    Destination = string.IsNullOrWhiteSpace(destination) ? null : destination.Trim(),
+                    DestinationId = string.IsNullOrWhiteSpace(destinationId) ? null : destinationId.Trim(),
+                };
+            }
+
+            var consolidated = new List<string>();
+            if (supersededTitles is { Count: > 0 })
+            {
+                for (var i = _jobs.Count - 1; i >= 0; i--)
+                {
+                    var candidate = _jobs[i];
+                    if (i == index
+                        || candidate.Done
+                        || candidate.Kind != "list"
+                        || !string.Equals(candidate.Source, source, StringComparison.Ordinal)
+                        || !supersededTitles.Contains(candidate.Title))
+                        continue;
+
+                    _jobs.RemoveAt(i);
+                    if (i < index) index--;
+                    consolidated.Add(candidate.Id);
+                }
+            }
+
+            Save();
+            return new ListReplacement(_jobs[index], created, consolidated);
+        }
     }
 
     /// <summary>Points a list at a place, or at nowhere in particular.</summary>

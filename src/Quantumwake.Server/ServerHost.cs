@@ -2992,7 +2992,7 @@ public static class ServerHost
         // said plainly, when UEX is off or nothing on the list is stocked.
         // From here it is the ordinary flow: the Now page, the overlay, the
         // MFD's List page.
-        app.MapPost("/api/garage/{cls}/shop", (string cls, LogLibrary lib, UexData uex, JobStore jobs, GarageShopRequest body) =>
+        app.MapPost("/api/garage/{cls}/shop", (string cls, LogLibrary lib, UexData uex, JobStore jobs, TombstoneStore deleted, GarageShopRequest body) =>
         {
             var community = lib.Community;
             var ship = community.GarageShip(cls);
@@ -3032,17 +3032,33 @@ public static class ServerHost
             var place = lib.Terminals.Resolve(proposal.Terminal);
 
             var title = string.IsNullOrWhiteSpace(body.Title) ? $"{ship.Name} fit" : body.Title.Trim();
-            var job = jobs.Add(
+            var source = $"garage:{ship.Class}";
+            // Before Garage shopping had a complete-fit button, a direct Fit
+            // made a one-part list named after that part. Fold exactly those
+            // legacy automatic lists into the fit the pilot is saving now;
+            // named saved-build lists remain separate work.
+            var legacyAutoTitles = wanted.Values
+                .SelectMany(w => new[]
+                {
+                    $"{ship.Name} · {w.Part.Name}",
+                    $"{ship.Name} - {w.Part.Name}",
+                })
+                .ToHashSet(StringComparer.Ordinal);
+            var saved = jobs.ReplaceOpenList(
                 title,
-                "list",
-                $"garage:{ship.Class}",
+                source,
                 [.. wanted.Values.Select(w => new JobItem(w.Part.Name, w.Count))],
                 place?.Name,
-                place?.RawId);
+                place?.RawId,
+                legacyAutoTitles);
+            foreach (var id in saved.ConsolidatedIds)
+                deleted.Record(TombstoneStore.Kinds.Jobs, id);
 
             return Results.Ok(new
             {
-                job,
+                job = saved.Job,
+                saved.Created,
+                Consolidated = saved.ConsolidatedIds.Count,
                 proposal = new
                 {
                     proposal.Terminal,

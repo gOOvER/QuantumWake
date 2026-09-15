@@ -549,23 +549,21 @@ public class GaragePageTests
     }
 
     [Fact]
-    public void Fitting_a_buyable_candidate_creates_a_list_for_that_component_only()
+    public void Fitting_a_buyable_candidate_updates_the_ship_fit_list()
     {
         var page = Bench();
-        page.Serve("/api/jobs", """{"id":"j2","title":"Aegis Gladius · Glacier","items":[{"name":"Glacier","needed":1}]}""");
+        page.Serve("/api/garage/AEGS_Gladius/shop", Shopped);
         page.Do("""
             await selectBenchPort('p1');
             const glacier = __dom.node('#garage-bench-panel').descendants().find(n => n.classList.contains('candidate') && n.textContent.includes('Glacier'));
             await glacier.descendants().find(n => n.tagName === 'button' && n.textContent === 'Fit').fire('click');
             """);
 
-        var body = page.BodyOf("/api/jobs");
-        Assert.Contains("\"source\":\"garage:AEGS_Gladius\"", body);
-        Assert.Contains("\"name\":\"Glacier\"", body);
-        Assert.Contains("\"needed\":1", body);
-        Assert.Contains("\"destination\":\"Area18\"", body);
-        Assert.Contains("\"title\":\"Aegis Gladius · Glacier\"", body);
-        Assert.Contains("Added \"Aegis Gladius · Glacier\"", page.NodeText("#garage-shop-result"));
+        var body = page.BodyOf("/api/garage/AEGS_Gladius/shop");
+        Assert.Contains("\"p1\":\"COOL_JUST_S01_Glacier_SCItem\"", body);
+        Assert.Contains("\"title\":\"Aegis Gladius fit\"", body);
+        Assert.Contains("Added \"Aegis Gladius fit\"", page.NodeText("#garage-shop-result"));
+        Assert.DoesNotContain(page.Fetched(), url => url.StartsWith("POST /api/jobs"));
     }
 
     [Fact]

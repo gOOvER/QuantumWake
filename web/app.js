@@ -9884,16 +9884,17 @@ async function shopForBench() {
     return;
   }
 
-  const { job, proposal } = await res.json();
+  const { job, proposal, created, consolidated } = await res.json();
   const items = (job.items || []).reduce((n, i) => n + (i.needed || 1), 0);
 
   const line = el('span');
-  line.append(document.createTextNode(`Added "${job.title}" - ${items} part${items === 1 ? '' : 's'} on ${job.items.length} line${job.items.length === 1 ? '' : 's'}. `));
+  line.append(document.createTextNode(`${created === false ? 'Updated' : 'Added'} "${job.title}" - ${items} part${items === 1 ? '' : 's'} on ${job.items.length} line${job.items.length === 1 ? '' : 's'}. `));
   const link = el('a', null, 'Open Shopping');
   link.href = '#jobs';
   link.addEventListener('click', (e) => { e.preventDefault(); showView('jobs'); });
   line.append(link);
   result.append(line);
+  if (consolidated) result.append(el('span', 'muted', ` Consolidated ${consolidated} earlier Garage list${consolidated === 1 ? '' : 's'}.`));
 
   // The stop, and what it lacks. "Nowhere" is said rather than left blank:
   // with UEX off there is no answer, and without a counter the list is still
@@ -9912,45 +9913,12 @@ async function shopForBench() {
 }
 
 /**
- * The candidate route has already named a seller for this exact part. Adding
- * the one line directly keeps every automatic fit separate; posting the whole
- * bench here would add earlier components again whenever another part changes.
+ * A direct Fit should make its buyable component actionable straight away,
+ * but it is still the ship's one evolving fit. Reposting the whole bench lets
+ * the server update that fit instead of leaving a stack of one-part lists.
  */
-async function addFittedPartToShopping(portIds, part) {
-  const result = $('#garage-shop-result');
-  result.hidden = true;
-  if (!garageClass || !part?.shop) return;
-
-  const ship = garageStock?.ship?.name || garageClass;
-  const title = `${ship} · ${part.name}`;
-  const res = await fetch('/api/jobs', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      title, kind: 'list', source: `garage:${garageClass}`,
-      items: [{ name: part.name, needed: portIds.length, unit: '' }],
-      destination: part.shop.place || null, destinationId: part.shop.placeId || null,
-    }),
-  });
-
-  result.textContent = '';
-  result.hidden = false;
-  if (!res.ok) {
-    result.append(el('span', 'muted', 'The fitted part could not be added to Shopping.'));
-    return;
-  }
-
-  const job = await res.json();
-  const line = el('span');
-  line.append(document.createTextNode(`Added "${job.title}" - ${portIds.length} part${portIds.length === 1 ? '' : 's'}. `));
-  const link = el('a', null, 'Open Shopping');
-  link.href = '#jobs';
-  link.addEventListener('click', (e) => { e.preventDefault(); showView('jobs'); });
-  line.append(link);
-  result.append(line);
-
-  const where = `${part.shop.terminal}${part.shop.place ? `, ${part.shop.place}` : ''}`;
-  const total = Number(part.shop.price) * portIds.length;
-  result.append(el('span', 'muted', `Destination: ${where}${total > 0 ? ` · ${fmtInt(total)} aUEC` : ''}.`));
+async function addFittedPartToShopping() {
+  await shopForBench();
 }
 
 $('#garage-shop')?.addEventListener('click', () => shopForBench().catch(() => {}));
