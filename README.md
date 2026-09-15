@@ -365,7 +365,35 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.25
+### 0.13.26
+
+- **A compared picture says what it is.** In a Hangar comparison each ship
+  wears a small badge on its picture - *top-down icon* for the game's own
+  vehicle icon, which is the hull's real footprint, or *gallery render* for
+  the three-quarter paint render fitted into that footprint's box - so two
+  pictures of different kinds side by side cannot be mistaken for the same
+  kind of picture.
+
+- **"Prices are getting old" is a chip, except where it matters.** The
+  notice keeps its full wording and buttons on Market, the commodity page,
+  Garage, Shopping and Routes, where an old price is a wrong number. On
+  every other page it shrinks to one line: the fact stays in view, the
+  paragraph and the buttons stop crowding a page that is not about prices.
+
+- **Copy diagnostic summary.** Settings › Report a problem has a second
+  button beside *Save a report*: one click puts a few lines of text on the
+  clipboard - app version and build, whether the install was found and how
+  many backup logs it has, the game-data read, the community dataset, UEX
+  prices and feeds with their ages, sessions read and counted, game builds,
+  parser health, the counts behind each page and the wipe line. Built from
+  the same chosen lists as the full report, so no handle, id, folder or key
+  can be in it; where the clipboard is not available the text is shown to
+  copy by hand.
+
+- **A backup with saved Garage builds now refuses an older build.** The
+  backup format is 2: a build before 0.13.3 restoring a newer backup says to
+  update rather than putting everything else back and dropping the builds
+  without a word. Backups from older builds restore as before.
 
 - **Comparing two ships in the Hangar compares their numbers now, not just
   their outlines.** Pick the pair in the Hangar's own *Compare … with …* bar

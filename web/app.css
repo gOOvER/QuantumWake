@@ -1863,6 +1863,10 @@ body.overlay .foot { display: none; }
   clip-path: var(--chamfer);
 }
 
+.option-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
+.diag-summary { width: 100%; margin-top: 8px; font: 11.5px var(--mono); color: var(--text); background: var(--deep); border: 1px solid var(--rule); padding: 8px; resize: vertical; }
+.diag-summary[hidden] { display: none; }
+
 .option-head {
   display: flex;
   align-items: center;
@@ -3155,6 +3159,14 @@ body.entity-open .view { padding-right: 296px; }
   clip-path: var(--chamfer);
 }
 .notice[hidden] { display: none; }
+
+/* The stale-prices notice as a chip, on pages that are not about prices: one
+   line, no paragraph, the buttons small. The fact stays; the alarm does not. */
+.notice.compact { padding: 4px 10px; gap: 10px; margin-bottom: 8px; font-size: 11.5px; background: none; border-left-width: 2px; }
+.notice.compact .notice-body { flex-direction: row; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.notice.compact .notice-body b { font-size: 11.5px; font-weight: 600; }
+.notice.compact .notice-body .muted { font-size: 11px; }
+.notice.compact .notice-actions .ghost { padding: 1px 7px; font-size: 10px; }
 /* A settings block whose data has been overtaken by a game patch. Amber like
    the page notices, but inline and without buttons: the control that answers
    it is the Refresh sitting directly above. */
@@ -4220,6 +4232,12 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 .hangar-scale { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; font-size: 11.5px; }
 .hangar-bar line { stroke: var(--cyan); stroke-width: 2; }
 .hangar-group { margin: 14px 16px 0; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--cyan-hot); }
+
+/* What a compared picture is, on the picture: icon or render. */
+.hangar-source rect { fill: rgba(4, 10, 17, .78); stroke: var(--rule-hot); stroke-width: 1; }
+.hangar-source text { font: 600 9px var(--mono); letter-spacing: .12em; text-transform: uppercase; fill: var(--muted); }
+.hangar-source.icon text { fill: var(--cyan); }
+.hangar-source.render text { fill: var(--amber); }
 
 /* Two ships side by side: the pair is picked in a bar under the controls and
    the figures sit under the deck, the better one for its row lit. */

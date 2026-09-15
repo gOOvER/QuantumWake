@@ -120,4 +120,26 @@ public class PriceAgeTests
 
         Assert.False(NoticeShown(page));
     }
+    /// <summary>
+    /// The notice speaks in full only where an old price is a wrong number:
+    /// Market, the commodity page, Garage, Shopping, Routes. Elsewhere it is a
+    /// chip - the fact stays in view, the paragraph and the buttons stand down.
+    /// </summary>
+    [Theory]
+    [InlineData("market", false)]
+    [InlineData("garage", false)]
+    [InlineData("jobs", false)]
+    [InlineData("commodity", false)]
+    [InlineData("now", true)]
+    [InlineData("fleet", true)]
+    [InlineData("hangar", true)]
+    [InlineData("settings", true)]
+    public void The_notice_is_a_chip_except_where_prices_decide_the_answer(string view, bool compact)
+    {
+        var page = new Page();
+        // The stub has no scrolling; the view switch is what is under test.
+        page.Do($"window.scrollTo = () => {{}}; showView('{view}');");
+
+        Assert.Equal(compact, page.Truth("__dom.node('#stale').classList.contains('compact')"));
+    }
 }

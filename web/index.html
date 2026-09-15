@@ -2472,7 +2472,10 @@
     <div class="option-block">
       <div class="option-head">
         <h3>Report a problem</h3>
-        <button class="ghost" id="diag-save">Save a report</button>
+        <span class="option-buttons">
+          <button class="ghost" id="diag-copy" title="App version, game-data status, price-feed age and parser health as a few lines of text, on the clipboard">Copy diagnostic summary</button>
+          <button class="ghost" id="diag-save">Save a report</button>
+        </span>
       </div>
       <p class="muted">
         If a page is empty here and full for somebody else, this is what tells
@@ -2500,6 +2503,7 @@
       </p>
       <span class="muted" id="diag-preview"></span>
       <span class="muted" id="diag-status"></span>
+      <textarea class="diag-summary" id="diag-summary" rows="12" readonly hidden aria-label="Diagnostic summary"></textarea>
     </div>
 
     <div class="option-block">

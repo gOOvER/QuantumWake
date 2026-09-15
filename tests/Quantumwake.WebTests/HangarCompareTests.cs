@@ -221,4 +221,23 @@ public class HangarCompareTests
         Assert.Contains("gallery render", page.Text($"{corsair}.textContent"));
         Assert.True(page.Truth("__dom.node('#hangar-unsized').hidden"));
     }
+    /// <summary>
+    /// A compared picture says what it is on the picture: the game's top-down
+    /// icon is the real footprint, a gallery render is a three-quarter view
+    /// fitted into that box, and the two can sit side by side.
+    /// </summary>
+    [Fact]
+    public void A_compared_picture_wears_a_badge_saying_whether_it_is_the_icon_or_a_render()
+    {
+        var page = Loaded();
+        page.Do("shipPaints = { DRAK_Corsair: 'Paint_Corsair_Ghoulish' }; hangarComparison = new Set(['Aegis Gladius', 'Drake Corsair']); renderHangar();");
+
+        var badges = page.Text("__dom.node('#hangar-canvas').byClass('hangar-source').map(g => g.className + '=' + g.querySelector('text').textContent).join('|')");
+        // Longest first: the Corsair, in its chosen paint, then the Gladius as the game's icon.
+        Assert.Equal("hangar-source render=gallery render|hangar-source icon=top-down icon", badges);
+
+        // Outside a comparison the deck is all icons and says so in its legend; no badge per ship.
+        page.Do("hangarComparison = new Set(); renderHangar();");
+        Assert.Equal(0, (int)page.Number("__dom.node('#hangar-canvas').byClass('hangar-source').length"));
+    }
 }

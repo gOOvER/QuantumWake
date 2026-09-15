@@ -226,9 +226,18 @@ buildPeriodSelects();
 
 /* ---------- tabs ---------- */
 
+/** The pages where a stale price is a wrong number rather than a fact about a feed. */
+const STALE_MATTERS_ON = new Set(['market', 'commodity', 'garage', 'jobs', 'routes']);
+
 function showView(name) {
   // Assets merged into Fleet; old #assets links and habits still land somewhere.
   if (name === 'assets') name = 'fleet';
+
+  // The stale-prices notice speaks in full only where old prices change the
+  // answer - Market, Garage, Shopping, Routes and the commodity drill-down.
+  // Everywhere else it is a chip: the fact stays in view, the paragraph and
+  // the buttons do not crowd a page that is not about prices.
+  $('#stale')?.classList.toggle('compact', !STALE_MATTERS_ON.has(name));
 
   const buttons = $$('#tabs button');
 
@@ -3115,6 +3124,75 @@ $('#settings-community-refresh').addEventListener('click', (e) =>
   setCommunity(true, $('#settings-community-status'), e.currentTarget));
 
 /* ---------- diagnostics ---------- */
+
+/**
+ * The short version of the report, as text for a clipboard: the app, the
+ * game data, the price feeds and the parser, in the words a support thread
+ * needs first. Built from the same lists the full report is - nothing here
+ * is read from a log - so it carries no handle, id, path or key either.
+ */
+function diagnosticSummary(version, gamedata, uex, feeds, report) {
+  const age = (iso) => (iso ? ago(iso) : 'never');
+  const lines = [`Quantum Wake ${version?.version || '?'} (${version?.build || 'build unknown'})`];
+  lines.push(`Taken ${new Date(report?.takenAt || Date.now()).toISOString()}`);
+  lines.push('');
+
+  const install = report?.install || {};
+  lines.push(`Install: ${install.found ? `${install.channel || 'unknown channel'}, Game.log ${install.hasGameLog ? 'present' : 'absent'}, ${install.backups ?? 0} backup logs` : 'not found'}`);
+  const gd = gamedata || {};
+  const counts = gd.counts ? Object.entries(gd.counts).map(([k, v]) => `${k} ${v}`).join(', ') : '';
+  lines.push(`Game data: ${gd.state || 'unknown'}${gd.problem ? ` - ${gd.problem}` : ''}${gd.finishedAt ? `, read ${age(gd.finishedAt)}` : ''}${counts ? ` (${counts})` : ''}`);
+
+  const data = report?.data || {};
+  lines.push(`Community dataset: ${data.community ? `on, dump ${data.communityDump || '?'}` : 'off'}`);
+  lines.push(`UEX prices: ${uex?.enabled ? `on, ${uex.prices ?? 0} prices, fetched ${age(uex.fetchedAt)}` : 'off'}${data.uexKeysStored ? ', keys stored' : ''}`);
+  const on = (feeds || []).filter((f) => f.enabled);
+  lines.push(`UEX feeds: ${on.length ? on.map((f) => `${f.key} ${age(f.fetchedAt)}`).join(', ') : 'none'}`);
+  lines.push('');
+
+  const lib = report?.library || {};
+  lines.push(`Sessions: ${lib.sessions ?? 0} read, ${lib.counted ?? 0} counted${lib.first ? `, ${String(lib.first).slice(0, 10)} to ${String(lib.last).slice(0, 10)}` : ''}`);
+  if (lib.builds?.length) lines.push(`Game builds: ${lib.builds.map((b) => `${b.build} (${b.sessions})`).join(', ')}`);
+  const parser = report?.parser || {};
+  lines.push(`Parser: ${parser.unread ? `${parser.unread} unreadable line${parser.unread === 1 ? '' : 's'} across ${(parser.tags || []).length} tag${(parser.tags || []).length === 1 ? '' : 's'}` : 'nothing unreadable'}`);
+  const views = report?.views || {};
+  lines.push(`Counts: ${Object.entries(views).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+  const wipe = report?.wipe || {};
+  if (wipe.at) lines.push(`Wipe line: ${String(wipe.at).slice(0, 10)}${wipe.patch ? ` (${wipe.patch})` : ''}, ${wipe.hidden ?? 0} sessions before it`);
+  return lines.join('\n');
+}
+
+/** Builds the summary from live answers and puts it on the clipboard; shows it when the clipboard is not to be had. */
+async function copyDiagnosticSummary(button) {
+  const status = $('#diag-status');
+  button.disabled = true;
+  status.textContent = 'Building the summary…';
+  try {
+    const [version, gamedata, uex, feeds, report] = await Promise.all([
+      getJson('/api/version').catch(() => null),
+      getJson('/api/gamedata').catch(() => null),
+      getJson('/api/uex').catch(() => null),
+      getJson('/api/uex/feeds').catch(() => []),
+      getJson('/api/diagnostics?samples=false'),
+    ]);
+    const text = diagnosticSummary(version, gamedata, uex, feeds, report);
+    let copied = false;
+    try {
+      if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); copied = true; }
+    } catch { copied = false; }
+    const box = $('#diag-summary');
+    if (box) { box.value = text; box.hidden = copied; }
+    status.textContent = copied
+      ? 'Copied. Paste it into the issue or the thread; read it first if you like - it is the text below the report.'
+      : 'The clipboard is not available here; the summary is shown below to copy by hand.';
+  } catch (err) {
+    status.textContent = `The summary could not be built: ${err.message}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+$('#diag-copy')?.addEventListener('click', (e) => copyDiagnosticSummary(e.currentTarget));
 
 /**
  * What a bug report would carry, said before it is written.
@@ -6299,6 +6377,25 @@ function drawToScale(ships, width, scale) {
     dims.textContent = `${ship.length} m · ${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}`
       + (!ship.icon ? ' · gallery render' : '');
     group.append(dims);
+
+    // What the picture is, said on the picture: a top-down icon is the
+    // hull's real footprint, a gallery render is a three-quarter view fitted
+    // into that footprint's box. In a comparison the two can sit side by
+    // side, and a caption under the name is not where the eye is.
+    if (hangarComparison.size === 2) {
+      const kind = paint ? 'gallery render' : 'top-down icon';
+      const badge = svgEl('g', { class: `hangar-source ${paint ? 'render' : 'icon'}`, transform: `translate(${offset + 4} ${top + 4})` });
+      badge.append(svgEl('rect', { x: 0, y: 0, width: kind.length * 6.2 + 16, height: 16, rx: 3 }));
+      const label = svgEl('text', { x: 8, y: 11.5 });
+      label.textContent = kind;
+      badge.append(label);
+      const why = svgEl('title', {});
+      why.textContent = paint
+        ? 'The game\'s gallery render of this hull, fitted into its installed bounding box - a three-quarter view, not the footprint.'
+        : 'The game\'s own top-down vehicle icon, at the installed bounding box: the real footprint.';
+      badge.append(why);
+      group.append(badge);
+    }
 
     svg.append(group);
   }
@@ -20583,6 +20680,9 @@ async function boot() {
 
   if (deepCommodity) openCommodity(deepCommodity).catch(() => {});
   else if (requested) showView(requested);
+  // No fragment lands on Now without a view switch, and Now is not a page
+  // about prices: the notice starts as the chip there.
+  else $('#stale')?.classList.add('compact');
 
   // ?q= pre-fills the map search, so a commodity view is a shareable link:
   // /?q=Copper#map opens the map with the sellers lit.

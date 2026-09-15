@@ -39,8 +39,15 @@ public sealed class BackupBuilder(
     ShardNoteStore shards,
     BuildStore builds)
 {
-    /// <summary>The format this build writes and can read back.</summary>
-    public const int Version = 1;
+    /// <summary>
+    /// The format this build writes and can read back. Raised when a backup
+    /// starts carrying something an older build would drop without a word:
+    /// 2 added saved Garage builds (0.13.3), so a build before that refuses
+    /// the file and says to update, rather than restoring everything else and
+    /// losing the builds silently. Kits, readings and shard notes were added
+    /// under 1 and older builds did drop them; this is the rule from here.
+    /// </summary>
+    public const int Version = 2;
 
     public ExportFile Build(ExportProducer producer, DateTimeOffset now, string? handle = null) =>
         new(ExportDocument.Format,
