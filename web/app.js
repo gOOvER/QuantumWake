@@ -6013,6 +6013,7 @@ function hangarComparisonRows(left, right) {
 
   row('Weapons', 'Pilot DPS', (s) => s.sheet.sheet.weapons.fixedDps, fmt1, 'more');
   row('Weapons', 'Alpha', (s) => s.sheet.sheet.weapons.fixedAlpha, fmt1, 'more');
+  row('Weapons', 'Pips', (s) => s.sheet.sheet.weapons.pips, fmtInt, 'less');
   row('Weapons', 'Turret DPS', (s) => s.sheet.sheet.weapons.turretDps, fmt1, 'more');
   row('Weapons', 'Missiles', (s) => s.sheet.sheet.weapons.missiles, fmtInt, 'more');
   row('Weapons', 'Missile damage', (s) => s.sheet.sheet.weapons.missileDamage, fmtInt, 'more');
@@ -9557,6 +9558,10 @@ function renderGarage(data, stock) {
     row('Pilot DPS', fmt1(w.fixedDps), [w.guns.length ? w.guns.join(', ') : 'No guns the pilot fires.', w.caveat].filter(Boolean).join(' · '), ow ? [ow.fixedDps, w.fixedDps] : null),
     row('Sustained', fmt1(w.fixedSustainedDps), null, ow ? [ow.fixedSustainedDps, w.fixedSustainedDps] : null, true),
     row('Alpha', fmt1(w.fixedAlpha), null, ow ? [ow.fixedAlpha, w.fixedAlpha] : null, true),
+    // One lead indicator per projectile speed: two speeds is two pips on the
+    // HUD, and a lead that lands one gun misses the other. Said in the row,
+    // not only in the notes, because it is the figure a gun swap changes.
+    pipsRow(w, ow),
     row('Turret DPS', w.turretDps ? fmt1(w.turretDps) : '—', [w.turretDps ? 'Crewed or remote turrets; somebody else fires these.' : null, w.caveat ? 'See the pilot row: the split between the two is the uncertain part.' : null].filter(Boolean).join(' ') || null, ow ? [ow.turretDps, w.turretDps] : null),
     row('Missiles', w.missiles ? `${w.missiles} · ${fmtInt(w.missileDamage)} dmg` : '—', null, ow ? [ow.missileDamage, w.missileDamage] : null),
   ]));
@@ -9750,6 +9755,61 @@ function garageSheetIcon(group) {
  *   changed something, the old figure is struck beside the new one and the new
  *   one coloured by whether it got better, which depends on the figure.
  */
+/**
+ * The chip on a gun the bench offers when fitting it would put a second pip
+ * on the HUD: its projectile speed matches none of the pilot's other guns.
+ * The other guns are the sheet's, less the one in this port - so a gun that
+ * is alone at its speed is not warned against every replacement. A port the
+ * sheet does not count as the pilot's (a crewed turret) gets no chip, since
+ * its pip is somebody else's.
+ */
+function pipChip(part, fittedPart) {
+  const speed = part?.weapon?.ammoSpeed;
+  if (!(speed > 0) || !garageSheet?.weapons?.speeds) return null;
+  const pilotGuns = garageSheet.weapons.guns || [];
+  if (fittedPart && !pilotGuns.includes(fittedPart.name)) return null;
+
+  const others = new Set();
+  for (const s of garageSheet.weapons.speeds) {
+    const names = [...s.guns];
+    if (fittedPart) {
+      const i = names.indexOf(fittedPart.name);
+      if (i >= 0) names.splice(i, 1);
+    }
+    if (names.length) others.add(Math.round(s.speed));
+  }
+  if (!others.size || others.has(Math.round(speed))) return null;
+
+  const chip = el('span', 'chip pip', `+1 pip`);
+  chip.title = `${fmtInt(speed)} m/s against ${[...others].map(fmtInt).join(' and ')} m/s on the other pilot guns: the HUD would draw a second lead indicator, and a lead that lands one gun misses the other.`;
+  return chip;
+}
+
+/** "CF-447 Rhino Repeater ×4" - a speed's guns, named once each and counted. */
+function gunsAtSpeed(names) {
+  const counts = new Map();
+  for (const n of names) counts.set(n, (counts.get(n) || 0) + 1);
+  return [...counts].map(([n, c]) => (c > 1 ? `${n} ×${c}` : n)).join(', ');
+}
+
+/**
+ * The projectile-speed row of the Weapons card. One speed is the figure;
+ * more than one is the count of pips, marked as a problem, with each speed's
+ * guns in the note - the compared figure is the pip count, fewer being better.
+ */
+function pipsRow(w, ow) {
+  const speeds = w.speeds || [];
+  const pips = speeds.length;
+  const was = ow ? (ow.speeds || []).length : null;
+  const value = pips === 0 ? '—' : pips === 1 ? `${fmtInt(speeds[0].speed)} m/s` : `${pips} speeds · ${pips} pips`;
+  const note = pips > 1
+    ? `${speeds.map((s) => `${gunsAtSpeed(s.guns)} at ${fmtInt(s.speed)} m/s`).join('; ')}. The HUD draws a pip per speed, and a lead that lands one gun misses the other.`
+    : pips === 1 ? 'Every pilot gun at one speed: one pip.' : null;
+  const r = row('Projectile speed', value, note, was !== null && was !== pips ? [was, pips, '', true] : null);
+  if (pips > 1) r.classList.add('alert');
+  return r;
+}
+
 function row(label, value, note, delta, sub = false) {
   const r = el('div', `sheet-row${sub ? ' sub' : ''}`);
   r.dataset.key = label;
@@ -9872,7 +9932,8 @@ function partFigures(part, ship) {
   const t = part.type;
   if (part.weapon) {
     return [['DPS', part.weapon.dps, fmt1(part.weapon.dps)], ['alpha', part.weapon.alpha, fmt1(part.weapon.alpha)],
-      ['range', part.weapon.range, `${fmtInt(part.weapon.range)} m`], ['sustained', part.weapon.sustainedDps, fmt1(part.weapon.sustainedDps)]];
+      ['range', part.weapon.range, `${fmtInt(part.weapon.range)} m`], ['sustained', part.weapon.sustainedDps, fmt1(part.weapon.sustainedDps)],
+      ...(part.weapon.ammoSpeed > 0 ? [['m/s', part.weapon.ammoSpeed, fmtInt(part.weapon.ammoSpeed)]] : [])];
   }
   if (part.shield) {
     return [['HP', part.shield.hp, fmtInt(part.shield.hp)], ['regen', part.shield.regen, `${fmtInt(part.shield.regen)}/s`],
@@ -10128,6 +10189,8 @@ function renderBenchPanel() {
     name.append(partChip(part));
     const componentClass = componentClassChip(option.componentClass);
     if (componentClass) name.append(componentClass);
+    const pip = pipChip(part, fittedPart);
+    if (pip) name.append(pip);
     mid.append(name);
     mid.append(el('div', 'c-maker', part.manufacturer || part.makerCode || ''));
 

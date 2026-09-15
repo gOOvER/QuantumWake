@@ -128,6 +128,22 @@ falls by what left, and a note names the rack and says why. Fitting a new
 rack *with* missiles would need the rack's own port list, which the dataset
 does not publish; until it does, the honest number is the smaller one.
 
+**Pips** (0.13.33). The HUD draws one lead indicator per projectile speed
+among the guns the pilot fires, so guns at two speeds are two pips and a
+lead that lands one gun misses the other. The dataset carries each gun's
+`Ammunition.Speed` (`WeaponStats.AmmoSpeed`), which the sheet had read
+and never used. `ShipSheet.Compute` now groups the pilot's guns by speed,
+rounded to the metre (1345.5 beside 1296 and 1440 is three pips; a rounding
+difference is not), into `Weapons.Speeds` with `Weapons.Pips` as the
+count, and notes a fit with more than one. The stock Gladius is the test
+case: two Panthers at 1,480 and a Mantis at 1,332 are two pips out of the
+box, and a Panther in the nose makes it one. The Hermes' four Rhinos are one.
+The Weapons card carries the row, in amber past one pip with each speed's
+guns named, and on the bench a gun whose speed matches none of the other
+pilot guns - the one in the port being changed not counted against itself -
+wears a *+1 pip* chip. Guns on crewed turrets are somebody else's pip and
+are left out, as they are from pilot DPS.
+
 So a stealth fit is a real answer, not an estimate: swap the Bracers for a
 Glacier and the IR moves by exactly what the game's own numbers say, with the
 armour and the cooling load accounted for. The page still says which scenario

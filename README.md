@@ -365,6 +365,18 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.13.33
+
+- **The Garage counts your pips.** The HUD draws one lead indicator per
+  projectile speed among the guns you fire, so guns at two speeds are two
+  pips and a lead that lands one gun misses the other. The Weapons card now
+  has a *Projectile speed* row — one speed, or *2 speeds · 2 pips* in amber
+  with each speed's guns named — the sheet's notes say so, the Hangar
+  comparison has a *Pips* row, and on the bench a gun that would add a pip
+  wears a *+1 pip* chip, with its speed among its figures. The stock Gladius
+  is two pips out of the box (Panthers at 1,480 m/s, Mantis at 1,332); the
+  Hermes' four Rhinos are one.
+
 ### 0.13.32
 
 - **The Garage opens a ship as its screenshot showed it.** With a loadout

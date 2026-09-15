@@ -165,6 +165,42 @@ public class GarageSheetTests(ITestOutputHelper output)
         Assert.Equal(stock.Shield.Hp, swapped.Shield.Hp);
     }
 
+    /// <summary>
+    /// The HUD draws one lead indicator per projectile speed among the
+    /// pilot's guns. The Gladius ships with two Panthers at 1,480 m/s and a
+    /// Mantis at 1,332 - two pips at stock, which the sheet counts, names and
+    /// notes - and a third Panther in the nose makes it one. Speeds the
+    /// dataset carries as 1345.5 beside 1296 are distinct pips; a rounding
+    /// difference is not.
+    /// </summary>
+    [Fact]
+    public void The_pilots_guns_are_counted_by_projectile_speed_as_pips()
+    {
+        var (ships, parts) = Load();
+        var gladius = ships["AEGS_Gladius"];
+        var stock = ShipSheet.Compute(gladius, parts);
+
+        Assert.Equal(2, stock.Weapons.Pips);
+        var speeds = Assert.IsAssignableFrom<IReadOnlyList<GunSpeed>>(stock.Weapons.Speeds);
+        Assert.Equal([1480, 1332], speeds.Select(s => s.Speed));
+        Assert.Equal(["CF-337 Panther Repeater", "CF-337 Panther Repeater"], speeds[0].Guns);
+        Assert.Equal(["Mantis GT-220 Gatling"], speeds[1].Guns);
+        var note = Assert.Single(stock.Notes, n => n.Contains("pips"));
+        Assert.Contains("2 speeds", note);
+        Assert.Contains("CF-337 Panther Repeater ×2 at 1,480 m/s", note);
+        Assert.Contains("Mantis GT-220 Gatling at 1,332 m/s", note);
+
+        var panther = parts.Values.Single(p => p.Type == "WeaponGun" && p.Name == "CF-337 Panther Repeater");
+        var nose = gladius.Loadout.Single(p => p.Hardpoint == "hardpoint_gun_nose").Children.Single();
+        var alike = ShipSheet.Compute(gladius, parts, new Dictionary<string, string?> { [nose.PortId] = panther.Class });
+
+        Assert.Equal(1, alike.Weapons.Pips);
+        Assert.DoesNotContain(alike.Notes, n => n.Contains("pips"));
+
+        // The Andromeda's four Galdereens are one speed; its crewed turrets do not count.
+        Assert.Equal(1, ShipSheet.Compute(ships["RSI_Constellation_Andromeda"], parts).Weapons.Pips);
+    }
+
     /// <summary>A third shield on a two-pool ship never comes online, in the fight or in the signature.</summary>
     [Fact]
     public void A_shield_beyond_the_pool_counts_for_nothing()
