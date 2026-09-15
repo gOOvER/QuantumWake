@@ -4518,20 +4518,25 @@ body.overlay .ship-picture { display: none; }
   .garage-rig-slots { grid-template-columns: 1fr; }
 }
 
-/* The sheet is groups of label/value rows, laid out as cards so a pilot can
-   find "Signature" without reading "Hull" first. Three across on a wide
-   screen, one on a phone. */
-.sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--gap); }
+/* The sheet is groups of label/value rows. On a wide display the seven systems
+   are deliberately compact enough to read as one instrument bank, rather than
+   leaving Quantum alone beneath an expanse of empty space. */
+.sheet { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 264px), 1fr)); gap: 12px; align-items: stretch; }
 .sheet-group {
   --sheet-accent: var(--cyan);
   position: relative;
+  isolation: isolate;
   overflow: hidden;
-  background: linear-gradient(145deg, rgba(15, 31, 43, .96), rgba(4, 10, 17, .98));
-  border: 1px solid color-mix(in srgb, var(--sheet-accent) 34%, var(--rule));
+  min-height: 218px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--sheet-accent) 10%, transparent), transparent 44%),
+    linear-gradient(145deg, rgba(15, 31, 43, .98), rgba(4, 10, 17, .99));
+  border: 1px solid color-mix(in srgb, var(--sheet-accent) 43%, var(--rule));
   clip-path: var(--chamfer);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04), 0 9px 22px rgba(0, 0, 0, .12);
 }
-.sheet-group::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--sheet-accent); box-shadow: 0 0 14px var(--sheet-accent); opacity: .78; }
+.sheet-group::before { content: ""; position: absolute; z-index: -1; inset: 0 0 auto; height: 3px; background: linear-gradient(90deg, var(--sheet-accent), color-mix(in srgb, var(--sheet-accent) 18%, transparent) 72%, transparent); box-shadow: 0 0 18px var(--sheet-accent); opacity: .92; }
+.sheet-group::after { content: attr(data-group); position: absolute; z-index: -1; right: -4px; bottom: -10px; color: color-mix(in srgb, var(--sheet-accent) 9%, transparent); font: 700 31px/.8 var(--mono); letter-spacing: -.08em; text-transform: uppercase; pointer-events: none; }
 .sheet-group[data-group="hull"] { --sheet-accent: #35c8f0; }
 .sheet-group[data-group="flight"] { --sheet-accent: #6bbaff; }
 .sheet-group[data-group="weapons"] { --sheet-accent: #f27f68; }
@@ -4540,38 +4545,44 @@ body.overlay .ship-picture { display: none; }
 .sheet-group[data-group="systems"] { --sheet-accent: #e8b35e; }
 .sheet-group[data-group="quantum"] { --sheet-accent: #7e9cff; }
 .sheet-group h3 {
-  margin: 0 0 2px;
-  padding: 10px 14px 9px;
-  font-size: 11px;
-  letter-spacing: .12em;
+  margin: 0 0 3px;
+  padding: 12px 13px 10px;
+  font-size: 10.5px;
+  letter-spacing: .13em;
   text-transform: uppercase;
   color: var(--text);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--sheet-accent) 13%, transparent), transparent 72%);
-  border-bottom: 1px solid color-mix(in srgb, var(--sheet-accent) 22%, transparent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--sheet-accent) 18%, transparent), transparent 75%);
+  border-bottom: 1px solid color-mix(in srgb, var(--sheet-accent) 30%, transparent);
 }
-.sheet-title { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
-.sheet-icon { display: inline-grid; place-items: center; width: 18px; height: 18px; color: var(--sheet-accent); border: 1px solid color-mix(in srgb, var(--sheet-accent) 55%, transparent); background: rgba(4, 10, 17, .62); font: 12px var(--mono); letter-spacing: 0; }
-.sheet-group h3 .src { flex: 0 0 auto; padding: 2px 5px; border: 1px solid color-mix(in srgb, var(--sheet-accent) 28%, transparent); background: rgba(4, 10, 17, .46); font: 9px var(--mono); letter-spacing: .04em; text-transform: none; color: var(--dim); }
+.sheet-title { display: inline-flex; align-items: center; gap: 8px; min-width: 0; color: var(--sheet-accent); text-shadow: 0 0 11px color-mix(in srgb, var(--sheet-accent) 40%, transparent); }
+.sheet-icon { display: inline-grid; place-items: center; width: 23px; height: 23px; color: var(--sheet-accent); border: 1px solid color-mix(in srgb, var(--sheet-accent) 72%, transparent); background: color-mix(in srgb, var(--sheet-accent) 9%, rgba(4, 10, 17, .8)); box-shadow: inset 0 0 10px color-mix(in srgb, var(--sheet-accent) 14%, transparent), 0 0 10px color-mix(in srgb, var(--sheet-accent) 12%, transparent); font: 14px var(--mono); letter-spacing: 0; }
+.sheet-group h3 .src { flex: 0 0 auto; padding: 3px 5px; border: 1px solid color-mix(in srgb, var(--sheet-accent) 35%, transparent); background: rgba(4, 10, 17, .6); font: 8.5px var(--mono); letter-spacing: .05em; text-transform: none; color: color-mix(in srgb, var(--dim) 82%, var(--sheet-accent)); }
 .sheet-row {
+  position: relative;
+  z-index: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
-  margin: 0 12px;
-  padding: 7px 2px;
-  border-top: 1px solid var(--rule);
+  margin: 0 11px;
+  padding: 8px 4px;
+  border-top: 1px solid color-mix(in srgb, var(--sheet-accent) 14%, var(--rule));
   align-items: baseline;
 }
 .sheet-row:first-of-type { border-top: 0; }
-.sheet-row:hover { background: linear-gradient(90deg, color-mix(in srgb, var(--sheet-accent) 7%, transparent), transparent 82%); }
-.sheet-row .k { color: var(--muted); font-size: 12px; }
-.sheet-row .v { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text); text-align: right; white-space: nowrap; }
+.sheet-row:hover { background: linear-gradient(90deg, color-mix(in srgb, var(--sheet-accent) 11%, transparent), transparent 82%); }
+.sheet-row .k { color: var(--muted); font-size: 11.5px; }
+.sheet-row .v { padding: 2px 4px; border: 1px solid color-mix(in srgb, var(--sheet-accent) 17%, transparent); background: color-mix(in srgb, var(--sheet-accent) 5%, transparent); font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--text); text-align: right; white-space: nowrap; }
 .sheet-row .v small { color: var(--muted); font-family: var(--mono); margin-left: 4px; }
-.sheet-row .n { grid-column: 1 / -1; padding: 3px 0 1px 8px; border-left: 1px solid color-mix(in srgb, var(--sheet-accent) 48%, transparent); font-size: 11px; color: var(--dim); line-height: 1.4; margin-top: -3px; }
+.sheet-row .n { grid-column: 1 / -1; padding: 3px 0 1px 8px; border-left: 2px solid color-mix(in srgb, var(--sheet-accent) 58%, transparent); font-size: 10.5px; color: var(--dim); line-height: 1.4; margin-top: -3px; }
 .sheet-row.sub .k { padding-left: 14px; color: color-mix(in srgb, var(--muted) 78%, var(--sheet-accent)); }
+@media (max-width: 620px) {
+  .sheet { grid-template-columns: 1fr; }
+  .sheet-group { min-height: 0; }
+}
 
 /* Movement, once the bench changes something: up in cyan, down in amber,
    with the old figure struck beside it. Which direction is good depends on

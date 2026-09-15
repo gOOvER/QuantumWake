@@ -364,7 +364,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.10
+### 0.13.11
 
 - **Every component maker has a logo now, not a four-letter monogram - the
   game's own.** The Fankit only ships marks for the fifteen hull makers;
@@ -409,6 +409,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   each has its own accent, mark and header, while the explanation for a figure
   is set apart as a small callout. The data is unchanged; it is simply easier
   to scan while choosing a fit.
+
+- **The sheet uses the full display, and each system now feels like an
+  instrument.** On a wide screen the seven system cards form one complete
+  bank rather than leaving Quantum stranded below the others. Brighter system
+  accents, a large card mark, subtle watermark and contained readouts give
+  each card a clearer identity without hiding the data.
 
 - **The part's own picture on the bench.** Where the Star Citizen Wiki has a
   cutout of a cooler, gun or drive, the bench and the candidate list show it
