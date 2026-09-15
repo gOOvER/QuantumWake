@@ -225,6 +225,52 @@ public class GaragePageTests
         return page;
     }
 
+    /// <summary>
+    /// The HUD draws a lead indicator per projectile speed. Two speeds among
+    /// the pilot's guns is a row in amber that names which guns fire at which,
+    /// and on the bench a gun that would add a pip - its speed matching none of
+    /// the other pilot guns - wears a chip saying so; one that matches does not,
+    /// and the gun in the port being changed is not counted against itself.
+    /// </summary>
+    [Fact]
+    public void Two_projectile_speeds_are_two_pips_on_the_sheet_and_a_chip_on_the_bench()
+    {
+        var page = new Page();
+        page.Serve("/api/garage", Garage);
+        var gladius = Gladius
+            .Replace("\"guns\":[\"CF-337 Panther Repeater\",\"CF-337 Panther Repeater\",\"Mantis GT-220 Gatling\"]",
+                "\"guns\":[\"CF-337 Panther Repeater\",\"CF-337 Panther Repeater\",\"Mantis GT-220 Gatling\"],\"pips\":2,"
+                + "\"speeds\":[{\"speed\":1480,\"guns\":[\"CF-337 Panther Repeater\",\"CF-337 Panther Repeater\"]},{\"speed\":1332,\"guns\":[\"Mantis GT-220 Gatling\"]}]")
+            .Replace("\"ports\":[",
+                "\"ports\":[{\"portId\":\"g3\",\"hardpoint\":\"hardpoint_gun_nose\",\"group\":\"WeaponGun\",\"minSize\":3,\"maxSize\":3,\"class\":\"GATS_BallisticGatling_S3\",\"name\":\"Mantis GT-220 Gatling\",\"stockClass\":\"GATS_BallisticGatling_S3\",\"changed\":false,"
+                + "\"fitted\":{\"type\":\"WeaponGun\",\"name\":\"Mantis GT-220 Gatling\",\"size\":3,\"grade\":2,\"manufacturer\":\"Gallenson Tactical\",\"makerCode\":\"GATS\",\"em\":10,\"ir\":0,\"weapon\":{\"dps\":648,\"sustainedDps\":400,\"alpha\":30,\"range\":2400,\"ammoSpeed\":1332}}},");
+        page.Serve("/api/garage/AEGS_Gladius", gladius);
+        page.Serve("/api/garage/builds?ship=AEGS_Gladius", "[]");
+        page.Serve("/api/garage/AEGS_Gladius/options?port=g3", """
+            {"port":{"portId":"g3","hardpoint":"hardpoint_gun_nose","kinds":["WeaponGun"],"minSize":3,"maxSize":3,"fitted":"GATS_BallisticGatling_S3"},
+             "pricesKnown":false,
+             "options":[
+               {"part":{"class":"GATS_BallisticGatling_S3","type":"WeaponGun","size":3,"grade":2,"name":"Mantis GT-220 Gatling","manufacturer":"Gallenson Tactical","makerCode":"GATS","em":10,"ir":0,"weapon":{"dps":648,"sustainedDps":400,"alpha":30,"range":2400,"ammoSpeed":1332}},"price":null,"shops":[]},
+               {"part":{"class":"KLWE_LaserRepeater_S3","type":"WeaponGun","size":3,"grade":2,"name":"CF-337 Panther Repeater","manufacturer":"Klaus & Werner","makerCode":"KLWE","em":10,"ir":0,"weapon":{"dps":650,"sustainedDps":420,"alpha":40,"range":2100,"ammoSpeed":1480}},"price":null,"shops":[]},
+               {"part":{"class":"BEHR_LaserCannon_S3","type":"WeaponGun","size":3,"grade":2,"name":"M5A Cannon","manufacturer":"Behring","makerCode":"BEHR","em":10,"ir":0,"weapon":{"dps":700,"sustainedDps":500,"alpha":120,"range":2600,"ammoSpeed":1184}},"price":null,"shops":[]}]}
+            """);
+        page.Do("await loadGarage();");
+
+        var rowSel = "__dom.node('#garage-sheet').descendants().find(n => n.classList.contains('sheet-row') && n.dataset.key === 'Projectile speed')";
+        Assert.Contains("2 speeds · 2 pips", page.Text($"{rowSel}.textContent"));
+        Assert.Contains("CF-337 Panther Repeater ×2 at 1,480 m/s; Mantis GT-220 Gatling at 1,332 m/s", page.Text($"{rowSel}.textContent"));
+        Assert.True(page.Truth($"{rowSel}.classList.contains('alert')"));
+
+        page.Do("await selectBenchPort('g3');");
+        var candidates = "__dom.node('#garage-bench-panel').descendants().filter(n => n.classList.contains('candidate'))";
+        var chipOn = (string name) => page.Truth($"{candidates}.find(n => n.textContent.includes('{name}')).descendants().some(n => n.classList.contains('chip') && n.classList.contains('pip'))");
+
+        // The Panther joins the other two at 1,480: one pip. The M5A at 1,184 would be a second.
+        Assert.False(chipOn("CF-337 Panther Repeater"));
+        Assert.True(chipOn("M5A Cannon"));
+        Assert.Contains("1,184 m/s", page.NodeText("#garage-bench-panel"));
+    }
+
     [Fact]
     public void The_bench_lists_the_ports_by_kind_with_a_mark_and_the_figure_that_matters()
     {

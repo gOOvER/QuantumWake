@@ -171,6 +171,13 @@ public sealed record ShieldSummary(double Hp, double Regen, int Generators, int 
 /// of the sheet holds to: one of the seven hulls whose remote turrets are
 /// named as pilot mounts in the loadout. Null when the two agree.
 /// </param>
+/// <param name="Speeds">
+/// The pilot's guns grouped by projectile speed, fastest first. The game
+/// draws one lead indicator - a pip - per speed, so two entries here is two
+/// pips on the HUD and a lead that is right for one gun and wrong for the
+/// other. The dataset's <c>Ammunition.Speed</c>, in metres a second; a gun
+/// without one is left out rather than counted as a speed of its own.
+/// </param>
 public sealed record WeaponSummary(
     double FixedDps,
     double FixedSustainedDps,
@@ -179,7 +186,15 @@ public sealed record WeaponSummary(
     double MissileDamage,
     int Missiles,
     IReadOnlyList<string> Guns,
-    string? Caveat = null);
+    string? Caveat = null,
+    IReadOnlyList<GunSpeed>? Speeds = null)
+{
+    /// <summary>How many lead indicators the pilot's guns put on the HUD.</summary>
+    public int Pips => Speeds?.Count ?? 0;
+}
+
+/// <summary>One projectile speed among the pilot's guns, and which guns fire at it.</summary>
+public sealed record GunSpeed(double Speed, IReadOnlyList<string> Guns);
 
 /// <param name="Range">Metres on a full tank: tank over the drive's fuel rate.</param>
 public sealed record QuantumSummary(string Drive, double Speed, double SpoolTime, double Cooldown, double Range, double FuelPerGm);
@@ -272,6 +287,7 @@ public sealed record ShipSheet(
         private readonly List<FittedPart> _fitted = [];
         private readonly List<string> _notes = [];
         private readonly List<string> _guns = [];
+        private readonly List<(string Name, double Speed)> _gunSpeeds = [];
         private readonly HashSet<string> _unknown = new(StringComparer.Ordinal);
 
         private double _ir, _plantEm, _plantSegments, _coolantGen, _weaponPowerUncapped;
@@ -477,6 +493,7 @@ public sealed record ShipSheet(
                     _fixedSustained += wp.SustainedDps;
                     _fixedAlpha += wp.Alpha;
                     _guns.Add(part.Name);
+                    if (wp.AmmoSpeed > 0) _gunSpeeds.Add((part.Name, wp.AmmoSpeed));
                 }
             }
 
@@ -489,6 +506,11 @@ public sealed record ShipSheet(
             if (part.Quantum is not null && isQuantum)
                 _drive = part;
         }
+
+        /// <summary>"CF-447 Rhino Repeater ×4, Deadbolt IV Cannon ×2" - names once each, counted.</summary>
+        private static string Describe(IEnumerable<string> names) =>
+            string.Join(", ", names.GroupBy(n => n, StringComparer.Ordinal)
+                .Select(g => g.Count() > 1 ? $"{g.Key} ×{g.Count()}" : g.Key));
 
         public ShipSheet Finish()
         {
@@ -560,6 +582,20 @@ public sealed record ShipSheet(
             foreach (var cls in _unknown)
                 _notes.Add($"{cls} is fitted but the reference has no figures for it; it counts for nothing here.");
 
+            // Speeds within a metre a second are one pip: the dataset carries
+            // 1345.5 beside 1296 and 1440, and those are three pips, but a
+            // rounding difference is not.
+            var speeds = _gunSpeeds
+                .GroupBy(g => Math.Round(g.Speed))
+                .OrderByDescending(g => g.Key)
+                .Select(g => new GunSpeed(g.Key, [.. g.Select(x => x.Name)]))
+                .ToList();
+            if (speeds.Count > 1)
+            {
+                var told = string.Join(", ", speeds.Select(sp => $"{Describe(sp.Guns)} at {sp.Speed:N0} m/s"));
+                _notes.Add($"The pilot's guns fire at {speeds.Count} speeds - {told} - so the HUD shows {speeds.Count} pips, and a lead that lands one gun misses the other.");
+            }
+
             var quantum = _drive?.Quantum is { } q
                 ? new QuantumSummary(_drive.Name, q.Speed, q.SpoolTime, q.Cooldown,
                     q.FuelRate > 0 ? ship.QuantumFuel / q.FuelRate : 0,
@@ -582,7 +618,7 @@ public sealed record ShipSheet(
                 new ShieldSummary(_shieldHp, _shieldRegen, _shieldGenerators, _maxShields),
                 new WeaponSummary(
                     Math.Round(_fixedDps, 1), Math.Round(_fixedSustained, 1), Math.Round(_fixedAlpha, 1),
-                    Math.Round(_turretDps, 1), Math.Round(_missileDamage), _missiles, _guns),
+                    Math.Round(_turretDps, 1), Math.Round(_missileDamage), _missiles, _guns, null, speeds),
                 quantum,
                 new ArmorSignals(_armorEm, _armorIr, _armorCross),
                 new Vec3(

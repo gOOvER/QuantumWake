@@ -4653,6 +4653,9 @@ body.overlay .ship-picture { display: none; }
 .sheet-row .v { padding: 2px 4px; border: 1px solid color-mix(in srgb, var(--sheet-accent) 17%, transparent); background: color-mix(in srgb, var(--sheet-accent) 5%, transparent); font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--text); text-align: right; white-space: nowrap; }
 .sheet-row .v small { color: var(--muted); font-family: var(--mono); margin-left: 4px; }
 .sheet-row .n { grid-column: 1 / -1; padding: 3px 0 1px 8px; border-left: 2px solid color-mix(in srgb, var(--sheet-accent) 58%, transparent); font-size: 10.5px; color: var(--dim); line-height: 1.4; margin-top: -3px; }
+/* A figure that is a problem, not a preference - two pips is the case: amber, as the stage tiles do it. */
+.sheet-row.alert .v { border-color: rgba(235, 174, 71, .7); color: var(--amber); }
+.sheet-row.alert .n { border-left-color: rgba(235, 174, 71, .7); }
 .sheet-row.sub .k { padding-left: 14px; color: color-mix(in srgb, var(--muted) 78%, var(--sheet-accent)); }
 @media (max-width: 620px) {
   .sheet { grid-template-columns: 1fr; }
@@ -4874,6 +4877,7 @@ body.overlay .ship-picture { display: none; }
 .candidate .c-act { text-align: right; }
 .candidate .c-act .state { font-size: 11px; color: var(--cyan); letter-spacing: .08em; text-transform: uppercase; }
 .chip.count { border-color: var(--cyan-deep); color: var(--cyan); }
+.chip.pip { border-color: rgba(235, 174, 71, .7); color: var(--amber); }
 
 /* ---------- saved builds ---------- */
 
