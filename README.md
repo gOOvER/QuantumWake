@@ -365,7 +365,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.31
+### 0.13.32
+
+- **The Garage opens a ship as its screenshot showed it.** With a loadout
+  photograph read — a Vehicle Loadout Manager frame or the Fleet Manager's
+  loadout estimate — the bench now starts from it the moment the ship is
+  opened, dated, with what the screenshot did not settle listed under it;
+  before, it opened at stock until you pressed *Start from the photographed
+  fit*. A tick above the bench, *Start from the newest photograph*, turns
+  that off and brings the button back; it also acts on the bench you are
+  looking at, and it is remembered in this browser like the paint pick.
 
 - **A ship wears the paint its screenshot showed.** A loadout screenshot
   names the livery — the Hermes' estimate listed *Hermes Keystone Livery* —

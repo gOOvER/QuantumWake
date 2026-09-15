@@ -1,9 +1,10 @@
 namespace Quantumwake.WebTests;
 
 /// <summary>
-/// The photographed fit on the Garage: offered, dated, and applied only when
-/// the pilot says so - because a screenshot is a moment and the ports are
-/// matched to it by order, not read from it.
+/// The photographed fit on the Garage: the bench opens as the newest
+/// screenshot showed the ship, dated, with what it did not settle listed -
+/// and a tick, kept in the browser, that turns that off for the pilot who
+/// would rather open every ship at stock and press for it.
 /// </summary>
 public class GaragePhotoTests
 {
@@ -37,10 +38,18 @@ public class GaragePhotoTests
                   {"slot":"Weapon 1","portId":"p-gun","name":null,"class":null,"applied":false,"changed":false,"why":"read “MBA Cannon”, which names no one part","stockName":"CF-337 Panther Repeater"}]}
         """;
 
-    private static Page Opened(string? photographed)
+    /// <summary>The sheet the server answers with once the Glacier is on the bench.</summary>
+    private static readonly string Fitted = Gladius
+        .Replace("\"ir\":8711", "\"ir\":8502")
+        .Replace("\"name\":\"Bracer\",\"stockClass\":\"COOL_AEGS_S01_Bracer_SCItem\",\"changed\":false",
+            "\"class\":\"COOL_JUST_S01_Glacier_SCItem\",\"name\":\"Glacier\",\"stockName\":\"Bracer\",\"stockClass\":\"COOL_AEGS_S01_Bracer_SCItem\",\"changed\":true");
+
+    private static Page Opened(string? photographed, bool fromPhoto = true)
     {
         var page = new Page();
+        page.Do($"localStorage.setItem('qw-garage-from-photo', '{(fromPhoto ? "yes" : "no")}'); garageFromPhoto = {(fromPhoto ? "true" : "false")};");
         page.Serve("/api/garage", Garage);
+        page.Serve("/api/garage/AEGS_Gladius/sheet", Fitted);
         page.Serve("/api/garage/AEGS_Gladius", Gladius);
         page.Serve("/api/garage/builds?ship=AEGS_Gladius", "[]");
         page.Serve("/api/garage/AEGS_Gladius/market", """{"enabled":false,"fetchedAt":null,"total":0,"components":0,"listings":[]}""");
@@ -68,14 +77,22 @@ public class GaragePhotoTests
     }
 
     /// <summary>
-    /// The offer is dated and counts what the screenshot settled and what it
-    /// did not, port by port with the reason - and the bench stays stock
-    /// until the pilot clicks.
+    /// The bench opens as photographed: the swaps are posted with the ship,
+    /// the section is dated and counts what the screenshot settled and what
+    /// it did not, port by port with the reason, and the button for pressing
+    /// is not shown - opening was the press.
     /// </summary>
     [Fact]
-    public void A_reading_is_offered_dated_with_what_it_did_not_settle()
+    public void The_bench_opens_as_photographed_and_says_what_the_screenshot_did_not_settle()
     {
         var page = Opened(Photographed);
+
+        Assert.Contains("POST /api/garage/AEGS_Gladius/sheet", page.Fetched());
+        Assert.Contains("\"p1\":\"COOL_JUST_S01_Glacier_SCItem\"", page.BodyOf("/api/garage/AEGS_Gladius/sheet"));
+        Assert.Equal("1 part changed", page.NodeText("#garage-changes"));
+        Assert.True(page.Truth("__dom.node('#garage-photo-auto').checked"));
+        Assert.True(page.Truth("__dom.node('#garage-photo-apply').hidden"));
+        Assert.Contains("started from this photograph", page.NodeText("#garage-photo-state"));
 
         Assert.False(page.Truth("__dom.node('#garage-photo').hidden"));
         Assert.Contains("Aegis Gladius, as photographed", page.NodeText("#garage-photo-title"));
@@ -85,20 +102,53 @@ public class GaragePhotoTests
         Assert.Contains("1 not settled by the screenshot and left as stock", sub);
         Assert.Contains("a moment, not a state", sub);
         Assert.Contains("Weapon 1 · read “MBA Cannon”, which names no one part", page.NodeText("#garage-photo-unsettled"));
+    }
+
+    /// <summary>
+    /// The tick off: every ship opens at stock, the offer is a button, and
+    /// the bench does not move until it is pressed. The tick is kept in the
+    /// browser like the paint pick.
+    /// </summary>
+    [Fact]
+    public void With_the_tick_off_the_bench_stays_stock_until_pressed()
+    {
+        var page = Opened(Photographed, fromPhoto: false);
 
         Assert.Equal("Stock fit", page.NodeText("#garage-changes"));
         Assert.DoesNotContain("POST /api/garage/AEGS_Gladius/sheet", page.Fetched());
+        Assert.False(page.Truth("__dom.node('#garage-photo-auto').checked"));
+        Assert.False(page.Truth("__dom.node('#garage-photo-apply').hidden"));
         Assert.False(page.Truth("__dom.node('#garage-photo-apply').disabled"));
+    }
+
+    /// <summary>
+    /// The tick acts at once as well as from now on: off takes the bench
+    /// back to stock, on fits the photograph, and either way it is remembered.
+    /// </summary>
+    [Fact]
+    public void The_tick_takes_effect_on_the_open_bench_and_is_remembered()
+    {
+        var page = Opened(Photographed);
+        Assert.Equal("1 part changed", page.NodeText("#garage-changes"));
+
+        page.Serve("/api/garage/AEGS_Gladius/sheet", Gladius);
+        page.Do("__dom.node('#garage-photo-auto').checked = false; await __dom.node('#garage-photo-auto').fire('change');");
+
+        Assert.Equal("Stock fit", page.NodeText("#garage-changes"));
+        Assert.Equal("no", page.Text("localStorage.getItem('qw-garage-from-photo')"));
+        Assert.False(page.Truth("__dom.node('#garage-photo-apply').hidden"));
+
+        page.Serve("/api/garage/AEGS_Gladius/sheet", Fitted);
+        page.Do("__dom.node('#garage-photo-auto').checked = true; await __dom.node('#garage-photo-auto').fire('change');");
+
+        Assert.Equal("1 part changed", page.NodeText("#garage-changes"));
+        Assert.Equal("yes", page.Text("localStorage.getItem('qw-garage-from-photo')"));
     }
 
     [Fact]
     public void Starting_from_it_posts_the_swaps_and_reset_takes_it_back()
     {
-        var page = Opened(Photographed);
-        page.Serve("/api/garage/AEGS_Gladius/sheet", Gladius
-            .Replace("\"ir\":8711", "\"ir\":8502")
-            .Replace("\"name\":\"Bracer\",\"stockClass\":\"COOL_AEGS_S01_Bracer_SCItem\",\"changed\":false",
-                "\"class\":\"COOL_JUST_S01_Glacier_SCItem\",\"name\":\"Glacier\",\"stockName\":\"Bracer\",\"stockClass\":\"COOL_AEGS_S01_Bracer_SCItem\",\"changed\":true"));
+        var page = Opened(Photographed, fromPhoto: false);
 
         page.Do("await __dom.node('#garage-photo-apply').fire('click');");
 

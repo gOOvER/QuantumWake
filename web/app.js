@@ -9296,6 +9296,23 @@ async function openGarage(cls) {
 let garagePhoto = null;
 let garagePhotoApplied = false;
 
+/**
+ * Whether a ship opens on the bench as its newest photograph showed it. On
+ * unless the pilot says otherwise, kept in this browser with the other
+ * bench habits: the photograph is the one thing that says what the ship is
+ * carrying, and a bench that opened at stock until a button was pressed
+ * was a bench nobody pressed. The way out is the tick, not a press a ship.
+ */
+let garageFromPhoto = true;
+try {
+  garageFromPhoto = localStorage.getItem('qw-garage-from-photo') !== 'no';
+} catch { /* private browsing keeps the default */ }
+
+function rememberGarageFromPhoto(on) {
+  garageFromPhoto = on;
+  try { localStorage.setItem('qw-garage-from-photo', on ? 'yes' : 'no'); } catch { /* as above */ }
+}
+
 async function loadGaragePhoto(cls) {
   const box = $('#garage-photo');
   if (!box) return;
@@ -9314,6 +9331,11 @@ async function loadGaragePhoto(cls) {
 
   garagePhoto = fit;
   renderGaragePhoto();
+
+  // A bench nobody has touched yet takes the photograph itself. One the
+  // pilot has already changed, or opened a saved build on, is theirs.
+  if (garageFromPhoto && fit?.applied && !garageOpenBuild && Object.keys(garageSwaps).length === 0)
+    await applyGaragePhoto();
 }
 
 function renderGaragePhoto() {
@@ -9356,8 +9378,13 @@ function renderGaragePhoto() {
     list.append(li);
   }
 
+  const auto = $('#garage-photo-auto');
+  if (auto) auto.checked = garageFromPhoto;
   const apply = $('#garage-photo-apply');
   apply.disabled = garagePhotoApplied || !fit.applied;
+  // With the tick on, the button is the same act as opening the ship, so it
+  // stays only for the pilot who took the tick off.
+  apply.hidden = garageFromPhoto && garagePhotoApplied;
   $('#garage-photo-state').textContent = garagePhotoApplied
     ? `The bench started from this photograph; ${fit.changed} part${fit.changed === 1 ? '' : 's'} differ from stock. Reset to stock takes it back.`
     : fit.applied ? '' : 'Nothing on the screenshot settled a port the bench can change.';
@@ -9374,6 +9401,19 @@ async function applyGaragePhoto() {
 }
 
 $('#garage-photo-apply')?.addEventListener('click', () => applyGaragePhoto().catch(() => {}));
+
+// The tick acts at once as well as from now on: off takes this bench back to
+// stock, on fits the photograph - so what is on screen is what the tick says.
+$('#garage-photo-auto')?.addEventListener('change', (e) => {
+  rememberGarageFromPhoto(e.target.checked);
+  if (garageFromPhoto && garagePhoto?.applied && !garagePhotoApplied && Object.keys(garageSwaps).length === 0) {
+    applyGaragePhoto().catch(() => {});
+  } else if (!garageFromPhoto && garagePhotoApplied) {
+    resetGarage().catch(() => {});
+  } else {
+    renderGaragePhoto();
+  }
+});
 
 /**
  * One player's advertisement, as a line the bench and the market panel share:

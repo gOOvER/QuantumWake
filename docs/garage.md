@@ -282,10 +282,19 @@ current panel.
   fit and says so; the pilot sets the bench to what they actually fly - or,
   since 0.13.19, starts it from a screenshot:
 
-  **The photographed fit.** A Vehicle Loadout Manager frame the screen reader
-  has read (see *The loadout, read* in `screen-insight.md`) is offered above
-  the bench as *Start from the photographed fit*, dated, and applied only on
-  that click. `GaragePhotograph.Match` turns the reading into bench swaps:
+  **The photographed fit.** A Vehicle Loadout Manager frame or a Fleet
+  Manager loadout estimate the screen reader has read (see *The loadout,
+  read* in `screen-insight.md`) is what the bench opens as, dated, with what
+  the screenshot did not settle listed under it. A tick above the bench -
+  *Start from the newest photograph*, kept in the browser like the paint
+  pick - turns that off, and then the same reading is a button, *Start from
+  the photographed fit*, applied only on the click. It shipped the other way
+  round until 0.13.32, and a bench that opened at stock until a button was
+  pressed was a bench nobody pressed. A bench already changed, or opened on
+  a saved build, is left alone. `GaragePhotograph.Match` turns the reading
+  into bench swaps: the estimate's `Cooler ×2` fills the first two coolers,
+  its plural `Quantum Drives` (read `Ouantum` by the engine) is the quantum
+  drive; on the Vehicle Loadout Manager,
   the screen's `Cooler 2` is the ship's second editable cooler port, where
   "second" is the number in the hardpoint name when the kind's ports all
   carry one (the Hermes' `hardpoint_shield_generator_02_hermes` is its
@@ -299,8 +308,9 @@ current panel.
   with their reason and left as stock. The reading has to name the ship
   exactly - the frame that read `DUKE CORSAIR` is *looks like Drake Corsair*
   and is offered to no bench. `GET /api/garage/{class}/photographed` is the
-  endpoint; 404 when no reading is of the ship. Nothing is written: the
-  swaps are the bench's, and *Reset to stock* takes them back.
+  endpoint; 404 when no reading is of the ship, and the page says so rather
+  than hiding the section. Nothing is written: the swaps are the bench's,
+  and *Reset to stock* takes them back.
 
 ## Build order
 
