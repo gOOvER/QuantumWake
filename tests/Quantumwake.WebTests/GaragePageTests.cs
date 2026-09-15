@@ -605,6 +605,19 @@ public class GaragePageTests
         Assert.Contains("terminal aUEC sellers", page.NodeText("#garage-optimise-status"));
     }
 
+    [Fact]
+    public void Terminal_aUEC_only_filters_an_open_bench_but_keeps_the_fitted_part_for_comparison()
+    {
+        var page = Bench();
+        page.Do("await selectBenchPort('p1'); __dom.node('#garage-optimise-buyable').checked = true; __dom.node('#garage-optimise-buyable').fire('change');");
+
+        var bench = page.NodeText("#garage-bench-panel");
+        Assert.Contains("Bracer", bench);
+        Assert.Contains("Glacier", bench);
+        Assert.DoesNotContain("Endo", bench);
+        Assert.Contains("terminal aUEC only", bench);
+    }
+
     [Theory]
     [InlineData("alpha", "{weapon:{alpha:91,sustainedDps:42}}", "91")]
     [InlineData("sustained", "{weapon:{alpha:91,sustainedDps:42}}", "42")]

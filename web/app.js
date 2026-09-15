@@ -9475,6 +9475,22 @@ function renderBenchPanel() {
   const current = currentClassOf(port);
   const fittedPart = garageOptions.options.find((o) => o.part.class === current)?.part || port?.fitted || null;
   const ship = garageStock.ship;
+  const terminalOnly = $('#garage-optimise-buyable').checked;
+  const term = (garageOptions.filter || '').trim().toLowerCase();
+  const keyIndex = 0;
+  // Keep the fitted part in view even when it has no known terminal seller:
+  // the Bench is still where a pilot compares its current component before
+  // choosing a purchasable replacement.
+  const rows = garageOptions.options
+    .filter((o) => !terminalOnly || o.shops?.length || o.part.class === current)
+    .filter((o) => !term || `${o.part.name} ${o.part.manufacturer || ''} ${o.part.makerCode || ''}`.toLowerCase().includes(term))
+    .sort((a, b) => {
+      const fa = partFigures(a.part, ship)[keyIndex];
+      const fb = partFigures(b.part, ship)[keyIndex];
+      if (!fa || !fb) return 0;
+      // Sorted so the best of the kind is on top: more DPS, less spool.
+      return fa[3] ? fa[1] - fb[1] : fb[1] - fa[1];
+    });
 
   const head = el('div', 'panel-head');
   head.append(el('div', 'panel-title', `${garageWord(port?.group || garageOptions.port.kinds[0])} · ${garagePortName(garageOptions.port.hardpoint)}`));
@@ -9490,23 +9506,13 @@ function renderBenchPanel() {
   search.value = garageOptions.filter || '';
   search.addEventListener('input', () => { garageOptions.filter = search.value; renderBenchPanel(); });
   tools.append(search);
-  tools.append(el('span', 'muted', `${garageOptions.options.length} fit · sorted by ${partFigures(fittedPart || garageOptions.options[0]?.part, ship)[0]?.[0] || 'name'}`));
+  tools.append(el('span', 'muted', `${rows.length} of ${garageOptions.options.length} fit${terminalOnly ? ' · terminal aUEC only' : ''} · sorted by ${partFigures(fittedPart || garageOptions.options[0]?.part, ship)[0]?.[0] || 'name'}`));
   panel.append(tools);
 
-  const term = (garageOptions.filter || '').trim().toLowerCase();
-  const keyIndex = 0;
-  const rows = garageOptions.options
-    .filter((o) => !term || `${o.part.name} ${o.part.manufacturer || ''} ${o.part.makerCode || ''}`.toLowerCase().includes(term))
-    .sort((a, b) => {
-      const fa = partFigures(a.part, ship)[keyIndex];
-      const fb = partFigures(b.part, ship)[keyIndex];
-      if (!fa || !fb) return 0;
-      // Sorted so the best of the kind is on top: more DPS, less spool.
-      return fa[3] ? fa[1] - fb[1] : fb[1] - fa[1];
-    });
-
   if (!rows.length) {
-    panel.append(el('p', 'muted', 'Nothing in the reference fits this port.'));
+    panel.append(el('p', 'muted', terminalOnly
+      ? 'No terminal aUEC seller is recorded for a compatible replacement.'
+      : 'Nothing in the reference fits this port.'));
     return;
   }
 
@@ -9949,6 +9955,9 @@ async function addFittedPartToShopping(portIds, part) {
 
 $('#garage-shop')?.addEventListener('click', () => shopForBench().catch(() => {}));
 $('#garage-optimise')?.addEventListener('click', () => optimiseGarage().catch(() => {}));
+$('#garage-optimise-buyable')?.addEventListener('change', () => {
+  if (garageOptions) renderBenchPanel();
+});
 
 onInput('#garage-mine', () => { const v = $('#garage-mine').value; if (v) openGarage(v).catch(() => {}); });
 onInput('#garage-all', () => { const v = $('#garage-all').value; if (v) openGarage(v).catch(() => {}); });

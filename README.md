@@ -364,7 +364,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.16
+### 0.13.17
+
+- **Terminal aUEC only now filters an open Bench as well as Auto-fit.** Toggle
+  it while comparing a port and the Bench immediately leaves only compatible
+  parts with a recorded NPC-terminal seller, while retaining the fitted part
+  as the useful baseline for comparison.
 
 - **Half the parts that had no picture have one now.** The bench used to ask
   the Star Citizen Wiki for a part's picture by the name of its page, and
