@@ -364,7 +364,20 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.18
+### 0.13.19
+
+- **Start the Garage bench from a screenshot of the ship.** When the screen
+  reader has read a Vehicle Loadout Manager frame of the open ship, the
+  Garage offers it above the bench - *RSI Hermes, as photographed 12 Sep
+  2026 21:55* - with how many ports it settled, how many differ from stock,
+  and a list of what it did not settle and why: nothing read under a port, a
+  line that named no one part, a reading two parts answer to. *Start from
+  the photographed fit* puts those parts in the bench and the sheet moves to
+  match; *Reset to stock* takes it back. It is offered, never applied on its
+  own, and it is dated: a screenshot is a moment, not a state, and the ports
+  are matched to the screen's labels by kind and number rather than read
+  from it. The ship's name has to have read exactly - a frame that only
+  looks like a Corsair is offered to no bench.
 
 - **One Garage fit, one shopping list.** Fitting a component sold at a terminal
   now adds it to the ship's existing fit list instead of creating a second,

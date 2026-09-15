@@ -8856,7 +8856,86 @@ async function openGarage(cls) {
   renderGarage(data, null);
   await loadBuilds();
   loadGarageMarket(cls).catch(() => { /* the panel says the feed is off or unread */ });
+  loadGaragePhoto(cls).catch(() => { /* no reading of this ship: the offer stays hidden */ });
 }
+
+/* ---------- the photographed fit ---------- */
+
+/**
+ * The ship's fit as last photographed, offered as a place to start the bench
+ * from. Never applied on its own: the logs do not name a ship's parts, a
+ * screenshot is a moment rather than a state, and the ports are matched to
+ * the screen's labels by kind and order - a starting point, dated, that the
+ * pilot chooses. Hidden when no loadout reading is of this ship.
+ */
+let garagePhoto = null;
+let garagePhotoApplied = false;
+
+async function loadGaragePhoto(cls) {
+  const box = $('#garage-photo');
+  if (!box) return;
+  garagePhoto = null;
+  garagePhotoApplied = false;
+  box.hidden = true;
+
+  let fit;
+  try {
+    fit = await getJson(`/api/garage/${encodeURIComponent(cls)}/photographed`);
+  } catch {
+    return;
+  }
+  if (cls !== garageClass) return;
+
+  garagePhoto = fit;
+  renderGaragePhoto();
+}
+
+function renderGaragePhoto() {
+  const box = $('#garage-photo');
+  if (!box) return;
+  const fit = garagePhoto;
+  if (!fit) { box.hidden = true; return; }
+  box.hidden = false;
+
+  const when = new Date(fit.shotAt).toLocaleString();
+  $('#garage-photo-title').textContent = `${fit.ship}, as photographed ${when}`;
+
+  const unsettled = (fit.ports || []).filter((p) => !p.applied);
+  const sub = [];
+  sub.push(`${fit.applied} of ${fit.ports.length} port${fit.ports.length === 1 ? '' : 's'} read as one part`);
+  sub.push(fit.changed ? `${fit.changed} differ${fit.changed === 1 ? 's' : ''} from stock` : 'none differ from stock');
+  if (unsettled.length) sub.push(`${unsettled.length} not settled by the screenshot and left as stock`);
+  if (fit.scope) sub.push(fit.scope);
+  sub.push(`from ${fit.shot}`);
+  $('#garage-photo-sub').textContent = `${sub.join(' · ')}. Ports are matched to the screen's labels by kind and order; a screenshot is a moment, not a state.`;
+
+  const list = $('#garage-photo-unsettled');
+  list.textContent = '';
+  for (const port of unsettled) {
+    const li = el('li');
+    li.append(el('span', 'what', port.slot));
+    li.append(el('span', 'd', ` · ${port.why}`));
+    list.append(li);
+  }
+
+  const apply = $('#garage-photo-apply');
+  apply.disabled = garagePhotoApplied || !fit.applied;
+  $('#garage-photo-state').textContent = garagePhotoApplied
+    ? `The bench started from this photograph; ${fit.changed} part${fit.changed === 1 ? '' : 's'} differ from stock. Reset to stock takes it back.`
+    : fit.applied ? '' : 'Nothing on the screenshot settled a port the bench can change.';
+}
+
+/** The photographed parts become the bench's swaps, and the sheet moves to match. */
+async function applyGaragePhoto() {
+  if (!garagePhoto || !garageStock) return;
+  garageSwaps = { ...garagePhoto.swaps };
+  garagePhotoApplied = true;
+  $('#garage-optimise-status').textContent = '';
+  await refitGarage();
+  renderGaragePhoto();
+}
+
+$('#garage-photo-apply')?.addEventListener('click', () => applyGaragePhoto().catch(() => {}));
 
 /**
  * One player's advertisement, as a line the bench and the market panel share:
@@ -9835,8 +9914,10 @@ async function refitGarage() {
 
 async function resetGarage() {
   garageSwaps = {};
+  garagePhotoApplied = false;
   $('#garage-optimise-status').textContent = '';
   await refitGarage();
+  renderGaragePhoto();
 }
 
 $('#garage-reset')?.addEventListener('click', () => resetGarage().catch(() => {}));

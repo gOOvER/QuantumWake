@@ -260,7 +260,28 @@ current panel.
 - **Reading your actual current fit from the logs.** `Game.log` names the
   ship, not its parts (see *Loadout* in `untapped-signals.md`: the attachment
   lines are the pilot's armour and weapons, not the vehicle's). The sheet starts from the stock
-  fit and says so; the pilot sets the bench to what they actually fly.
+  fit and says so; the pilot sets the bench to what they actually fly - or,
+  since 0.13.19, starts it from a screenshot:
+
+  **The photographed fit.** A Vehicle Loadout Manager frame the screen reader
+  has read (see *The loadout, read* in `screen-insight.md`) is offered above
+  the bench as *Start from the photographed fit*, dated, and applied only on
+  that click. `GaragePhotograph.Match` turns the reading into bench swaps:
+  the screen's `Cooler 2` is the ship's second editable cooler port, where
+  "second" is the number in the hardpoint name when the kind's ports all
+  carry one (the Hermes' `hardpoint_shield_generator_02_hermes` is its
+  Shield Generator 2 - the dump lists it *before* `_01`, so dump order alone
+  would have swapped them) and the dump's order otherwise (`cooler_left`,
+  `cooler_right`). That fallback is an assumption about the game, stated on
+  the page. Only a port read with one class is applied; `Empty` empties the
+  port; a tie (the M6A that reads as the M8A), an unrecognised line, a part
+  that does not fit the port, and guns under a turret (numbered within the
+  turret on screen, within the ship in the dump) are listed under the offer
+  with their reason and left as stock. The reading has to name the ship
+  exactly - the frame that read `DUKE CORSAIR` is *looks like Drake Corsair*
+  and is offered to no bench. `GET /api/garage/{class}/photographed` is the
+  endpoint; 404 when no reading is of the ship. Nothing is written: the
+  swaps are the bench's, and *Reset to stock* takes them back.
 
 ## Build order
 

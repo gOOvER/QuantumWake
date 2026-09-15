@@ -3201,6 +3201,31 @@ public static class ServerHost
             });
         });
 
+        // The ship's fit as last photographed at a Vehicle Loadout Manager,
+        // as bench swaps: what the screen read, port by port, and what it did
+        // not settle. 404 when no loadout reading is of this ship - the name
+        // has to have read exactly; "looks like Drake Corsair" is not one.
+        app.MapGet("/api/garage/{cls}/photographed", (string cls, LogLibrary lib, ScreenReadingStore readings) =>
+        {
+            var community = lib.Community;
+            var ship = community.GarageShip(cls);
+            if (ship is null) return Results.NotFound();
+
+            var fit = GaragePhotograph.Latest(ship, readings.LatestLoadouts(), community.Parts, community.Ships);
+            return fit is null
+                ? Results.NotFound(new { message = $"No loadout screenshot of the {ship.Name} has been read." })
+                : Results.Ok(new
+                {
+                    fit.Shot, fit.ShotAt, fit.Ship, fit.Scope, fit.Swaps, fit.Applied, fit.Changed,
+                    ports = fit.Ports.Select(p => new
+                    {
+                        p.Slot, p.PortId, p.Name, p.Class, p.Applied, p.Changed, p.Why,
+                        stockName = p.PortId is not null && FindPort(ship.Loadout, p.PortId)?.Class is { } stock
+                            && community.Parts.TryGetValue(stock, out var was) ? was.Name : null
+                    })
+                });
+        });
+
         app.MapGet("/api/garage/{cls}/options", (string cls, string port, LogLibrary lib, UexData uex, UexFeeds feeds) =>
         {
             var community = lib.Community;

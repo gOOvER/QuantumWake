@@ -1945,6 +1945,22 @@
       <p class="muted" id="garage-optimise-status" aria-live="polite"></p>
     </section>
 
+    <!-- The ship's fit as last photographed at a Vehicle Loadout Manager,
+         offered as a starting point. Dated, because a screenshot is a moment
+         and not a state; hidden when no loadout reading is of this ship. -->
+    <section class="garage-photo" id="garage-photo" hidden aria-labelledby="garage-photo-title">
+      <div class="garage-photo-copy">
+        <div class="garage-eyebrow">Photographed fit</div>
+        <h3 id="garage-photo-title"></h3>
+        <p class="muted" id="garage-photo-sub"></p>
+        <ul class="garage-photo-unsettled" id="garage-photo-unsettled"></ul>
+      </div>
+      <div class="garage-photo-tools">
+        <button type="button" class="ghost tiny" id="garage-photo-apply">Start from the photographed fit</button>
+        <span class="muted" id="garage-photo-state"></span>
+      </div>
+    </section>
+
     <div class="bench-bar" id="garage-bench-bar" hidden>
       <h2 class="spaced">Bench</h2>
       <div class="bench-state">
