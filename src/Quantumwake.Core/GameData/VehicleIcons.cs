@@ -45,14 +45,37 @@ public static class VehicleIcons
 
         var height = BinaryPrimitives.ReadInt32LittleEndian(dds.AsSpan(12));
         var width = BinaryPrimitives.ReadInt32LittleEndian(dds.AsSpan(16));
+        var pixelFlags = BinaryPrimitives.ReadInt32LittleEndian(dds.AsSpan(80));
         var fourCc = System.Text.Encoding.ASCII.GetString(dds, 84, 4);
+        var bitCount = BinaryPrimitives.ReadInt32LittleEndian(dds.AsSpan(88));
 
-        if (fourCc != "DXT5" || width <= 0 || height <= 0 || width % 4 != 0 || height % 4 != 0)
-            return null;
-        if (dds.Length < DdsHeader + width * height)
+        if (width <= 0 || height <= 0 || width % 4 != 0 || height % 4 != 0)
             return null;
 
-        var rgba = DecodeBc3(dds, DdsHeader, width, height);
+        byte[] rgba;
+        if (fourCc == "DXT5")
+        {
+            if (dds.Length < DdsHeader + width * height) return null;
+            rgba = DecodeBc3(dds, DdsHeader, width, height);
+        }
+        else if ((pixelFlags & 0x40) != 0 && bitCount == 32)
+        {
+            // Uncompressed 32-bit, which a few of the maker logos are (RAMP
+            // Corporation, Gyson - 256-square at four bytes a pixel). Stored
+            // as the masks say; BGRA in every one met, so the red mask decides
+            // whether the first byte is blue or red.
+            if (dds.Length < DdsHeader + width * height * 4) return null;
+            var redMask = BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(92));
+            rgba = new byte[width * height * 4];
+            Buffer.BlockCopy(dds, DdsHeader, rgba, 0, rgba.Length);
+            if (redMask == 0x00ff0000)
+                for (var i = 0; i < rgba.Length; i += 4)
+                    (rgba[i], rgba[i + 2]) = (rgba[i + 2], rgba[i]);
+        }
+        else
+        {
+            return null;
+        }
 
         // Opaque bounds. A threshold rather than zero: BC3's alpha ramp leaves
         // faint haloes around the shape that would pad every crop by a pixel.

@@ -31,7 +31,7 @@ namespace Quantumwake.Core.GameData;
 public sealed partial class GameCommodities
 {
     /// <summary>Bumped when the cached shape changes.</summary>
-    private const int CacheVersion = 30;
+    private const int CacheVersion = 31;
 
     private const string DataCoreEntry = @"Data\Game2.dcb";
     private const string LocalisationEntry = @"Data\Localization\english\global.ini";
@@ -47,6 +47,7 @@ public sealed partial class GameCommodities
     private readonly GameWikeloCatalogue _wikelo;
     private readonly Dictionary<string, GameVehicle> _vehicles;
     private readonly List<GamePaint> _paints;
+    private readonly Dictionary<string, string> _makerLogos;
 
     private GameCommodities(
         Dictionary<string, string> byId,
@@ -57,9 +58,11 @@ public sealed partial class GameCommodities
         Dictionary<string, GamePlace> places,
         GameWikeloCatalogue? wikelo = null,
         Dictionary<string, GameVehicle>? vehicles = null,
-        List<GamePaint>? paints = null)
+        List<GamePaint>? paints = null,
+        Dictionary<string, string>? makerLogos = null)
     {
         _paints = paints ?? [];
+        _makerLogos = makerLogos ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         _wikelo = wikelo ?? GameWikeloCatalogue.Empty;
         _vehicles = vehicles ?? new Dictionary<string, GameVehicle>(StringComparer.OrdinalIgnoreCase);
         _byId = byId;
@@ -105,6 +108,10 @@ public sealed partial class GameCommodities
 
     /// <summary>Every paint the install pictures, for the Fleet page to offer per hull.</summary>
     public IReadOnlyList<GamePaint> Paints => _paints;
+
+    /// <summary>The archive entry of a maker's 256-square logo, by code, or null when the game has none.</summary>
+    public string? MakerLogo(string? code) =>
+        code is { Length: > 0 } && _makerLogos.TryGetValue(code, out var entry) ? entry : null;
 
     /// <summary>Nothing known, used when the archive is unreadable.</summary>
     public static GameCommodities Empty { get; } =
@@ -161,16 +168,16 @@ public sealed partial class GameCommodities
 
         if (TryLoadCache(cachePath, stamp) is { } cached) return cached;
 
-        var (commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints) = Read(archive);
+        var (commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos) = Read(archive);
         if (commodities.Count > 0 || items.Count > 0)
-            SaveCache(cachePath, stamp, commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints);
+            SaveCache(cachePath, stamp, commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos);
 
-        return new GameCommodities(commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints);
+        return new GameCommodities(commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos);
     }
 
     private static (Dictionary<string, string> Commodities, Dictionary<string, string> Items,
         Dictionary<string, GameItem> Facts, List<GameBlueprint> Blueprints,
-        List<GameSpawn> Spawns, Dictionary<string, GamePlace> Places, GameWikeloCatalogue Wikelo, Dictionary<string, GameVehicle> Vehicles, List<GamePaint> Paints) Read(string archivePath)
+        List<GameSpawn> Spawns, Dictionary<string, GamePlace> Places, GameWikeloCatalogue Wikelo, Dictionary<string, GameVehicle> Vehicles, List<GamePaint> Paints, Dictionary<string, string> MakerLogos) Read(string archivePath)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var itemUuids = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -181,6 +188,7 @@ public sealed partial class GameCommodities
         var wikelo = GameWikeloCatalogue.Empty;
         var vehicles = new Dictionary<string, GameVehicle>(StringComparer.OrdinalIgnoreCase);
         var paints = new List<GamePaint>();
+        var makerLogos = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         try
         {
@@ -190,7 +198,7 @@ public sealed partial class GameCommodities
             var ini = p4k.TryRead(LocalisationEntry);
 
             if (blob is null || ini is null)
-                return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints);
+                return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos);
 
             var text = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -243,14 +251,15 @@ public sealed partial class GameCommodities
             // The default liveries are files no record points at: only the
             // archive's own listing knows they exist.
             paints.AddRange(GamePaints.Stock(p4k.List(GamePaints.RenderFolder).Select(e => e.Path), paints));
+            makerLogos = GameMakerLogos.Read(core, p4k.List(GameMakerLogos.Folder).Select(e => e.Path));
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         {
             // A missing or unreadable archive degrades naming, never the app.
-            return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints);
+            return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos);
         }
 
-        return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints);
+        return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos);
     }
 
     /// <summary>
@@ -296,7 +305,8 @@ public sealed partial class GameCommodities
                 new Dictionary<string, GamePlace>(cache.Places, StringComparer.OrdinalIgnoreCase),
                 cache.Wikelo,
                 cache.Vehicles is not null ? new Dictionary<string, GameVehicle>(cache.Vehicles, StringComparer.OrdinalIgnoreCase) : null,
-                cache.Paints);
+                cache.Paints,
+                cache.MakerLogos is not null ? new Dictionary<string, string>(cache.MakerLogos, StringComparer.OrdinalIgnoreCase) : null);
         }
         catch (Exception e) when (e is IOException or JsonException)
         {
@@ -309,7 +319,7 @@ public sealed partial class GameCommodities
         Dictionary<string, string> items, Dictionary<string, GameItem> facts,
         List<GameBlueprint> blueprints, List<GameSpawn> spawns,
         Dictionary<string, GamePlace> places, GameWikeloCatalogue wikelo,
-        Dictionary<string, GameVehicle> vehicles, List<GamePaint> paints)
+        Dictionary<string, GameVehicle> vehicles, List<GamePaint> paints, Dictionary<string, string> makerLogos)
     {
         try
         {
@@ -320,7 +330,7 @@ public sealed partial class GameCommodities
                     {
                         Stamp = stamp, Commodities = names, Items = items,
                         Facts = facts, Blueprints = blueprints, Spawns = spawns, Places = places,
-                        Wikelo = wikelo, Vehicles = vehicles, Paints = paints
+                        Wikelo = wikelo, Vehicles = vehicles, Paints = paints, MakerLogos = makerLogos
                     },
                     Json));
         }
@@ -345,5 +355,6 @@ public sealed partial class GameCommodities
         public GameWikeloCatalogue? Wikelo { get; set; }
         public Dictionary<string, GameVehicle>? Vehicles { get; set; }
         public List<GamePaint>? Paints { get; set; }
+        public Dictionary<string, string>? MakerLogos { get; set; }
     }
 }

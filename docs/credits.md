@@ -57,12 +57,14 @@ third-party extractor is used or shipped: `GameData/DataCore.cs` walks the blob
 itself.
 
 **Star Citizen Wiki** ([starcitizen.tools](https://starcitizen.tools)) is
-where the Garage's pictures of parts and component makers' logos come from:
-once the community dataset is switched on, the bench asks the wiki's MediaWiki
-API for the lead image of a part's or a manufacturer's page - the display name
-is the only thing sent - and keeps the thumbnail under
-`community/part-pictures/` or `community/maker-marks/`. Those images are the wiki
-contributors' captures, shown as the wiki serves them under its own terms
+where the Garage's pictures of parts come from, and the logo of the odd maker
+the game files lack one for: once the community dataset is switched on, the
+bench asks the wiki's MediaWiki API for the lead image of a part's or a
+manufacturer's page - the display name is the only thing sent - and keeps the
+thumbnail under `community/part-pictures/` or `community/maker-marks/`.
+(Makers' marks themselves come from `Data.p4k` first, like the ship
+silhouettes.) Those images are the wiki contributors' captures, shown as the
+wiki serves them under its own terms
 (CC BY-SA for the wiki's work; what is pictured is Cloud Imperium's), and
 nothing from the wiki is committed to this repository. The wiki's REST API
 ([api.star-citizen.wiki](https://api.star-citizen.wiki)) and

@@ -33,6 +33,37 @@ if (install is null)
     return 1;
 }
 
+// The table behind docs/garage.md's maker-logo claim: every non-paint
+// SCItemManufacturer record's Code and Logo, whether the archive holds the
+// texture, and how a split mip chain is cut. Run it again after a patch.
+if (args.Contains("--maker-logos"))
+{
+    var p4k = new P4kArchive(P4kArchive.PathFor(install.RootPath));
+    var blob = p4k.TryRead(@"Data\Game2.dcb");
+    if (blob is null) { Console.Error.WriteLine("no Game2.dcb"); return 1; }
+    var core = new DataCore(blob);
+    var folder = p4k.List(@"Data\UI\SharedAssets\ManufacturerLogos\");
+    Console.WriteLine($"{folder.Count} entries under ManufacturerLogos");
+    var byName = folder.ToDictionary(e => System.IO.Path.GetFileName(e.Path), e => e.Size, StringComparer.OrdinalIgnoreCase);
+    var n = 0;
+    foreach (var record in core.Records())
+    {
+        if (!record.Name.StartsWith("SCItemManufacturer.", StringComparison.OrdinalIgnoreCase) || record.Name.Contains("Paint_", StringComparison.OrdinalIgnoreCase)) continue;
+        var at = core.InstanceAt(record, record.VariantIndex);
+        var code = core.StringAt(at, record.StructIndex, "Code");
+        var logo = core.StringAt(at, record.StructIndex, "Logo");
+        var file = logo is { Length: > 0 } ? System.IO.Path.GetFileNameWithoutExtension(logo) + ".dds" : null;
+        var has = file is not null && byName.TryGetValue(file, out var size)
+            ? $"archive {size}" + (size < 1024 ? " parts " + string.Join(",", folder.Where(e => e.Path.Contains(file + ".", StringComparison.OrdinalIgnoreCase)).Select(e => System.IO.Path.GetExtension(e.Path) + "=" + e.Size)) : "")
+            : "archive -";
+        Console.WriteLine($"{code,-6} {record.Name,-40} {logo ?? "-",-70} {has}");
+        n++;
+    }
+    Console.WriteLine($"{n} makers");
+    return 0;
+}
+
+
 // Step 2 of docs/screen-insight.md. Takes the lines an OCR engine returned -
 // a text file, one per line - and says what the catalogue thinks they are.
 //

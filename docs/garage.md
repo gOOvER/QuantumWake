@@ -205,13 +205,21 @@ current panel.
   once and cached under `community/part-pictures/` - 316 of the 633 bench
   part names had one on 14 Sep 2026 (115/153 guns, 46/74 plants, 35/73
   coolers, 34/64 shields, 32/58 drives, 2/58 radars, 0 EMPs). The other half
-  keep the maker's mark - and the mark itself has the same story: the Fankit
-  covers 15 of the 60 makers on the bench (the hull makers), the wiki's
-  manufacturer pages 57 of 59, so `GET /api/garage/maker/{code}` fetches
-  those the same way into `community/maker-marks/`. Two have no logo page
-  (ArcCorp, Broad & Rabiee) and one leads with a photograph (Vanduul Clans);
-  they keep the monogram.
-- **Turret-mounted gun ballistics** (gimbal spread, convergence) - the dump
+  keep the maker's mark.
+- **Makers' marks, on the other hand, are in the game files.** The Fankit
+  covers 15 of the 60 makers on the bench (the hull makers), but every
+  `SCItemManufacturer` record carries a `Logo` naming a 256-square texture
+  under `UI/SharedAssets/ManufacturerLogos/`, and the 4.10 archive holds it
+  for 127 of the 211 non-paint maker records (`--maker-logos` in the CLI
+  prints the table) - 57 of the 59 makers on the bench; the 84 without are
+  shops and stations wearing the same record type. 115 are plain 256-square
+  BC3; nine ship as split mip chains (a 464-byte `.dds` plus `.dds.1`–`.4`,
+  the top level alone in the highest part); two (RAMP, Gyson) and one
+  4096-square (Broad & Rabiee) are uncompressed 32-bit. All decode through
+  the same path as the vehicle icons. `GET /api/garage/maker/{code}` serves
+  the game's mark first, the wiki's manufacturer page for a maker the install
+  lacks (Associated Sciences), and 404 - the monogram - for a part with no
+  maker.
   has the numbers, the page has no honest way to combine them.
 - **Armour and hull damage models** beyond HP and the resistance table.
 - **Sharing builds** between installs - `ExportDocument` has no class for it;

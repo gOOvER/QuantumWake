@@ -881,7 +881,24 @@ public static class ServerHost
 
             if (!File.Exists(cached))
             {
-                var dds = new P4kArchive(P4kArchive.PathFor(install.RootPath)).TryRead(entry);
+                var p4k = new P4kArchive(P4kArchive.PathFor(install.RootPath));
+                var dds = p4k.TryRead(entry);
+
+                // A split mip chain: the .dds is a 464-byte header with the
+                // smallest levels, and the full-size level sits alone in the
+                // highest-numbered .dds.N beside it. Nine of the maker logos
+                // ship that way (Chimera, WillsOp, Blue Triangle); glued back
+                // behind the header they decode like the rest.
+                if (dds is { Length: >= 128 and < 1024 })
+                {
+                    for (var n = 9; n >= 1; n--)
+                    {
+                        if (p4k.TryRead($"{entry}.{n}") is not { } top) continue;
+                        dds = [.. dds.AsSpan(0, 128), .. top];
+                        break;
+                    }
+                }
+
                 if (dds is null || VehicleIcons.Convert(dds) is not { } picture)
                     return Results.NotFound();
 
@@ -3055,10 +3072,19 @@ public static class ServerHost
         });
 
         // A component maker's logo, for the forty-five the Fankit does not
-        // cover. The maker's name comes from the dataset's own list, else from
-        // any part that names it; 404 puts the monogram back.
+        // cover. The game's own 256-square mark first - the archive has one
+        // for 127 makers, every component maker among them - the wiki's
+        // manufacturer page for a maker the install lacks, 404 for the
+        // monogram. The maker's name for the wiki comes from the dataset's
+        // own list, else from any part that names it.
         app.MapGet("/api/garage/maker/{code}", async (string code, LogLibrary lib, PartPictures pictures, IHttpClientFactory httpFactory, HttpContext ctx) =>
         {
+            if (lib.GameCommodities.MakerLogo(code) is { } entry)
+            {
+                ctx.Response.Headers.CacheControl = "private, max-age=86400";
+                return ArchivePicture(entry, "maker-logos");
+            }
+
             if (!lib.Community.IsEnabled) return Results.NotFound();
 
             var name = lib.Community.Manufacturers.GetValueOrDefault(code)
