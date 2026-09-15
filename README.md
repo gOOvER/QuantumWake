@@ -365,7 +365,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.27
+### 0.13.28
+
+- **The Hangar's cards open the Garage too.** Each ship card in the Hangar
+  gallery carries the same *Garage* button as its Fleet card, so a ship you
+  are looking at can be taken to its numbers, what fits it and what a part
+  would change without going back through Fleet. Ground vehicles get no
+  button there, as on Fleet: nobody sells parts for their ports.
 
 - **The Garage no longer shows one ship's sheet under another's name.** A
   slow answer for the ship you had just left could land after the one you

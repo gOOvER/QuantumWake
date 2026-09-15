@@ -499,10 +499,11 @@ public class GaragePageTests
         page.Serve("/api/garage", Garage);
         page.Serve("/api/garage/DRAK_Cutlass_Black", Gladius.Replace("AEGS_Gladius", "DRAK_Cutlass_Black").Replace("Aegis Gladius", "Drake Cutlass Black"));
         page.Serve("/api/garage/builds?ship=DRAK_Cutlass_Black", "[]");
-        page.Do("openGarageFor('DRAK_Cutlass_Black'); await loadGarage();");
+        page.Do("window.scrollTo = () => {}; openGarageFor('DRAK_Cutlass_Black'); await loadGarage();");
 
         Assert.Equal("DRAK_Cutlass_Black", page.Text("garageClass"));
         Assert.Contains("GET /api/garage/DRAK_Cutlass_Black", page.Fetched());
+        Assert.True(page.Truth("__dom.node('#view-garage').classList.contains('active')"));
     }
 
     // ---- the shopping list ----

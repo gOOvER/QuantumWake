@@ -6300,6 +6300,16 @@ function renderHangarGallery(canvas, ships) {
     body.append(el('div', 'muted', facts.join(' · ')));
 
     if (!(ship.length > 0)) body.append(el('div', 'muted', 'not in the install\'s vehicle table — no size'));
+
+    // The same offer as the Fleet card, under the same rule: ground vehicles
+    // have no ports anyone sells parts for, so the Garage is not offered.
+    if (ship.kind === 'Spaceship' || !ship.kind) {
+      const garage = el('button', 'ghost ship-upgrade', 'Garage');
+      garage.type = 'button';
+      garage.title = `${ship.name}'s numbers, what fits it, and what a part would change`;
+      garage.addEventListener('click', () => openGarageFor(ship.className || ship.name));
+      body.append(garage);
+    }
     card.append(body);
     grid.append(card);
   }

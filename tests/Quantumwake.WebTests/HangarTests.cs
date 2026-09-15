@@ -170,6 +170,31 @@ public class HangarTests
     }
 
     /// <summary>
+    /// A gallery card carries the Fleet card's Garage button, and it opens the
+    /// Garage on that hull. The ground vehicle's card has none, for the reason
+    /// the Fleet card has none: no ports anyone sells parts for.
+    /// </summary>
+    [Fact]
+    public void A_gallery_card_opens_the_garage_on_its_ship()
+    {
+        var page = new Page();
+        page.Serve("/api/fleet/hangar", Fleet);
+        page.Serve("/api/garage", """{"mine":[],"all":[]}""");
+        page.Do("""
+            __dom.node('#hangar-mode').value = 'gallery'; __dom.node('#hangar-sort').value = 'length';
+            await loadHangar();
+            """);
+
+        Assert.Equal(1, Convert.ToInt32(page.Eval("__dom.node('#hangar-canvas').byClass('hangar-card')[0].byClass('ship-upgrade').length")));
+        Assert.Equal(0, Convert.ToInt32(page.Eval("__dom.node('#hangar-canvas').byClass('hangar-card')[3].byClass('ship-upgrade').length")));
+
+        page.Do("window.scrollTo = () => {}; __dom.node('#hangar-canvas').byClass('hangar-card')[0].byClass('ship-upgrade')[0].click();");
+
+        Assert.Equal("DRAK_Corsair", page.Text("garageClass"));
+        Assert.True(page.Truth("__dom.node('#view-garage').classList.contains('active')"));
+    }
+
+    /// <summary>
     /// Ships on one shelf and ground vehicles on another, at the same scale:
     /// the PTV's 4 m against the Corsair's 53 m is the point of the drawing.
     /// </summary>
