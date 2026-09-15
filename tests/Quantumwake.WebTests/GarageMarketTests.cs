@@ -31,7 +31,7 @@ public class GarageMarketTests
         """;
 
     private const string Listing = """
-        {"id":172424,"title":"Glacier 3pip","operation":"sell","type":"item","section":"Systems","category":"Coolers","itemUuid":"c-glacier","itemName":"Glacier",
+        {"id":172424,"title":"Glacier 3pip","operation":"sell","type":"item","itemUuid":"c-glacier",
          "price":8800000,"unit":"unit","inStock":2,"quality":null,"location":"Admin - Ruin Station","seller":"penetrator3000",
          "added":"2026-09-14T10:00:00+00:00","expires":null,"photo":null,"soldOut":false,"url":"https://uexcorp.space/marketplace/item/info/glacier-3pip-0Y9jLAxXhB/"}
         """;

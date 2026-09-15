@@ -25,15 +25,25 @@ public sealed record UexRawPrice(string Commodity, string Terminal, decimal Sell
 /// asking for) an item, at a price they named, where they said they are.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Nothing here is a market price. A listing is one person's ask on one day,
 /// and the feed carries the newest five hundred of them, so a part with no
 /// listing is not a part nobody sells - it is a part nobody advertised this
 /// week. The page says so beside every count built on it.
+/// </para>
+/// <para>
+/// What UEX alone knows is kept, and nothing else: the ask, the seller, the
+/// place, the photograph, and which of UEX's own item ids the seller picked.
+/// That id is resolved to the game's uuid and stops there - the part's name,
+/// kind, size and maker are the install's to say, by that uuid, and the page
+/// takes them from there. A listing UEX cannot put a uuid to keeps only the
+/// seller's own title.
+/// </para>
 /// </remarks>
 /// <param name="ItemUuid">
-/// The game's id for the item, through UEX's own item table - the join the
-/// bench uses. Null when UEX's record has no uuid, or the listing names no
-/// item at all (a service, or free text).
+/// The game's id for the item, through UEX's item table - the join the bench
+/// uses. Null when UEX's record has no uuid, or the listing names no item at
+/// all (a service, or free text).
 /// </param>
 /// <param name="Quality">A commodity's quality, mostly; null where the seller left it blank.</param>
 /// <param name="Photo">The first of the seller's photographs, a thumbnail on UEX's CDN.</param>
@@ -44,11 +54,8 @@ public sealed record UexListing(
     string Operation,
     string Type,
     int CategoryId,
-    string? Section,
-    string? Category,
     int ItemId,
     string? ItemUuid,
-    string? ItemName,
     decimal Price,
     string? Unit,
     int InStock,
@@ -64,8 +71,13 @@ public sealed record UexListing(
     public string Url => $"https://uexcorp.space/marketplace/item/info/{Slug}/";
 }
 
-/// <summary>One row of UEX's item table, kept for the id-to-uuid join.</summary>
-public sealed record UexMarketItem(int Id, string Name, string? Uuid, string? Slug, int CategoryId, string? Section, string? Category);
+/// <summary>
+/// One row of UEX's item table, reduced to the join: UEX's id and the game's
+/// uuid. UEX's name, section and category for the item are not kept - the
+/// install describes every item by uuid already, and a second copy of the
+/// same facts from a third party is one more thing to disagree.
+/// </summary>
+public sealed record UexMarketItem(int Id, string? Uuid);
 
 /// <summary>
 /// The item table behind the marketplace, fetched a category at a time and
@@ -84,7 +96,6 @@ public sealed class UexMarketIndex
 {
     public Dictionary<int, DateTimeOffset> Categories { get; set; } = [];
     public Dictionary<int, UexMarketItem> Items { get; set; } = [];
-    public Dictionary<int, string[]> CategoryNames { get; set; } = [];
 }
 
 /// <summary>One place in UEX's own hierarchy: a station, city, outpost or point of interest.</summary>
@@ -132,7 +143,6 @@ public sealed class UexFeeds
 
     public const string ListingsUrl = "https://api.uexcorp.space/2.0/marketplace_listings";
     public const string ItemsUrl = "https://api.uexcorp.space/2.0/items?id_category=";
-    public const string CategoriesUrl = "https://api.uexcorp.space/2.0/categories";
 
     /// <summary>Every optional feed, in the order the settings page lists them.</summary>
     public static readonly IReadOnlyList<UexFeedInfo> All =
@@ -460,13 +470,6 @@ public sealed class UexFeeds
         var rows = Rows(listings).ToList();
         var index = LoadIndex();
 
-        if (index.CategoryNames.Count == 0)
-        {
-            foreach (var row in Rows(JsonDocument.Parse(await http.GetStringAsync(CategoriesUrl, token)).RootElement))
-                if (Int(row, "id") is { } id)
-                    index.CategoryNames[id] = [Str(row, "section") ?? "", Str(row, "name") ?? ""];
-        }
-
         // Which categories to read: those with a listed item the table lacks.
         // A category read within the day is left alone even then - the id is
         // newer than the table, and asking again now gets the same answer.
@@ -483,12 +486,10 @@ public sealed class UexFeeds
         {
             foreach (var row in Rows(JsonDocument.Parse(await http.GetStringAsync(ItemsUrl + category, token)).RootElement))
             {
-                if (Int(row, "id") is not { } id || Str(row, "name") is not { Length: > 0 } name)
+                if (Int(row, "id") is not { } id)
                     continue;
 
-                index.Items[id] = new UexMarketItem(
-                    id, name, Str(row, "uuid"), Str(row, "slug"), Int(row, "id_category") ?? category,
-                    Str(row, "section"), Str(row, "category"));
+                index.Items[id] = new UexMarketItem(id, Str(row, "uuid"));
             }
 
             index.Categories[category] = DateTimeOffset.UtcNow;
@@ -507,8 +508,6 @@ public sealed class UexFeeds
 
         var itemId = Int(row, "id_item") ?? 0;
         var item = itemId > 0 ? index.Items.GetValueOrDefault(itemId) : null;
-        var categoryId = Int(row, "id_category") ?? item?.CategoryId ?? 0;
-        var names = index.CategoryNames.GetValueOrDefault(categoryId);
 
         // The price arrives as a string of digits, the photos as one
         // comma-joined string with a trailing comma; both are UEX's shape.
@@ -519,15 +518,12 @@ public sealed class UexFeeds
         return new UexListing(
             id,
             slug,
-            Str(row, "title") ?? item?.Name ?? "",
+            Str(row, "title") ?? "",
             Str(row, "operation") ?? "sell",
             Str(row, "type") ?? "item",
-            categoryId,
-            item?.Section ?? names?[0],
-            item?.Category ?? names?[1],
+            Int(row, "id_category") ?? 0,
             itemId,
             item?.Uuid,
-            item?.Name,
             price,
             Str(row, "unit"),
             Int(row, "in_stock") ?? 0,

@@ -4140,10 +4140,14 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
         return null;
     }
 
-    /// <summary>A marketplace advertisement as a page shows it: the ask, who, where, and the way to UEX.</summary>
+    /// <summary>
+    /// A marketplace advertisement as a page shows it: the ask, who, where,
+    /// and the way to UEX. What the item is comes from the install by uuid,
+    /// on the part card beside this, never from UEX's copy of the same facts.
+    /// </summary>
     static object ListingCard(UexListing l) => new
     {
-        l.Id, l.Title, l.Operation, l.Type, l.Section, l.Category, l.ItemUuid, l.ItemName,
+        l.Id, l.Title, l.Operation, l.Type, l.ItemUuid,
         l.Price, l.Unit, l.InStock, l.Quality, l.Location, l.Seller, l.Added, l.Expires, l.Photo, l.SoldOut, l.Url
     };
 

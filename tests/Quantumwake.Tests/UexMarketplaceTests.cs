@@ -13,7 +13,9 @@ namespace Quantumwake.Tests;
 /// item by UEX's own integer id, and the price feed the app already holds
 /// resolves that for 26 of 441 - what players advertise is what no shop
 /// stocks. So the item table is read a category at a time, only for the
-/// categories advertised, and kept between fetches.
+/// categories advertised, and kept between fetches - reduced to id and uuid,
+/// because everything else UEX says about an item the install already says
+/// by that uuid, and the app does not take from UEX what it can read itself.
 /// </remarks>
 public class UexMarketplaceTests : IDisposable
 {
@@ -52,13 +54,6 @@ public class UexMarketplaceTests : IDisposable
         ]}
         """;
 
-    private const string Categories = """
-        {"status":"ok","data":[
-          {"id":19,"type":"item","section":"Systems","name":"Coolers"},
-          {"id":41,"type":"service","section":"General","name":"Mining"}
-        ]}
-        """;
-
     /// <summary>A UEX that answers by url and counts what it was asked, so the item table reads can be watched.</summary>
     private sealed class Uex(string listings) : HttpMessageHandler
     {
@@ -70,7 +65,6 @@ public class UexMarketplaceTests : IDisposable
             Requests.Add(url);
 
             var body = url.StartsWith(UexFeeds.ListingsUrl, StringComparison.Ordinal) ? listings
-                : url.StartsWith(UexFeeds.CategoriesUrl, StringComparison.Ordinal) ? Categories
                 : url == UexFeeds.ItemsUrl + "19" ? Coolers
                 : "{\"status\":\"ok\",\"data\":[]}";
 
@@ -90,16 +84,15 @@ public class UexMarketplaceTests : IDisposable
         var count = await feeds.EnableAsync(UexFeeds.Marketplace, new HttpClient(uex));
 
         Assert.Equal(5, count);
-        // The listings, the category names, and the one category advertised
-        // with an item the table did not hold. The service's category is
-        // never read: it names no item.
-        Assert.Equal([UexFeeds.ListingsUrl, UexFeeds.CategoriesUrl, UexFeeds.ItemsUrl + "19"], uex.Requests);
+        // The listings, and the one category advertised with an item the
+        // table did not hold. The service's category is never read: it names
+        // no item. Nothing else is asked of UEX - no category names, no item
+        // names - because the install has those by uuid.
+        Assert.Equal([UexFeeds.ListingsUrl, UexFeeds.ItemsUrl + "19"], uex.Requests);
 
         var dear = Assert.Single(feeds.Listings, l => l.Id == 172424);
         Assert.Equal("9a0d3b4e-0000-4000-8000-000000001772", dear.ItemUuid);
-        Assert.Equal("QuadraCell MT", dear.ItemName);
-        Assert.Equal("Coolers", dear.Category);
-        Assert.Equal("Systems", dear.Section);
+        Assert.Equal(19, dear.CategoryId);
         Assert.Equal(8_800_000m, dear.Price);
         Assert.Equal(900, dear.Quality);
         Assert.Equal("penetrator3000", dear.Seller);
@@ -115,10 +108,10 @@ public class UexMarketplaceTests : IDisposable
         Assert.Null(cheap.Expires);
         Assert.Null(cheap.Photo);
 
-        // A service names no item; its category is still named from the list.
+        // A service names no item; it is the seller's own words and nothing else.
         var service = Assert.Single(feeds.Listings, l => l.Type == "service");
         Assert.Null(service.ItemUuid);
-        Assert.Equal("Mining", service.Category);
+        Assert.Equal("Mining escort", service.Title);
     }
 
     /// <summary>
@@ -183,8 +176,6 @@ public class UexMarketplaceTests : IDisposable
         var orphan = Assert.Single(feeds.Listings, l => l.Id == 172424);
         Assert.Equal("QuadraCell MT 900Q (3pip)", orphan.Title);
         Assert.Null(orphan.ItemUuid);
-        Assert.Null(orphan.ItemName);
-        Assert.Equal("Coolers", orphan.Category);
     }
 
     public void Dispose()

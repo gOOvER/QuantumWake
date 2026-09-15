@@ -364,7 +364,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.16
+### 0.13.17
 
 - **Half the parts that had no picture have one now.** The bench used to ask
   the Star Citizen Wiki for a part's picture by the name of its page, and
@@ -390,7 +390,10 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   opens that port. Asks are shown as asks, never as prices: the note says
   how many of the feed's listings they are, when it was fetched, and that
   two days of advertisements are not a verdict on the market. The optimiser's
-  *Terminal aUEC only* ignores them, as it says.
+  *Terminal aUEC only* ignores them, as it says. Only what UEX alone knows is
+  taken from it - the ask, the seller, the place, and which of its item ids
+  the seller picked; what the item *is* comes from your install, as
+  everywhere else on the bench.
 
 - **Every component maker has a logo now, not a four-letter monogram - the
   game's own.** The Fankit only ships marks for the fifteen hull makers;
