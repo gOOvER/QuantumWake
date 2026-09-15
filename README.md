@@ -365,7 +365,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.29
+### 0.13.30
+
+- **A ship wears the paint its screenshot showed.** A loadout screenshot
+  names the livery — the Hermes' estimate listed *Hermes Keystone Livery* —
+  and that paint now stands in on the Fleet card, the Hangar and the Garage
+  until you pick one yourself, labelled as photographed and dated, in place
+  of the first paint the game happens to list. Your own pick still wins.
 
 - **Screenshots from before the app was watching can now be read.** The
   folder watch reads nothing that was already there when it was switched on,

@@ -113,6 +113,37 @@ public class ShipPictureTests
     }
 
     /// <summary>
+    /// A loadout screenshot names the paint - the Hermes' estimate listed its
+    /// Keystone livery - and the server lists that paint first, dated. It
+    /// stands in on every picture until the pilot picks, and both the picture
+    /// and the chooser say it was photographed rather than chosen.
+    /// </summary>
+    [Fact]
+    public void The_paint_a_screenshot_showed_the_ship_wearing_stands_in_and_says_so()
+    {
+        var page = Fresh();
+        page.Serve("/api/fleet/paints/DRAK_Corsair", """
+            [{"item":"Paint_Corsair_Commando","name":"Corsair Commando Livery","stock":false,
+              "photographed":{"shot":"ScreenShot-2026-09-08_21-53-11-CD7.jpg","shotAt":"2026-09-09T01:53:11Z"}},
+             {"item":"Paint_Corsair_Black_Black_Gold_Camo","name":"Corsair Black Gold Camo Livery","stock":false,"photographed":null}]
+            """);
+        page.Do($"""
+            const box = shipPicture({Corsair}, {Maker});
+            __dom.node('#t').append(box);
+            await paintsForHull('DRAK_Corsair'); await Promise.resolve();
+            """);
+
+        Assert.Contains("Paint_Corsair_Commando/render", page.Text("__dom.node('#t').byClass('ship-render')[0].src"));
+        Assert.Contains("a loadout screenshot showed it wearing", page.Text("__dom.node('#t').byClass('ship-render')[0].title"));
+        Assert.True(page.Truth("shipPaints.DRAK_Corsair === undefined"));
+
+        page.Do($"await openPaintChooser({Corsair}, __dom.node('#t').children[0], __dom.node('#t').children[0].byClass('ship-paint')[0]);");
+        Assert.Contains("photographed", page.Text("__dom.node('#t').byClass('ship-paint-select')[0].options[1].textContent"));
+        Assert.Contains("shown until you pick", page.Text("__dom.node('#t').byClass('ship-paint-select')[0].options[1].textContent"));
+        Assert.Equal("Paint_Corsair_Commando", page.Text("__dom.node('#t').byClass('ship-paint-select')[0].value"));
+    }
+
+    /// <summary>
     /// Nothing picked and the game pictures paints for the hull: the first
     /// one stands in, labelled as a stand-in - which paint a ship wears is not
     /// in the logs, so the card cannot claim it is the pilot's.

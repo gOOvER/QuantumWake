@@ -924,10 +924,26 @@ public static class ServerHost
                 : Results.NotFound());
 
         // The paints the game pictures for a hull, for the pilot to pick from.
-        // The app never picks: which paint a ship wears is not in the logs.
-        app.MapGet("/api/fleet/paints/{vehicleClass}", (string vehicleClass, LogLibrary lib) =>
-            Results.Ok(GamePaints.ForHull(lib.GameCommodities.Paints, vehicleClass)
-                .Select(p => new { p.Item, p.Name, p.Stock })));
+        // The app never guesses: which paint a ship wears is not in the logs.
+        // A loadout screenshot names it, though - the Liveries row - and that
+        // one comes first, dated, so the card can wear it until the pilot
+        // says otherwise.
+        app.MapGet("/api/fleet/paints/{vehicleClass}", (string vehicleClass, LogLibrary lib, ScreenReadingStore readings) =>
+        {
+            var name = lib.GameCommodities.Vehicle(vehicleClass)?.Name
+                ?? (lib.Community.Ships.TryGetValue(vehicleClass, out var info) ? info.Name : null);
+            var worn = name is null ? null : readings.LastPaint(name);
+
+            return Results.Ok(GamePaints.ForHull(lib.GameCommodities.Paints, vehicleClass)
+                .Select(p => new
+                {
+                    p.Item, p.Name, p.Stock,
+                    photographed = worn is not null && string.Equals(worn.Item, p.Item, StringComparison.OrdinalIgnoreCase)
+                        ? new { worn.Shot, worn.ShotAt } : null,
+                })
+                .OrderByDescending(p => p.photographed is not null)
+                .ToList());
+        });
 
         // The game's own picture of a hull in one paint: the paint item's logo.
         app.MapGet("/api/fleet/paints/{paintItem}/render", (string paintItem, LogLibrary lib) =>

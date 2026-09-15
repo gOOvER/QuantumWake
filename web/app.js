@@ -14240,9 +14240,11 @@ function shipPicture(ship, maker, options = {}) {
       img.loading = 'lazy';
       img.title = chosen
         ? `${ship.name} in the paint you chose — the game's own picture`
-        : standIn?.stock
-          ? `${ship.name} in its default livery — the game's own picture; Paint… to choose another`
-          : `${ship.name} in the first paint the game pictures for it — the files hold no picture of its default livery; Paint… to choose`;
+        : standIn?.photographed
+          ? `${ship.name} in ${standIn.name}, the paint a loadout screenshot showed it wearing on ${new Date(standIn.photographed.shotAt).toLocaleDateString()} — the game's own picture; Paint… to choose another`
+          : standIn?.stock
+            ? `${ship.name} in its default livery — the game's own picture; Paint… to choose another`
+            : `${ship.name} in the first paint the game pictures for it — the files hold no picture of its default livery; Paint… to choose`;
       if (options.onPreview) {
         img.classList.add('ship-picture-clickable');
         img.title += '; click for this ship\'s flight summary';
@@ -14309,7 +14311,11 @@ async function openPaintChooser(ship, box, button) {
   select.setAttribute('aria-label', `Paint for ${ship.name}`);
   select.append(new Option('Silhouette, tinted by maker', SILHOUETTE));
   const unpicked = !shipPaints[ship.className];
-  paints.forEach((paint, i) => select.append(new Option(i === 0 && unpicked ? `${paint.name} (shown until you pick)` : paint.name, paint.item)));
+  paints.forEach((paint, i) => select.append(new Option(
+    paint.photographed
+      ? `${paint.name} (photographed ${new Date(paint.photographed.shotAt).toLocaleDateString()}${i === 0 && unpicked ? ', shown until you pick' : ''})`
+      : i === 0 && unpicked ? `${paint.name} (shown until you pick)` : paint.name,
+    paint.item)));
   if (!paints.length) select.append(new Option('The game pictures no paint for this hull', '', false, false));
   // Unpicked shows the first paint, so that is where the list opens.
   select.value = shipPaints[ship.className] || paints[0]?.item || SILHOUETTE;
