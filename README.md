@@ -364,7 +364,33 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.15
+### 0.13.16
+
+- **Half the parts that had no picture have one now.** The bench used to ask
+  the Star Citizen Wiki for a part's picture by the name of its page, and
+  about half the bench came back empty - most coolers, shields and power
+  plants among them. It now asks by the game's own id first, through the
+  wiki's item API, which also gathers the pictures cstone.space's item finder
+  and the German star-citizen.wiki hold. On this install that filled 48 of
+  the 78 blanks - 14 of 15 coolers, every plant and drive, 10 of 11 shields.
+  Radars, missile racks and turrets mostly stay on the maker's mark: nobody
+  has photographed them anywhere public, and the app does not pretend
+  otherwise. Parts already recorded as "no picture" are asked about again
+  once, so nothing needs clearing.
+
+- **Who is selling a part on UEX's player marketplace, on the Garage.** A new
+  optional feed under UEX in Settings - *Player marketplace*, off until you
+  fetch it, and enabling UEX prices does not turn it on - reads the newest
+  five hundred advertisements on uexcorp.space and joins them to the bench by
+  item. A candidate with a player offering it shows the cheapest ask under
+  the terminal price as a *Player listing* - who, where, how many, and a
+  link to the advertisement on UEX, which is where the deal is made. Under
+  the bench, *For sale by players* lists every advertised part that fits a
+  port on the open ship at its size, newest first, with a Bench button that
+  opens that port. Asks are shown as asks, never as prices: the note says
+  how many of the feed's listings they are, when it was fetched, and that
+  two days of advertisements are not a verdict on the market. The optimiser's
+  *Terminal aUEC only* ignores them, as it says.
 
 - **Every component maker has a logo now, not a four-letter monogram - the
   game's own.** The Fankit only ships marks for the fifteen hull makers;

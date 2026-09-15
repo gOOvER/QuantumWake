@@ -200,12 +200,45 @@ current panel.
   `displayIcon`s in the DataCore, every one is a ship silhouette or an FPS
   loadout preset, and not one cooler, shield, plant, drive or gun has an icon.
   UEX's item records carry a `screenshot` field and it is empty for every
-  component checked (coolers, plants, drives, guns: 0 of 359). What the app
-  shows is the Star Citizen Wiki's lead image for the part's page, fetched
-  once and cached under `community/part-pictures/` - 316 of the 633 bench
-  part names had one on 14 Sep 2026 (115/153 guns, 46/74 plants, 35/73
-  coolers, 34/64 shields, 32/58 drives, 2/58 radars, 0 EMPs). The other half
-  keep the maker's mark.
+  component checked (coolers, plants, drives, guns: 0 of 359, and 0 of 2,244
+  across every item category on 15 Sep 2026). What the app shows comes from
+  the Star Citizen Wiki, fetched once and cached under
+  `community/part-pictures/`, two ways in order:
+  1. **By uuid**, through the wiki's item API (`/api/v2/items/{uuid}`), which
+     files every item under the game's id and lists the pictures it has
+     gathered from its own uploads, the German star-citizen.wiki and
+     cstone.space's item finder. Across the bench kinds it has one for 485
+     of 1,306 items (141/173 guns, 71/78 plants, 64/74 coolers, 58/67
+     shields, 55/57 drives, 39/139 missile racks, 30/65 missiles, 11/20
+     mining heads, 8/241 turrets, 2/63 radars, 0/7 EMPs, 0/5 jump drives).
+  2. **By page title** (the lead image of the part's wiki page, by display
+     name), which is what 0.13.5 did alone - 316 of the 633 bench part names
+     had one on 14 Sep 2026 - and still finds pages the item record does not
+     list a picture for.
+
+  Measured on this install's miss list from the title-only lookup: the uuid
+  lookup filled 48 of its 78 blanks (coolers 14/15, plants 10/10, shields
+  10/11, drives 8/8, guns 5/13, radars 0/20), checked end to end through
+  `GET /api/garage/picture/{uuid}` against a copy of the data - 3.5 MB for
+  the 48, the largest a 369 KB PNG from cstone. The wiki's own thumbnails
+  are taken before cstone's originals for that reason. What is left without
+  a picture is mostly radars, missile racks and turrets, which nobody has
+  photographed anywhere public; those keep the maker's mark. **cstone's file
+  store is not guessed at**: its `uifimages/<uuid>.png` answers 200 with an
+  HTML page for ids it lacks as often as it 404s, so only the urls the wiki
+  names are fetched.
+- **Reading UEX's player marketplace as prices.** It is not a price list:
+  the feed is the newest 500 advertisements (about two days' worth, 465 sells,
+  186 naming an item UEX has a uuid for), each one person's ask. The Garage
+  shows them as *asking prices, not market prices*, beside the terminal price
+  and never in its place, and the optimiser's *Terminal aUEC only* ignores
+  them. The feed is its own switch under UEX in Settings - enabling UEX does
+  not turn it on - and the join runs through UEX's `items` table read a
+  category at a time (`marketplace-items.json`, 886 KB for the categories
+  advertised), because the price feed the app already holds resolved only 26
+  of the 441 listed item ids: what players advertise is what no shop stocks.
+  On this install's Hermes: 17 of the 52 component listings fit a port at
+  its size.
 - **Makers' marks, on the other hand, are in the game files.** The Fankit
   covers 15 of the 60 makers on the bench (the hull makers), but every
   `SCItemManufacturer` record carries a `Logo` naming a 256-square texture

@@ -30,17 +30,29 @@ public sealed record PartPicture(byte[] Bytes, string ContentType);
 /// from the same place, by the maker's name.
 /// </para>
 /// <para>
-/// One page-image lookup per subject, by its display name, then one download
-/// of a thumbnail. Both go to the wiki only after the community dataset was
-/// switched on, which is the app's consent to talk to the network, and carry
-/// the name and nothing else. A miss is remembered for a month so a bench
-/// full of radars does not ask the wiki the same question every time it
-/// opens.
+/// A part is asked for by its uuid first: the wiki's item API files every
+/// item under the game's own id and answers with the pictures it has
+/// gathered from three places (its own upload, cstone.space's item finder,
+/// the German star-citizen.wiki). That is an exact join, and on the install
+/// this was measured against it found a picture for 48 of the 78 bench parts
+/// the title guess had given up on - 14 of 15 coolers, 10 of 10 plants, 10 of
+/// 11 shields, 8 of 8 drives; radars stay at 2 of 76 because nobody has
+/// photographed them. The page-image lookup by display name stays as the
+/// second try, because it still finds pages the item API has no picture for.
+/// </para>
+/// <para>
+/// So at most two lookups and one download per part, and one lookup and one
+/// download per maker. All of it goes to the wiki only after the community
+/// dataset was switched on, which is the app's consent to talk to the
+/// network, and carries the id or the name and nothing else. A miss is
+/// remembered for a month so a bench full of radars does not ask the wiki the
+/// same question every time it opens.
 /// </para>
 /// </remarks>
 public sealed class PartPictures
 {
     public const string WikiApi = "https://starcitizen.tools/api.php";
+    public const string ItemApi = "https://api.star-citizen.wiki/api/v2/items/";
 
     /// <summary>The size asked for: the bench shows a picture at 56 px, twice that reads sharp on a scaled display.</summary>
     private const int Width = 240;
@@ -63,7 +75,12 @@ public sealed class PartPictures
         var root = directory ?? AppPaths.In("community");
         _parts = Path.Combine(root, "part-pictures");
         _makers = Path.Combine(root, "maker-marks");
-        _missesPath = Path.Combine(_parts, "misses.json");
+        // The misses file changed name with the uuid lookup: everything the
+        // title guess recorded as missing is worth one more ask, and a stale
+        // month-long "no" on 48 parts that do have a picture is exactly the
+        // silent failure the rename avoids.
+        _missesPath = Path.Combine(_parts, "misses-2.json");
+        ForgetTitleOnlyMisses(Path.Combine(_parts, "misses.json"));
         LoadMisses();
     }
 
@@ -76,7 +93,7 @@ public sealed class PartPictures
         if (string.IsNullOrEmpty(part.Uuid) || string.IsNullOrWhiteSpace(part.Name))
             return Task.FromResult<PartPicture?>(null);
 
-        return Get(http, part.Uuid, Titles(part.Name), _parts, logo: false, token);
+        return Get(http, part.Uuid, Titles(part.Name), _parts, logo: false, token, itemUuid: part.Uuid);
     }
 
     /// <summary>
@@ -92,7 +109,7 @@ public sealed class PartPictures
         return Get(http, code.Trim().ToUpperInvariant(), [name.Trim()], _makers, logo: true, token);
     }
 
-    private Task<PartPicture?> Get(HttpClient http, string key, IReadOnlyList<string> titles, string directory, bool logo, CancellationToken token)
+    private Task<PartPicture?> Get(HttpClient http, string key, IReadOnlyList<string> titles, string directory, bool logo, CancellationToken token, string? itemUuid = null)
     {
         var cached = FromCache(directory, key);
         if (cached is not null)
@@ -105,7 +122,7 @@ public sealed class PartPictures
                 return Task.FromResult<PartPicture?>(null);
         }
 
-        return _inFlight.GetOrAdd(missKey, k => FetchAsync(http, key, titles, directory, logo, missKey, token)
+        return _inFlight.GetOrAdd(missKey, k => FetchAsync(http, key, titles, directory, logo, missKey, itemUuid, token)
             .ContinueWith(t =>
             {
                 _inFlight.TryRemove(k, out _);
@@ -129,12 +146,13 @@ public sealed class PartPictures
         return titles;
     }
 
-    private async Task<PartPicture?> FetchAsync(HttpClient http, string key, IReadOnlyList<string> titles, string directory, bool logo, string missKey, CancellationToken token)
+    private async Task<PartPicture?> FetchAsync(HttpClient http, string key, IReadOnlyList<string> titles, string directory, bool logo, string missKey, string? itemUuid, CancellationToken token)
     {
         await _slots.WaitAsync(token);
         try
         {
-            var source = await LookUpAsync(http, titles, logo, token);
+            var source = (itemUuid is not null ? await LookUpByUuidAsync(http, itemUuid, token) : null)
+                ?? await LookUpAsync(http, titles, logo, token);
             if (source is null)
             {
                 RecordMiss(missKey);
@@ -166,6 +184,46 @@ public sealed class PartPictures
             _slots.Release();
         }
     }
+
+    /// <summary>
+    /// Asks the wiki's item API for the pictures it holds of one item, by the
+    /// game's uuid. Null when it has none, or has never heard of the id.
+    /// </summary>
+    /// <remarks>
+    /// The API lists every picture it has gathered, each naming where it came
+    /// from. The wiki's own thumbnails are preferred over cstone.space's
+    /// originals: a 600 px JPEG of a shield is thirty kilobytes and the
+    /// finder's 512-square PNG of the same shield is half a megabyte, and the
+    /// bench shows either at 56 px.
+    /// </remarks>
+    private static async Task<string?> LookUpByUuidAsync(HttpClient http, string uuid, CancellationToken token)
+    {
+        using var response = await http.GetAsync(ItemApi + Uri.EscapeDataString(uuid), token);
+        if (!response.IsSuccessStatusCode)
+            return null;
+
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
+        if (!doc.RootElement.TryGetProperty("data", out var item) || !item.TryGetProperty("images", out var images)
+            || images.ValueKind != JsonValueKind.Array)
+            return null;
+
+        string? fallback = null;
+        foreach (var image in images.EnumerateArray())
+        {
+            var url = Text(image, "thumbnail_url") ?? Text(image, "original_url");
+            if (string.IsNullOrEmpty(url))
+                continue;
+
+            if (!string.Equals(Text(image, "source"), "cstone.space", StringComparison.OrdinalIgnoreCase))
+                return url;
+            fallback ??= url;
+        }
+
+        return fallback;
+    }
+
+    private static string? Text(JsonElement element, string property) =>
+        element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
     /// <summary>Asks the wiki which picture leads the page, trying each title it might be under.</summary>
     /// <remarks>
@@ -317,6 +375,23 @@ public sealed class PartPictures
             {
                 // A miss that is not remembered is asked again next time; nothing worse.
             }
+        }
+    }
+
+    /// <summary>
+    /// Drops the miss list the title-only lookup kept, so its parts are asked
+    /// about again through the item API. Once: the file is gone after.
+    /// </summary>
+    private static void ForgetTitleOnlyMisses(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch (IOException)
+        {
+            // Left in place it is merely ignored: nothing reads that name now.
         }
     }
 

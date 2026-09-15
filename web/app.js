@@ -8855,6 +8855,96 @@ async function openGarage(cls) {
   garageSheetCache.clear();
   renderGarage(data, null);
   await loadBuilds();
+  loadGarageMarket(cls).catch(() => { /* the panel says the feed is off or unread */ });
+}
+
+/**
+ * One player's advertisement, as a line the bench and the market panel share:
+ * the ask, who, where, and the way to UEX - which is where the buying is
+ * arranged, not here.
+ */
+function listingLine(listing, more = 0) {
+  const line = el('span', 'listing');
+  line.append(acquisitionChip('players', 'Player listing',
+    'A player\'s advertisement on UEX\'s marketplace: an asking price, not a market price. Buying is arranged with the seller on UEX.'));
+  line.append(el('b', null, `${fmtInt(listing.price)} aUEC`));
+  const where = [listing.seller ? `by ${listing.seller}` : '', listing.location ? `at ${listing.location}` : ''].filter(Boolean).join(' ');
+  line.append(document.createTextNode(` · ${where || 'place not given'}${listing.inStock > 1 ? ` · ${listing.inStock} in stock` : ''}${more > 0 ? ` +${more}` : ''} `));
+  const link = el('a', 'uex-link', 'UEX ↗');
+  link.href = listing.url;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.title = listing.title;
+  line.append(link);
+  return line;
+}
+
+/**
+ * The panel under the bench: parts fit for this ship that players are
+ * offering on UEX's marketplace this week. Off until the pilot fetches the
+ * feed - the panel says so rather than hiding, because "nobody is selling"
+ * and "you have not looked" are different answers and only one is true.
+ */
+async function loadGarageMarket(cls) {
+  const box = $('#garage-market');
+  const body = $('#garage-market-body');
+  const note = $('#garage-market-note');
+  if (!box || !body || !note) return;
+
+  let data;
+  try {
+    data = await getJson(`/api/garage/${encodeURIComponent(cls)}/market`);
+  } catch {
+    box.hidden = true;
+    return;
+  }
+  // The ship changed under the fetch: this answer is for a bench that is gone.
+  if (cls !== garageClass) return;
+
+  box.hidden = false;
+  body.textContent = '';
+  const shipName = garageStock?.ship?.name || cls;
+
+  if (!data.enabled) {
+    note.textContent = 'Player listings are off. Fetch the Player marketplace feed under UEX in Settings to see who is offering parts for this ship on uexcorp.space.';
+    return;
+  }
+
+  const fetched = data.fetchedAt ? `fetched ${ago(data.fetchedAt)}` : 'never fetched';
+  if (!data.listings.length) {
+    note.textContent = `Nobody has advertised a part that fits the ${shipName} in the newest ${fmtInt(data.total)} UEX marketplace listings (${data.components} of them are ship components at all) · ${fetched}. That is a week's advertisements, not a verdict on the market.`;
+    return;
+  }
+
+  note.textContent = `${data.listings.length} of the newest ${fmtInt(data.total)} UEX marketplace listings are parts that fit the ${shipName} · asking prices, not market prices · ${fetched}.`;
+
+  for (const row of data.listings) {
+    const { listing, part } = row;
+    const rowEl = el('div', 'candidate market-row');
+    rowEl.append(partMark(part));
+
+    const mid = el('div');
+    const name = el('div', 'c-name', part.name);
+    name.append(partChip(part));
+    mid.append(name);
+    mid.append(el('div', 'c-maker', `${part.manufacturer || part.makerCode || ''}${listing.title && listing.title !== part.name ? ` · listed as “${listing.title}”` : ''}`));
+    const shop = el('div', 'c-shop');
+    shop.append(listingLine(listing));
+    shop.append(document.createTextNode(` · posted ${ago(listing.added)}`));
+    mid.append(shop);
+    rowEl.append(mid);
+
+    const act = el('div', 'c-act');
+    if (row.ports && row.ports.length) {
+      const open = el('button', 'ghost tiny', 'Bench');
+      open.type = 'button';
+      open.title = 'Open the port this part fits, with what else fits it';
+      open.addEventListener('click', () => selectBenchPort(row.ports[0], true).catch(() => {}));
+      act.append(open);
+    }
+    rowEl.append(act);
+    body.append(rowEl);
+  }
 }
 
 /**
@@ -9390,7 +9480,7 @@ function renderBenchPanel() {
   head.append(el('div', 'panel-title', `${garageWord(port?.group || garageOptions.port.kinds[0])} · ${garagePortName(garageOptions.port.hardpoint)}`));
   const sizes = garageOptions.port.minSize === garageOptions.port.maxSize ? `size ${garageOptions.port.maxSize}` : `sizes ${garageOptions.port.minSize}–${garageOptions.port.maxSize}`;
   const many = siblingsOf(garageOptions.port.portId).length;
-  head.append(el('div', 'panel-sub', `${sizes}${many > 1 ? ` · ${many} ports alike, fitted together` : ''} · now fitted: ${fittedPart?.name || 'nothing'}${garageOptions.pricesKnown ? '' : ' · prices need UEX (Settings)'}`));
+  head.append(el('div', 'panel-sub', `${sizes}${many > 1 ? ` · ${many} ports alike, fitted together` : ''} · now fitted: ${fittedPart?.name || 'nothing'}${garageOptions.pricesKnown ? '' : ' · prices need UEX (Settings)'}${garageOptions.marketKnown ? '' : ' · player listings need the Player marketplace feed (Settings)'}`));
   panel.append(head);
 
   const tools = el('div', 'panel-tools');
@@ -9467,6 +9557,12 @@ function renderBenchPanel() {
       } else {
         shop.append(acquisitionChip('unlisted', 'No terminal seller', 'No NPC terminal seller is recorded in the UEX market feed.'));
       }
+    }
+    // A player offering it is a third route, and a different kind of answer:
+    // one person's ask this week, with the deal made on UEX, not a counter.
+    if (option.listings && option.listings.length) {
+      if (shop.childElementCount) shop.append(el('br'));
+      shop.append(listingLine(option.listings[0], option.listings.length - 1));
     }
     mid.append(shop);
     rowEl.append(mid);

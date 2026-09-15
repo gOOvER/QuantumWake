@@ -1981,6 +1981,20 @@
         <p class="muted">Pick a port on the left.</p>
       </div>
     </div>
+
+    <!-- UEX's player marketplace, kept to parts this ship can take. Off
+         until the feed is fetched; the panel says so rather than hiding,
+         because an empty list would read as "nobody sells these". -->
+    <section class="garage-market" id="garage-market" hidden aria-labelledby="garage-market-title">
+      <div class="garage-market-head">
+        <div>
+          <div class="garage-eyebrow">For sale by players</div>
+          <h3 id="garage-market-title">On UEX's marketplace</h3>
+        </div>
+        <span class="muted" id="garage-market-note"></span>
+      </div>
+      <div class="bench-panel market-list" id="garage-market-body"></div>
+    </section>
   </section>
 
 

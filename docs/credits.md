@@ -29,7 +29,7 @@ below are theirs, re-implemented.
 | [scunpacked-data](https://github.com/StarCitizenWiki/scunpacked-data) | StarCitizenWiki | **The optional commodity names.** A cargo sale logs the commodity as an id nothing in the local install can resolve; this repository publishes the id-to-name table, regenerated after each patch, and it resolved every id this project had ever logged. Fetched only when the user opts in — never vendored, never fetched silently. |
 | [ScDataDumper](https://github.com/octfx/ScDataDumper) | octfx | The loader that generates scunpacked-data from the game files. Not run or shipped here, but the names the opt-in feature shows exist because of it. **And the signature model**: the Garage's EM, IR and power-budget figures re-implement `Services/Vehicle/EmissionAggregator.php` - the shield-pool cap, the weapon-pool scaling, the armour multipliers, the per-segment power-plant EM and the cooling-load IR - checked against its own output on 269 ships before a line of the page was written. See [garage.md](garage.md). |
 | [StarStrings](https://github.com/MrKraken/StarStrings) | MrKraken | **The optional text mod, entirely their work.** Every string in it was written, tested and maintained by MrKraken; this app only offers to fetch their release and copy it into the game folder, on a click, and to take it back out again. Nothing of theirs is vendored, modified or redistributed here - the download comes from their own GitHub releases, and the mod is theirs to credit and theirs to change. |
-| [UEX](https://uexcorp.space) | UEX Corp and its datarunners | **The optional live prices**, crowd-sourced by players and fetched only at the user's request - and the destination of the optional price reports, where a user with UEX credentials can contribute the sale prices their own logs recorded. |
+| [UEX](https://uexcorp.space) | UEX Corp and its datarunners | **The optional live prices**, crowd-sourced by players and fetched only at the user's request - and the destination of the optional price reports, where a user with UEX credentials can contribute the sale prices their own logs recorded. Since 0.13.16 also **the optional player marketplace**: the newest advertisements on UEX's player-to-player marketplace and the item table behind them (`marketplace_listings`, `items`, `categories`), fetched only when that feed is switched on, shown as asking prices with the seller's name as UEX publishes it, and linked back to the advertisement on uexcorp.space - which is where any deal is made. |
 
 The comparison of the seven log tools, and what each one does on a current
 install, is in [docs/README.md](README.md).
@@ -59,18 +59,25 @@ itself.
 **Star Citizen Wiki** ([starcitizen.tools](https://starcitizen.tools)) is
 where the Garage's pictures of parts come from, and the logo of the odd maker
 the game files lack one for: once the community dataset is switched on, the
-bench asks the wiki's MediaWiki API for the lead image of a part's or a
-manufacturer's page - the display name is the only thing sent - and keeps the
-thumbnail under `community/part-pictures/` or `community/maker-marks/`.
-(Makers' marks themselves come from `Data.p4k` first, like the ship
-silhouettes.) Those images are the wiki contributors' captures, shown as the
-wiki serves them under its own terms
+bench asks the wiki's item API ([api.star-citizen.wiki](https://api.star-citizen.wiki),
+`/api/v2/items/{uuid}`) for the pictures it holds of a part, by the game's own
+id - the uuid is the only thing sent - and, when that record lists none, the
+wiki's MediaWiki API for the lead image of the part's or a manufacturer's
+page by display name. The thumbnail is kept under `community/part-pictures/`
+or `community/maker-marks/`. (Makers' marks themselves come from `Data.p4k`
+first, like the ship silhouettes.) The item API gathers its pictures from
+three places and says which: the wiki's own uploads, the German
+[star-citizen.wiki](https://star-citizen.wiki), and **cstone.space**'s
+Universal Item Finder ([finder.cstone.space](https://finder.cstone.space), by
+Meepowski), whose 512-square renders are what most coolers and power plants
+wear on the bench; the app fetches whichever the wiki names, smallest first,
+and never guesses at any site's file store. Those images are the
+contributors' captures, shown as their sites serve them under their own terms
 (CC BY-SA for the wiki's work; what is pictured is Cloud Imperium's), and
-nothing from the wiki is committed to this repository. The wiki's REST API
-([api.star-citizen.wiki](https://api.star-citizen.wiki)) and
-[starcitizen-api.com](https://starcitizen-api.com) were consulted during
-research as a cross-check on body and station names; neither is called at
-runtime and no data from either is committed — the shipped names come from
+nothing from any of them is committed to this repository.
+[starcitizen-api.com](https://starcitizen-api.com) was consulted during
+research as a cross-check on body and station names; it is not called at
+runtime and no data from it is committed — the shipped names come from
 `Data.p4k`.
 
 ## Artwork

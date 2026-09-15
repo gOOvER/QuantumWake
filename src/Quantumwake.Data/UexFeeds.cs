@@ -20,6 +20,73 @@ public sealed record UexRefinery(string Commodity, string Terminal, string? Syst
 /// <summary>What raw, unrefined ore fetches at one terminal.</summary>
 public sealed record UexRawPrice(string Commodity, string Terminal, decimal Sell);
 
+/// <summary>
+/// One advertisement on UEX's player marketplace: a player offering (or
+/// asking for) an item, at a price they named, where they said they are.
+/// </summary>
+/// <remarks>
+/// Nothing here is a market price. A listing is one person's ask on one day,
+/// and the feed carries the newest five hundred of them, so a part with no
+/// listing is not a part nobody sells - it is a part nobody advertised this
+/// week. The page says so beside every count built on it.
+/// </remarks>
+/// <param name="ItemUuid">
+/// The game's id for the item, through UEX's own item table - the join the
+/// bench uses. Null when UEX's record has no uuid, or the listing names no
+/// item at all (a service, or free text).
+/// </param>
+/// <param name="Quality">A commodity's quality, mostly; null where the seller left it blank.</param>
+/// <param name="Photo">The first of the seller's photographs, a thumbnail on UEX's CDN.</param>
+public sealed record UexListing(
+    int Id,
+    string Slug,
+    string Title,
+    string Operation,
+    string Type,
+    int CategoryId,
+    string? Section,
+    string? Category,
+    int ItemId,
+    string? ItemUuid,
+    string? ItemName,
+    decimal Price,
+    string? Unit,
+    int InStock,
+    int? Quality,
+    string? Location,
+    string Seller,
+    DateTimeOffset Added,
+    DateTimeOffset? Expires,
+    string? Photo,
+    bool SoldOut)
+{
+    /// <summary>The advertisement on UEX's site, which is where a buyer talks to the seller.</summary>
+    public string Url => $"https://uexcorp.space/marketplace/item/info/{Slug}/";
+}
+
+/// <summary>One row of UEX's item table, kept for the id-to-uuid join.</summary>
+public sealed record UexMarketItem(int Id, string Name, string? Uuid, string? Slug, int CategoryId, string? Section, string? Category);
+
+/// <summary>
+/// The item table behind the marketplace, fetched a category at a time and
+/// kept, with when each category was last read.
+/// </summary>
+/// <remarks>
+/// UEX serves its items only by category, company or uuid, and a marketplace
+/// listing names an item by UEX's own id - which the price feed resolves for
+/// only 26 of the 441 listings that named one when this was written, because
+/// what players advertise is mostly what no shop stocks. So the categories
+/// that appear in the listings are read in full and remembered; a category
+/// is read again only when a listing names an id it does not hold and the
+/// last read is older than a day.
+/// </remarks>
+public sealed class UexMarketIndex
+{
+    public Dictionary<int, DateTimeOffset> Categories { get; set; } = [];
+    public Dictionary<int, UexMarketItem> Items { get; set; } = [];
+    public Dictionary<int, string[]> CategoryNames { get; set; } = [];
+}
+
 /// <summary>One place in UEX's own hierarchy: a station, city, outpost or point of interest.</summary>
 /// <param name="Clinic">
 /// Whether the place has a clinic, when the directory says. Null means the feed
@@ -61,6 +128,11 @@ public sealed class UexFeeds
     public const string Refineries = "refineries";
     public const string RawPrices = "raw-prices";
     public const string Places = "places";
+    public const string Marketplace = "marketplace";
+
+    public const string ListingsUrl = "https://api.uexcorp.space/2.0/marketplace_listings";
+    public const string ItemsUrl = "https://api.uexcorp.space/2.0/items?id_category=";
+    public const string CategoriesUrl = "https://api.uexcorp.space/2.0/categories";
 
     /// <summary>Every optional feed, in the order the settings page lists them.</summary>
     public static readonly IReadOnlyList<UexFeedInfo> All =
@@ -80,6 +152,9 @@ public sealed class UexFeeds
         new(Places, "Place directory",
             "UEX's own catalogue of stations, cities, outposts and points of interest - better place matching everywhere.",
             "~700 KB"),
+        new(Marketplace, "Player marketplace",
+            "The newest five hundred advertisements on UEX's player-to-player marketplace - who is offering which component, weapon or armour, at what asking price and where - joined to the Garage bench by item.",
+            "~600 KB, plus UEX's item table for the categories advertised"),
     ];
 
     private static readonly Dictionary<string, string[]> Urls = new(StringComparer.OrdinalIgnoreCase)
@@ -99,6 +174,7 @@ public sealed class UexFeeds
             "https://api.uexcorp.space/2.0/outposts",
             "https://api.uexcorp.space/2.0/poi",
         ],
+        [Marketplace] = [ListingsUrl],
     };
 
     private readonly string _directory;
@@ -108,6 +184,9 @@ public sealed class UexFeeds
         _directory = directory ?? AppPaths.In("uex", "feeds");
 
     private string PathFor(string key) => Path.Combine(_directory, $"{key}.json");
+
+    /// <summary>The item table is not a feed: it outlives any one fetch of the listings, and dropping the feed keeps it.</summary>
+    private string IndexPath => Path.Combine(_directory, "marketplace-items.json");
 
     public bool IsEnabled(string key) => File.Exists(PathFor(key));
 
@@ -131,6 +210,7 @@ public sealed class UexFeeds
             Refineries => DigestRefineries(documents[0], documents[1]),
             RawPrices => DigestRawPrices(documents[0]),
             Places => DigestPlaces(documents),
+            Marketplace => await DigestMarketplaceAsync(documents[0], http, token),
             _ => throw new ArgumentException($"Unknown UEX feed '{key}'.", nameof(key))
         };
 
@@ -179,6 +259,24 @@ public sealed class UexFeeds
     public IReadOnlyList<UexRefinery> RefineryYields => Read<UexRefinery>(Refineries);
     public IReadOnlyList<UexRawPrice> RawOrePrices => Read<UexRawPrice>(RawPrices);
     public IReadOnlyList<UexPlace> PlaceDirectory => Read<UexPlace>(Places);
+    public IReadOnlyList<UexListing> Listings => Read<UexListing>(Marketplace);
+
+    /// <summary>
+    /// Players offering one item, cheapest first: sell listings only, and none
+    /// the seller has marked sold out. Empty when the feed is off, or nobody
+    /// has advertised the item this week - the caller cannot tell those apart
+    /// from here, and should say which with <see cref="IsEnabled"/>.
+    /// </summary>
+    public IReadOnlyList<UexListing> ListingsFor(string? itemUuid)
+    {
+        if (string.IsNullOrWhiteSpace(itemUuid))
+            return [];
+
+        return [.. Listings
+            .Where(l => l.ItemUuid is not null && string.Equals(l.ItemUuid, itemUuid, StringComparison.OrdinalIgnoreCase))
+            .Where(l => l.Operation.Equals("sell", StringComparison.OrdinalIgnoreCase) && !l.SoldOut)
+            .OrderBy(l => l.Price)];
+    }
 
     /// <summary>
     /// Whether a place has a clinic: true, false, or null for "not known".
@@ -348,6 +446,130 @@ public sealed class UexFeeds
     private static bool? Flag(JsonElement element, string property) =>
         element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Number
             ? value.GetInt32() != 0
+            : null;
+
+    /* ---------- the marketplace ---------- */
+
+    /// <summary>
+    /// The listings, each joined to UEX's item record where it names one -
+    /// reading the item table for whichever categories are advertised and
+    /// not yet held.
+    /// </summary>
+    private async Task<List<UexListing>> DigestMarketplaceAsync(JsonElement listings, HttpClient http, CancellationToken token)
+    {
+        var rows = Rows(listings).ToList();
+        var index = LoadIndex();
+
+        if (index.CategoryNames.Count == 0)
+        {
+            foreach (var row in Rows(JsonDocument.Parse(await http.GetStringAsync(CategoriesUrl, token)).RootElement))
+                if (Int(row, "id") is { } id)
+                    index.CategoryNames[id] = [Str(row, "section") ?? "", Str(row, "name") ?? ""];
+        }
+
+        // Which categories to read: those with a listed item the table lacks.
+        // A category read within the day is left alone even then - the id is
+        // newer than the table, and asking again now gets the same answer.
+        var wanted = rows
+            .Where(r => string.Equals(Str(r, "type"), "item", StringComparison.OrdinalIgnoreCase))
+            .Where(r => Int(r, "id_item") is > 0 and var item && !index.Items.ContainsKey(item))
+            .Select(r => Int(r, "id_category") ?? 0)
+            .Where(c => c > 0)
+            .Distinct()
+            .Where(c => !index.Categories.TryGetValue(c, out var read) || DateTimeOffset.UtcNow - read > TimeSpan.FromDays(1))
+            .ToList();
+
+        foreach (var category in wanted)
+        {
+            foreach (var row in Rows(JsonDocument.Parse(await http.GetStringAsync(ItemsUrl + category, token)).RootElement))
+            {
+                if (Int(row, "id") is not { } id || Str(row, "name") is not { Length: > 0 } name)
+                    continue;
+
+                index.Items[id] = new UexMarketItem(
+                    id, name, Str(row, "uuid"), Str(row, "slug"), Int(row, "id_category") ?? category,
+                    Str(row, "section"), Str(row, "category"));
+            }
+
+            index.Categories[category] = DateTimeOffset.UtcNow;
+        }
+
+        if (wanted.Count > 0 || !File.Exists(IndexPath))
+            SaveIndex(index);
+
+        return [.. rows.Select(r => Listing(r, index)).OfType<UexListing>()];
+    }
+
+    private static UexListing? Listing(JsonElement row, UexMarketIndex index)
+    {
+        if (Int(row, "id") is not { } id || Str(row, "slug") is not { Length: > 0 } slug)
+            return null;
+
+        var itemId = Int(row, "id_item") ?? 0;
+        var item = itemId > 0 ? index.Items.GetValueOrDefault(itemId) : null;
+        var categoryId = Int(row, "id_category") ?? item?.CategoryId ?? 0;
+        var names = index.CategoryNames.GetValueOrDefault(categoryId);
+
+        // The price arrives as a string of digits, the photos as one
+        // comma-joined string with a trailing comma; both are UEX's shape.
+        var price = decimal.TryParse(Str(row, "price") ?? "", System.Globalization.NumberStyles.Number,
+            System.Globalization.CultureInfo.InvariantCulture, out var p) ? p : (decimal)(Num(row, "price") ?? 0);
+        var photo = (Str(row, "photos") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault();
+
+        return new UexListing(
+            id,
+            slug,
+            Str(row, "title") ?? item?.Name ?? "",
+            Str(row, "operation") ?? "sell",
+            Str(row, "type") ?? "item",
+            categoryId,
+            item?.Section ?? names?[0],
+            item?.Category ?? names?[1],
+            itemId,
+            item?.Uuid,
+            item?.Name,
+            price,
+            Str(row, "unit"),
+            Int(row, "in_stock") ?? 0,
+            Int(row, "quality") is > 0 and var quality ? quality : null,
+            Str(row, "location") is { Length: > 0 } location ? location : null,
+            Str(row, "user_username") ?? Str(row, "user_name") ?? "",
+            Stamp(row, "date_added") ?? DateTimeOffset.UnixEpoch,
+            Stamp(row, "date_expiration"),
+            photo,
+            (Int(row, "is_sold_out") ?? 0) != 0);
+    }
+
+    private UexMarketIndex LoadIndex()
+    {
+        try
+        {
+            if (File.Exists(IndexPath))
+                return JsonSerializer.Deserialize<UexMarketIndex>(File.ReadAllText(IndexPath)) ?? new UexMarketIndex();
+        }
+        catch (Exception e) when (e is IOException or JsonException)
+        {
+            // A table that cannot be read is read again from UEX; nothing is lost but a few requests.
+        }
+
+        return new UexMarketIndex();
+    }
+
+    private void SaveIndex(UexMarketIndex index)
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(IndexPath, JsonSerializer.Serialize(index));
+    }
+
+    private static int? Int(JsonElement element, string property) =>
+        element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var n)
+            ? n
+            : null;
+
+    /// <summary>A Unix second count, as every date on the marketplace is written; null for zero or absent.</summary>
+    private static DateTimeOffset? Stamp(JsonElement element, string property) =>
+        element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var seconds) && seconds > 0
+            ? DateTimeOffset.FromUnixTimeSeconds(seconds)
             : null;
 
     private static IEnumerable<JsonElement> Rows(JsonElement root) =>

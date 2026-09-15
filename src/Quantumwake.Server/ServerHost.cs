@@ -2917,6 +2917,12 @@ public static class ServerHost
         app.MapGet("/api/uex/refineries", (UexFeeds feeds) => feeds.RefineryYields);
         app.MapGet("/api/uex/raw-prices", (UexFeeds feeds) => feeds.RawOrePrices);
         app.MapGet("/api/uex/places", (UexFeeds feeds) => feeds.PlaceDirectory);
+        app.MapGet("/api/uex/marketplace", (UexFeeds feeds) => new
+        {
+            enabled = feeds.IsEnabled(UexFeeds.Marketplace),
+            fetchedAt = feeds.FetchedAt(UexFeeds.Marketplace),
+            listings = feeds.Listings.Select(ListingCard)
+        });
 
         // ---- UEX: live prices in, logged sale prices out. Both opt-in. ----
 
@@ -3120,7 +3126,66 @@ public static class ServerHost
             return Results.Ok(new { id });
         });
 
-        app.MapGet("/api/garage/{cls}/options", (string cls, string port, LogLibrary lib, UexData uex) =>
+        // Who is selling a part fit for this ship on UEX's player marketplace,
+        // for the panel under the bench. Joined by uuid through the feed's
+        // item table, then kept to what some port on the ship accepts at a
+        // size it takes - a size 3 shield is not an offer for a Gladius. The
+        // count of what the feed holds altogether is returned too, because a
+        // panel of two rows needs to say whether that is two of five hundred
+        // or two of two.
+        app.MapGet("/api/garage/{cls}/market", (string cls, LogLibrary lib, UexFeeds feeds) =>
+        {
+            var community = lib.Community;
+            var ship = community.GarageShip(cls);
+            if (ship is null) return Results.NotFound();
+
+            var ports = new List<FitPort>();
+            void Walk(IReadOnlyList<FitPort> tree)
+            {
+                foreach (var port in tree)
+                {
+                    ports.Add(port);
+                    Walk(port.Children);
+                }
+            }
+            Walk(ship.Loadout);
+
+            bool Fits(PartStats part) => ports.Any(p =>
+                p.Accepts.Contains(part.Type, StringComparer.Ordinal) && part.Size >= p.MinSize && part.Size <= p.MaxSize);
+
+            var byUuid = community.Parts.Values
+                .Where(p => p.Uuid is { Length: > 0 } && GarageKinds.Contains(p.Type))
+                .GroupBy(p => p.Uuid!, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+            var listings = feeds.Listings
+                .Where(l => l.Operation.Equals("sell", StringComparison.OrdinalIgnoreCase) && !l.SoldOut && l.ItemUuid is not null)
+                .Select(l => (Listing: l, Part: byUuid.GetValueOrDefault(l.ItemUuid!)))
+                .Where(x => x.Part is not null && Fits(x.Part))
+                .OrderByDescending(x => x.Listing.Added)
+                .Select(x => new
+                {
+                    listing = ListingCard(x.Listing),
+                    part = PartCard(x.Part!),
+                    // The port(s) it would go in, so the row can open the bench there.
+                    ports = ports
+                        .Where(p => p.Accepts.Contains(x.Part!.Type, StringComparer.Ordinal) && x.Part.Size >= p.MinSize && x.Part.Size <= p.MaxSize)
+                        .Select(p => p.PortId)
+                        .Take(1)
+                })
+                .ToList();
+
+            return Results.Ok(new
+            {
+                enabled = feeds.IsEnabled(UexFeeds.Marketplace),
+                fetchedAt = feeds.FetchedAt(UexFeeds.Marketplace),
+                total = feeds.Listings.Count,
+                components = feeds.Listings.Count(l => l.ItemUuid is not null && byUuid.ContainsKey(l.ItemUuid)),
+                listings
+            });
+        });
+
+        app.MapGet("/api/garage/{cls}/options", (string cls, string port, LogLibrary lib, UexData uex, UexFeeds feeds) =>
         {
             var community = lib.Community;
             var ship = community.GarageShip(cls);
@@ -3161,6 +3226,9 @@ public static class ServerHost
                             ? facts.Tags.Contains("flightReady", StringComparison.OrdinalIgnoreCase)
                             : (bool?)null,
                         price = uex.ItemPrice(p.Uuid),
+                        // Players offering it this week, cheapest first, three at
+                        // most; the panel under the bench has the rest.
+                        listings = feeds.ListingsFor(p.Uuid).Take(3).Select(ListingCard).ToList(),
                         shops = uex.ItemMarket(p.Uuid)
                             .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
                             .Select(g => g.MinBy(r => r.Buy)!)
@@ -3187,6 +3255,7 @@ public static class ServerHost
             {
                 port = new { target.PortId, target.Hardpoint, kinds, target.MinSize, target.MaxSize, fitted = target.Class },
                 pricesKnown = uex.IsEnabled,
+                marketKnown = feeds.IsEnabled(UexFeeds.Marketplace),
                 options
             });
         });
@@ -4070,6 +4139,13 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
 
         return null;
     }
+
+    /// <summary>A marketplace advertisement as a page shows it: the ask, who, where, and the way to UEX.</summary>
+    static object ListingCard(UexListing l) => new
+    {
+        l.Id, l.Title, l.Operation, l.Type, l.Section, l.Category, l.ItemUuid, l.ItemName,
+        l.Price, l.Unit, l.InStock, l.Quality, l.Location, l.Seller, l.Added, l.Expires, l.Photo, l.SoldOut, l.Url
+    };
 
     /// <summary>A part as the bench shows it: identity plus the figures that matter for its kind.</summary>
     static object PartCard(PartStats part) => new
