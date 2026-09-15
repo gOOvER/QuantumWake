@@ -364,7 +364,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.12
+### 0.13.13
 
 - **Every component maker has a logo now, not a four-letter monogram - the
   game's own.** The Fankit only ships marks for the fifteen hull makers;
@@ -420,6 +420,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   flight an arrow, weapons a reticle, defence a shield, signature a scanner,
   systems a circuit, and quantum a drive vector. They pair with the cards'
   coloured accents so the section you want is recognisable before reading it.
+
+- **Ships now carry a small purpose badge in the Garage.** Industrial, military
+  and civilian are readable beside the ship name, with a distinct mark and
+  colour. The badge is derived from the community reference's career and role;
+  its tooltip shows exactly what supplied that classification.
 
 - **The part's own picture on the bench.** Where the Star Citizen Wiki has a
   cutout of a cooler, gun or drive, the bench and the candidate list show it

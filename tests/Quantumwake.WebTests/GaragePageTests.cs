@@ -54,8 +54,19 @@ public class GaragePageTests
         Assert.Contains("GET /api/garage/AEGS_Gladius", page.Fetched());
         Assert.Equal("Aegis Gladius", page.NodeText("#garage-title"));
         Assert.Contains("Light Fighter", page.NodeText("#garage-sub"));
+        Assert.Contains("Military", page.NodeText("#garage-sub"));
+        Assert.Equal("military", page.Text("__dom.node('#garage-sub').descendants().find(n => n.classList.contains('garage-duty')).dataset.discipline"));
         Assert.Contains("4.10.0-LIVE.12519617", page.NodeText("#garage-source"));
         Assert.Equal("AEGS_Gladius", page.Text("__dom.node('#garage-mine').value"));
+    }
+
+    [Fact]
+    public void Ship_discipline_badges_are_derived_from_the_reference_career_and_role()
+    {
+        var page = Opened();
+
+        Assert.Equal("Industrial|Civilian|Military",
+            page.Text("['Industrial|Light Mining', 'Exploration|Pathfinder', 'Combat|Medium Fighter'].map(s => { const [career, role] = s.split('|'); return garageShipDiscipline(career, role).label; }).join('|')"));
     }
 
     [Fact]

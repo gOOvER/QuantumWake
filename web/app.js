@@ -8865,8 +8865,14 @@ function renderGarage(data, stock) {
   const head = $('#garage-head');
   head.hidden = false;
   $('#garage-title').textContent = data.ship.name;
-  $('#garage-sub').textContent = [data.ship.manufacturer, data.ship.role, data.ship.career,
-    `size ${data.ship.size}`, `crew ${data.ship.crew}`].filter(Boolean).join(' · ');
+  const discipline = garageShipDiscipline(data.ship.career, data.ship.role);
+  const sub = $('#garage-sub');
+  sub.textContent = '';
+  const badge = el('span', `garage-duty ${discipline.key}`, discipline.label);
+  badge.dataset.discipline = discipline.key;
+  badge.title = `Inferred from the community career / role: ${discipline.basis}`;
+  sub.append(badge, el('span', 'garage-subline', [data.ship.manufacturer, data.ship.role, data.ship.career,
+    `size ${data.ship.size}`, `crew ${data.ship.crew}`].filter(Boolean).join(' · ')));
   $('#garage-source').textContent = `Community dataset${data.dump ? ` · dump ${data.dump}` : ''} · recomputed from the fitted parts`;
   renderGarageRig(data);
 
@@ -8959,6 +8965,19 @@ function renderGarage(data, stock) {
   for (const note of s.notes || []) notes.append(el('div', null, note));
 
   renderBench(data);
+}
+
+// The reference calls this a career and role, not a ship allegiance. This is a
+// compact reading aid for the Garage, so the tooltip keeps the source visible
+// instead of claiming that every expedition or freighter is officially civil.
+function garageShipDiscipline(career, role) {
+  const basis = [career, role].filter(Boolean).join(' · ') || 'no career / role recorded';
+  const words = basis.toLowerCase();
+  if (/combat|fighter|bomber|gunship|destroyer|frigate|interceptor|interdiction/.test(words))
+    return { key: 'military', label: 'Military', basis };
+  if (/industrial|mining|salvage|repair|recovery|refuel|science/.test(words))
+    return { key: 'industrial', label: 'Industrial', basis };
+  return { key: 'civilian', label: 'Civilian', basis };
 }
 
 /**
