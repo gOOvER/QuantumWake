@@ -112,7 +112,21 @@ turrets whose class says "Remote" and whose port does not. On those the
 Starlancer's four turret repeaters sit in the pilot row where the file has
 them in the turret row; the guns are on the sheet either way, and the total is
 the same. Not chased further: the answer is in a file the dataset does not
-publish.
+publish. Since 0.13.27 the sheet says so itself: `ShipSheet.Compute` checks
+the stock fit's pilot DPS against `Dataset.FixedDps` and, past the 2% the
+rest of the sheet holds to, sets `Weapons.Caveat` with both figures; the page
+prints it under the pilot and turret rows. Data-driven rather than a list of
+seven, so a hull the next dump adds to the disagreement says so unprompted.
+
+**A swapped rack takes its missiles with it** (0.13.27). The loadout tree
+carries the stock rack's missiles as its children and nothing about what
+another rack would carry, so `Walk` used to keep counting the stock missiles
+under a rack that was no longer there - a Gladius with a two-missile rack
+replaced still read six missiles. A port swapped to another class, or emptied,
+now skips its stock children; the new rack counts for itself, the missile row
+falls by what left, and a note names the rack and says why. Fitting a new
+rack *with* missiles would need the rack's own port list, which the dataset
+does not publish; until it does, the honest number is the smaller one.
 
 So a stealth fit is a real answer, not an estimate: swap the Bracers for a
 Glacier and the IR moves by exactly what the game's own numbers say, with the

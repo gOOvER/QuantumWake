@@ -3141,7 +3141,9 @@ function diagnosticSummary(version, gamedata, uex, feeds, report) {
   lines.push(`Install: ${install.found ? `${install.channel || 'unknown channel'}, Game.log ${install.hasGameLog ? 'present' : 'absent'}, ${install.backups ?? 0} backup logs` : 'not found'}`);
   const gd = gamedata || {};
   const counts = gd.counts ? Object.entries(gd.counts).map(([k, v]) => `${k} ${v}`).join(', ') : '';
-  lines.push(`Game data: ${gd.state || 'unknown'}${gd.problem ? ` - ${gd.problem}` : ''}${gd.finishedAt ? `, read ${age(gd.finishedAt)}` : ''}${counts ? ` (${counts})` : ''}`);
+  // The one free-text field: an exception's message, which on a file error
+  // carries the path it failed on, user name and all. Redacted, not trusted.
+  lines.push(`Game data: ${gd.state || 'unknown'}${gd.problem ? ` - ${redactPaths(gd.problem)}` : ''}${gd.finishedAt ? `, read ${age(gd.finishedAt)}` : ''}${counts ? ` (${counts})` : ''}`);
 
   const data = report?.data || {};
   lines.push(`Community dataset: ${data.community ? `on, dump ${data.communityDump || '?'}` : 'off'}`);
@@ -3160,6 +3162,19 @@ function diagnosticSummary(version, gamedata, uex, feeds, report) {
   const wipe = report?.wipe || {};
   if (wipe.at) lines.push(`Wipe line: ${String(wipe.at).slice(0, 10)}${wipe.patch ? ` (${wipe.patch})` : ''}, ${wipe.hidden ?? 0} sessions before it`);
   return lines.join('\n');
+}
+
+/**
+ * Every file path in a piece of text, replaced with a marker. Windows paths
+ * with a drive or a UNC root, and Unix ones from a root or a home, however
+ * they are quoted; what is left says the kind of failure without the name of
+ * the person it failed for.
+ */
+function redactPaths(text) {
+  return String(text ?? '')
+    .replace(/[A-Za-z]:[\\/](?:[^\\/:*?"'<>|\r\n]+[\\/])*[^\\/:*?"'<>|\r\n]*/g, '<path>')
+    .replace(/\\\\[^\\/\s]+(?:[\\/][^\\/:*?"'<>|\r\n]*)+/g, '<path>')
+    .replace(/(?:^|[\s'"(])(?:\/(?:home|Users|tmp|var|etc|opt|mnt|media|root)|~)\/[^\s'")]*/g, (m) => m[0].match(/[\s'"(]/) ? `${m[0]}<path>` : '<path>');
 }
 
 /** Builds the summary from live answers and puts it on the clipboard; shows it when the clipboard is not to be had. */
@@ -9154,8 +9169,20 @@ function fillGaragePicker(select, prompt, entries) {
   select.value = entries.some(([v]) => v === keep) ? keep : '';
 }
 
+/*
+ * Every fetch on this page is answered later than it was asked, and the pilot
+ * can change ship, port or fit in between. Each of the three asks carries a
+ * ticket; an answer whose ticket is no longer the newest is dropped, so a slow
+ * sheet for the Corsair cannot land on a bench that has moved on to the Cutlass
+ * - which it did, and a build saved then carried the wrong ship's ports.
+ */
+let garageRequest = 0;
+let benchRequest = 0;
+let refitRequest = 0;
+
 /** Puts a ship on the bench: its stock sheet, and its ports. */
 async function openGarage(cls) {
+  const request = ++garageRequest;
   garageClass = cls;
   // A new ship is a clean bench: swaps belong to the ship they were made on.
   garageSwaps = {};
@@ -9172,11 +9199,13 @@ async function openGarage(cls) {
   try {
     data = await getJson(`/api/garage/${encodeURIComponent(cls)}`);
   } catch {
+    if (request !== garageRequest) return;
     const unavailable = $('#garage-unavailable');
     unavailable.hidden = false;
     unavailable.textContent = `The reference does not know a ship called ${cls}.`;
     return;
   }
+  if (request !== garageRequest) return;
 
   garageStock = data;
   garageSheet = data.sheet;
@@ -9404,10 +9433,12 @@ function renderGarage(data, stock) {
   const w = s.weapons;
   const ow = o?.weapons;
   sheet.append(sheetGroup('Weapons', 'parts', [
-    row('Pilot DPS', fmt1(w.fixedDps), w.guns.length ? w.guns.join(', ') : 'No guns the pilot fires.', ow ? [ow.fixedDps, w.fixedDps] : null),
+    // The caveat rides on both rows it moves guns between: the split is the
+    // one figure read from a port name, and on seven hulls the dump disagrees.
+    row('Pilot DPS', fmt1(w.fixedDps), [w.guns.length ? w.guns.join(', ') : 'No guns the pilot fires.', w.caveat].filter(Boolean).join(' · '), ow ? [ow.fixedDps, w.fixedDps] : null),
     row('Sustained', fmt1(w.fixedSustainedDps), null, ow ? [ow.fixedSustainedDps, w.fixedSustainedDps] : null, true),
     row('Alpha', fmt1(w.fixedAlpha), null, ow ? [ow.fixedAlpha, w.fixedAlpha] : null, true),
-    row('Turret DPS', w.turretDps ? fmt1(w.turretDps) : '—', w.turretDps ? 'Crewed or remote turrets; somebody else fires these.' : null, ow ? [ow.turretDps, w.turretDps] : null),
+    row('Turret DPS', w.turretDps ? fmt1(w.turretDps) : '—', [w.turretDps ? 'Crewed or remote turrets; somebody else fires these.' : null, w.caveat ? 'See the pilot row: the split between the two is the uncertain part.' : null].filter(Boolean).join(' ') || null, ow ? [ow.turretDps, w.turretDps] : null),
     row('Missiles', w.missiles ? `${w.missiles} · ${fmtInt(w.missileDamage)} dmg` : '—', null, ow ? [ow.missileDamage, w.missileDamage] : null),
   ]));
 
@@ -9787,14 +9818,25 @@ function benchRows(ports) {
   return [...rows.values()];
 }
 
-/** Every port folded into the row that holds this one. */
+/** The bench's ports as last drawn - the current fit, not stock. */
+let garageBenchPorts = [];
+
+/**
+ * Every port folded into the row that holds this one - the row as it is on
+ * screen. The rows fold by what is fitted now, so two coolers that started
+ * alike and were changed apart are two rows; deciding from the stock fit put
+ * a part meant for cooler 1 on cooler 2 as well.
+ */
 function siblingsOf(portId) {
-  const rows = benchRows((garageStock?.ports || []).filter((p) => BENCH_KINDS.includes(p.group)));
-  return rows.find((r) => r.portIds.includes(portId))?.portIds || [portId];
+  const current = benchRows(garageBenchPorts).find((r) => r.portIds.includes(portId));
+  if (current) return current.portIds;
+  const stock = benchRows((garageStock?.ports || []).filter((p) => BENCH_KINDS.includes(p.group)));
+  return stock.find((r) => r.portIds.includes(portId))?.portIds || [portId];
 }
 
 function renderBench(data) {
   const ports = (data.ports || []).filter((p) => BENCH_KINDS.includes(p.group));
+  garageBenchPorts = ports;
   const optimizer = $('#garage-optimizer');
   const bar = $('#garage-bench-bar');
   const bench = $('#garage-bench');
@@ -9845,6 +9887,8 @@ function renderBench(data) {
 
 /** Opens the candidates for one port. */
 async function selectBenchPort(portId, revealChoices = false) {
+  const request = ++benchRequest;
+  const cls = garageClass;
   garageSelectedPort = portId;
   for (const rowEl of $$('#garage-bench-ports .bench-port')) rowEl.classList.toggle('selected', rowEl.dataset.port === portId);
   // The fitted-layout cards are another way into this same port, so the
@@ -9855,14 +9899,19 @@ async function selectBenchPort(portId, revealChoices = false) {
   panel.textContent = '';
   panel.append(el('p', 'muted', 'Looking up what fits…'));
 
+  let options;
   try {
-    garageOptions = await getJson(`/api/garage/${encodeURIComponent(garageClass)}/options?port=${encodeURIComponent(portId)}`);
+    options = await getJson(`/api/garage/${encodeURIComponent(cls)}/options?port=${encodeURIComponent(portId)}`);
   } catch {
+    if (request !== benchRequest || cls !== garageClass) return;
     panel.textContent = '';
     panel.append(el('p', 'muted', 'Could not read what fits this port.'));
     return;
   }
+  // A later pick, or another ship, has taken the panel; this answer is for a port nobody is looking at.
+  if (request !== benchRequest || cls !== garageClass) return;
 
+  garageOptions = options;
   renderBenchPanel();
   if (revealChoices) revealGarageChoices(panel);
 }
@@ -9877,8 +9926,17 @@ function revealGarageChoices(panel) {
 
 function renderBenchPanel() {
   const panel = $('#garage-bench-panel');
-  panel.textContent = '';
-  if (!garageOptions || !garageStock) return;
+  if (!garageOptions || !garageStock) { panel.textContent = ''; return; }
+
+  // The search box stays where it is while its results redraw: rebuilding it
+  // on every keystroke took the focus with it, and typing "cold" left "c".
+  // Head, tools and the list are three boxes; only what changed is redrawn,
+  // and the box is a new one only when the port is.
+  const sameport = panel.dataset.port === garageOptions.port.portId && panel.querySelector('.bench-search');
+  if (!sameport) {
+    panel.textContent = '';
+    panel.dataset.port = garageOptions.port.portId;
+  }
 
   const port = (garageStock.ports || []).find((p) => p.portId === garageOptions.port.portId) || null;
   const current = currentClassOf(port);
@@ -9901,25 +9959,36 @@ function renderBenchPanel() {
       return fa[3] ? fa[1] - fb[1] : fb[1] - fa[1];
     });
 
-  const head = el('div', 'panel-head');
+  const head = sameport ? panel.querySelector('.panel-head') : el('div', 'panel-head');
+  head.textContent = '';
   head.append(el('div', 'panel-title', `${garageWord(port?.group || garageOptions.port.kinds[0])} · ${garagePortName(garageOptions.port.hardpoint)}`));
   const sizes = garageOptions.port.minSize === garageOptions.port.maxSize ? `size ${garageOptions.port.maxSize}` : `sizes ${garageOptions.port.minSize}–${garageOptions.port.maxSize}`;
   const many = siblingsOf(garageOptions.port.portId).length;
   head.append(el('div', 'panel-sub', `${sizes}${many > 1 ? ` · ${many} ports alike, fitted together` : ''} · now fitted: ${fittedPart?.name || 'nothing'}${garageOptions.pricesKnown ? '' : ' · prices need UEX (Settings)'}${garageOptions.marketKnown ? '' : ' · player listings need the Player marketplace feed (Settings)'}`));
-  panel.append(head);
+  if (!sameport) panel.append(head);
 
-  const tools = el('div', 'panel-tools');
-  const search = el('input', 'search');
-  search.type = 'search';
-  search.placeholder = 'Filter by name or maker…';
-  search.value = garageOptions.filter || '';
-  search.addEventListener('input', () => { garageOptions.filter = search.value; renderBenchPanel(); });
-  tools.append(search);
-  tools.append(el('span', 'muted', `${rows.length} of ${garageOptions.options.length} fit${terminalOnly ? ' · terminal aUEC only' : ''} · sorted by ${partFigures(fittedPart || garageOptions.options[0]?.part, ship)[0]?.[0] || 'name'}`));
-  panel.append(tools);
+  const countText = `${rows.length} of ${garageOptions.options.length} fit${terminalOnly ? ' · terminal aUEC only' : ''} · sorted by ${partFigures(fittedPart || garageOptions.options[0]?.part, ship)[0]?.[0] || 'name'}`;
+  let list;
+  if (sameport) {
+    panel.querySelector('.bench-count').textContent = countText;
+    list = panel.querySelector('.candidates');
+    list.textContent = '';
+  } else {
+    const tools = el('div', 'panel-tools');
+    const search = el('input', 'search bench-search');
+    search.type = 'search';
+    search.placeholder = 'Filter by name or maker…';
+    search.value = garageOptions.filter || '';
+    search.addEventListener('input', () => { garageOptions.filter = search.value; renderBenchPanel(); });
+    tools.append(search);
+    tools.append(el('span', 'muted bench-count', countText));
+    panel.append(tools);
+    list = el('div', 'candidates');
+    panel.append(list);
+  }
 
   if (!rows.length) {
-    panel.append(el('p', 'muted', terminalOnly
+    list.append(el('p', 'muted', terminalOnly
       ? 'No terminal aUEC seller is recorded for a compatible replacement.'
       : 'Nothing in the reference fits this port.'));
     return;
@@ -9997,7 +10066,7 @@ function renderBenchPanel() {
     }
     rowEl.append(act);
 
-    panel.append(rowEl);
+    list.append(rowEl);
   }
 }
 
@@ -10023,8 +10092,13 @@ async function fitPart(portId, cls, autoShop = null) {
 
   // A folded row may represent sixteen missile ports, but it is still one
   // shopping decision and one shopping-list line with the matching count.
+  // Every other edit - a part with no seller, a port put back to stock -
+  // reconciles the list the Garage already keeps, so a purchase undone on
+  // the bench does not stay on the Shopping page.
   if (autoShop && cls !== null) {
     await addFittedPartToShopping(portIds, autoShop);
+  } else {
+    await reconcileBenchShopping();
   }
 }
 
@@ -10060,7 +10134,10 @@ async function optimiseGarage() {
   const status = $('#garage-optimise-status');
   const goal = $('#garage-optimise-goal').value;
   const buyableOnly = $('#garage-optimise-buyable').checked;
-  const rows = benchRows((garageStock.ports || []).filter((p) => BENCH_KINDS.includes(p.group)));
+  // The rows as the bench shows them - the current fit - so a cooler changed
+  // apart from its twin is decided on its own.
+  const rows = benchRows(garageBenchPorts.length ? garageBenchPorts : (garageStock.ports || []).filter((p) => BENCH_KINDS.includes(p.group)));
+  const cls = garageClass;
   button.disabled = true;
   status.textContent = `Finding the best ${GARAGE_OPTIMISE_GOALS[goal] || 'fit'}…`;
 
@@ -10072,6 +10149,8 @@ async function optimiseGarage() {
         ? garageOptions
         : await getJson(`/api/garage/${encodeURIComponent(garageClass)}/options?port=${encodeURIComponent(row.portIds[0])}`).catch(() => null);
       if (!options) { unavailable += row.portIds.length; continue; }
+      // The ship changed under the optimiser: its choices belong to the old bench.
+      if (cls !== garageClass) return;
 
       const ranked = (options.options || [])
         .filter((option) => !buyableOnly || option.shops?.length)
@@ -10089,7 +10168,7 @@ async function optimiseGarage() {
       changed += row.portIds.length;
     }
 
-    if (changed) await refitGarage();
+    if (changed) { await refitGarage(); await reconcileBenchShopping(); }
     const scope = buyableOnly ? ' from known terminal aUEC sellers' : '';
     status.textContent = changed
       ? `Optimised ${changed} port${changed === 1 ? '' : 's'} for ${GARAGE_OPTIMISE_GOALS[goal]}${scope}. Review the sheet, then add the changed parts to Shopping when you are ready to buy.`
@@ -10115,11 +10194,16 @@ function openGarageFor(cls) {
 }
 
 async function loadBuilds() {
+  const cls = garageClass;
+  let builds;
   try {
-    garageBuilds = await getJson(`/api/garage/builds?ship=${encodeURIComponent(garageClass)}`);
+    builds = await getJson(`/api/garage/builds?ship=${encodeURIComponent(cls)}`);
   } catch {
-    garageBuilds = [];
+    builds = [];
   }
+  // Another ship's builds must not land on this bench.
+  if (cls !== garageClass) return;
+  garageBuilds = builds;
   renderBuilds();
 }
 
@@ -10230,10 +10314,14 @@ async function sheetFor(swaps) {
  */
 async function refitGarage() {
   if (!garageClass || !garageStock) return;
+  const request = ++refitRequest;
+  const cls = garageClass;
 
   const current = await sheetFor(garageSwaps);
   const against = garageBuilds.find((b) => b.id === garageCompare);
   const reference = against ? await sheetFor(against.swaps || {}) : garageStock;
+  // A newer refit, or another ship, has the bench now; this sheet is stale.
+  if (request !== refitRequest || cls !== garageClass) return;
 
   garageSheet = current.sheet;
   renderGarage(current, reference === current ? null : reference);
@@ -10248,6 +10336,7 @@ async function resetGarage() {
   $('#garage-optimise-status').textContent = '';
   await refitGarage();
   renderGaragePhoto();
+  await reconcileBenchShopping();
 }
 
 $('#garage-reset')?.addEventListener('click', () => resetGarage().catch(() => {}));
@@ -10273,29 +10362,51 @@ onInput('#garage-compare', () => { garageCompare = $('#garage-compare').value; r
  * links to the list, and nothing else - from here it is the Shopping page's
  * flow, the Now page's, the MFD's.
  */
-async function shopForBench() {
+/**
+ * The list the Garage keeps for this bench, brought up to date with what is
+ * on it now and never started here: a fit put back to stock removes the
+ * list rather than leaving a purchase nobody wants on the Shopping page.
+ */
+async function reconcileBenchShopping() {
+  if (!garageClass) return;
+  await shopForBench(true);
+}
+
+async function shopForBench(onlyIfExists = false) {
   const result = $('#garage-shop-result');
   result.hidden = true;
-  if (!garageClass || !Object.keys(garageSwaps).length) return;
+  if (!garageClass) return;
+  if (!onlyIfExists && !Object.keys(garageSwaps).length) return;
 
   const open = garageBuilds.find((b) => b.id === garageOpenBuild);
   const title = open ? open.name : `${garageStock?.ship?.name || garageClass} fit`;
 
   const res = await fetch(`/api/garage/${encodeURIComponent(garageClass)}/shop`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ swaps: garageSwaps, title }),
+    body: JSON.stringify({ swaps: garageSwaps, title, onlyIfExists }),
   });
-
-  result.textContent = '';
-  result.hidden = false;
 
   if (!res.ok) {
     const problem = await res.json().catch(() => null);
+    result.textContent = '';
+    result.hidden = false;
     result.append(el('span', 'muted', problem?.message || 'The list could not be written.'));
     return;
   }
 
-  const { job, proposal, created, consolidated } = await res.json();
+  const { job, proposal, created, consolidated, removed, removedTitle, destinationKept } = await res.json();
+
+  // Nothing kept and nothing to keep: a reconcile with no list says nothing.
+  if (!job) {
+    if (!removed) return;
+    result.textContent = '';
+    result.hidden = false;
+    result.append(el('span', 'muted', `The bench is back to stock, so "${removedTitle}" was taken off Shopping.`));
+    return;
+  }
+
+  result.textContent = '';
+  result.hidden = false;
   const items = (job.items || []).reduce((n, i) => n + (i.needed || 1), 0);
 
   const line = el('span');
@@ -10312,7 +10423,11 @@ async function shopForBench() {
   // a list.
   if (proposal.terminal) {
     const where = `${proposal.terminal}${proposal.place ? `, ${proposal.place}` : ''}`;
-    let note = `Destination: ${where} - ${proposal.covered} of ${proposal.of} line${proposal.of === 1 ? '' : 's'}`;
+    // A destination the pilot chose on Shopping is theirs; the proposal is
+    // offered beside it, not written over it.
+    let note = destinationKept
+      ? `Destination kept as ${job.destination} (chosen on Shopping). UEX would propose ${where} - ${proposal.covered} of ${proposal.of} line${proposal.of === 1 ? '' : 's'}`
+      : `Destination: ${where} - ${proposal.covered} of ${proposal.of} line${proposal.of === 1 ? '' : 's'}`;
     if (proposal.total > 0) note += `, ${fmtInt(proposal.total)} aUEC`;
     if (proposal.missing?.length) note += `. Not sold there: ${proposal.missing.join(', ')}`;
     result.append(el('span', 'muted', note + '.'));

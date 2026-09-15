@@ -190,4 +190,61 @@ public class GarageSheetTests(ITestOutputHelper output)
         Assert.Contains(sheet.Notes, n => n.Contains("POWR_FROM_THE_FUTURE"));
         Assert.Equal(0, sheet.Power.Available);
     }
+    /// <summary>
+    /// A rack takes its missiles with it. The dump says what the stock rack
+    /// carries and nothing about what another would, so a swapped rack counts
+    /// for itself, the missile row falls by what left, an emptied rack port
+    /// carries nothing, and the note says why. Before this the stock missiles
+    /// stayed on the sheet under a rack that was no longer there.
+    /// </summary>
+    [Fact]
+    public void A_swapped_or_emptied_rack_takes_its_stock_missiles_with_it()
+    {
+        var (ships, parts) = Load();
+        var gladius = ships["AEGS_Gladius"];
+        var stock = ShipSheet.Compute(gladius, parts);
+        Assert.Equal(6, stock.Weapons.Missiles);
+
+        var racks = gladius.Loadout.Where(p => p.Type == "MissileLauncher").ToList();
+        var twoUp = racks.First(r => r.Children.Count == 2);
+        var other = parts.Values.First(p => p.Type == "MissileLauncher" && p.Class != twoUp.Class
+            && p.Size >= twoUp.MinSize && p.Size <= twoUp.MaxSize);
+
+        var swapped = ShipSheet.Compute(gladius, parts, new Dictionary<string, string?> { [twoUp.PortId] = other.Class });
+        Assert.Equal(4, swapped.Weapons.Missiles);
+        Assert.True(swapped.Weapons.MissileDamage < stock.Weapons.MissileDamage);
+        Assert.Contains(swapped.Notes, n => n.Contains(other.Name) && n.Contains("nothing counted on it"));
+
+        var emptied = ShipSheet.Compute(gladius, parts, new Dictionary<string, string?> { [twoUp.PortId] = null });
+        Assert.Equal(4, emptied.Weapons.Missiles);
+        Assert.DoesNotContain(emptied.Notes, n => n.Contains("nothing counted on it"));
+
+        // Putting the stock rack back by name is not a swap: its missiles stay.
+        var same = ShipSheet.Compute(gladius, parts, new Dictionary<string, string?> { [twoUp.PortId] = twoUp.Class });
+        Assert.Equal(6, same.Weapons.Missiles);
+    }
+
+    /// <summary>
+    /// The seven hulls whose remote turrets the loadout names as pilot mounts
+    /// carry the disagreement on the sheet, beside the rows it moves guns
+    /// between; a hull the dump agrees on carries nothing.
+    /// </summary>
+    [Fact]
+    public void A_hull_the_dump_splits_differently_says_so_on_its_weapons_rows()
+    {
+        var (ships, parts) = Load();
+
+        var starlancer = ShipSheet.Compute(ships["MISC_Starlancer_Max"], parts);
+        Assert.NotNull(starlancer.Weapons.Caveat);
+        Assert.Contains($"{ships["MISC_Starlancer_Max"].Dataset.FixedDps:0.#}", starlancer.Weapons.Caveat);
+        Assert.Contains("only the row differs", starlancer.Weapons.Caveat);
+
+        // The caveat is about the hull, so a fit with its coolers changed still carries it.
+        var cooler = ships["MISC_Starlancer_Max"].Loadout.First(p => p.Type == "Cooler");
+        var glacier = parts.Values.First(p => p.Type == "Cooler" && p.Size == cooler.MinSize && p.Class != cooler.Class);
+        var refit = ShipSheet.Compute(ships["MISC_Starlancer_Max"], parts, new Dictionary<string, string?> { [cooler.PortId] = glacier.Class });
+        Assert.Equal(starlancer.Weapons.Caveat, refit.Weapons.Caveat);
+
+        Assert.Null(ShipSheet.Compute(ships["AEGS_Gladius"], parts).Weapons.Caveat);
+    }
 }

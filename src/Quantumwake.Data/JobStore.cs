@@ -36,8 +36,15 @@ public sealed record Job(
     bool Pinned = false,
     string? Destination = null,
     string? DestinationId = null,
-    DateTimeOffset? ModifiedAt = null) : IStamped<Job>
+    DateTimeOffset? ModifiedAt = null,
+    bool DestinationChosen = false) : IStamped<Job>
 {
+    /*
+     * DestinationChosen: the pilot pointed this list somewhere themselves, on
+     * Shopping. A destination the Garage proposed is a suggestion and the next
+     * proposal may replace it; one the pilot chose is theirs, and a rewrite of
+     * the list keeps it and offers the new proposal beside it instead.
+     */
     public string StampId => Id;
     /// <remarks>Pinned is view state and does not travel - see <see cref="Trip.Bare"/>.</remarks>
     public Job Bare() => this with { ModifiedAt = null, Pinned = false };
@@ -54,7 +61,8 @@ public sealed record Job(
 }
 
 /// <summary>The single current list and any obsolete automatic Garage lists it replaced.</summary>
-public sealed record ListReplacement(Job Job, bool Created, IReadOnlyList<string> ConsolidatedIds);
+/// <param name="DestinationKept">True when the list kept a destination the pilot had chosen rather than taking the proposal.</param>
+public sealed record ListReplacement(Job Job, bool Created, IReadOnlyList<string> ConsolidatedIds, bool DestinationKept = false);
 
 /// <summary>
 /// The player's own plans, kept in a file beside the caches.
@@ -158,13 +166,16 @@ public sealed class JobStore
                     DestinationId: string.IsNullOrWhiteSpace(destinationId) ? null : destinationId.Trim()));
                 index = 0;
             }
-            else
+            var kept = false;
+            if (!created)
             {
-                _jobs[index] = _jobs[index] with
+                var existing = _jobs[index];
+                kept = existing.DestinationChosen && !string.IsNullOrWhiteSpace(existing.Destination);
+                _jobs[index] = existing with
                 {
                     Items = [.. items],
-                    Destination = string.IsNullOrWhiteSpace(destination) ? null : destination.Trim(),
-                    DestinationId = string.IsNullOrWhiteSpace(destinationId) ? null : destinationId.Trim(),
+                    Destination = kept ? existing.Destination : string.IsNullOrWhiteSpace(destination) ? null : destination.Trim(),
+                    DestinationId = kept ? existing.DestinationId : string.IsNullOrWhiteSpace(destinationId) ? null : destinationId.Trim(),
                 };
             }
 
@@ -188,7 +199,20 @@ public sealed class JobStore
             }
 
             Save();
-            return new ListReplacement(_jobs[index], created, consolidated);
+            return new ListReplacement(_jobs[index], created, consolidated, kept);
+        }
+    }
+
+    /// <summary>The open list a source keeps under a title, or null.</summary>
+    public Job? OpenList(string source, string title)
+    {
+        lock (_gate)
+        {
+            return _jobs.FirstOrDefault(j =>
+                !j.Done
+                && j.Kind == "list"
+                && string.Equals(j.Source, source, StringComparison.Ordinal)
+                && string.Equals(j.Title, title, StringComparison.Ordinal));
         }
     }
 
@@ -205,6 +229,9 @@ public sealed class JobStore
             {
                 Destination = string.IsNullOrWhiteSpace(place) ? null : place.Trim(),
                 DestinationId = string.IsNullOrWhiteSpace(placeId) ? null : placeId.Trim(),
+                // Pointing it somewhere is a choice; clearing it hands the
+                // choice back to whatever proposes next.
+                DestinationChosen = !string.IsNullOrWhiteSpace(place),
             };
 
             Save();

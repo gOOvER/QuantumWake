@@ -3015,8 +3015,29 @@ public static class ServerHost
                 wanted[toClass] = (part, so.Count + 1);
             }
 
+            var title = string.IsNullOrWhiteSpace(body.Title) ? $"{ship.Name} fit" : body.Title.Trim();
+            var source = $"garage:{ship.Class}";
+            var existing = jobs.OpenList(source, title);
+
+            // A bench put back to stock has nothing to buy - and a list the
+            // Garage wrote for it is now a list of things not wanted. It goes,
+            // and the page says so; a list the Garage never wrote is not made.
             if (wanted.Count == 0)
-                return Results.BadRequest(new { message = "Nothing on the bench differs from stock, so there is nothing to buy." });
+            {
+                if (existing is not null && jobs.Remove(existing.Id))
+                {
+                    deleted.Record(TombstoneStore.Kinds.Jobs, existing.Id);
+                    return Results.Ok(new { job = (Job?)null, removed = true, removedTitle = existing.Title });
+                }
+                return body.OnlyIfExists == true
+                    ? Results.Ok(new { job = (Job?)null, removed = false })
+                    : Results.BadRequest(new { message = "Nothing on the bench differs from stock, so there is nothing to buy." });
+            }
+
+            // A bench edit reconciles a list the Garage already keeps; it does
+            // not start one the pilot never asked for.
+            if (body.OnlyIfExists == true && existing is null)
+                return Results.Ok(new { job = (Job?)null, removed = false });
 
             var lines = wanted.Values
                 .Select(w => new ShoppingLine(
@@ -3031,8 +3052,6 @@ public static class ServerHost
             var proposal = GarageShopping.Propose(lines);
             var place = lib.Terminals.Resolve(proposal.Terminal);
 
-            var title = string.IsNullOrWhiteSpace(body.Title) ? $"{ship.Name} fit" : body.Title.Trim();
-            var source = $"garage:{ship.Class}";
             // Before Garage shopping had a complete-fit button, a direct Fit
             // made a one-part list named after that part. Fold exactly those
             // legacy automatic lists into the fit the pilot is saving now;
@@ -3059,6 +3078,7 @@ public static class ServerHost
                 job = saved.Job,
                 saved.Created,
                 Consolidated = saved.ConsolidatedIds.Count,
+                saved.DestinationKept,
                 proposal = new
                 {
                     proposal.Terminal,
@@ -4631,7 +4651,8 @@ public sealed record GarageSwapRequest(Dictionary<string, string?>? Swaps);
 public sealed record BuildRequest(string? ShipClass, string? Name, Dictionary<string, string?>? Swaps, string? Note);
 
 /// <summary>Body of POST /api/garage/{class}/shop: the bench's swaps, and a title for the job.</summary>
-public sealed record GarageShopRequest(Dictionary<string, string?>? Swaps, string? Title);
+/// <param name="OnlyIfExists">Reconcile a list the Garage already keeps; never start one. What a bench edit sends.</param>
+public sealed record GarageShopRequest(Dictionary<string, string?>? Swaps, string? Title, bool? OnlyIfExists = null);
 
 /// <summary>Body of PUT /api/servers/{shard}/favorite.</summary>
 public sealed record ShardFavoriteRequest(bool Favorite);

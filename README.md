@@ -365,7 +365,52 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.26
+### 0.13.27
+
+- **The Garage no longer shows one ship's sheet under another's name.** A
+  slow answer for the ship you had just left could land after the one you
+  picked and overwrite it - Ship B selected, Ship A displayed, and a build
+  saved then carried A's ports under B's class. Every ask the page makes
+  (the ship, a port's candidates, a refit) now carries a ticket, and an
+  answer that is no longer the newest is dropped.
+
+- **Changing one cooler no longer changes its twin.** Two ports that started
+  alike and were fitted apart show as two rows, but the change was decided
+  from the stock fit, so a part fitted to cooler 1 went on cooler 2 as well.
+  Rows are now decided from the fit on screen, on the bench and in Auto-fit.
+
+- **A swapped missile rack takes its missiles with it.** Replacing or
+  emptying a rack left the stock missiles in the missile count and damage.
+  They now leave with the rack; the reference says what the stock rack
+  carried and nothing about what another would, so the sheet counts the new
+  rack for itself and a note says why the missile row fell.
+
+- **The bench filter keeps its focus.** Typing "cold" left "c": every
+  keystroke rebuilt the box it was typed into. The rows redraw around it now.
+
+- **A purchase undone on the bench leaves Shopping too.** *Back to stock* and
+  *Reset to stock* now reconcile the list the Garage keeps for the fit; a
+  bench back at stock takes its list off Shopping and says so. A bench that
+  never made a list still makes none.
+
+- **A destination you chose on Shopping is yours.** Updating a Garage list
+  used to write the newly proposed shop over it, or clear it when nothing
+  resolved. A destination you picked is kept, and the proposal is offered
+  beside it instead.
+
+- **The diagnostic summary redacts paths.** The one free-text field it
+  carries - why the game data could not be read - is an exception's message,
+  which on a file error names the file, user folder and all. Every Windows,
+  UNC and Unix path in it is replaced with `<path>` before the text reaches
+  the clipboard.
+
+- **The pilot/turret DPS split says when the dataset disagrees.** On seven
+  hulls - the Asgard, Cutlass Steel, Starlancer MAX and TAC and their Wikelo
+  variants - remote turrets are named as pilot mounts in the loadout, so
+  their guns sit in the pilot row where the dataset's own total puts them on
+  turrets (the Starlancer MAX reads 7,373.6 pilot DPS here and 4,102 there).
+  Those hulls now say so beside both rows, with both figures; the guns are on
+  the sheet either way and the sum agrees.
 
 - **A compared picture says what it is.** In a Hangar comparison each ship
   wears a small badge on its picture - *top-down icon* for the game's own

@@ -165,6 +165,12 @@ public sealed record ShieldSummary(double Hp, double Regen, int Generators, int 
 /// <param name="FixedDps">Guns on fixed mounts and gimbals the pilot aims.</param>
 /// <param name="TurretDps">Guns on crewed or remote turrets, which the pilot does not fire.</param>
 /// <param name="MissileDamage">Every missile on every rack, fired once.</param>
+/// <param name="Caveat">
+/// Said beside the pilot and turret rows when the stock fit's split between
+/// them disagrees with the dataset's own total by more than the 2% the rest
+/// of the sheet holds to: one of the seven hulls whose remote turrets are
+/// named as pilot mounts in the loadout. Null when the two agree.
+/// </param>
 public sealed record WeaponSummary(
     double FixedDps,
     double FixedSustainedDps,
@@ -172,7 +178,8 @@ public sealed record WeaponSummary(
     double TurretDps,
     double MissileDamage,
     int Missiles,
-    IReadOnlyList<string> Guns);
+    IReadOnlyList<string> Guns,
+    string? Caveat = null);
 
 /// <param name="Range">Metres on a full tank: tank over the drive's fuel rate.</param>
 public sealed record QuantumSummary(string Drive, double Speed, double SpoolTime, double Cooldown, double Range, double FuelPerGm);
@@ -227,7 +234,24 @@ public sealed record ShipSheet(
     {
         var acc = new Accumulator(ship, parts, swaps ?? new Dictionary<string, string?>());
         acc.Walk(ship.Loadout, underTurret: false);
-        return acc.Finish();
+        var sheet = acc.Finish();
+
+        // The pilot/turret split is the one figure this model gets from a port
+        // name rather than a number, and the dump disagrees on seven hulls. The
+        // stock fit is what the dump's total describes, so the stock fit is
+        // what is checked - a bench with the guns swapped is not evidence
+        // either way - and the caveat then rides on every fit of that hull.
+        var stock = swaps is { Count: > 0 } ? Compute(ship, parts, null) : sheet;
+        var published = ship.Dataset.FixedDps;
+        if (published > 0 && Math.Abs(stock.Weapons.FixedDps - published) / published > 0.02)
+        {
+            var caveat = $"The dataset's own total puts {published:0.#} DPS in the pilot's hands for this hull and the rest on turrets; "
+                + $"here the stock fit reads {stock.Weapons.FixedDps:0.#}, because its remote turrets are named as pilot mounts in the loadout "
+                + "and the file that says who fires them is not published. The guns are on the sheet either way; only the row differs.";
+            sheet = sheet with { Weapons = sheet.Weapons with { Caveat = caveat } };
+        }
+
+        return sheet;
     }
 
     private sealed class Accumulator(
@@ -292,6 +316,20 @@ public sealed record ShipSheet(
                 {
                     var stock = port.Class is not null && parts.TryGetValue(port.Class, out var was) ? was.Mass : 0;
                     _massDelta += (part?.Mass ?? 0) - stock;
+                }
+
+                // The children are the stock part's - a rack's missiles, a
+                // turret's guns. A port swapped to another part, or emptied,
+                // takes them with it: the dump says what the stock rack carries
+                // and nothing about what another would, so the new rack counts
+                // for itself and the missile row says why it has fewer.
+                var childrenLeft = swapped && !string.Equals(to, port.Class, StringComparison.Ordinal) && port.Children.Count > 0;
+                if (childrenLeft)
+                {
+                    var carried = port.Children.Count(c => c.Class is not null);
+                    if (part is not null && carried > 0)
+                        _notes.Add($"{part.Name} is fitted with nothing counted on it: the reference says what the stock {(port.Type ?? "part")} carried ({carried}), not what this one does.");
+                    continue;
                 }
 
                 Walk(port.Children, underTurret || IsTurret(port));

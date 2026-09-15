@@ -47,4 +47,38 @@ public sealed class JobStoreTests : IDisposable
         Assert.Single(saved.ConsolidatedIds);
         Assert.Equal("RSI Hermes fit", list.Title);
     }
+    /// <summary>
+    /// A destination the pilot pointed the list at on Shopping is theirs. The
+    /// next rewrite of the list keeps it and says so, rather than writing the
+    /// new proposal over it; a proposed destination is still replaced.
+    /// </summary>
+    [Fact]
+    public void A_chosen_destination_survives_the_lists_next_rewrite()
+    {
+        var store = new JobStore(_root);
+        var first = store.ReplaceOpenList("RSI Hermes fit", "garage:RSI_Hermes", [new JobItem("SolarFlare", 2)], "Terra", "P1");
+        Assert.False(first.DestinationKept);
+
+        // Proposed, not chosen: the next proposal takes its place.
+        var proposed = store.ReplaceOpenList("RSI Hermes fit", "garage:RSI_Hermes", [new JobItem("SolarFlare", 2)], "Area18", "P2");
+        Assert.Equal("Area18", proposed.Job.Destination);
+        Assert.False(proposed.DestinationKept);
+
+        Assert.True(store.SetDestination(first.Job.Id, "Orison", "P3"));
+
+        var rewritten = store.ReplaceOpenList("RSI Hermes fit", "garage:RSI_Hermes", [new JobItem("SolarFlare", 2), new JobItem("JS-400", 1)], "Lorville", "P4");
+        Assert.True(rewritten.DestinationKept);
+        Assert.Equal("Orison", rewritten.Job.Destination);
+        Assert.Equal("P3", rewritten.Job.DestinationId);
+        Assert.Equal(2, rewritten.Job.Items.Count);
+
+        // Clearing the destination hands the choice back.
+        Assert.True(store.SetDestination(first.Job.Id, null, null));
+        var again = store.ReplaceOpenList("RSI Hermes fit", "garage:RSI_Hermes", [new JobItem("SolarFlare", 2)], "Lorville", "P4");
+        Assert.False(again.DestinationKept);
+        Assert.Equal("Lorville", again.Job.Destination);
+
+        Assert.Equal(first.Job.Id, store.OpenList("garage:RSI_Hermes", "RSI Hermes fit")!.Id);
+        Assert.Null(store.OpenList("garage:RSI_Hermes", "Quiet fit"));
+    }
 }
