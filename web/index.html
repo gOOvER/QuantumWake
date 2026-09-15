@@ -1308,6 +1308,16 @@
         <span class="muted" id="hangar-count"></span>
       </div>
     </div>
+    <!-- Two ships side by side: pickable here as well as from the Fleet
+         cards, and clearable here, because a comparison that can only be
+         undone on another page is a filter nobody asked for. -->
+    <div class="hangar-compare-bar" id="hangar-compare-bar">
+      <span class="muted">Compare</span>
+      <select id="hangar-compare-a" class="select tiny" title="First ship to compare"></select>
+      <span class="muted">with</span>
+      <select id="hangar-compare-b" class="select tiny" title="Second ship to compare"></select>
+      <button type="button" class="ghost tiny" id="hangar-compare-clear" hidden>Clear</button>
+    </div>
     <div class="view-sources source-slot" id="hangar-data-sources" data-sources="logs install"></div>
     <p class="muted caption">
       Every ship your logs say you have flown, from your installed game files. The
@@ -1320,6 +1330,12 @@
     <div id="hangar-scale" class="hangar-scale"></div>
     <div id="hangar-canvas" class="hangar-canvas"></div>
     <p class="muted" id="hangar-unsized" hidden></p>
+    <section class="hangar-compare" id="hangar-compare" hidden aria-labelledby="hangar-compare-title">
+      <div class="garage-eyebrow">Side by side</div>
+      <h3 id="hangar-compare-title"></h3>
+      <p class="muted" id="hangar-compare-note"></p>
+      <div class="table-wrap"><table id="hangar-compare-table"><thead></thead><tbody></tbody></table></div>
+    </section>
   </section>
 
   <!-- WIKELO: the Banu trader's collection contracts, read from the installed

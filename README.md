@@ -364,7 +364,23 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.20
+### 0.13.21
+
+- **Comparing two ships in the Hangar compares their numbers now, not just
+  their outlines.** Pick the pair in the Hangar's own *Compare … with …* bar
+  (or on two Fleet cards, as before) and a side-by-side appears under the
+  deck: size from your game files, your own sorties and hours from the logs,
+  and the Garage's recomputed sheet for each hull - hull HP, mass, crew,
+  cargo, fuel, SCM and boost, pitch · yaw · roll, shield HP and regen, pilot
+  and turret DPS, alpha, missiles, quantum speed, range and spool, EM and IR
+  signatures, power and cooling - with UEX buy and rental prices, claim wait
+  and expedite fee where known. The better figure for each row is lit the
+  right way round (less mass, less signature and less money win; more of
+  everything else does) and the difference is given in the row's own unit.
+  Size and use carry no verdict. The comparison can be cleared from the
+  Hangar, which it could not be before, and picking the same ship twice is
+  refused. A hull the community dataset cannot draw keeps its size and use
+  and the note says why the rest is missing.
 
 - **Start the Garage bench from a screenshot of the ship.** When the screen
   reader has read a Vehicle Loadout Manager frame of the open ship, the

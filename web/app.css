@@ -4220,6 +4220,17 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 .hangar-scale { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; font-size: 11.5px; }
 .hangar-bar line { stroke: var(--cyan); stroke-width: 2; }
 .hangar-group { margin: 14px 16px 0; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--cyan-hot); }
+
+/* Two ships side by side: the pair is picked in a bar under the controls and
+   the figures sit under the deck, the better one for its row lit. */
+.hangar-compare-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; font-size: 12px; }
+.hangar-compare-bar .select.tiny { min-width: 150px; padding: 2px 6px; font-size: 11px; }
+.hangar-compare { margin: 16px 0 0; }
+.hangar-compare h3 { margin: 2px 0 6px; font-size: 14px; color: var(--text); }
+.hangar-compare > .muted { font-size: 11.5px; line-height: 1.4; margin: 0 0 8px; max-width: 900px; }
+.hangar-compare tbody td.better { color: var(--cyan); font-weight: 600; }
+.hangar-compare tbody tr.compare-group td { color: var(--dim); font: 600 9.5px var(--mono); letter-spacing: .18em; text-transform: uppercase; background: var(--panel-2); padding: 6px 15px; }
+.hangar-compare tbody tr.compare-group:hover { background: var(--panel-2); }
 /* The gallery: the same picture the Fleet card carries, larger, one card a ship. */
 .hangar-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--gap); padding: 14px; }
 .hangar-card { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid var(--rule); background: rgba(0, 0, 0, .18); }

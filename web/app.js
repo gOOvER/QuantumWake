@@ -5703,6 +5703,11 @@ function renderHangar() {
   if (zoomSelect) zoomSelect.hidden = mode !== 'scale';
   if (layoutSelect) layoutSelect.hidden = mode !== 'scale';
 
+  // The pair and its side-by-side belong to both modes: the gallery narrows
+  // to the two cards as the deck narrows to the two silhouettes.
+  renderHangarCompareBar();
+  renderHangarComparison().catch(() => { /* the panel says what it could not fetch */ });
+
   if (mode === 'gallery') {
     setHangarExportVisible(false);
     renderHangarGallery(canvas, ships);
@@ -5752,12 +5757,211 @@ function renderHangar() {
     bar.append(svgEl('line', { x1: metres * scale + 2, y1: 2, x2: metres * scale + 2, y2: 12 }));
     scaleBox.append(bar);
     scaleBox.append(el('span', 'muted', ` ${metres} m — sizes are the game's bounding boxes. Silhouettes are its own vehicle icons, tinted by maker; a hull without one is listed below rather than drawn as a guess.`));
-    if (hangarComparison.size)
-      scaleBox.append(el('span', 'muted', ` Comparing: ${[...hangarComparison].join(' · ')}.`));
   }
 
   showScaleOmissions(unsized, iconless, missing);
 }
+
+/* ---------- two ships side by side ---------- */
+
+/**
+ * The pair to compare, chosen here or on the Fleet cards. The selects list
+ * the roster the deck draws - a ship unticked on Fleet is not offered, for
+ * the same reason it is not drawn.
+ */
+function renderHangarCompareBar() {
+  const a = $('#hangar-compare-a');
+  const b = $('#hangar-compare-b');
+  const clear = $('#hangar-compare-clear');
+  if (!a || !b || !clear) return;
+
+  const names = (hangarShips?.ships || []).filter((s) => !excludedShips.has(s.name)).map((s) => s.name)
+    .sort((x, y) => x.localeCompare(y));
+  const chosen = [...hangarComparison];
+
+  for (const [select, index] of [[a, 0], [b, 1]]) {
+    select.textContent = '';
+    select.append(new Option(index === 0 ? 'a ship…' : 'another…', ''));
+    for (const name of names) select.append(new Option(name, name));
+    select.value = chosen[index] && names.includes(chosen[index]) ? chosen[index] : '';
+  }
+  clear.hidden = hangarComparison.size === 0;
+}
+
+function chooseHangarComparison(index, name) {
+  const chosen = [...hangarComparison];
+  // Keep the two slots apart: picking the first ship again in the second
+  // select is one ship, not a comparison.
+  chosen[index] = name && name !== chosen[1 - index] ? name : undefined;
+  hangarComparison = new Set(chosen.filter(Boolean));
+  renderHangar();
+  try { renderFleetShips(); } catch { /* Fleet not drawn yet: its cards read the set when they are */ }
+}
+
+/** The Garage's sheet for a hull, fetched once per page; null when the dataset cannot draw it. */
+const compareSheets = new Map();
+function compareSheetFor(cls) {
+  if (!cls) return Promise.resolve(null);
+  if (!compareSheets.has(cls))
+    compareSheets.set(cls, getJson(`/api/garage/${encodeURIComponent(cls)}`).then((d) => (d && d.known ? d : null)).catch(() => null));
+  return compareSheets.get(cls);
+}
+let compareCatalogue = null;
+
+/**
+ * The rows of the side-by-side, each saying which way is better - so a
+ * heavier ship is not marked as winning on mass - and where the figure comes
+ * from. A row both ships lack is left out rather than drawn as two dashes.
+ */
+function hangarComparisonRows(left, right) {
+  const rows = [];
+  const row = (group, label, pick, format, better = null, source = 'dataset') => {
+    const values = [left, right].map((side) => {
+      try { const v = pick(side); return Number.isFinite(v) ? v : (v ?? null); } catch { return null; }
+    });
+    if (values.every((v) => v === null || v === undefined)) return;
+    rows.push({ group, label, values, text: values.map((v, i) => (v === null || v === undefined ? '—' : format(v, [left, right][i]))), better, source, format });
+  };
+
+  const m = (n) => `${fmt1(n)} m`;
+  row('Size', 'Length', (s) => s.ship.length, m, null, 'install');
+  row('Size', 'Beam', (s) => s.ship.beam, m, null, 'install');
+  row('Size', 'Height', (s) => s.ship.height, m, null, 'install');
+
+  row('Your use', 'Sorties', (s) => s.ship.sorties, fmtInt, null, 'logs');
+  row('Your use', 'Hours aboard', (s) => s.ship.hours, (n) => `${fmt1(n)} h`, null, 'logs');
+  row('Your use', 'Last flown', (s) => s.ship.lastFlown, (d) => relative(d), null, 'logs');
+
+  row('Hull', 'Hull HP', (s) => s.sheet.ship.health, fmtInt, 'more');
+  row('Hull', 'Mass, stock', (s) => s.sheet.sheet.mass, (n) => `${fmtInt(n)} kg`, 'less');
+  row('Hull', 'Crew', (s) => s.sheet.ship.crew, fmtInt);
+  row('Hull', 'Cargo', (s) => s.sheet.ship.cargoScu, (n) => `${fmtInt(n)} SCU`, 'more');
+  row('Hull', 'Quantum fuel', (s) => s.sheet.ship.quantumFuel, fmtInt, 'more');
+  row('Hull', 'Hydrogen fuel', (s) => s.sheet.ship.hydrogenFuel, fmtInt, 'more');
+
+  row('Flight', 'SCM', (s) => s.sheet.ship.flight.scm, (n) => `${fmtInt(n)} m/s`, 'more');
+  row('Flight', 'Boost', (s) => s.sheet.ship.flight.boost, (n) => `${fmtInt(n)} m/s`, 'more');
+  row('Flight', 'Max', (s) => s.sheet.ship.flight.max, (n) => `${fmtInt(n)} m/s`, 'more');
+  row('Flight', 'Pitch · yaw · roll', (s) => s.sheet.ship.flight.pitch + s.sheet.ship.flight.yaw + s.sheet.ship.flight.roll,
+    (_, s) => `${fmtInt(s.sheet.ship.flight.pitch)} · ${fmtInt(s.sheet.ship.flight.yaw)} · ${fmtInt(s.sheet.ship.flight.roll)} °/s`, 'more');
+
+  row('Defence', 'Shield HP', (s) => s.sheet.sheet.shield.hp, fmtInt, 'more');
+  row('Defence', 'Shield regen', (s) => s.sheet.sheet.shield.regen, (n) => `${fmtInt(n)}/s`, 'more');
+
+  row('Weapons', 'Pilot DPS', (s) => s.sheet.sheet.weapons.fixedDps, fmt1, 'more');
+  row('Weapons', 'Alpha', (s) => s.sheet.sheet.weapons.fixedAlpha, fmt1, 'more');
+  row('Weapons', 'Turret DPS', (s) => s.sheet.sheet.weapons.turretDps, fmt1, 'more');
+  row('Weapons', 'Missiles', (s) => s.sheet.sheet.weapons.missiles, fmtInt, 'more');
+  row('Weapons', 'Missile damage', (s) => s.sheet.sheet.weapons.missileDamage, fmtInt, 'more');
+
+  row('Quantum', 'Drive', (s) => s.sheet.sheet.quantumDrive?.drive ?? null, (d) => d);
+  row('Quantum', 'Speed', (s) => s.sheet.sheet.quantumDrive?.speed, fmtSpeed, 'more');
+  row('Quantum', 'Range', (s) => s.sheet.sheet.quantumDrive?.range, fmtDistance, 'more');
+  row('Quantum', 'Spool', (s) => s.sheet.sheet.quantumDrive?.spoolTime, (n) => `${fmt1(n)} s`, 'less');
+
+  row('Signature', 'EM, shields up', (s) => s.sheet.sheet.shields.em, fmtInt, 'less');
+  row('Signature', 'IR, shields up', (s) => s.sheet.sheet.shields.ir, fmtInt, 'less');
+  row('Signature', 'EM, in quantum', (s) => s.sheet.sheet.quantum.em, fmtInt, 'less');
+
+  row('Power', 'Available', (s) => s.sheet.sheet.power.available, (n) => `${fmtInt(n)} seg`, 'more');
+  row('Power', 'Drawn, shields up', (s) => s.sheet.sheet.power.usedShields, (n) => `${fmt1(n)} seg`, 'less');
+  row('Power', 'Cooling generated', (s) => s.sheet.sheet.cooling.generated, (n) => `${fmtInt(n)} seg`, 'more');
+
+  row('Money', 'Buy, UEX', (s) => s.ref?.price?.price ?? null, money, 'less', 'uex');
+  row('Money', 'Rent, UEX', (s) => s.ref?.rental?.price ?? null, money, 'less', 'uex');
+  row('Money', 'Claim wait', (s) => s.ref?.standardClaimTime ?? null, (n) => `${fmt1(n)} min`, 'less');
+  row('Money', 'Expedite fee', (s) => s.ref?.expeditedCost ?? null, money, 'less');
+
+  return rows;
+}
+
+/**
+ * The side-by-side under the deck. The figures are the Garage's own
+ * recomputed sheet for each hull - the same arithmetic the dataset's totals
+ * come from - beside the install's dimensions and the logs' record of use;
+ * a hull the dataset cannot draw gets its size and use and a sentence about
+ * the rest, not a column of dashes.
+ */
+async function renderHangarComparison() {
+  const box = $('#hangar-compare');
+  if (!box) return;
+  const names = [...hangarComparison];
+  const ships = names.map((n) => (hangarShips?.ships || []).find((s) => s.name === n)).filter(Boolean);
+  if (ships.length !== 2) { box.hidden = true; return; }
+
+  box.hidden = false;
+  $('#hangar-compare-title').textContent = `${ships[0].name} vs ${ships[1].name}`;
+  $('#hangar-compare-note').textContent = 'Fetching the sheets…';
+
+  const [sheets, catalogue] = await Promise.all([
+    Promise.all(ships.map((s) => compareSheetFor(s.className))),
+    (compareCatalogue ??= getJson('/api/reference/ships').catch(() => [])),
+  ]);
+  // The pair changed under the fetch; that answer belongs to a comparison that is gone.
+  if ([...hangarComparison].join('|') !== names.join('|')) return;
+
+  const sides = ships.map((ship, i) => ({
+    ship, sheet: sheets[i],
+    ref: catalogue.find((r) => r.name === ship.name) || null,
+  }));
+  const rows = hangarComparisonRows(sides[0], sides[1]);
+
+  const head = $('#hangar-compare-table thead');
+  head.textContent = '';
+  const hr = el('tr');
+  hr.append(el('th', null, ''));
+  for (const side of sides) hr.append(el('th', 'num', side.ship.name));
+  hr.append(el('th', 'num', 'Difference'));
+  head.append(hr);
+
+  const body = $('#hangar-compare-table tbody');
+  body.textContent = '';
+  let group = null;
+  for (const r of rows) {
+    if (r.group !== group) {
+      group = r.group;
+      const gr = el('tr', 'compare-group');
+      const td = el('td', null, group);
+      td.colSpan = 4;
+      gr.append(td);
+      body.append(gr);
+    }
+    const tr = el('tr');
+    tr.append(el('td', null, r.label));
+    const [a, b] = r.values;
+    const numeric = typeof a === 'number' && typeof b === 'number';
+    const winner = r.better && numeric && a !== b ? ((r.better === 'more') === (a > b) ? 0 : 1) : null;
+    r.text.forEach((text, i) => tr.append(el('td', winner === i ? 'num better' : 'num', String(text))));
+    // The difference is the second ship against the first, signed, and only
+    // where both are numbers - a date or a drive's name has no difference.
+    let diff = '—';
+    if (numeric && a !== b) {
+      const d = b - a;
+      const pct = a !== 0 ? ` (${d > 0 ? '+' : '−'}${Math.abs(Math.round((d / a) * 100))}%)` : '';
+      // In the row's own unit - a quantum speed differs in km/s, not in the
+      // metres per second the sheet keeps; a formatter that needs the whole
+      // side (pitch · yaw · roll) falls back to the bare number.
+      let amount;
+      try { amount = r.format(Math.abs(d)); } catch { amount = fmtSmart(Math.abs(d)); }
+      diff = `${d > 0 ? '+' : '−'}${amount}${pct}`;
+    }
+    tr.append(el('td', 'num muted', diff));
+    body.append(tr);
+  }
+
+  const missing = sides.filter((s) => !s.sheet).map((s) => s.ship.name);
+  const parts = ['Size from the game files; sorties and hours from the logs; the rest recomputed from each hull\'s stock parts by the Garage, with UEX prices where it has them. The better figure for its row is lit - less mass, less signature, more of everything else.'];
+  if (missing.length) parts.push(`${missing.join(' and ')}: the community dataset cannot draw ${missing.length === 1 ? 'its' : 'their'} sheet, so only size and use are shown (Settings › community data).`);
+  $('#hangar-compare-note').textContent = parts.join(' ');
+}
+
+$('#hangar-compare-a')?.addEventListener('change', (e) => chooseHangarComparison(0, e.currentTarget.value));
+$('#hangar-compare-b')?.addEventListener('change', (e) => chooseHangarComparison(1, e.currentTarget.value));
+$('#hangar-compare-clear')?.addEventListener('click', () => {
+  hangarComparison = new Set();
+  renderHangar();
+  try { renderFleetShips(); } catch { /* as above */ }
+});
 
 /** The same global scale can be read in the most useful arrangement for the question at hand. */
 function hangarScaleGroups(pictured) {
