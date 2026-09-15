@@ -36,8 +36,15 @@ public sealed record Job(
     bool Pinned = false,
     string? Destination = null,
     string? DestinationId = null,
-    DateTimeOffset? ModifiedAt = null) : IStamped<Job>
+    DateTimeOffset? ModifiedAt = null,
+    bool DestinationChosen = false) : IStamped<Job>
 {
+    /*
+     * DestinationChosen: the pilot pointed this list somewhere themselves, on
+     * Shopping. A destination the Garage proposed is a suggestion and the next
+     * proposal may replace it; one the pilot chose is theirs, and a rewrite of
+     * the list keeps it and offers the new proposal beside it instead.
+     */
     public string StampId => Id;
     /// <remarks>Pinned is view state and does not travel - see <see cref="Trip.Bare"/>.</remarks>
     public Job Bare() => this with { ModifiedAt = null, Pinned = false };
@@ -52,6 +59,10 @@ public sealed record Job(
     /// </remarks>
     public DateTimeOffset ChangedAt => ModifiedAt ?? CreatedAt;
 }
+
+/// <summary>The single current list and any obsolete automatic Garage lists it replaced.</summary>
+/// <param name="DestinationKept">True when the list kept a destination the pilot had chosen rather than taking the proposal.</param>
+public sealed record ListReplacement(Job Job, bool Created, IReadOnlyList<string> ConsolidatedIds, bool DestinationKept = false);
 
 /// <summary>
 /// The player's own plans, kept in a file beside the caches.
@@ -114,6 +125,97 @@ public sealed class JobStore
         return job;
     }
 
+    /// <summary>
+    /// Writes the current contents of one authored list, reusing its open
+    /// source-and-title match rather than creating a second version of it.
+    /// </summary>
+    /// <remarks>
+    /// A garage fit changes one component at a time. Treating every change as
+    /// a new list makes a useful automatic shopping reminder look like the
+    /// pilot wants the same component twice.
+    /// </remarks>
+    public ListReplacement ReplaceOpenList(
+        string title,
+        string source,
+        IReadOnlyList<JobItem> items,
+        string? destination = null,
+        string? destinationId = null,
+        IReadOnlySet<string>? supersededTitles = null)
+    {
+        lock (_gate)
+        {
+            var index = _jobs.FindIndex(j =>
+                !j.Done
+                && j.Kind == "list"
+                && string.Equals(j.Source, source, StringComparison.Ordinal)
+                && string.Equals(j.Title, title, StringComparison.Ordinal));
+            var created = index < 0;
+
+            if (created)
+            {
+                _jobs.Insert(0, new Job(
+                    Guid.NewGuid().ToString("N")[..8],
+                    title,
+                    "list",
+                    source,
+                    DateTimeOffset.UtcNow,
+                    Done: false,
+                    [.. items],
+                    Pinned: false,
+                    Destination: string.IsNullOrWhiteSpace(destination) ? null : destination.Trim(),
+                    DestinationId: string.IsNullOrWhiteSpace(destinationId) ? null : destinationId.Trim()));
+                index = 0;
+            }
+            var kept = false;
+            if (!created)
+            {
+                var existing = _jobs[index];
+                kept = existing.DestinationChosen && !string.IsNullOrWhiteSpace(existing.Destination);
+                _jobs[index] = existing with
+                {
+                    Items = [.. items],
+                    Destination = kept ? existing.Destination : string.IsNullOrWhiteSpace(destination) ? null : destination.Trim(),
+                    DestinationId = kept ? existing.DestinationId : string.IsNullOrWhiteSpace(destinationId) ? null : destinationId.Trim(),
+                };
+            }
+
+            var consolidated = new List<string>();
+            if (supersededTitles is { Count: > 0 })
+            {
+                for (var i = _jobs.Count - 1; i >= 0; i--)
+                {
+                    var candidate = _jobs[i];
+                    if (i == index
+                        || candidate.Done
+                        || candidate.Kind != "list"
+                        || !string.Equals(candidate.Source, source, StringComparison.Ordinal)
+                        || !supersededTitles.Contains(candidate.Title))
+                        continue;
+
+                    _jobs.RemoveAt(i);
+                    if (i < index) index--;
+                    consolidated.Add(candidate.Id);
+                }
+            }
+
+            Save();
+            return new ListReplacement(_jobs[index], created, consolidated, kept);
+        }
+    }
+
+    /// <summary>The open list a source keeps under a title, or null.</summary>
+    public Job? OpenList(string source, string title)
+    {
+        lock (_gate)
+        {
+            return _jobs.FirstOrDefault(j =>
+                !j.Done
+                && j.Kind == "list"
+                && string.Equals(j.Source, source, StringComparison.Ordinal)
+                && string.Equals(j.Title, title, StringComparison.Ordinal));
+        }
+    }
+
     /// <summary>Points a list at a place, or at nowhere in particular.</summary>
     public bool SetDestination(string id, string? place, string? placeId)
     {
@@ -127,6 +229,9 @@ public sealed class JobStore
             {
                 Destination = string.IsNullOrWhiteSpace(place) ? null : place.Trim(),
                 DestinationId = string.IsNullOrWhiteSpace(placeId) ? null : placeId.Trim(),
+                // Pointing it somewhere is a choice; clearing it hands the
+                // choice back to whatever proposes next.
+                DestinationChosen = !string.IsNullOrWhiteSpace(place),
             };
 
             Save();

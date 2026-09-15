@@ -36,10 +36,18 @@ public sealed class BackupBuilder(
     TombstoneStore deleted,
     KitStore kits,
     ScreenReadingStore readings,
-    ShardNoteStore shards)
+    ShardNoteStore shards,
+    BuildStore builds)
 {
-    /// <summary>The format this build writes and can read back.</summary>
-    public const int Version = 1;
+    /// <summary>
+    /// The format this build writes and can read back. Raised when a backup
+    /// starts carrying something an older build would drop without a word:
+    /// 2 added saved Garage builds (0.13.3), so a build before that refuses
+    /// the file and says to update, rather than restoring everything else and
+    /// losing the builds silently. Kits, readings and shard notes were added
+    /// under 1 and older builds did drop them; this is the rule from here.
+    /// </summary>
+    public const int Version = 2;
 
     public ExportFile Build(ExportProducer producer, DateTimeOffset now, string? handle = null) =>
         new(ExportDocument.Format,
@@ -72,7 +80,8 @@ public sealed class BackupBuilder(
         goals.Current is not null,
         wipe.Current is not null,
         readings.Pinned().Count,
-        shards.All().Count);
+        shards.All().Count,
+        builds.All().Count);
 
     private ExportBackup Contents() => new(
         // Pinned and Tracked belong to the machine, not to the work.
@@ -90,7 +99,8 @@ public sealed class BackupBuilder(
         // and annotated by the pilot, a reading is observed and comes back
         // from the screenshot folder.
         [.. readings.Pinned()],
-        [.. shards.All()]);
+        [.. shards.All()],
+        [.. builds.All()]);
 }
 
 /// <summary>How much a backup would carry, for saying so before it is taken.</summary>
@@ -105,4 +115,5 @@ public sealed record BackupCounts(
     bool Goal,
     bool Wipe,
     int Pins = 0,
-    int Shards = 0);
+    int Shards = 0,
+    int Builds = 0);

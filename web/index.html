@@ -75,6 +75,7 @@
         <button data-view="loadout">Loadout</button>
         <button data-view="stash">Stash</button>
         <button data-view="loot">Loot</button>
+        <button data-view="garage">Garage</button>
       </div>
     </div>
     <div class="tab-group">
@@ -875,11 +876,13 @@
           <div class="option-head">
             <button class="ghost" id="screen-parse">Read copied location</button>
             <button class="ghost" id="screen-scan" hidden>Read last screenshot</button>
+            <button class="ghost" id="screen-read-older" hidden
+                    title="Read the screenshots already in the folder without switching the watch on - newest first, forty at a time"></button>
             <label class="muted" title="Check the clipboard on its own every few seconds">
               <input type="checkbox" id="screen-watch"> Watch clipboard
             </label>
             <label class="muted" id="screen-watch-folder-label" hidden
-                   title="Read each new screenshot as the game saves it. Nothing already in the folder is read.">
+                   title="Read every screenshot in the folder - the ones already there, newest first, and each new one as the game saves it. Untick to stop.">
               <input type="checkbox" id="screen-watch-folder"> Watch screenshots
             </label>
           </div>
@@ -1307,6 +1310,16 @@
         <span class="muted" id="hangar-count"></span>
       </div>
     </div>
+    <!-- Two ships side by side: pickable here as well as from the Fleet
+         cards, and clearable here, because a comparison that can only be
+         undone on another page is a filter nobody asked for. -->
+    <div class="hangar-compare-bar" id="hangar-compare-bar">
+      <span class="muted">Compare</span>
+      <select id="hangar-compare-a" class="select tiny" title="First ship to compare"></select>
+      <span class="muted">with</span>
+      <select id="hangar-compare-b" class="select tiny" title="Second ship to compare"></select>
+      <button type="button" class="ghost tiny" id="hangar-compare-clear" hidden>Clear</button>
+    </div>
     <div class="view-sources source-slot" id="hangar-data-sources" data-sources="logs install"></div>
     <p class="muted caption">
       Every ship your logs say you have flown, from your installed game files. The
@@ -1319,6 +1332,12 @@
     <div id="hangar-scale" class="hangar-scale"></div>
     <div id="hangar-canvas" class="hangar-canvas"></div>
     <p class="muted" id="hangar-unsized" hidden></p>
+    <section class="hangar-compare" id="hangar-compare" hidden aria-labelledby="hangar-compare-title">
+      <div class="garage-eyebrow">Side by side</div>
+      <h3 id="hangar-compare-title"></h3>
+      <p class="muted" id="hangar-compare-note"></p>
+      <div class="table-wrap"><table id="hangar-compare-table"><thead></thead><tbody></tbody></table></div>
+    </section>
   </section>
 
   <!-- WIKELO: the Banu trader's collection contracts, read from the installed
@@ -1861,6 +1880,160 @@
     </div>
   </section>
 
+  <section id="view-garage" class="view">
+    <div class="section-bar">
+      <h2>Garage</h2>
+      <div class="controls">
+        <select id="garage-mine" class="select" title="Ships the logs have seen you fly"></select>
+        <select id="garage-all" class="select" title="Every ship in the reference"></select>
+      </div>
+    </div>
+    <p class="muted caption">
+      A ship's numbers, and what a part would do to them. Every figure here is
+      recomputed from the fitted parts using the community dataset's own model
+      &mdash; the same files and the same arithmetic that produced its published
+      totals, checked against them on every ship (<code>docs/garage.md</code>).
+      <b>Signatures are the shields-up, everything-at-maximum scenario</b> the
+      dataset and erkul publish; a pilot who has pulled power off the guns is
+      quieter than this says. The logs name the ship you fly but not its parts,
+      so the sheet starts from the stock fit.
+    </p>
+
+    <div class="garage-duty-legend" aria-label="Ship discipline legend">
+      <span class="legend-label">Ship discipline</span>
+      <span class="garage-duty civilian" title="Derived from the ship's community career and role">Civilian</span>
+      <span class="garage-duty industrial" title="Derived from the ship's community career and role">Industrial</span>
+      <span class="garage-duty military" title="Derived from the ship's community career and role">Military</span>
+    </div>
+
+    <p class="muted" id="garage-unavailable" hidden></p>
+
+    <div id="garage-head" class="garage-head" hidden>
+      <div class="garage-title" id="garage-title"></div>
+      <div class="muted" id="garage-sub"></div>
+      <div class="muted small" id="garage-source"></div>
+    </div>
+
+    <section id="garage-rig" class="garage-rig" hidden aria-label="Ship component layout">
+      <div class="garage-rig-head">
+        <div>
+          <div class="garage-eyebrow">Fitted layout</div>
+          <p>Pick a fitted component to inspect compatible replacements below.</p>
+        </div>
+        <span class="muted" id="garage-rig-count"></span>
+      </div>
+      <div class="garage-rig-body">
+        <div class="garage-rig-slots garage-rig-left" id="garage-rig-left"></div>
+        <div class="garage-ship-stage">
+          <div class="garage-ship-grid" aria-hidden="true"></div>
+          <div id="garage-ship-model" class="garage-ship-model"></div>
+          <div class="garage-ship-summary" id="garage-ship-summary"></div>
+        </div>
+        <div class="garage-rig-slots garage-rig-right" id="garage-rig-right"></div>
+      </div>
+    </section>
+
+    <div class="sheet" id="garage-sheet"></div>
+
+    <div id="garage-notes" class="garage-notes" hidden></div>
+
+    <section class="garage-optimizer" id="garage-optimizer" hidden aria-labelledby="garage-optimizer-title">
+      <div class="garage-optimizer-copy">
+        <div class="garage-eyebrow">Auto-fit</div>
+        <h3 id="garage-optimizer-title">Optimise this loadout</h3>
+        <p>Only the component types that affect the chosen goal are changed. Review the sheet before buying.</p>
+      </div>
+      <div class="garage-optimizer-tools">
+        <select class="select" id="garage-optimise-goal" aria-label="Optimisation goal">
+          <option value="stealth">Best stealth</option>
+          <option value="alpha">Best alpha DPS</option>
+          <option value="sustained">Best sustained DPS</option>
+          <option value="missile">Most missile damage</option>
+          <option value="shield">Strongest shields</option>
+          <option value="quantumSpeed">Fastest quantum drive</option>
+          <option value="quantumRange">Longest quantum range</option>
+          <option value="cooling">Most cooling</option>
+          <option value="power">Most power headroom</option>
+        </select>
+        <label class="toggle" title="Only consider parts with a known NPC-terminal aUEC seller; crafting and player listings are not included">
+          <input type="checkbox" id="garage-optimise-buyable" /> Terminal aUEC only
+        </label>
+        <button type="button" class="ghost tiny" id="garage-optimise">Optimise fit</button>
+      </div>
+      <p class="muted" id="garage-optimise-status" aria-live="polite"></p>
+    </section>
+
+    <!-- The ship's fit as last photographed at a Vehicle Loadout Manager,
+         offered as a starting point. Dated, because a screenshot is a moment
+         and not a state; hidden when no loadout reading is of this ship. -->
+    <section class="garage-photo" id="garage-photo" hidden aria-labelledby="garage-photo-title">
+      <div class="garage-photo-copy">
+        <div class="garage-eyebrow">Photographed fit</div>
+        <h3 id="garage-photo-title"></h3>
+        <p class="muted" id="garage-photo-sub"></p>
+        <ul class="garage-photo-unsettled" id="garage-photo-unsettled"></ul>
+      </div>
+      <div class="garage-photo-tools" id="garage-photo-tools">
+        <label class="muted" title="Open a ship on the bench already fitted as its newest screenshot showed it. Untick to open every ship at stock and start from a photograph only when you press the button.">
+          <input type="checkbox" id="garage-photo-auto" checked> Start from the newest photograph
+        </label>
+        <button type="button" class="ghost tiny" id="garage-photo-apply">Start from the photographed fit</button>
+        <span class="muted" id="garage-photo-state"></span>
+      </div>
+    </section>
+
+    <div class="bench-bar" id="garage-bench-bar" hidden>
+      <h2 class="spaced">Bench</h2>
+      <div class="bench-state">
+        <span id="garage-changes" class="muted">Stock fit</span>
+        <label class="toggle compare-against">Compare against
+          <select id="garage-compare" class="select tiny" title="What the struck figures are measured from">
+            <option value="">Stock</option>
+          </select>
+        </label>
+        <button type="button" class="ghost tiny" id="garage-reset" hidden>Reset to stock</button>
+        <button type="button" class="ghost tiny" id="garage-update" hidden>Update build</button>
+        <button type="button" class="ghost tiny" id="garage-save">Save build…</button>
+        <button type="button" class="ghost tiny" id="garage-shop" hidden>Add to shopping list</button>
+      </div>
+    </div>
+    <form class="build-name-form" id="garage-save-form" hidden>
+      <input type="text" id="garage-save-name" class="search" maxlength="80" placeholder="Name this build — Starlancer, quiet fit" />
+      <button type="submit" class="ghost tiny">Save</button>
+      <button type="button" class="ghost tiny" id="garage-save-cancel">Cancel</button>
+    </form>
+    <div class="builds" id="garage-builds" hidden></div>
+    <p class="shop-result" id="garage-shop-result" hidden></p>
+    <p class="muted caption" id="garage-bench-caption" hidden>
+      Pick a port, then a part that fits it. The sheet above moves as you do:
+      every figure that changed shows what it was, coloured by whether it got
+      better <em>for that figure</em> &mdash; less IR is better, less DPS is not.
+      <b>Save build…</b> keeps a fit under a name; it survives rescans and travels
+      in a backup. <b>Compare against</b> measures the struck figures from a
+      saved build instead of stock, which is how two fits are set side by side.
+    </p>
+    <div class="bench" id="garage-bench" hidden>
+      <div class="bench-ports" id="garage-bench-ports"></div>
+      <div class="bench-panel" id="garage-bench-panel">
+        <p class="muted">Pick a port on the left.</p>
+      </div>
+    </div>
+
+    <!-- UEX's player marketplace, kept to parts this ship can take. Off
+         until the feed is fetched; the panel says so rather than hiding,
+         because an empty list would read as "nobody sells these". -->
+    <section class="garage-market" id="garage-market" hidden aria-labelledby="garage-market-title">
+      <div class="garage-market-head">
+        <div>
+          <div class="garage-eyebrow">For sale by players</div>
+          <h3 id="garage-market-title">On UEX's marketplace</h3>
+        </div>
+        <span class="muted" id="garage-market-note"></span>
+      </div>
+      <div class="bench-panel market-list" id="garage-market-body"></div>
+    </section>
+  </section>
+
 
   <!-- OVERLAY -->
   <section id="view-overlay" class="view">
@@ -2304,7 +2477,10 @@
     <div class="option-block">
       <div class="option-head">
         <h3>Report a problem</h3>
-        <button class="ghost" id="diag-save">Save a report</button>
+        <span class="option-buttons">
+          <button class="ghost" id="diag-copy" title="App version, game-data status, price-feed age and parser health as a few lines of text, on the clipboard">Copy diagnostic summary</button>
+          <button class="ghost" id="diag-save">Save a report</button>
+        </span>
       </div>
       <p class="muted">
         If a page is empty here and full for somebody else, this is what tells
@@ -2332,6 +2508,7 @@
       </p>
       <span class="muted" id="diag-preview"></span>
       <span class="muted" id="diag-status"></span>
+      <textarea class="diag-summary" id="diag-summary" rows="12" readonly hidden aria-label="Diagnostic summary"></textarea>
     </div>
 
     <div class="option-block">
@@ -2670,11 +2847,11 @@
         </details>
         <details class="faq-item">
           <summary>Does screenshot reading capture my screen?</summary>
-          <p>No. The optional reader only reads a screenshot file you saved in Star Citizen's screenshots folder, after you turn it on, and only files saved after that — nothing already there is read. It does not capture the display, read game memory or send the image away. The dashboard keeps a dated reading; the overlay and MFDs receive only a small summary.</p>
+          <p>No. The optional reader only reads a screenshot file you saved in Star Citizen's screenshots folder, after you turn it on — every file in that folder, the ones already there included. Untick <b>Watch screenshots</b> to stop, invalidate a reading on the Log tab to have nothing believed from it, or clear them all. It does not capture the display, read game memory or send the image away. The dashboard keeps a dated reading; the overlay and MFDs receive only a small summary.</p>
         </details>
         <details class="faq-item">
           <summary>Which screens can it read?</summary>
-          <p>An item tooltip, the character loadout, the mobiGlas map footer, the Contracts and Reputation apps, the Fleet Manager and a commodity kiosk — each checked against what the logs believed and shown with the verdict. The inventory screen cannot be read: its items are icons with no text, so a stash is confirmed one tooltip at a time. A screen it does not know goes to the review queue on the Log tab with its text, which is how each reader so far was written.</p>
+          <p>An item tooltip, a ship's Vehicle Loadout Manager (which the Fleet page shows as photographed and the Garage can start a bench from), the mobiGlas map footer, the Contracts and Reputation apps, the Fleet Manager and a commodity kiosk — each checked against what the logs believed and shown with the verdict. The inventory screen cannot be read: its items are icons with no text, so a stash is confirmed one tooltip at a time. A screen it does not know goes to the review queue on the Log tab with its text, which is how each reader so far was written.</p>
         </details>
         <details class="faq-item">
           <summary>A reading is wrong. What do I do with it?</summary>
@@ -2700,7 +2877,7 @@
         </details>
         <details class="faq-item">
           <summary>What is in a backup, and what is not?</summary>
-          <p>Settings → <b>Back up what you typed</b>: jobs, checklists, flight plans, the mining log, map notes, kits, points of interest with their notes, your goal, your wipe line and your label settings — everything re-reading the logs cannot bring back. Sessions, trades and contracts are deliberately not in it: they come back by reading your logs again, and a second copy could disagree with the game. Restoring shows what it would change first, keeps newer work on this machine by default, and never brings back something you deleted on purpose without asking.</p>
+          <p>Settings → <b>Back up what you typed</b>: jobs, checklists, flight plans, the mining log, map notes, kits, saved Garage builds, points of interest with their notes, your goal, your wipe line and your label settings — everything re-reading the logs cannot bring back. Sessions, trades and contracts are deliberately not in it: they come back by reading your logs again, and a second copy could disagree with the game. Restoring shows what it would change first, keeps newer work on this machine by default, and never brings back something you deleted on purpose without asking.</p>
         </details>
       </div>
       </section>

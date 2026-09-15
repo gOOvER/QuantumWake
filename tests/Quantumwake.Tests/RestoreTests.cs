@@ -30,7 +30,7 @@ public class RestoreTests : IDisposable
         new JobStore(_root), new ChecklistStore(_root), new TripStore(_root),
         new MiningLogStore(_root), new MapNoteStore(_root), new GoalStore(_root),
         new WipeStore(_root), new ItemLabelStore(_root), new TombstoneStore(_root),
-        new LogLibrary(_sessions), new KitStore(_root), new ScreenReadingStore(_root), new ShardNoteStore(_root));
+        new LogLibrary(_sessions), new KitStore(_root), new ScreenReadingStore(_root), new ShardNoteStore(_root), new BuildStore(_root));
 
     private static ExportBackup Backup(params Job[] jobs) =>
         new(jobs, [], [], [], [], [], [], null, null, null);
@@ -251,6 +251,29 @@ public class RestoreTests : IDisposable
 
         Assert.Null(contents);
         Assert.Contains("does not know how to put back", problem!.Message);
+    }
+
+    /// <summary>
+    /// A backup written before saved Garage builds existed is format 1 and
+    /// still restores; this build writes 2, so a build before 0.13.3 refuses
+    /// the file and says to update rather than putting everything else back
+    /// and dropping the builds without a word.
+    /// </summary>
+    [Fact]
+    public void A_backup_from_before_saved_builds_still_restores_and_this_build_writes_the_newer_format()
+    {
+        Assert.Equal(2, BackupBuilder.Version);
+
+        var older = new ExportFile(ExportDocument.Format, ExportDocument.FormatVersion,
+            1, DateTimeOffset.UtcNow,
+            new ExportProducer("Quantumwake", "0.12.4"), [ExportDocument.Backup],
+            Backup: new ExportBackup([], [], [], [], [], [], []));
+
+        var (contents, _, problem) = BackupReader.Read(JsonSerializer.Serialize(older, ExportDocument.Json));
+
+        Assert.Null(problem);
+        Assert.NotNull(contents);
+        Assert.Empty(contents.Builds);
     }
 
     [Fact]

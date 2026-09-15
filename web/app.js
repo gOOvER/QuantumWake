@@ -226,9 +226,18 @@ buildPeriodSelects();
 
 /* ---------- tabs ---------- */
 
+/** The pages where a stale price is a wrong number rather than a fact about a feed. */
+const STALE_MATTERS_ON = new Set(['market', 'commodity', 'garage', 'jobs', 'routes']);
+
 function showView(name) {
   // Assets merged into Fleet; old #assets links and habits still land somewhere.
   if (name === 'assets') name = 'fleet';
+
+  // The stale-prices notice speaks in full only where old prices change the
+  // answer - Market, Garage, Shopping, Routes and the commodity drill-down.
+  // Everywhere else it is a chip: the fact stays in view, the paragraph and
+  // the buttons do not crowd a page that is not about prices.
+  $('#stale')?.classList.toggle('compact', !STALE_MATTERS_ON.has(name));
 
   const buttons = $$('#tabs button');
 
@@ -284,6 +293,7 @@ function showView(name) {
   if (name === 'casualties') loadCasualties().catch(() => {});
   if (name === 'crew') loadCrew().catch(() => {});
   if (name === 'servers') loadServers().catch(() => {});
+  if (name === 'garage') loadGarage().catch(() => {});
   if (name === 'points') loadPoints().catch(() => {});
   if (name === 'wikelo') loadWikelo().catch(() => {});
 
@@ -3116,6 +3126,90 @@ $('#settings-community-refresh').addEventListener('click', (e) =>
 /* ---------- diagnostics ---------- */
 
 /**
+ * The short version of the report, as text for a clipboard: the app, the
+ * game data, the price feeds and the parser, in the words a support thread
+ * needs first. Built from the same lists the full report is - nothing here
+ * is read from a log - so it carries no handle, id, path or key either.
+ */
+function diagnosticSummary(version, gamedata, uex, feeds, report) {
+  const age = (iso) => (iso ? ago(iso) : 'never');
+  const lines = [`Quantum Wake ${version?.version || '?'} (${version?.build || 'build unknown'})`];
+  lines.push(`Taken ${new Date(report?.takenAt || Date.now()).toISOString()}`);
+  lines.push('');
+
+  const install = report?.install || {};
+  lines.push(`Install: ${install.found ? `${install.channel || 'unknown channel'}, Game.log ${install.hasGameLog ? 'present' : 'absent'}, ${install.backups ?? 0} backup logs` : 'not found'}`);
+  const gd = gamedata || {};
+  const counts = gd.counts ? Object.entries(gd.counts).map(([k, v]) => `${k} ${v}`).join(', ') : '';
+  // The one free-text field: an exception's message, which on a file error
+  // carries the path it failed on, user name and all. Redacted, not trusted.
+  lines.push(`Game data: ${gd.state || 'unknown'}${gd.problem ? ` - ${redactPaths(gd.problem)}` : ''}${gd.finishedAt ? `, read ${age(gd.finishedAt)}` : ''}${counts ? ` (${counts})` : ''}`);
+
+  const data = report?.data || {};
+  lines.push(`Community dataset: ${data.community ? `on, dump ${data.communityDump || '?'}` : 'off'}`);
+  lines.push(`UEX prices: ${uex?.enabled ? `on, ${uex.prices ?? 0} prices, fetched ${age(uex.fetchedAt)}` : 'off'}${data.uexKeysStored ? ', keys stored' : ''}`);
+  const on = (feeds || []).filter((f) => f.enabled);
+  lines.push(`UEX feeds: ${on.length ? on.map((f) => `${f.key} ${age(f.fetchedAt)}`).join(', ') : 'none'}`);
+  lines.push('');
+
+  const lib = report?.library || {};
+  lines.push(`Sessions: ${lib.sessions ?? 0} read, ${lib.counted ?? 0} counted${lib.first ? `, ${String(lib.first).slice(0, 10)} to ${String(lib.last).slice(0, 10)}` : ''}`);
+  if (lib.builds?.length) lines.push(`Game builds: ${lib.builds.map((b) => `${b.build} (${b.sessions})`).join(', ')}`);
+  const parser = report?.parser || {};
+  lines.push(`Parser: ${parser.unread ? `${parser.unread} unreadable line${parser.unread === 1 ? '' : 's'} across ${(parser.tags || []).length} tag${(parser.tags || []).length === 1 ? '' : 's'}` : 'nothing unreadable'}`);
+  const views = report?.views || {};
+  lines.push(`Counts: ${Object.entries(views).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+  const wipe = report?.wipe || {};
+  if (wipe.at) lines.push(`Wipe line: ${String(wipe.at).slice(0, 10)}${wipe.patch ? ` (${wipe.patch})` : ''}, ${wipe.hidden ?? 0} sessions before it`);
+  return lines.join('\n');
+}
+
+/**
+ * Every file path in a piece of text, replaced with a marker. Windows paths
+ * with a drive or a UNC root, and Unix ones from a root or a home, however
+ * they are quoted; what is left says the kind of failure without the name of
+ * the person it failed for.
+ */
+function redactPaths(text) {
+  return String(text ?? '')
+    .replace(/[A-Za-z]:[\\/](?:[^\\/:*?"'<>|\r\n]+[\\/])*[^\\/:*?"'<>|\r\n]*/g, '<path>')
+    .replace(/\\\\[^\\/\s]+(?:[\\/][^\\/:*?"'<>|\r\n]*)+/g, '<path>')
+    .replace(/(?:^|[\s'"(])(?:\/(?:home|Users|tmp|var|etc|opt|mnt|media|root)|~)\/[^\s'")]*/g, (m) => m[0].match(/[\s'"(]/) ? `${m[0]}<path>` : '<path>');
+}
+
+/** Builds the summary from live answers and puts it on the clipboard; shows it when the clipboard is not to be had. */
+async function copyDiagnosticSummary(button) {
+  const status = $('#diag-status');
+  button.disabled = true;
+  status.textContent = 'Building the summary…';
+  try {
+    const [version, gamedata, uex, feeds, report] = await Promise.all([
+      getJson('/api/version').catch(() => null),
+      getJson('/api/gamedata').catch(() => null),
+      getJson('/api/uex').catch(() => null),
+      getJson('/api/uex/feeds').catch(() => []),
+      getJson('/api/diagnostics?samples=false'),
+    ]);
+    const text = diagnosticSummary(version, gamedata, uex, feeds, report);
+    let copied = false;
+    try {
+      if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); copied = true; }
+    } catch { copied = false; }
+    const box = $('#diag-summary');
+    if (box) { box.value = text; box.hidden = copied; }
+    status.textContent = copied
+      ? 'Copied. Paste it into the issue or the thread; read it first if you like - it is the text below the report.'
+      : 'The clipboard is not available here; the summary is shown below to copy by hand.';
+  } catch (err) {
+    status.textContent = `The summary could not be built: ${err.message}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+$('#diag-copy')?.addEventListener('click', (e) => copyDiagnosticSummary(e.currentTarget));
+
+/**
  * What a bug report would carry, said before it is written.
  *
  * The same rule the export block follows: the reader sees what would go
@@ -4920,14 +5014,30 @@ function applyScreenMode() {
   const folderLabel = $('#screen-watch-folder-label');
   if (folderLabel) folderLabel.hidden = !shots;
 
+  // The watch reads the archive itself, newest first, so the button for the
+  // older ones is for the pilot who has the watch off: a one-off read, by
+  // count, and no button at all when there is nothing waiting.
+  const unread = Number(screenSettings.unread) || 0;
+  const watching = shots && screenSettings.watchScreenshots;
+  const older = $('#screen-read-older');
+  if (older) {
+    older.hidden = !shots || !screenSettings.canReadScreenshots || watching || unread === 0;
+    older.textContent = `Read ${unread} older screenshot${unread === 1 ? '' : 's'}`;
+  }
+
   // The folder being followed, named. The pilot is agreeing to a directory
-  // being watched and should be able to see which one.
+  // being read and should be able to see which one, and how much of it is
+  // still to come.
   const folder = $('#screen-folder');
   if (folder) {
-    const watching = shots && screenSettings.watchScreenshots && screenSettings.folder;
-    folder.hidden = !watching;
-    folder.textContent = watching
-      ? `Reading new screenshots from ${screenSettings.folder} as they land. Nothing already there is read.`
+    const named = watching && screenSettings.folder;
+    folder.hidden = !named;
+    folder.textContent = named
+      ? `Reading every screenshot in ${screenSettings.folder}, the ones already there and each new one as it lands.`
+        + (unread
+          ? ` ${unread} still to read, newest first.`
+          : ' Nothing is waiting.')
+        + ' Untick Watch screenshots to stop; invalidate a reading below to have nothing believed from it.'
       : '';
   }
 
@@ -5315,6 +5425,33 @@ async function scanScreenshot() {
 }
 
 /**
+ * The archive, a batch at a time. Each press reads the newest forty the app
+ * has never read and says what came of them and how many are left; the
+ * button relabels itself from the settings answer rather than counting
+ * down here, so what it says is what the folder holds.
+ */
+async function readOlderScreenshots() {
+  const unread = Number(screenSettings.unread) || 0;
+  screenSay(`reading ${Math.min(unread, 40)} of ${unread} older screenshot${unread === 1 ? '' : 's'}…`);
+  screenShow(() => {});
+
+  const got = await getJson2('/api/screen/readings/older?take=40');
+  const read = got.read || [];
+  const kinds = new Map();
+  for (const s of read) kinds.set(s.kind, (kinds.get(s.kind) || 0) + 1);
+  const told = [...kinds].map(([kind, n]) => `${n} ${SCREEN_KINDS[kind] || kind}`).join(', ');
+
+  screenSay(`${read.length} read${told ? ` (${told})` : ''}`
+    + (got.remaining ? ` · ${got.remaining} older still unread` : ' · nothing older left unread'));
+
+  try {
+    screenSettings = await getJson('/api/screen/settings');
+  } catch { /* the button keeps its last count; the next open corrects it */ }
+  applyScreenMode();
+  renderScreenLog().catch(() => {});
+}
+
+/**
  * The log: everything the app has been shown, newest first.
  *
  * One list for both, because to the pilot a paste and a screenshot are the
@@ -5686,8 +5823,15 @@ function renderHangar() {
 
   const ships = hangarOrdered();
   const sized = ships.filter((s) => s.length > 0 && s.beam > 0);
-  const pictured = sized.filter((s) => s.icon);
-  const iconless = sized.filter((s) => !s.icon);
+  // A general scale deck only uses top-down game icons. In a picked pair,
+  // though, leaving a hull out because the install has no such icon makes a
+  // comparison look broken even when the game supplies its gallery render.
+  // That render is visibly labelled below but fits the same verified box, so
+  // the dimensions remain honest and both selected vessels stay present.
+  const comparing = hangarComparison.size === 2;
+  const canDrawToScale = (ship) => ship.icon || (comparing && Boolean(hangarPaintFor(ship)));
+  const pictured = sized.filter(canDrawToScale);
+  const iconless = sized.filter((s) => !canDrawToScale(s));
   const missing = ships.filter((s) => !(s.length > 0 && s.beam > 0));
 
   const unticked = (hangarShips?.ships || []).length - ships.length;
@@ -5702,6 +5846,11 @@ function renderHangar() {
   if (zoomSelect) zoomSelect.hidden = mode !== 'scale';
   if (layoutSelect) layoutSelect.hidden = mode !== 'scale';
 
+  // The pair and its side-by-side belong to both modes: the gallery narrows
+  // to the two cards as the deck narrows to the two silhouettes.
+  renderHangarCompareBar();
+  renderHangarComparison().catch(() => { /* the panel says what it could not fetch */ });
+
   if (mode === 'gallery') {
     setHangarExportVisible(false);
     renderHangarGallery(canvas, ships);
@@ -5712,7 +5861,9 @@ function renderHangar() {
 
   if (!pictured.length) {
     canvas.append(el('p', 'muted', ships.length
-      ? 'None of the ships flown has a top-down game icon, so there is nothing to draw to scale.'
+      ? comparing
+        ? 'Neither selected ship has a top-down game icon or gallery render, so there is nothing to draw to scale.'
+        : 'None of the ships flown has a top-down game icon, so there is nothing to draw to scale.'
       : 'No ship has been flown in the logs yet, so there is nothing to draw.'));
     showScaleOmissions(unsized, iconless, missing);
     return;
@@ -5729,8 +5880,26 @@ function renderHangar() {
   // The two widest cells also need the gap between them. Without taking it
   // out here, their right edges exceed the deck by the gap and the second
   // ship silently wraps onto its own oversized shelf.
-  const scale = ((width - 40 - HANGAR_SHIP_GAP) / 2 / longest) * zoom;   // px per metre
-  const groups = hangarScaleGroups(pictured);
+  let scale = ((width - 40 - HANGAR_SHIP_GAP) / 2 / longest) * zoom;   // px per metre
+
+  // A comparison is drawn to fit: every pictured member stays on one shelf
+  // whatever the zoom, and never blows up past what the pictures can stand.
+  // This deliberately follows the picked pair rather than pictured.length:
+  // a ship without a game icon is listed below as an omission, but used to
+  // leave its visible counterpart subject to the normal full-deck scale.
+  // That read as one enormous, blurred ship instead of an honest partial
+  // comparison. The cap is the paint render's own 256 px at one and a half
+  // times; past that the finish is a blur and the silhouette gains nothing.
+  if (comparing) {
+    const across = pictured.reduce((sum, s) => sum + Math.max(s.length, 90 / scale), 0);
+    const fit = (width - 40 - HANGAR_SHIP_GAP) / across;
+    const cap = 384 / Math.max(...pictured.map((s) => Math.max(s.length, s.beam)));
+    scale = Math.min(fit, cap);
+  }
+  if (zoomSelect) zoomSelect.hidden = comparing || mode !== 'scale';
+  if (layoutSelect) layoutSelect.hidden = comparing || mode !== 'scale';
+
+  const groups = comparing ? [['Compared', pictured]] : hangarScaleGroups(pictured);
 
   // Ships on one shelf and ground vehicles on another, at the same scale. A
   // missing game icon is a missing shape, not permission to invent one or to
@@ -5750,13 +5919,212 @@ function renderHangar() {
     bar.append(svgEl('line', { x1: 2, y1: 2, x2: 2, y2: 12 }));
     bar.append(svgEl('line', { x1: metres * scale + 2, y1: 2, x2: metres * scale + 2, y2: 12 }));
     scaleBox.append(bar);
-    scaleBox.append(el('span', 'muted', ` ${metres} m — sizes are the game's bounding boxes. Silhouettes are its own vehicle icons, tinted by maker; a hull without one is listed below rather than drawn as a guess.`));
-    if (hangarComparison.size)
-      scaleBox.append(el('span', 'muted', ` Comparing: ${[...hangarComparison].join(' · ')}.`));
+    scaleBox.append(el('span', 'muted', ` ${metres} m — sizes are the game's bounding boxes. Silhouettes are its own vehicle icons, tinted by maker; in a comparison, a hull without one may use its Gallery render inside that same box and is labelled below its name.`));
   }
 
   showScaleOmissions(unsized, iconless, missing);
 }
+
+/* ---------- two ships side by side ---------- */
+
+/**
+ * The pair to compare, chosen here or on the Fleet cards. The selects list
+ * the roster the deck draws - a ship unticked on Fleet is not offered, for
+ * the same reason it is not drawn.
+ */
+function renderHangarCompareBar() {
+  const a = $('#hangar-compare-a');
+  const b = $('#hangar-compare-b');
+  const clear = $('#hangar-compare-clear');
+  if (!a || !b || !clear) return;
+
+  const names = (hangarShips?.ships || []).filter((s) => !excludedShips.has(s.name)).map((s) => s.name)
+    .sort((x, y) => x.localeCompare(y));
+  const chosen = [...hangarComparison];
+
+  for (const [select, index] of [[a, 0], [b, 1]]) {
+    select.textContent = '';
+    select.append(new Option(index === 0 ? 'a ship…' : 'another…', ''));
+    for (const name of names) select.append(new Option(name, name));
+    select.value = chosen[index] && names.includes(chosen[index]) ? chosen[index] : '';
+  }
+  clear.hidden = hangarComparison.size === 0;
+}
+
+function chooseHangarComparison(index, name) {
+  const chosen = [...hangarComparison];
+  // Keep the two slots apart: picking the first ship again in the second
+  // select is one ship, not a comparison.
+  chosen[index] = name && name !== chosen[1 - index] ? name : undefined;
+  hangarComparison = new Set(chosen.filter(Boolean));
+  renderHangar();
+  try { renderFleetShips(); } catch { /* Fleet not drawn yet: its cards read the set when they are */ }
+}
+
+/** The Garage's sheet for a hull, fetched once per page; null when the dataset cannot draw it. */
+const compareSheets = new Map();
+function compareSheetFor(cls) {
+  if (!cls) return Promise.resolve(null);
+  if (!compareSheets.has(cls))
+    compareSheets.set(cls, getJson(`/api/garage/${encodeURIComponent(cls)}`).then((d) => (d && d.known ? d : null)).catch(() => null));
+  return compareSheets.get(cls);
+}
+let compareCatalogue = null;
+
+/**
+ * The rows of the side-by-side, each saying which way is better - so a
+ * heavier ship is not marked as winning on mass - and where the figure comes
+ * from. A row both ships lack is left out rather than drawn as two dashes.
+ */
+function hangarComparisonRows(left, right) {
+  const rows = [];
+  const row = (group, label, pick, format, better = null, source = 'dataset') => {
+    const values = [left, right].map((side) => {
+      try { const v = pick(side); return Number.isFinite(v) ? v : (v ?? null); } catch { return null; }
+    });
+    if (values.every((v) => v === null || v === undefined)) return;
+    rows.push({ group, label, values, text: values.map((v, i) => (v === null || v === undefined ? '—' : format(v, [left, right][i]))), better, source, format });
+  };
+
+  const m = (n) => `${fmt1(n)} m`;
+  row('Size', 'Length', (s) => s.ship.length, m, null, 'install');
+  row('Size', 'Beam', (s) => s.ship.beam, m, null, 'install');
+  row('Size', 'Height', (s) => s.ship.height, m, null, 'install');
+
+  row('Your use', 'Sorties', (s) => s.ship.sorties, fmtInt, null, 'logs');
+  row('Your use', 'Hours aboard', (s) => s.ship.hours, (n) => `${fmt1(n)} h`, null, 'logs');
+  row('Your use', 'Last flown', (s) => s.ship.lastFlown, (d) => relative(d), null, 'logs');
+
+  row('Hull', 'Hull HP', (s) => s.sheet.ship.health, fmtInt, 'more');
+  row('Hull', 'Mass, stock', (s) => s.sheet.sheet.mass, (n) => `${fmtInt(n)} kg`, 'less');
+  row('Hull', 'Crew', (s) => s.sheet.ship.crew, fmtInt);
+  row('Hull', 'Cargo', (s) => s.sheet.ship.cargoScu, (n) => `${fmtInt(n)} SCU`, 'more');
+  row('Hull', 'Quantum fuel', (s) => s.sheet.ship.quantumFuel, fmtInt, 'more');
+  row('Hull', 'Hydrogen fuel', (s) => s.sheet.ship.hydrogenFuel, fmtInt, 'more');
+
+  row('Flight', 'SCM', (s) => s.sheet.ship.flight.scm, (n) => `${fmtInt(n)} m/s`, 'more');
+  row('Flight', 'Boost', (s) => s.sheet.ship.flight.boost, (n) => `${fmtInt(n)} m/s`, 'more');
+  row('Flight', 'Max', (s) => s.sheet.ship.flight.max, (n) => `${fmtInt(n)} m/s`, 'more');
+  row('Flight', 'Pitch · yaw · roll', (s) => s.sheet.ship.flight.pitch + s.sheet.ship.flight.yaw + s.sheet.ship.flight.roll,
+    (_, s) => `${fmtInt(s.sheet.ship.flight.pitch)} · ${fmtInt(s.sheet.ship.flight.yaw)} · ${fmtInt(s.sheet.ship.flight.roll)} °/s`, 'more');
+
+  row('Defence', 'Shield HP', (s) => s.sheet.sheet.shield.hp, fmtInt, 'more');
+  row('Defence', 'Shield regen', (s) => s.sheet.sheet.shield.regen, (n) => `${fmtInt(n)}/s`, 'more');
+
+  row('Weapons', 'Pilot DPS', (s) => s.sheet.sheet.weapons.fixedDps, fmt1, 'more');
+  row('Weapons', 'Alpha', (s) => s.sheet.sheet.weapons.fixedAlpha, fmt1, 'more');
+  row('Weapons', 'Turret DPS', (s) => s.sheet.sheet.weapons.turretDps, fmt1, 'more');
+  row('Weapons', 'Missiles', (s) => s.sheet.sheet.weapons.missiles, fmtInt, 'more');
+  row('Weapons', 'Missile damage', (s) => s.sheet.sheet.weapons.missileDamage, fmtInt, 'more');
+
+  row('Quantum', 'Drive', (s) => s.sheet.sheet.quantumDrive?.drive ?? null, (d) => d);
+  row('Quantum', 'Speed', (s) => s.sheet.sheet.quantumDrive?.speed, fmtSpeed, 'more');
+  row('Quantum', 'Range', (s) => s.sheet.sheet.quantumDrive?.range, fmtDistance, 'more');
+  row('Quantum', 'Spool', (s) => s.sheet.sheet.quantumDrive?.spoolTime, (n) => `${fmt1(n)} s`, 'less');
+
+  row('Signature', 'EM, shields up', (s) => s.sheet.sheet.shields.em, fmtInt, 'less');
+  row('Signature', 'IR, shields up', (s) => s.sheet.sheet.shields.ir, fmtInt, 'less');
+  row('Signature', 'EM, in quantum', (s) => s.sheet.sheet.quantum.em, fmtInt, 'less');
+
+  row('Power', 'Available', (s) => s.sheet.sheet.power.available, (n) => `${fmtInt(n)} seg`, 'more');
+  row('Power', 'Drawn, shields up', (s) => s.sheet.sheet.power.usedShields, (n) => `${fmt1(n)} seg`, 'less');
+  row('Power', 'Cooling generated', (s) => s.sheet.sheet.cooling.generated, (n) => `${fmtInt(n)} seg`, 'more');
+
+  row('Money', 'Buy, UEX', (s) => s.ref?.price?.price ?? null, money, 'less', 'uex');
+  row('Money', 'Rent, UEX', (s) => s.ref?.rental?.price ?? null, money, 'less', 'uex');
+  row('Money', 'Claim wait', (s) => s.ref?.standardClaimTime ?? null, (n) => `${fmt1(n)} min`, 'less');
+  row('Money', 'Expedite fee', (s) => s.ref?.expeditedCost ?? null, money, 'less');
+
+  return rows;
+}
+
+/**
+ * The side-by-side under the deck. The figures are the Garage's own
+ * recomputed sheet for each hull - the same arithmetic the dataset's totals
+ * come from - beside the install's dimensions and the logs' record of use;
+ * a hull the dataset cannot draw gets its size and use and a sentence about
+ * the rest, not a column of dashes.
+ */
+async function renderHangarComparison() {
+  const box = $('#hangar-compare');
+  if (!box) return;
+  const names = [...hangarComparison];
+  const ships = names.map((n) => (hangarShips?.ships || []).find((s) => s.name === n)).filter(Boolean);
+  if (ships.length !== 2) { box.hidden = true; return; }
+
+  box.hidden = false;
+  $('#hangar-compare-title').textContent = `${ships[0].name} vs ${ships[1].name}`;
+  $('#hangar-compare-note').textContent = 'Fetching the sheets…';
+
+  const [sheets, catalogue] = await Promise.all([
+    Promise.all(ships.map((s) => compareSheetFor(s.className))),
+    (compareCatalogue ??= getJson('/api/reference/ships').catch(() => [])),
+  ]);
+  // The pair changed under the fetch; that answer belongs to a comparison that is gone.
+  if ([...hangarComparison].join('|') !== names.join('|')) return;
+
+  const sides = ships.map((ship, i) => ({
+    ship, sheet: sheets[i],
+    ref: catalogue.find((r) => r.name === ship.name) || null,
+  }));
+  const rows = hangarComparisonRows(sides[0], sides[1]);
+
+  const head = $('#hangar-compare-table thead');
+  head.textContent = '';
+  const hr = el('tr');
+  hr.append(el('th', null, ''));
+  for (const side of sides) hr.append(el('th', 'num', side.ship.name));
+  hr.append(el('th', 'num', 'Difference'));
+  head.append(hr);
+
+  const body = $('#hangar-compare-table tbody');
+  body.textContent = '';
+  let group = null;
+  for (const r of rows) {
+    if (r.group !== group) {
+      group = r.group;
+      const gr = el('tr', 'compare-group');
+      const td = el('td', null, group);
+      td.colSpan = 4;
+      gr.append(td);
+      body.append(gr);
+    }
+    const tr = el('tr');
+    tr.append(el('td', null, r.label));
+    const [a, b] = r.values;
+    const numeric = typeof a === 'number' && typeof b === 'number';
+    const winner = r.better && numeric && a !== b ? ((r.better === 'more') === (a > b) ? 0 : 1) : null;
+    r.text.forEach((text, i) => tr.append(el('td', winner === i ? 'num better' : 'num', String(text))));
+    // The difference is the second ship against the first, signed, and only
+    // where both are numbers - a date or a drive's name has no difference.
+    let diff = '—';
+    if (numeric && a !== b) {
+      const d = b - a;
+      const pct = a !== 0 ? ` (${d > 0 ? '+' : '−'}${Math.abs(Math.round((d / a) * 100))}%)` : '';
+      // In the row's own unit - a quantum speed differs in km/s, not in the
+      // metres per second the sheet keeps; a formatter that needs the whole
+      // side (pitch · yaw · roll) falls back to the bare number.
+      let amount;
+      try { amount = r.format(Math.abs(d)); } catch { amount = fmtSmart(Math.abs(d)); }
+      diff = `${d > 0 ? '+' : '−'}${amount}${pct}`;
+    }
+    tr.append(el('td', 'num muted', diff));
+    body.append(tr);
+  }
+
+  const missing = sides.filter((s) => !s.sheet).map((s) => s.ship.name);
+  const parts = ['Size from the game files; sorties and hours from the logs; the rest recomputed from each hull\'s stock parts by the Garage, with UEX prices where it has them. The better figure for its row is lit - less mass, less signature, more of everything else.'];
+  if (missing.length) parts.push(`${missing.join(' and ')}: the community dataset cannot draw ${missing.length === 1 ? 'its' : 'their'} sheet, so only size and use are shown (Settings › community data).`);
+  $('#hangar-compare-note').textContent = parts.join(' ');
+}
+
+$('#hangar-compare-a')?.addEventListener('change', (e) => chooseHangarComparison(0, e.currentTarget.value));
+$('#hangar-compare-b')?.addEventListener('change', (e) => chooseHangarComparison(1, e.currentTarget.value));
+$('#hangar-compare-clear')?.addEventListener('click', () => {
+  hangarComparison = new Set();
+  renderHangar();
+  try { renderFleetShips(); } catch { /* as above */ }
+});
 
 /** The same global scale can be read in the most useful arrangement for the question at hand. */
 function hangarScaleGroups(pictured) {
@@ -5975,6 +6343,16 @@ function renderHangarGallery(canvas, ships) {
     body.append(el('div', 'muted', facts.join(' · ')));
 
     if (!(ship.length > 0)) body.append(el('div', 'muted', 'not in the install\'s vehicle table — no size'));
+
+    // The same offer as the Fleet card, under the same rule: ground vehicles
+    // have no ports anyone sells parts for, so the Garage is not offered.
+    if (ship.kind === 'Spaceship' || !ship.kind) {
+      const garage = el('button', 'ghost ship-upgrade', 'Garage');
+      garage.type = 'button';
+      garage.title = `${ship.name}'s numbers, what fits it, and what a part would change`;
+      garage.addEventListener('click', () => openGarageFor(ship.className || ship.name));
+      body.append(garage);
+    }
     card.append(body);
     grid.append(card);
   }
@@ -6024,7 +6402,8 @@ function drawToScale(ships, width, scale) {
     const group = svgEl('g', { class: 'hangar-ship', transform: `translate(${sx} ${sy})` });
     const title = svgEl('title', {});
     group.append(title);
-    title.textContent = `${ship.name} · ${ship.length} × ${ship.beam} × ${ship.height} m · ${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}`;
+    title.textContent = `${ship.name} · ${ship.length} × ${ship.beam} × ${ship.height} m · ${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}`
+      + (!ship.icon ? ' · Gallery render fitted to this scale box; no top-down icon is installed' : '');
 
     // Centred in the cell so a small ship's name does not hang off its left edge.
     const offset = (cell - w) / 2;
@@ -6063,8 +6442,28 @@ function drawToScale(ships, width, scale) {
     group.append(name);
 
     const dims = svgEl('text', { class: 'hangar-dims', x: cell / 2, y: baseline + 13, 'text-anchor': 'middle' });
-    dims.textContent = `${ship.length} m · ${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}`;
+    dims.textContent = `${ship.length} m · ${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}`
+      + (!ship.icon ? ' · gallery render' : '');
     group.append(dims);
+
+    // What the picture is, said on the picture: a top-down icon is the
+    // hull's real footprint, a gallery render is a three-quarter view fitted
+    // into that footprint's box. In a comparison the two can sit side by
+    // side, and a caption under the name is not where the eye is.
+    if (hangarComparison.size === 2) {
+      const kind = paint ? 'gallery render' : 'top-down icon';
+      const badge = svgEl('g', { class: `hangar-source ${paint ? 'render' : 'icon'}`, transform: `translate(${offset + 4} ${top + 4})` });
+      badge.append(svgEl('rect', { x: 0, y: 0, width: kind.length * 6.2 + 16, height: 16, rx: 3 }));
+      const label = svgEl('text', { x: 8, y: 11.5 });
+      label.textContent = kind;
+      badge.append(label);
+      const why = svgEl('title', {});
+      why.textContent = paint
+        ? 'The game\'s gallery render of this hull, fitted into its installed bounding box - a three-quarter view, not the footprint.'
+        : 'The game\'s own top-down vehicle icon, at the installed bounding box: the real footprint.';
+      badge.append(why);
+      group.append(badge);
+    }
 
     svg.append(group);
   }
@@ -7006,6 +7405,19 @@ $('#screen-scan')?.addEventListener('click', async (e) => {
     await scanScreenshot();
   } catch (err) {
     screenSay(`could not read the screenshot: ${err.message}`);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$('#screen-read-older')?.addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  button.disabled = true;
+
+  try {
+    await readOlderScreenshots();
+  } catch (err) {
+    screenSay(`could not read the older screenshots: ${err.message}`);
   } finally {
     button.disabled = false;
   }
@@ -8723,6 +9135,1445 @@ onInput('#servers-search', renderServers);
 onInput('#servers-region', renderServers);
 onInput('#servers-current', renderServers);
 onInput('#servers-starred', renderServers);
+
+/* ---------- garage ---------- */
+
+/** The ship on the bench, by class, and the last sheet drawn for it. */
+let garageClass = null;
+let garageStock = null;
+let garageSheet = null;
+
+/** Ports named for the game's files; this is what a pilot calls them. */
+const GARAGE_GROUP_WORDS = {
+  QuantumDrive: 'Quantum drive',
+  Shield: 'Shield generator',
+  PowerPlant: 'Power plant',
+  Cooler: 'Cooler',
+  WeaponGun: 'Gun',
+  Turret: 'Gun mount',
+  TurretBase: 'Turret',
+  MissileLauncher: 'Missile rack',
+  Missile: 'Missile',
+  Radar: 'Radar',
+  EMP: 'EMP',
+  QuantumInterdictionGenerator: 'Quantum interdiction',
+  WeaponMining: 'Mining laser',
+  Armor: 'Armour',
+  LifeSupportGenerator: 'Life support',
+  FlightController: 'Flight controller',
+  FuelTank: 'Fuel tank',
+  QuantumFuelTank: 'Quantum fuel tank',
+  WeaponDefensive: 'Countermeasures',
+  TractorBeam: 'Tractor beam',
+  Misc: 'Utility',
+};
+
+const garageWord = (group) => GARAGE_GROUP_WORDS[group] || String(group || '').replace(/([a-z])([A-Z])/g, '$1 $2');
+
+/** A hardpoint name as a pilot reads it: hardpoint_shield_generator_left → shield generator left. */
+function garagePortName(hardpoint) {
+  return String(hardpoint || '')
+    .replace(/^hardpoint_/i, '')
+    .replace(/_attach$/i, '')
+    .replace(/_/g, ' ');
+}
+
+const fmtInt = (n) => Math.round(Number(n) || 0).toLocaleString();
+const fmt1 = (n) => (Math.round((Number(n) || 0) * 10) / 10).toLocaleString(undefined, { maximumFractionDigits: 1 });
+
+/** Metres to the unit a pilot uses: Gm for ranges, km for anything shorter. */
+function fmtDistance(metres) {
+  const m = Number(metres) || 0;
+  if (m >= 1e9) return `${(m / 1e9).toLocaleString(undefined, { maximumFractionDigits: 1 })} Gm`;
+  if (m >= 1e6) return `${(m / 1e6).toLocaleString(undefined, { maximumFractionDigits: 1 })} Mm`;
+  return `${(m / 1e3).toLocaleString(undefined, { maximumFractionDigits: 1 })} km`;
+}
+
+/** Drive speed, in km/s - the figure the in-game drive screen shows. */
+const fmtSpeed = (mps) => `${Math.round((Number(mps) || 0) / 1000).toLocaleString()} km/s`;
+
+async function loadGarage() {
+  const mine = $('#garage-mine');
+  if (!mine) return;
+
+  let data;
+  try {
+    data = await getJson('/api/garage');
+  } catch {
+    return;
+  }
+
+  const unavailable = $('#garage-unavailable');
+  if (!data.known) {
+    unavailable.hidden = false;
+    unavailable.textContent = 'The reference data predates the garage. Refresh the community dataset in Settings '
+      + 'and this page fills in - it needs the part figures the older download did not keep.';
+    return;
+  }
+  unavailable.hidden = true;
+
+  fillGaragePicker(mine, 'Your fleet…', data.mine.map((s) => [s.class, `${s.name} · ${s.sorties} sortie${s.sorties === 1 ? '' : 's'}`]));
+  fillGaragePicker($('#garage-all'), 'Any ship…', data.all.map((s) => [s.class, `${s.name}${s.role ? ` · ${s.role}` : ''}`]));
+
+  // Open the ship already on the bench, else the one flown most, else nothing.
+  const first = garageClass || data.mine[0]?.class || null;
+  if (first) await openGarage(first);
+}
+
+function fillGaragePicker(select, prompt, entries) {
+  if (!select) return;
+  const keep = select.value;
+  select.textContent = '';
+  const head = el('option', null, prompt);
+  head.value = '';
+  select.append(head);
+  for (const [value, label] of entries) {
+    const option = el('option', null, label);
+    option.value = value;
+    select.append(option);
+  }
+  select.value = entries.some(([v]) => v === keep) ? keep : '';
+}
+
+/*
+ * Every fetch on this page is answered later than it was asked, and the pilot
+ * can change ship, port or fit in between. Each of the three asks carries a
+ * ticket; an answer whose ticket is no longer the newest is dropped, so a slow
+ * sheet for the Corsair cannot land on a bench that has moved on to the Cutlass
+ * - which it did, and a build saved then carried the wrong ship's ports.
+ */
+let garageRequest = 0;
+let benchRequest = 0;
+let refitRequest = 0;
+
+/** Puts a ship on the bench: its stock sheet, and its ports. */
+async function openGarage(cls) {
+  const request = ++garageRequest;
+  garageClass = cls;
+  // A new ship is a clean bench: swaps belong to the ship they were made on.
+  garageSwaps = {};
+  garageSelectedPort = null;
+  garageOptions = null;
+  $('#garage-optimise-status').textContent = '';
+  for (const id of ['#garage-mine', '#garage-all']) {
+    const select = $(id);
+    if (select && [...select.options].some((o) => o.value === cls)) select.value = cls;
+    else if (select) select.value = '';
+  }
+
+  let data;
+  try {
+    data = await getJson(`/api/garage/${encodeURIComponent(cls)}`);
+  } catch {
+    if (request !== garageRequest) return;
+    const unavailable = $('#garage-unavailable');
+    unavailable.hidden = false;
+    unavailable.textContent = `The reference does not know a ship called ${cls}.`;
+    return;
+  }
+  if (request !== garageRequest) return;
+
+  garageStock = data;
+  garageSheet = data.sheet;
+  garageOpenBuild = null;
+  garageCompare = '';
+  garageSheetCache.clear();
+  renderGarage(data, null);
+  await loadBuilds();
+  loadGarageMarket(cls).catch(() => { /* the panel says the feed is off or unread */ });
+  loadGaragePhoto(cls).catch(() => { /* no reading of this ship: the offer stays hidden */ });
+}
+
+/* ---------- the photographed fit ---------- */
+
+/**
+ * The ship's fit as last photographed, offered as a place to start the bench
+ * from. Never applied on its own: the logs do not name a ship's parts, a
+ * screenshot is a moment rather than a state, and the ports are matched to
+ * the screen's labels by kind and order - a starting point, dated, that the
+ * pilot chooses. Hidden when no loadout reading is of this ship.
+ */
+let garagePhoto = null;
+let garagePhotoApplied = false;
+
+/**
+ * Whether a ship opens on the bench as its newest photograph showed it. On
+ * unless the pilot says otherwise, kept in this browser with the other
+ * bench habits: the photograph is the one thing that says what the ship is
+ * carrying, and a bench that opened at stock until a button was pressed
+ * was a bench nobody pressed. The way out is the tick, not a press a ship.
+ */
+let garageFromPhoto = true;
+try {
+  garageFromPhoto = localStorage.getItem('qw-garage-from-photo') !== 'no';
+} catch { /* private browsing keeps the default */ }
+
+function rememberGarageFromPhoto(on) {
+  garageFromPhoto = on;
+  try { localStorage.setItem('qw-garage-from-photo', on ? 'yes' : 'no'); } catch { /* as above */ }
+}
+
+async function loadGaragePhoto(cls) {
+  const box = $('#garage-photo');
+  if (!box) return;
+  garagePhoto = null;
+  garagePhotoApplied = false;
+  box.hidden = true;
+
+  let fit = null;
+  try {
+    fit = await getJson(`/api/garage/${encodeURIComponent(cls)}/photographed`);
+  } catch {
+    // No reading of this ship. The section stays, with the reason: a bench
+    // that never mentions photographs looks like it cannot use one.
+  }
+  if (cls !== garageClass) return;
+
+  garagePhoto = fit;
+  renderGaragePhoto();
+
+  // A bench nobody has touched yet takes the photograph itself. One the
+  // pilot has already changed, or opened a saved build on, is theirs.
+  if (garageFromPhoto && fit?.applied && !garageOpenBuild && Object.keys(garageSwaps).length === 0)
+    await applyGaragePhoto();
+}
+
+function renderGaragePhoto() {
+  const box = $('#garage-photo');
+  if (!box) return;
+  const fit = garagePhoto;
+  const tools = $('#garage-photo-tools');
+  box.hidden = false;
+
+  if (!fit) {
+    const name = garageStock?.ship?.name || 'this ship';
+    $('#garage-photo-title').textContent = `No photograph of the ${name} has been read`;
+    $('#garage-photo-sub').textContent = `Open it at a Vehicle Loadout Manager, or its loadout estimate at a Fleet Manager, `
+      + `and take a screenshot; with Watch screenshots on (Log tab) it is read as it lands, `
+      + `the ones already in the folder included, and the bench can start from what the screen shows.`;
+    $('#garage-photo-unsettled').textContent = '';
+    if (tools) tools.hidden = true;
+    return;
+  }
+  if (tools) tools.hidden = false;
+
+  const when = new Date(fit.shotAt).toLocaleString();
+  $('#garage-photo-title').textContent = `${fit.ship}, as photographed ${when}`;
+
+  const unsettled = (fit.ports || []).filter((p) => !p.applied);
+  const sub = [];
+  sub.push(`${fit.applied} of ${fit.ports.length} port${fit.ports.length === 1 ? '' : 's'} read as one part`);
+  sub.push(fit.changed ? `${fit.changed} differ${fit.changed === 1 ? 's' : ''} from stock` : 'none differ from stock');
+  if (unsettled.length) sub.push(`${unsettled.length} not settled by the screenshot and left as stock`);
+  if (fit.scope) sub.push(fit.scope);
+  sub.push(`from ${fit.shot}`);
+  $('#garage-photo-sub').textContent = `${sub.join(' · ')}. Ports are matched to the screen's labels by kind and order; a screenshot is a moment, not a state.`;
+
+  const list = $('#garage-photo-unsettled');
+  list.textContent = '';
+  for (const port of unsettled) {
+    const li = el('li');
+    li.append(el('span', 'what', port.slot));
+    li.append(el('span', 'd', ` · ${port.why}`));
+    list.append(li);
+  }
+
+  const auto = $('#garage-photo-auto');
+  if (auto) auto.checked = garageFromPhoto;
+  const apply = $('#garage-photo-apply');
+  apply.disabled = garagePhotoApplied || !fit.applied;
+  // With the tick on, the button is the same act as opening the ship, so it
+  // stays only for the pilot who took the tick off.
+  apply.hidden = garageFromPhoto && garagePhotoApplied;
+  $('#garage-photo-state').textContent = garagePhotoApplied
+    ? `The bench started from this photograph; ${fit.changed} part${fit.changed === 1 ? '' : 's'} differ from stock. Reset to stock takes it back.`
+    : fit.applied ? '' : 'Nothing on the screenshot settled a port the bench can change.';
+}
+
+/** The photographed parts become the bench's swaps, and the sheet moves to match. */
+async function applyGaragePhoto() {
+  if (!garagePhoto || !garageStock) return;
+  garageSwaps = { ...garagePhoto.swaps };
+  garagePhotoApplied = true;
+  $('#garage-optimise-status').textContent = '';
+  await refitGarage();
+  renderGaragePhoto();
+}
+
+$('#garage-photo-apply')?.addEventListener('click', () => applyGaragePhoto().catch(() => {}));
+
+// The tick acts at once as well as from now on: off takes this bench back to
+// stock, on fits the photograph - so what is on screen is what the tick says.
+$('#garage-photo-auto')?.addEventListener('change', (e) => {
+  rememberGarageFromPhoto(e.target.checked);
+  if (garageFromPhoto && garagePhoto?.applied && !garagePhotoApplied && Object.keys(garageSwaps).length === 0) {
+    applyGaragePhoto().catch(() => {});
+  } else if (!garageFromPhoto && garagePhotoApplied) {
+    resetGarage().catch(() => {});
+  } else {
+    renderGaragePhoto();
+  }
+});
+
+/**
+ * One player's advertisement, as a line the bench and the market panel share:
+ * the ask, who, where, and the way to UEX - which is where the buying is
+ * arranged, not here.
+ */
+function listingLine(listing, more = 0) {
+  const line = el('span', 'listing');
+  line.append(acquisitionChip('players', 'Player listing',
+    'A player\'s advertisement on UEX\'s marketplace: an asking price, not a market price. Buying is arranged with the seller on UEX.'));
+  line.append(el('b', null, `${fmtInt(listing.price)} aUEC`));
+  const where = [listing.seller ? `by ${listing.seller}` : '', listing.location ? `at ${listing.location}` : ''].filter(Boolean).join(' ');
+  line.append(document.createTextNode(` · ${where || 'place not given'}${listing.inStock > 1 ? ` · ${listing.inStock} in stock` : ''}${more > 0 ? ` +${more}` : ''} `));
+  const link = el('a', 'uex-link', 'UEX ↗');
+  link.href = listing.url;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.title = listing.title;
+  line.append(link);
+  return line;
+}
+
+/**
+ * The panel under the bench: parts fit for this ship that players are
+ * offering on UEX's marketplace this week. Off until the pilot fetches the
+ * feed - the panel says so rather than hiding, because "nobody is selling"
+ * and "you have not looked" are different answers and only one is true.
+ */
+async function loadGarageMarket(cls) {
+  const box = $('#garage-market');
+  const body = $('#garage-market-body');
+  const note = $('#garage-market-note');
+  if (!box || !body || !note) return;
+
+  let data;
+  try {
+    data = await getJson(`/api/garage/${encodeURIComponent(cls)}/market`);
+  } catch {
+    box.hidden = true;
+    return;
+  }
+  // The ship changed under the fetch: this answer is for a bench that is gone.
+  if (cls !== garageClass) return;
+
+  box.hidden = false;
+  body.textContent = '';
+  const shipName = garageStock?.ship?.name || cls;
+
+  if (!data.enabled) {
+    note.textContent = 'Player listings are off. Fetch the Player marketplace feed under UEX in Settings to see who is offering parts for this ship on uexcorp.space.';
+    return;
+  }
+
+  const fetched = data.fetchedAt ? `fetched ${ago(data.fetchedAt)}` : 'never fetched';
+  if (!data.listings.length) {
+    note.textContent = `Nobody has advertised a part that fits the ${shipName} in the newest ${fmtInt(data.total)} UEX marketplace listings (${data.components} of them are ship components at all) · ${fetched}. That is a week's advertisements, not a verdict on the market.`;
+    return;
+  }
+
+  note.textContent = `${data.listings.length} of the newest ${fmtInt(data.total)} UEX marketplace listings are parts that fit the ${shipName} · asking prices, not market prices · ${fetched}.`;
+
+  for (const row of data.listings) {
+    const { listing, part } = row;
+    const rowEl = el('div', 'candidate market-row');
+    rowEl.append(partMark(part));
+
+    const mid = el('div');
+    const name = el('div', 'c-name', part.name);
+    name.append(partChip(part));
+    mid.append(name);
+    mid.append(el('div', 'c-maker', `${part.manufacturer || part.makerCode || ''}${listing.title && listing.title !== part.name ? ` · listed as “${listing.title}”` : ''}`));
+    const shop = el('div', 'c-shop');
+    shop.append(listingLine(listing));
+    shop.append(document.createTextNode(` · posted ${ago(listing.added)}`));
+    mid.append(shop);
+    rowEl.append(mid);
+
+    const act = el('div', 'c-act');
+    if (row.ports && row.ports.length) {
+      const open = el('button', 'ghost tiny', 'Bench');
+      open.type = 'button';
+      open.title = 'Open the port this part fits, with what else fits it';
+      open.addEventListener('click', () => selectBenchPort(row.ports[0], true).catch(() => {}));
+      act.append(open);
+    }
+    rowEl.append(act);
+    body.append(rowEl);
+  }
+}
+
+/**
+ * Draws the sheet. With a stock sheet to compare against, every figure that
+ * moved shows the old one struck beside it.
+ */
+function renderGarage(data, stock) {
+  const head = $('#garage-head');
+  head.hidden = false;
+  $('#garage-title').textContent = data.ship.name;
+  const discipline = garageShipDiscipline(data.ship.career, data.ship.role);
+  const sub = $('#garage-sub');
+  sub.textContent = '';
+  const badge = el('span', `garage-duty ${discipline.key}`, discipline.label);
+  badge.dataset.discipline = discipline.key;
+  badge.title = `Inferred from the community career / role: ${discipline.basis}`;
+  sub.append(badge, el('span', 'garage-subline', [data.ship.manufacturer, data.ship.role, data.ship.career,
+    `size ${data.ship.size}`, `crew ${data.ship.crew}`].filter(Boolean).join(' · ')));
+  $('#garage-source').textContent = `Community dataset${data.dump ? ` · dump ${data.dump}` : ''} · recomputed from the fitted parts`;
+  renderGarageRig(data);
+
+  const s = data.sheet;
+  const o = stock?.sheet || null;
+  const ship = data.ship;
+
+  const sheet = $('#garage-sheet');
+  sheet.textContent = '';
+
+  sheet.append(sheetGroup('Hull', 'ships.json', [
+    row('Hull HP', fmtInt(ship.health)),
+    row('Mass', `${fmtInt(s.mass)} kg`, 'The dataset’s stock figure, moved by what you changed.', o ? [o.mass, s.mass, ' kg'] : null),
+    s.crossSection.x || s.crossSection.y || s.crossSection.z
+      ? row('Cross-section', `${fmtInt(s.crossSection.x)} · ${fmtInt(s.crossSection.y)} · ${fmtInt(s.crossSection.z)}`,
+        'Front · side · top. Geometry: parts do not change it.')
+      : row('Cross-section', '—', 'The dataset carries none for this hull.'),
+    row('Cargo', ship.cargoScu ? `${fmt1(ship.cargoScu)} SCU` : '—'),
+    row('Fuel', `${fmtInt(ship.hydrogenFuel)} H · ${fmtInt(ship.quantumFuel)} Q`),
+  ]));
+
+  const f = ship.flight;
+  sheet.append(sheetGroup('Flight', 'ships.json', [
+    row('SCM', `${fmtInt(f.scm)} m/s`),
+    row('Boost', `${fmtInt(f.boost)} m/s`),
+    row('Max', `${fmtInt(f.max)} m/s`),
+    row('Pitch · yaw · roll', `${fmtInt(f.pitch)} · ${fmtInt(f.yaw)} · ${fmtInt(f.roll)} °/s`),
+  ]));
+
+  const w = s.weapons;
+  const ow = o?.weapons;
+  sheet.append(sheetGroup('Weapons', 'parts', [
+    // The caveat rides on both rows it moves guns between: the split is the
+    // one figure read from a port name, and on seven hulls the dump disagrees.
+    row('Pilot DPS', fmt1(w.fixedDps), [w.guns.length ? w.guns.join(', ') : 'No guns the pilot fires.', w.caveat].filter(Boolean).join(' · '), ow ? [ow.fixedDps, w.fixedDps] : null),
+    row('Sustained', fmt1(w.fixedSustainedDps), null, ow ? [ow.fixedSustainedDps, w.fixedSustainedDps] : null, true),
+    row('Alpha', fmt1(w.fixedAlpha), null, ow ? [ow.fixedAlpha, w.fixedAlpha] : null, true),
+    row('Turret DPS', w.turretDps ? fmt1(w.turretDps) : '—', [w.turretDps ? 'Crewed or remote turrets; somebody else fires these.' : null, w.caveat ? 'See the pilot row: the split between the two is the uncertain part.' : null].filter(Boolean).join(' ') || null, ow ? [ow.turretDps, w.turretDps] : null),
+    row('Missiles', w.missiles ? `${w.missiles} · ${fmtInt(w.missileDamage)} dmg` : '—', null, ow ? [ow.missileDamage, w.missileDamage] : null),
+  ]));
+
+  const sh = s.shield;
+  const osh = o?.shield;
+  sheet.append(sheetGroup('Defence', 'parts', [
+    row('Shield HP', fmtInt(sh.hp), sh.poolLimit && sh.generators > sh.poolLimit
+      ? `${sh.generators} generators fitted, ${sh.poolLimit} online: the pool caps it.` : null, osh ? [osh.hp, sh.hp] : null),
+    row('Shield regen', `${fmtInt(sh.regen)} /s`, null, osh ? [osh.regen, sh.regen] : null),
+    row('Generators', sh.poolLimit ? `${sh.generators} of ${sh.poolLimit}` : String(sh.generators)),
+    row('Armour', `EM ×${s.armorSignals.em} · IR ×${s.armorSignals.ir}`, 'The hull’s signal multipliers; every signature below carries them.'),
+  ]));
+
+  const sig = s.shields;
+  const osig = o?.shields;
+  const groups = Object.entries(sig.emByGroup || {}).sort((a, b) => b[1] - a[1]);
+  sheet.append(sheetGroup('Signature', 'model', [
+    row('EM, shields up', fmtInt(sig.em), 'Every part at maximum, quantum drive idle.', osig ? [osig.em, sig.em, '', true] : null),
+    ...groups.map(([g, v]) => row(garageWord(g), fmtInt(v), null,
+      osig ? [osig.emByGroup?.[g] || 0, v, '', true] : null, true)),
+    row('IR, shields up', fmtInt(sig.ir), 'Every part’s IR × armour × cooling load.', osig ? [osig.ir, sig.ir, '', true] : null),
+    row('EM · IR, in quantum', `${fmtInt(s.quantum.em)} · ${fmtInt(s.quantum.ir)}`, 'Drive spooled, shields down.',
+      o ? [o.quantum.em, s.quantum.em, '', true] : null),
+  ]));
+
+  const p = s.power;
+  const c = s.cooling;
+  const op = o?.power;
+  const oc = o?.cooling;
+  sheet.append(sheetGroup('Systems', 'parts', [
+    row('Power available', `${p.available} seg`, null, op ? [op.available, p.available] : null),
+    row('Drawn, shields up', `${fmt1(p.usedShields)} seg`, p.overShields ? 'Over budget: the game will brown something out.' : null,
+      op ? [op.usedShields, p.usedShields, '', true] : null),
+    row('Drawn, in quantum', `${fmt1(p.usedQuantum)} seg`, p.overQuantum ? 'Over budget in quantum.' : null,
+      op ? [op.usedQuantum, p.usedQuantum, '', true] : null),
+    row('Cooling generated', `${fmtInt(c.generated)} seg`, null, oc ? [oc.generated, c.generated] : null),
+    row('Cooling load', `${Math.round(c.loadShields * 100)}%`, c.loadShields > 1 ? 'Above 100%: the coolers cannot keep up at full draw.' : 'Used over generated, shields up. Lower is quieter.',
+      oc ? [oc.loadShields * 100, c.loadShields * 100, '%', true] : null),
+  ]));
+
+  const q = s.quantumDrive;
+  const oq = o?.quantumDrive;
+  sheet.append(sheetGroup('Quantum', 'parts', q ? [
+    row('Drive', q.drive),
+    row('Speed', fmtSpeed(q.speed), null, oq ? [oq.speed, q.speed, '', false, fmtSpeed] : null),
+    row('Spool · cooldown', `${fmt1(q.spoolTime)} s · ${fmt1(q.cooldown)} s`, null, oq ? [oq.spoolTime, q.spoolTime, ' s', true] : null),
+    row('Range', fmtDistance(q.range), 'Full tank over the drive’s fuel rate.', oq ? [oq.range, q.range, '', false, fmtDistance] : null),
+    row('Fuel per Gm', fmt1(q.fuelPerGm), null, oq ? [oq.fuelPerGm, q.fuelPerGm, '', true] : null),
+  ] : [row('Drive', 'None fitted')]));
+
+  const notes = $('#garage-notes');
+  notes.textContent = '';
+  notes.hidden = !(s.notes && s.notes.length);
+  for (const note of s.notes || []) notes.append(el('div', null, note));
+
+  renderBench(data);
+}
+
+// The reference calls this a career and role, not a ship allegiance. This is a
+// compact reading aid for the Garage, so the tooltip keeps the source visible
+// instead of claiming that every expedition or freighter is officially civil.
+function garageShipDiscipline(career, role) {
+  const basis = [career, role].filter(Boolean).join(' · ') || 'no career / role recorded';
+  const words = basis.toLowerCase();
+  if (/combat|fighter|bomber|gunship|destroyer|frigate|interceptor|interdiction/.test(words))
+    return { key: 'military', label: 'Military', basis };
+  if (/industrial|mining|salvage|repair|recovery|refuel|science/.test(words))
+    return { key: 'industrial', label: 'Industrial', basis };
+  return { key: 'civilian', label: 'Civilian', basis };
+}
+
+/**
+ * The bench is where alternatives are compared; this is the fitted ship at a
+ * glance. Ports stay as real, clickable cards rather than being painted onto
+ * an approximate hull drawing - the data knows attachment names, not 3D
+ * coordinates, and inventing coordinates would make a useful fit look exact.
+ */
+function renderGarageRig(data) {
+  const rig = $('#garage-rig');
+  const ports = (data.ports || []).filter((p) => BENCH_KINDS.includes(p.group));
+  rig.hidden = ports.length === 0;
+  if (!ports.length) return;
+
+  const left = $('#garage-rig-left');
+  const right = $('#garage-rig-right');
+  left.textContent = '';
+  right.textContent = '';
+
+  const leftKinds = new Set(['PowerPlant', 'Cooler', 'Shield', 'QuantumDrive', 'Radar', 'EMP', 'QuantumInterdictionGenerator']);
+  const rows = benchGroups(benchRows(ports));
+  for (const [kind, group] of rows) {
+    const side = leftKinds.has(kind) ? left : right;
+    for (const port of group) side.append(garageRigSlot(port, data.ship));
+  }
+
+  const model = $('#garage-ship-model');
+  model.textContent = '';
+  const code = makerAliases.get(String(data.ship.manufacturer || '').toLowerCase())
+    || String(data.ship.class || '').split('_')[0];
+  const maker = { code, name: MANUFACTURERS[code] || data.ship.manufacturer || 'Unknown maker' };
+  model.append(shipPicture({ name: data.ship.name, className: data.ship.class }, maker));
+
+  $('#garage-rig-count').textContent = `${ports.length} fitted port${ports.length === 1 ? '' : 's'}`;
+  const summary = $('#garage-ship-summary');
+  summary.textContent = '';
+  const power = data.sheet.power;
+  const powerHeadroom = power.available - power.usedShields;
+  for (const [label, value] of [
+    ['Shield', `${fmtInt(data.sheet.shield.hp)} HP`],
+    ['Pilot DPS', fmt1(data.sheet.weapons.fixedDps)],
+    ['Quantum', data.sheet.quantumDrive?.drive || '—'],
+    ['Power', power.overShields ? `${fmt1(Math.abs(powerHeadroom))} short` : `${fmt1(powerHeadroom)} spare`],
+  ]) {
+    const unhealthy = label === 'Power' && power.overShields;
+    const stat = el('div', `garage-ship-stat${unhealthy ? ' alert' : ''}`);
+    stat.append(el('span', null, label), el('b', null, value));
+    summary.append(stat);
+  }
+}
+
+function garageRigSlot(port, ship) {
+  const selected = port.portIds.includes(garageSelectedPort);
+  const button = el('button', `garage-rig-slot${port.changed ? ' changed' : ''}${selected ? ' selected' : ''}`);
+  button.type = 'button';
+  button.dataset.port = port.portIds[0];
+  button.setAttribute('aria-pressed', String(selected));
+  const many = port.portIds.length > 1;
+  const name = port.name || port.class || 'Empty port';
+  button.title = `${garageWord(port.group)} · ${garagePortName(port.hardpoint)} · ${name}`;
+  button.append(partMark(port.fitted, true));
+
+  const body = el('span', 'garage-rig-slot-body');
+  body.append(el('span', 'garage-rig-slot-kind', garageWord(port.group)));
+  const part = el('span', 'garage-rig-slot-name', name);
+  if (port.fitted) part.append(partChip(port.fitted));
+  if (many) part.append(el('span', 'chip count', `×${port.portIds.length}`));
+  body.append(part);
+  const figures = partFigures(port.fitted, ship).slice(0, 2);
+  if (figures.length) body.append(el('span', 'garage-rig-slot-spec', figures.map((f) => `${f[2]} ${f[0]}`).join(' · ')));
+  button.append(body);
+  button.addEventListener('click', () => selectBenchPort(port.portIds[0], true).catch(() => {}));
+  return button;
+}
+
+function sheetGroup(title, source, rows) {
+  const group = el('section', 'sheet-group');
+  const groupKey = title.toLowerCase();
+  group.dataset.group = groupKey;
+  const h = el('h3');
+  const label = el('span', 'sheet-title');
+  label.append(garageSheetIcon(groupKey), document.createTextNode(title));
+  h.append(el('span', 'src', source === 'model' ? 'signature model' : source));
+  h.prepend(label);
+  group.append(h);
+  for (const r of rows) if (r) group.append(r);
+  return group;
+}
+
+// These are diagrammatic system marks rather than imported game artwork: they
+// distinguish the questions the sheet answers while keeping the numbers as the
+// information a pilot is actually here to read.
+const SHEET_GROUP_ICON_SHAPES = {
+  hull: [['polygon', { points: '12,2 20,7 20,17 12,22 4,17 4,7' }], ['path', { d: 'M4 7l8 5 8-5M12 12v10' }]],
+  flight: [['path', { d: 'M3 13 12 3l9 10-6-1-3 9-3-9z' }]],
+  weapons: [['circle', { cx: 12, cy: 12, r: 4 }], ['circle', { cx: 12, cy: 12, r: 9 }], ['path', { d: 'M12 1v4m0 14v4M1 12h4m14 0h4' }]],
+  defence: [['path', { d: 'M12 2 20 5v6c0 5.4-3.3 9.2-8 11-4.7-1.8-8-5.6-8-11V5z' }], ['path', { d: 'm8.5 12 2.2 2.2 4.8-5' }]],
+  signature: [['circle', { cx: 12, cy: 12, r: 9 }], ['circle', { cx: 12, cy: 12, r: 3 }], ['path', { d: 'M12 12 19 5M12 3v2M3 12h2' }]],
+  systems: [['path', { d: 'M4 7h6V4h4v5h6M4 17h6v3h4v-5h6' }], ['circle', { cx: 4, cy: 7, r: 1.5 }], ['circle', { cx: 20, cy: 17, r: 1.5 }]],
+  quantum: [['path', { d: 'M3 12h14M11 7l6 5-6 5M4 7h6M4 17h6' }], ['circle', { cx: 4, cy: 12, r: 1.5 }]],
+};
+
+function garageSheetIcon(group) {
+  const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  icon.setAttribute('class', 'sheet-icon');
+  icon.setAttribute('viewBox', '0 0 24 24');
+  icon.setAttribute('aria-hidden', 'true');
+  icon.dataset.icon = group;
+  for (const [tag, attrs] of SHEET_GROUP_ICON_SHAPES[group] || SHEET_GROUP_ICON_SHAPES.hull) {
+    const shape = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const [name, value] of Object.entries(attrs)) shape.setAttribute(name, value);
+    icon.append(shape);
+  }
+  return icon;
+}
+
+/**
+ * One line of the sheet.
+ *
+ * @param delta [was, now, unit, lowerIsBetter, format] - when the bench has
+ *   changed something, the old figure is struck beside the new one and the new
+ *   one coloured by whether it got better, which depends on the figure.
+ */
+function row(label, value, note, delta, sub = false) {
+  const r = el('div', `sheet-row${sub ? ' sub' : ''}`);
+  r.dataset.key = label;
+  r.append(el('span', 'k', label));
+
+  const v = el('span', 'v');
+  if (delta && Number.isFinite(delta[0]) && Number.isFinite(delta[1]) && Math.abs(delta[0] - delta[1]) > 1e-9) {
+    const [was, now, unit = '', lowerIsBetter = false, format = null] = delta;
+    const wasText = format ? format(was) : `${fmtSmart(was)}${unit}`;
+    v.append(el('span', 'was', wasText));
+    const better = lowerIsBetter ? now < was : now > was;
+    v.classList.add(better ? 'up' : 'down');
+  }
+  v.append(document.createTextNode(value));
+  r.append(v);
+
+  if (note) r.append(el('span', 'n', note));
+  return r;
+}
+
+const fmtSmart = (n) => Number.isInteger(n) ? fmtInt(n) : fmt1(n);
+
+/* ---------- the bench ---------- */
+
+/** Port id → class fitted instead of stock. Empty means the stock fit. */
+let garageSwaps = {};
+let garageSelectedPort = null;
+let garageOptions = null;
+
+/** The kinds in the order a pilot thinks about them, and the figure that heads each. */
+const BENCH_KINDS = ['PowerPlant', 'Cooler', 'Shield', 'QuantumDrive', 'WeaponGun', 'MissileLauncher', 'Missile', 'Radar',
+  'EMP', 'QuantumInterdictionGenerator', 'WeaponMining'];
+
+
+/**
+ * The maker's mark for a part: the Fankit logo where the app has one, and a
+ * monogram of the maker's code otherwise. The game files hold no picture of a
+ * component, so this is the only face a cooler has.
+ */
+function partMark(part, small = false) {
+  const mark = el('span', `part-mark${small ? ' small' : ''}`);
+  const code = part?.makerCode || null;
+  const name = part?.manufacturer || code || '';
+  mark.title = part?.name ? `${part.name}${name ? ` - ${name}` : ''}` : name;
+
+  // The maker's face: the Fankit logo where the app has one (the hull
+  // makers), the wiki's logo for the component makers the Fankit does not
+  // cover, a monogram when the wiki has none either - or when it answers
+  // 404, which swaps the monogram in after the fact.
+  const mono = () => el('span', 'mono-mark', monogram(code, name));
+  const maker = () => {
+    if (!code) return mono();
+    const img = document.createElement('img');
+    img.alt = name;
+    img.loading = 'lazy';
+    if (MANUFACTURER_LOGOS.has(code)) {
+      img.src = `assets/manufacturers/${code}.png`;
+    } else {
+      img.className = 'maker-pic';
+      img.src = `/api/garage/maker/${encodeURIComponent(code)}`;
+      img.addEventListener('error', () => img.replaceWith(mono()));
+    }
+    return img;
+  };
+
+  // The part itself where the wiki has a picture of it, which is about half
+  // of the bench; the 404 for the other half is the cue to show the maker
+  // instead, so a radar without a picture is not a broken image.
+  if (part?.uuid) {
+    const pic = document.createElement('img');
+    pic.className = 'part-pic';
+    pic.src = `/api/garage/picture/${encodeURIComponent(part.uuid)}`;
+    pic.alt = part.name || '';
+    pic.loading = 'lazy';
+    pic.addEventListener('error', () => { mark.classList.remove('pic'); pic.replaceWith(maker()); });
+    mark.classList.add('pic');
+    mark.append(pic);
+  } else {
+    mark.append(maker());
+  }
+  return mark;
+}
+
+
+/** A maker's code, else the initials of its name: Wen-Cassel Propulsion → WCP. */
+function monogram(code, name) {
+  if (code) return code.toUpperCase().slice(0, 4);
+  const initials = String(name || '').split(/[\s\-&]+/).filter(Boolean).map((w) => w[0]).join('');
+  return (initials || '?').toUpperCase().slice(0, 4);
+}
+
+/** The size-and-grade chip: S2 · B. */
+function partChip(part) {
+  const grade = gradeLetter(part?.grade);
+  return el('span', `chip${/^[A-D]$/.test(grade) ? ` grade-${grade.toLowerCase()}` : ''}`, `S${part?.size ?? '?'} · ${grade}`);
+}
+
+/** The game's class line makes a part's intended discipline visible on the bench. */
+function componentClassChip(componentClass) {
+  if (!componentClass) return null;
+  const key = String(componentClass).toLowerCase();
+  const chip = el('span', `component-class ${key}`, componentClass);
+  chip.title = 'Component class from the game\'s item description';
+  return chip;
+}
+
+/** A route is useful only when its kind is stated: a shop and a recipe answer different plans. */
+function acquisitionChip(kind, text, title) {
+  const chip = el('span', `acquisition ${kind}`, text);
+  chip.title = title;
+  return chip;
+}
+
+/**
+ * The figures that matter for a kind, as [label, value, formatted, lowerIsBetter].
+ * These head the port row and the candidate rows, so the two read alike.
+ */
+function partFigures(part, ship) {
+  if (!part) return [];
+  const t = part.type;
+  if (part.weapon) {
+    return [['DPS', part.weapon.dps, fmt1(part.weapon.dps)], ['alpha', part.weapon.alpha, fmt1(part.weapon.alpha)],
+      ['range', part.weapon.range, `${fmtInt(part.weapon.range)} m`], ['sustained', part.weapon.sustainedDps, fmt1(part.weapon.sustainedDps)]];
+  }
+  if (part.shield) {
+    return [['HP', part.shield.hp, fmtInt(part.shield.hp)], ['regen', part.shield.regen, `${fmtInt(part.shield.regen)}/s`],
+      ['EM', part.em, fmtInt(part.em), true], ['draw', part.powerUseMax, `${fmt1(part.powerUseMax)} seg`, true]];
+  }
+  if (part.quantum) {
+    const range = ship?.quantumFuel && part.quantum.fuelRate ? ship.quantumFuel / part.quantum.fuelRate : null;
+    return [['speed', part.quantum.speed, fmtSpeed(part.quantum.speed)], ['spool', part.quantum.spoolTime, `${fmt1(part.quantum.spoolTime)} s`, true],
+      ...(range ? [['range', range, fmtDistance(range)]] : []), ['EM', part.em, fmtInt(part.em), true]];
+  }
+  if (part.missile) {
+    return [['dmg', part.missile.damage, fmtInt(part.missile.damage)], ['speed', part.missile.speed, `${fmtInt(part.missile.speed)} m/s`],
+      ['lock', part.missile.lockTime, `${fmt1(part.missile.lockTime)} s`, true], ['range', part.missile.range, fmtDistance(part.missile.range)]];
+  }
+  if (t === 'Cooler') {
+    return [['coolant', part.coolantGen, fmtInt(part.coolantGen)], ['IR', part.ir, fmtInt(part.ir), true], ['EM', part.em, fmtInt(part.em), true],
+      ['draw', part.powerUseMax, `${fmt1(part.powerUseMax)} seg`, true]];
+  }
+  if (t === 'PowerPlant') {
+    return [['power', part.powerGen, `${fmtInt(part.powerGen)} seg`], ['EM', part.em, fmtInt(part.em), true], ['HP', part.health, fmtInt(part.health)]];
+  }
+  const bits = [];
+  if (part.em) bits.push(['EM', part.em, fmtInt(part.em), true]);
+  if (part.ir) bits.push(['IR', part.ir, fmtInt(part.ir), true]);
+  if (part.powerUseMax) bits.push(['draw', part.powerUseMax, `${fmt1(part.powerUseMax)} seg`, true]);
+  if (part.health) bits.push(['HP', part.health, fmtInt(part.health)]);
+  return bits;
+}
+
+/** The one figure a port row leads with. */
+function headFigure(part, ship) {
+  const [first] = partFigures(part, ship);
+  return first ? `${first[2]} ${first[0]}` : '';
+}
+
+/** Ports by kind, in bench order, then by hardpoint name so two coolers sit together. */
+function benchGroups(ports) {
+  const order = new Map(BENCH_KINDS.map((k, i) => [k, i]));
+  const groups = new Map();
+  for (const port of ports) {
+    const kind = port.group;
+    if (!groups.has(kind)) groups.set(kind, []);
+    groups.get(kind).push(port);
+  }
+  return [...groups.entries()]
+    .sort((a, b) => (order.get(a[0]) ?? 99) - (order.get(b[0]) ?? 99))
+    .map(([kind, list]) => [kind, list.sort((a, b) => a.hardpoint.localeCompare(b.hardpoint))]);
+}
+
+/**
+ * Identical ports fold into one row. Sixteen missile ports carrying the same
+ * missile are one decision, not sixteen: the row says ×16, and a part fitted
+ * from it goes on all of them. Two coolers with different parts stay apart.
+ */
+function benchRows(ports) {
+  const rows = new Map();
+  for (const port of ports) {
+    const key = [port.group, port.minSize, port.maxSize, port.stockClass || '', port.class || ''].join('|');
+    if (!rows.has(key)) rows.set(key, { ...port, portIds: [] });
+    rows.get(key).portIds.push(port.portId);
+  }
+  return [...rows.values()];
+}
+
+/** The bench's ports as last drawn - the current fit, not stock. */
+let garageBenchPorts = [];
+
+/**
+ * Every port folded into the row that holds this one - the row as it is on
+ * screen. The rows fold by what is fitted now, so two coolers that started
+ * alike and were changed apart are two rows; deciding from the stock fit put
+ * a part meant for cooler 1 on cooler 2 as well.
+ */
+function siblingsOf(portId) {
+  const current = benchRows(garageBenchPorts).find((r) => r.portIds.includes(portId));
+  if (current) return current.portIds;
+  const stock = benchRows((garageStock?.ports || []).filter((p) => BENCH_KINDS.includes(p.group)));
+  return stock.find((r) => r.portIds.includes(portId))?.portIds || [portId];
+}
+
+function renderBench(data) {
+  const ports = (data.ports || []).filter((p) => BENCH_KINDS.includes(p.group));
+  garageBenchPorts = ports;
+  const optimizer = $('#garage-optimizer');
+  const bar = $('#garage-bench-bar');
+  const bench = $('#garage-bench');
+  const caption = $('#garage-bench-caption');
+  optimizer.hidden = bar.hidden = bench.hidden = caption.hidden = ports.length === 0;
+  if (!ports.length) return;
+
+  const changed = ports.filter((p) => p.changed).length;
+  $('#garage-changes').textContent = changed ? `${changed} part${changed === 1 ? '' : 's'} changed` : 'Stock fit';
+  $('#garage-changes').className = changed ? 'changed' : 'muted';
+  $('#garage-reset').hidden = !changed;
+  $('#garage-shop').hidden = !changed;
+
+  const list = $('#garage-bench-ports');
+  list.textContent = '';
+
+  for (const [kind, group] of benchGroups(ports)) {
+    list.append(el('div', 'bench-kind', `${garageWord(kind)}${group.length > 1 ? ` · ${group.length}` : ''}`));
+    for (const port of benchRows(group)) {
+      const many = port.portIds.length > 1;
+      const selected = port.portIds.includes(garageSelectedPort);
+      const rowEl = el('div', `bench-port${port.changed ? ' changed' : ''}${selected ? ' selected' : ''}`);
+      rowEl.dataset.port = port.portIds[0];
+      rowEl.dataset.count = String(port.portIds.length);
+      rowEl.append(partMark(port.fitted));
+
+      const mid = el('div');
+      const name = el('div', 'part-name', port.name || (port.class ? port.class : 'empty'));
+      if (port.fitted) name.append(partChip(port.fitted));
+      if (many) name.append(el('span', 'chip count', `×${port.portIds.length}`));
+      mid.append(name);
+      const sub = el('div', 'port-name', many ? `${garagePortName(port.hardpoint)} and ${port.portIds.length - 1} more` : garagePortName(port.hardpoint));
+      if (port.changed) sub.append(el('span', 'was', `was ${port.stockName || port.stockClass || 'empty'}`));
+      mid.append(sub);
+      rowEl.append(mid);
+
+      const figure = el('div', 'figure');
+      const [first, second] = partFigures(port.fitted, data.ship);
+      if (first) figure.append(el('b', null, `${first[2]} ${first[0]}`));
+      if (second) figure.append(document.createTextNode(`${second[2]} ${second[0]}`));
+      rowEl.append(figure);
+
+      rowEl.addEventListener('click', () => selectBenchPort(port.portIds[0]).catch(() => {}));
+      list.append(rowEl);
+    }
+  }
+}
+
+/** Opens the candidates for one port. */
+async function selectBenchPort(portId, revealChoices = false) {
+  const request = ++benchRequest;
+  const cls = garageClass;
+  garageSelectedPort = portId;
+  for (const rowEl of $$('#garage-bench-ports .bench-port')) rowEl.classList.toggle('selected', rowEl.dataset.port === portId);
+  // The fitted-layout cards are another way into this same port, so the
+  // selected state must move in both views rather than leaving two answers.
+  renderGarageRig(garageStock);
+
+  const panel = $('#garage-bench-panel');
+  panel.textContent = '';
+  panel.append(el('p', 'muted', 'Looking up what fits…'));
+
+  let options;
+  try {
+    options = await getJson(`/api/garage/${encodeURIComponent(cls)}/options?port=${encodeURIComponent(portId)}`);
+  } catch {
+    if (request !== benchRequest || cls !== garageClass) return;
+    panel.textContent = '';
+    panel.append(el('p', 'muted', 'Could not read what fits this port.'));
+    return;
+  }
+  // A later pick, or another ship, has taken the panel; this answer is for a port nobody is looking at.
+  if (request !== benchRequest || cls !== garageClass) return;
+
+  garageOptions = options;
+  renderBenchPanel();
+  if (revealChoices) revealGarageChoices(panel);
+}
+
+/** A card in the fitted layout opens a result well below the fold. Move to
+ * that answer once it has rendered; without this, the click can look inert. */
+function revealGarageChoices(panel) {
+  panel.tabIndex = -1;
+  panel.focus({ preventScroll: true });
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderBenchPanel() {
+  const panel = $('#garage-bench-panel');
+  if (!garageOptions || !garageStock) { panel.textContent = ''; return; }
+
+  // The search box stays where it is while its results redraw: rebuilding it
+  // on every keystroke took the focus with it, and typing "cold" left "c".
+  // Head, tools and the list are three boxes; only what changed is redrawn,
+  // and the box is a new one only when the port is.
+  const sameport = panel.dataset.port === garageOptions.port.portId && panel.querySelector('.bench-search');
+  if (!sameport) {
+    panel.textContent = '';
+    panel.dataset.port = garageOptions.port.portId;
+  }
+
+  const port = (garageStock.ports || []).find((p) => p.portId === garageOptions.port.portId) || null;
+  const current = currentClassOf(port);
+  const fittedPart = garageOptions.options.find((o) => o.part.class === current)?.part || port?.fitted || null;
+  const ship = garageStock.ship;
+  const terminalOnly = $('#garage-optimise-buyable').checked;
+  const term = (garageOptions.filter || '').trim().toLowerCase();
+  const keyIndex = 0;
+  // Keep the fitted part in view even when it has no known terminal seller:
+  // the Bench is still where a pilot compares its current component before
+  // choosing a purchasable replacement.
+  const rows = garageOptions.options
+    .filter((o) => !terminalOnly || o.shops?.length || o.part.class === current)
+    .filter((o) => !term || `${o.part.name} ${o.part.manufacturer || ''} ${o.part.makerCode || ''}`.toLowerCase().includes(term))
+    .sort((a, b) => {
+      const fa = partFigures(a.part, ship)[keyIndex];
+      const fb = partFigures(b.part, ship)[keyIndex];
+      if (!fa || !fb) return 0;
+      // Sorted so the best of the kind is on top: more DPS, less spool.
+      return fa[3] ? fa[1] - fb[1] : fb[1] - fa[1];
+    });
+
+  const head = sameport ? panel.querySelector('.panel-head') : el('div', 'panel-head');
+  head.textContent = '';
+  head.append(el('div', 'panel-title', `${garageWord(port?.group || garageOptions.port.kinds[0])} · ${garagePortName(garageOptions.port.hardpoint)}`));
+  const sizes = garageOptions.port.minSize === garageOptions.port.maxSize ? `size ${garageOptions.port.maxSize}` : `sizes ${garageOptions.port.minSize}–${garageOptions.port.maxSize}`;
+  const many = siblingsOf(garageOptions.port.portId).length;
+  head.append(el('div', 'panel-sub', `${sizes}${many > 1 ? ` · ${many} ports alike, fitted together` : ''} · now fitted: ${fittedPart?.name || 'nothing'}${garageOptions.pricesKnown ? '' : ' · prices need UEX (Settings)'}${garageOptions.marketKnown ? '' : ' · player listings need the Player marketplace feed (Settings)'}`));
+  if (!sameport) panel.append(head);
+
+  const countText = `${rows.length} of ${garageOptions.options.length} fit${terminalOnly ? ' · terminal aUEC only' : ''} · sorted by ${partFigures(fittedPart || garageOptions.options[0]?.part, ship)[0]?.[0] || 'name'}`;
+  let list;
+  if (sameport) {
+    panel.querySelector('.bench-count').textContent = countText;
+    list = panel.querySelector('.candidates');
+    list.textContent = '';
+  } else {
+    const tools = el('div', 'panel-tools');
+    const search = el('input', 'search bench-search');
+    search.type = 'search';
+    search.placeholder = 'Filter by name or maker…';
+    search.value = garageOptions.filter || '';
+    search.addEventListener('input', () => { garageOptions.filter = search.value; renderBenchPanel(); });
+    tools.append(search);
+    tools.append(el('span', 'muted bench-count', countText));
+    panel.append(tools);
+    list = el('div', 'candidates');
+    panel.append(list);
+  }
+
+  if (!rows.length) {
+    list.append(el('p', 'muted', terminalOnly
+      ? 'No terminal aUEC seller is recorded for a compatible replacement.'
+      : 'Nothing in the reference fits this port.'));
+    return;
+  }
+
+  const fittedFigures = partFigures(fittedPart, ship);
+
+  for (const option of rows) {
+    const part = option.part;
+    const isCurrent = part.class === current;
+    const isStock = part.class === port?.stockClass;
+
+    const rowEl = el('div', `candidate${isCurrent ? ' fitted' : ''}`);
+    rowEl.append(partMark(part));
+
+    const mid = el('div');
+    const name = el('div', 'c-name', part.name);
+    name.append(partChip(part));
+    const componentClass = componentClassChip(option.componentClass);
+    if (componentClass) name.append(componentClass);
+    mid.append(name);
+    mid.append(el('div', 'c-maker', part.manufacturer || part.makerCode || ''));
+
+    // Each figure beside how it compares with what is in the port now, coloured
+    // by whether that is better for the figure: less IR good, less DPS not.
+    const figures = el('div', 'c-figures');
+    partFigures(part, ship).forEach(([label, value, text, lowerIsBetter], i) => {
+      const span = el('span');
+      span.append(el('b', null, text), document.createTextNode(` ${label}`));
+      const ref = fittedFigures[i];
+      if (ref && !isCurrent && Number.isFinite(ref[1]) && Math.abs(ref[1] - value) > 1e-9) {
+        const better = lowerIsBetter ? value < ref[1] : value > ref[1];
+        const diff = value - ref[1];
+        span.append(el('span', better ? 'd-up' : 'd-down', ` ${diff > 0 ? '+' : '−'}${fmtSmart(Math.abs(diff))}`));
+      }
+      figures.append(span);
+    });
+    mid.append(figures);
+
+    const shop = el('div', 'c-shop');
+    if (option.shops && option.shops.length) {
+      const best = option.shops[0];
+      shop.append(acquisitionChip('terminal', 'Terminal aUEC', 'Known NPC terminal seller from the UEX market feed.'));
+      shop.append(el('b', null, `${fmtInt(best.price)} aUEC`));
+      shop.append(document.createTextNode(` · ${best.terminal}${best.place ? `, ${best.place}` : ''}${option.shops.length > 1 ? ` +${option.shops.length - 1}` : ''}`));
+    } else if (garageOptions.pricesKnown) {
+      if (option.craftable) {
+        shop.append(acquisitionChip('craft', 'Blueprint recipe', 'The installed game data contains a recipe; see Crafting for its materials and whether you own the blueprint.'));
+        shop.append(document.createTextNode(' No terminal aUEC seller recorded.'));
+      } else {
+        shop.append(acquisitionChip('unlisted', 'No terminal seller', 'No NPC terminal seller is recorded in the UEX market feed.'));
+      }
+    }
+    // A player offering it is a third route, and a different kind of answer:
+    // one person's ask this week, with the deal made on UEX, not a counter.
+    if (option.listings && option.listings.length) {
+      if (shop.childElementCount) shop.append(el('br'));
+      shop.append(listingLine(option.listings[0], option.listings.length - 1));
+    }
+    mid.append(shop);
+    rowEl.append(mid);
+
+    const act = el('div', 'c-act');
+    if (isCurrent) {
+      act.append(el('span', 'state', isStock ? 'Stock' : 'Fitted'));
+    } else {
+      const fit = el('button', 'ghost tiny', isStock ? 'Back to stock' : 'Fit');
+      fit.type = 'button';
+      // Fitting from this list is an intentional purchase decision. A known
+      // seller lets it become its own shopping line; unknown sellers stay a
+      // useful bench comparison without leaving an un-routable list behind.
+      const autoShop = !isStock && option.shops?.length ? { name: part.name, shop: option.shops[0] } : null;
+      fit.addEventListener('click', () => fitPart(garageOptions.port.portId, isStock ? null : part.class, autoShop).catch(() => {}));
+      act.append(fit);
+    }
+    rowEl.append(act);
+
+    list.append(rowEl);
+  }
+}
+
+/** What is in a port now: the swap if there is one, else stock. */
+function currentClassOf(port) {
+  if (!port) return null;
+  return Object.prototype.hasOwnProperty.call(garageSwaps, port.portId) ? garageSwaps[port.portId] : port.stockClass;
+}
+
+/**
+ * Puts a part in a port - and in every port folded into the same bench row,
+ * since a row of sixteen missiles is one decision. A null class takes them
+ * back to stock, and a bench with nothing changed is the stock sheet again,
+ * deltas and all.
+ */
+async function fitPart(portId, cls, autoShop = null) {
+  const portIds = siblingsOf(portId);
+  for (const id of portIds) {
+    if (cls === null) delete garageSwaps[id];
+    else garageSwaps[id] = cls;
+  }
+  await refitGarage();
+
+  // A folded row may represent sixteen missile ports, but it is still one
+  // shopping decision and one shopping-list line with the matching count.
+  // Every other edit - a part with no seller, a port put back to stock -
+  // reconciles the list the Garage already keeps, so a purchase undone on
+  // the bench does not stay on the Shopping page.
+  if (autoShop && cls !== null) {
+    await addFittedPartToShopping(portIds, autoShop);
+  } else {
+    await reconcileBenchShopping();
+  }
+}
+
+/* One goal, one honest measure. A DPS fit does not silently replace coolers,
+ * and a stealth fit only scores components whose two signatures are known. */
+const GARAGE_OPTIMISE_GOALS = {
+  stealth: 'stealth', alpha: 'alpha DPS', sustained: 'sustained DPS', missile: 'missile damage', shield: 'shield HP',
+  quantumSpeed: 'quantum speed', quantumRange: 'quantum range', cooling: 'cooling', power: 'power headroom',
+};
+
+function optimiseScore(part, goal, ship) {
+  if (goal === 'stealth') {
+    if (!Number.isFinite(part.em) || !Number.isFinite(part.ir)) return null;
+    return -(part.em + part.ir);
+  }
+  if (goal === 'alpha') return Number.isFinite(part.weapon?.alpha) ? part.weapon.alpha : null;
+  if (goal === 'sustained') return Number.isFinite(part.weapon?.sustainedDps) ? part.weapon.sustainedDps : null;
+  if (goal === 'missile') return Number.isFinite(part.missile?.damage) ? part.missile.damage : null;
+  if (goal === 'shield') return Number.isFinite(part.shield?.hp) ? part.shield.hp : null;
+  if (goal === 'quantumSpeed') return Number.isFinite(part.quantum?.speed) ? part.quantum.speed : null;
+  if (goal === 'quantumRange') {
+    if (!Number.isFinite(part.quantum?.fuelRate) || part.quantum.fuelRate <= 0 || !Number.isFinite(ship.quantumFuel)) return null;
+    return ship.quantumFuel / part.quantum.fuelRate;
+  }
+  if (goal === 'cooling') return part.type === 'Cooler' && Number.isFinite(part.coolantGen) ? part.coolantGen : null;
+  if (goal === 'power') return part.type === 'PowerPlant' && Number.isFinite(part.powerGen) ? part.powerGen : null;
+  return null;
+}
+
+async function optimiseGarage() {
+  if (!garageClass || !garageStock) return;
+  const button = $('#garage-optimise');
+  const status = $('#garage-optimise-status');
+  const goal = $('#garage-optimise-goal').value;
+  const buyableOnly = $('#garage-optimise-buyable').checked;
+  // The rows as the bench shows them - the current fit - so a cooler changed
+  // apart from its twin is decided on its own.
+  const rows = benchRows(garageBenchPorts.length ? garageBenchPorts : (garageStock.ports || []).filter((p) => BENCH_KINDS.includes(p.group)));
+  const cls = garageClass;
+  button.disabled = true;
+  status.textContent = `Finding the best ${GARAGE_OPTIMISE_GOALS[goal] || 'fit'}…`;
+
+  let changed = 0;
+  let unavailable = 0;
+  try {
+    for (const row of rows) {
+      const options = garageOptions?.port?.portId === row.portIds[0]
+        ? garageOptions
+        : await getJson(`/api/garage/${encodeURIComponent(garageClass)}/options?port=${encodeURIComponent(row.portIds[0])}`).catch(() => null);
+      if (!options) { unavailable += row.portIds.length; continue; }
+      // The ship changed under the optimiser: its choices belong to the old bench.
+      if (cls !== garageClass) return;
+
+      const ranked = (options.options || [])
+        .filter((option) => !buyableOnly || option.shops?.length)
+        .map((option) => ({ option, score: optimiseScore(option.part, goal, garageStock.ship) }))
+        .filter((entry) => Number.isFinite(entry.score))
+        .sort((a, b) => b.score - a.score || a.option.part.name.localeCompare(b.option.part.name));
+      if (!ranked.length) continue; // This port does not affect the selected goal.
+
+      const best = ranked[0].option.part;
+      if (best.class === currentClassOf(row)) continue;
+      for (const id of row.portIds) {
+        if (best.class === (garageStock.ports || []).find((p) => p.portId === id)?.stockClass) delete garageSwaps[id];
+        else garageSwaps[id] = best.class;
+      }
+      changed += row.portIds.length;
+    }
+
+    if (changed) { await refitGarage(); await reconcileBenchShopping(); }
+    const scope = buyableOnly ? ' from known terminal aUEC sellers' : '';
+    status.textContent = changed
+      ? `Optimised ${changed} port${changed === 1 ? '' : 's'} for ${GARAGE_OPTIMISE_GOALS[goal]}${scope}. Review the sheet, then add the changed parts to Shopping when you are ready to buy.`
+      : `Nothing on this fit changed for ${GARAGE_OPTIMISE_GOALS[goal]}${scope}.`;
+    if (unavailable) status.textContent += ` ${unavailable} port${unavailable === 1 ? '' : 's'} could not be read.`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+/* ---------- saved builds ---------- */
+
+/** The builds saved for the ship on the bench, the one open for editing, and what deltas are measured from. */
+let garageBuilds = [];
+let garageOpenBuild = null;
+let garageCompare = '';
+const garageSheetCache = new Map();
+
+/** Opens the Garage on a ship from elsewhere - the Fleet card's button. */
+function openGarageFor(cls) {
+  garageClass = cls;
+  showView('garage');
+}
+
+async function loadBuilds() {
+  const cls = garageClass;
+  let builds;
+  try {
+    builds = await getJson(`/api/garage/builds?ship=${encodeURIComponent(cls)}`);
+  } catch {
+    builds = [];
+  }
+  // Another ship's builds must not land on this bench.
+  if (cls !== garageClass) return;
+  garageBuilds = builds;
+  renderBuilds();
+}
+
+function renderBuilds() {
+  const box = $('#garage-builds');
+  box.textContent = '';
+  box.hidden = garageBuilds.length === 0;
+
+  for (const build of garageBuilds) {
+    const chip = el('span', `build-chip${build.id === garageOpenBuild ? ' open' : ''}`);
+    chip.dataset.build = build.id;
+    chip.append(el('span', null, build.name));
+    const n = Object.keys(build.swaps || {}).length;
+    chip.append(el('span', 'meta', `${n} part${n === 1 ? '' : 's'} · ${relative(build.updatedAt)}`));
+    chip.addEventListener('click', () => openBuild(build.id).catch(() => {}));
+
+    const drop = el('button', 'drop', '×');
+    drop.type = 'button';
+    drop.title = `Delete "${build.name}"`;
+    drop.addEventListener('click', (e) => { e.stopPropagation(); deleteBuild(build.id).catch(() => {}); });
+    chip.append(drop);
+    box.append(chip);
+  }
+
+  const compare = $('#garage-compare');
+  const keep = garageCompare;
+  compare.textContent = '';
+  const stock = el('option', null, 'Stock');
+  stock.value = '';
+  compare.append(stock);
+  for (const build of garageBuilds) {
+    const option = el('option', null, build.name);
+    option.value = build.id;
+    compare.append(option);
+  }
+  compare.value = garageBuilds.some((b) => b.id === keep) ? keep : '';
+  garageCompare = compare.value;
+
+  $('#garage-update').hidden = !garageOpenBuild;
+}
+
+async function openBuild(id) {
+  const build = garageBuilds.find((b) => b.id === id);
+  if (!build) return;
+  garageOpenBuild = id;
+  garageSwaps = { ...(build.swaps || {}) };
+  await refitGarage();
+}
+
+async function saveBuild(name) {
+  const res = await fetch('/api/garage/builds', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ shipClass: garageClass, name, swaps: garageSwaps }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const build = await res.json();
+  garageBuilds.unshift(build);
+  garageOpenBuild = build.id;
+  renderBuilds();
+}
+
+/** Writes the bench's swaps into the build that is open. */
+async function updateBuild() {
+  if (!garageOpenBuild) return;
+  const res = await fetch(`/api/garage/builds/${encodeURIComponent(garageOpenBuild)}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ swaps: garageSwaps }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const build = await res.json();
+  garageBuilds = garageBuilds.map((b) => (b.id === build.id ? build : b));
+  garageSheetCache.delete(build.id);
+  renderBuilds();
+}
+
+async function deleteBuild(id) {
+  const res = await fetch(`/api/garage/builds/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
+  garageBuilds = garageBuilds.filter((b) => b.id !== id);
+  garageSheetCache.delete(id);
+  if (garageOpenBuild === id) garageOpenBuild = null;
+  if (garageCompare === id) garageCompare = '';
+  renderBuilds();
+  await refitGarage();
+}
+
+/** The sheet for a set of swaps, asked of the server once per distinct fit. */
+async function sheetFor(swaps) {
+  if (!Object.keys(swaps).length) return garageStock;
+  const key = JSON.stringify(Object.entries(swaps).sort());
+  if (garageSheetCache.has(key)) return garageSheetCache.get(key);
+
+  const res = await fetch(`/api/garage/${encodeURIComponent(garageClass)}/sheet`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ swaps }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const data = { ...(await res.json()), ship: garageStock.ship };
+  garageSheetCache.set(key, data);
+  return data;
+}
+
+/**
+ * Redraws the sheet for the bench's swaps, with the struck figures measured
+ * from stock or from the build chosen under "Compare against" - which is how
+ * two builds are set side by side without a second sheet on the page.
+ */
+async function refitGarage() {
+  if (!garageClass || !garageStock) return;
+  const request = ++refitRequest;
+  const cls = garageClass;
+
+  const current = await sheetFor(garageSwaps);
+  const against = garageBuilds.find((b) => b.id === garageCompare);
+  const reference = against ? await sheetFor(against.swaps || {}) : garageStock;
+  // A newer refit, or another ship, has the bench now; this sheet is stale.
+  if (request !== refitRequest || cls !== garageClass) return;
+
+  garageSheet = current.sheet;
+  renderGarage(current, reference === current ? null : reference);
+  renderBench(current);
+  renderBenchPanel();
+  renderBuilds();
+}
+
+async function resetGarage() {
+  garageSwaps = {};
+  garagePhotoApplied = false;
+  $('#garage-optimise-status').textContent = '';
+  await refitGarage();
+  renderGaragePhoto();
+  await reconcileBenchShopping();
+}
+
+$('#garage-reset')?.addEventListener('click', () => resetGarage().catch(() => {}));
+$('#garage-update')?.addEventListener('click', () => updateBuild().catch(() => {}));
+$('#garage-save')?.addEventListener('click', () => {
+  const form = $('#garage-save-form');
+  form.hidden = !form.hidden;
+  if (!form.hidden) $('#garage-save-name').focus();
+});
+$('#garage-save-cancel')?.addEventListener('click', () => { $('#garage-save-form').hidden = true; });
+$('#garage-save-form')?.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const name = $('#garage-save-name').value.trim();
+  $('#garage-save-form').hidden = true;
+  $('#garage-save-name').value = '';
+  saveBuild(name || 'Untitled build').catch(() => {});
+});
+onInput('#garage-compare', () => { garageCompare = $('#garage-compare').value; refitGarage().catch(() => {}); });
+
+/**
+ * The bench's changes as a shopping list. The server writes the job and
+ * proposes the stop that sells the most of it; this says what it did and
+ * links to the list, and nothing else - from here it is the Shopping page's
+ * flow, the Now page's, the MFD's.
+ */
+/**
+ * The list the Garage keeps for this bench, brought up to date with what is
+ * on it now and never started here: a fit put back to stock removes the
+ * list rather than leaving a purchase nobody wants on the Shopping page.
+ */
+async function reconcileBenchShopping() {
+  if (!garageClass) return;
+  await shopForBench(true);
+}
+
+async function shopForBench(onlyIfExists = false) {
+  const result = $('#garage-shop-result');
+  result.hidden = true;
+  if (!garageClass) return;
+  if (!onlyIfExists && !Object.keys(garageSwaps).length) return;
+
+  const open = garageBuilds.find((b) => b.id === garageOpenBuild);
+  const title = open ? open.name : `${garageStock?.ship?.name || garageClass} fit`;
+
+  const res = await fetch(`/api/garage/${encodeURIComponent(garageClass)}/shop`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ swaps: garageSwaps, title, onlyIfExists }),
+  });
+
+  if (!res.ok) {
+    const problem = await res.json().catch(() => null);
+    result.textContent = '';
+    result.hidden = false;
+    result.append(el('span', 'muted', problem?.message || 'The list could not be written.'));
+    return;
+  }
+
+  const { job, proposal, created, consolidated, removed, removedTitle, destinationKept } = await res.json();
+
+  // Nothing kept and nothing to keep: a reconcile with no list says nothing.
+  if (!job) {
+    if (!removed) return;
+    result.textContent = '';
+    result.hidden = false;
+    result.append(el('span', 'muted', `The bench is back to stock, so "${removedTitle}" was taken off Shopping.`));
+    return;
+  }
+
+  result.textContent = '';
+  result.hidden = false;
+  const items = (job.items || []).reduce((n, i) => n + (i.needed || 1), 0);
+
+  const line = el('span');
+  line.append(document.createTextNode(`${created === false ? 'Updated' : 'Added'} "${job.title}" - ${items} part${items === 1 ? '' : 's'} on ${job.items.length} line${job.items.length === 1 ? '' : 's'}. `));
+  const link = el('a', null, 'Open Shopping');
+  link.href = '#jobs';
+  link.addEventListener('click', (e) => { e.preventDefault(); showView('jobs'); });
+  line.append(link);
+  result.append(line);
+  if (consolidated) result.append(el('span', 'muted', ` Consolidated ${consolidated} earlier Garage list${consolidated === 1 ? '' : 's'}.`));
+
+  // The stop, and what it lacks. "Nowhere" is said rather than left blank:
+  // with UEX off there is no answer, and without a counter the list is still
+  // a list.
+  if (proposal.terminal) {
+    const where = `${proposal.terminal}${proposal.place ? `, ${proposal.place}` : ''}`;
+    // A destination the pilot chose on Shopping is theirs; the proposal is
+    // offered beside it, not written over it.
+    let note = destinationKept
+      ? `Destination kept as ${job.destination} (chosen on Shopping). UEX would propose ${where} - ${proposal.covered} of ${proposal.of} line${proposal.of === 1 ? '' : 's'}`
+      : `Destination: ${where} - ${proposal.covered} of ${proposal.of} line${proposal.of === 1 ? '' : 's'}`;
+    if (proposal.total > 0) note += `, ${fmtInt(proposal.total)} aUEC`;
+    if (proposal.missing?.length) note += `. Not sold there: ${proposal.missing.join(', ')}`;
+    result.append(el('span', 'muted', note + '.'));
+  } else {
+    result.append(el('span', 'muted', proposal.pricesKnown
+      ? 'No terminal UEX knows sells any of it; the list has no destination.'
+      : 'Destinations need UEX prices (Settings); the list was written without one.'));
+  }
+}
+
+/**
+ * A direct Fit should make its buyable component actionable straight away,
+ * but it is still the ship's one evolving fit. Reposting the whole bench lets
+ * the server update that fit instead of leaving a stack of one-part lists.
+ */
+async function addFittedPartToShopping() {
+  await shopForBench();
+}
+
+$('#garage-shop')?.addEventListener('click', () => shopForBench().catch(() => {}));
+$('#garage-optimise')?.addEventListener('click', () => optimiseGarage().catch(() => {}));
+$('#garage-optimise-buyable')?.addEventListener('change', () => {
+  if (garageOptions) renderBenchPanel();
+});
+
+onInput('#garage-mine', () => { const v = $('#garage-mine').value; if (v) openGarage(v).catch(() => {}); });
+onInput('#garage-all', () => { const v = $('#garage-all').value; if (v) openGarage(v).catch(() => {}); });
 onInput('#servers-troubled', renderServers);
 
 /**
@@ -12385,6 +14236,20 @@ function hangarPaintFor(ship) {
 }
 
 /**
+ * Every ship picture drawn this page load, so a paint picked anywhere is
+ * seen everywhere the hull is pictured. Boxes a re-render has discarded are
+ * dropped as they are found, so the set stays the size of the page.
+ */
+const shipPictureBoxes = new Set();
+
+function redrawShipPictures(vehicleClass) {
+  for (const box of shipPictureBoxes) {
+    if (box.isConnected === false) { shipPictureBoxes.delete(box); continue; }
+    if (box.dataset.className === vehicleClass) box.redraw?.();
+  }
+}
+
+/**
  * The ship's picture on its card: the game's own render of the hull in the
  * paint the pilot chose, or the game's silhouette tinted by maker. A small
  * button opens the paints the game pictures for that hull. Until the pilot
@@ -12416,9 +14281,11 @@ function shipPicture(ship, maker, options = {}) {
       img.loading = 'lazy';
       img.title = chosen
         ? `${ship.name} in the paint you chose — the game's own picture`
-        : standIn?.stock
-          ? `${ship.name} in its default livery — the game's own picture; Paint… to choose another`
-          : `${ship.name} in the first paint the game pictures for it — the files hold no picture of its default livery; Paint… to choose`;
+        : standIn?.photographed
+          ? `${ship.name} in ${standIn.name}, the paint a loadout screenshot showed it wearing on ${new Date(standIn.photographed.shotAt).toLocaleDateString()} — the game's own picture; Paint… to choose another`
+          : standIn?.stock
+            ? `${ship.name} in its default livery — the game's own picture; Paint… to choose another`
+            : `${ship.name} in the first paint the game pictures for it — the files hold no picture of its default livery; Paint… to choose`;
       if (options.onPreview) {
         img.classList.add('ship-picture-clickable');
         img.title += '; click for this ship\'s flight summary';
@@ -12464,10 +14331,13 @@ function shipPicture(ship, maker, options = {}) {
     });
   }
 
-  // The chooser redraws this box, wherever it sits - a Fleet card or a
-  // Hangar card - rather than every Fleet card, which was why a pick made on
-  // the Hangar showed only after a reload.
+  // The chooser redraws every box of this hull, wherever each sits - the
+  // Fleet card, the Hangar card, the Garage's model - rather than only its
+  // own. Fleet does not re-render on entry, and a pick made on the Garage
+  // used to reach its card only after a reload.
   box.redraw = () => { chosen = shipPaints[ship.className]; failed = false; draw(); };
+  box.dataset.className = ship.className || '';
+  shipPictureBoxes.add(box);
   return box;
 }
 
@@ -12482,14 +14352,18 @@ async function openPaintChooser(ship, box, button) {
   select.setAttribute('aria-label', `Paint for ${ship.name}`);
   select.append(new Option('Silhouette, tinted by maker', SILHOUETTE));
   const unpicked = !shipPaints[ship.className];
-  paints.forEach((paint, i) => select.append(new Option(i === 0 && unpicked ? `${paint.name} (shown until you pick)` : paint.name, paint.item)));
+  paints.forEach((paint, i) => select.append(new Option(
+    paint.photographed
+      ? `${paint.name} (photographed ${new Date(paint.photographed.shotAt).toLocaleDateString()}${i === 0 && unpicked ? ', shown until you pick' : ''})`
+      : i === 0 && unpicked ? `${paint.name} (shown until you pick)` : paint.name,
+    paint.item)));
   if (!paints.length) select.append(new Option('The game pictures no paint for this hull', '', false, false));
   // Unpicked shows the first paint, so that is where the list opens.
   select.value = shipPaints[ship.className] || paints[0]?.item || SILHOUETTE;
 
   select.addEventListener('change', () => {
     rememberShipPaint(ship.className, select.value || null);
-    box.redraw?.();
+    redrawShipPictures(ship.className);
     renderHangar();
   });
 
@@ -12816,10 +14690,10 @@ function renderFleetShips() {
     // Ground vehicles have no ports anyone sells parts for, so the offer is
     // made only where it can be kept.
     if (!grounded) {
-      const upgrade = el('button', 'ghost ship-upgrade', 'Upgrades');
-      upgrade.title = `What fits ${ship.name}, and where to buy it`;
-      upgrade.addEventListener('click', () => showUpgrades(ship.name, ship.className, card));
-      body.append(upgrade);
+      const garage = el('button', 'ghost ship-upgrade', 'Garage');
+      garage.title = `${ship.name}'s numbers, what fits it, and what a part would change`;
+      garage.addEventListener('click', () => openGarageFor(ship.className || ship.name));
+      body.append(garage);
     }
 
     const compare = el('button', hangarComparison.has(ship.name) ? 'ghost tiny ship-compare active' : 'ghost tiny ship-compare', hangarComparison.has(ship.name) ? 'Selected to compare' : 'Compare');
@@ -12844,178 +14718,6 @@ function renderFleetShips() {
 }
 
 /* ---------- what fits a ship, and where it is sold ---------- */
-
-/**
- * The upgrade panel for one ship, fetched once per ship.
- *
- * The game's own data says what each port accepts, so this is not a guess: a
- * size 2 shield port takes a size 2 shield, and the shops that stock one are
- * known. What the panel is for is the trip - every option carries where it can
- * be bought, and every line can go straight onto a shopping list.
- */
-const upgradeCache = new Map();
-
-async function upgradesFor(ship) {
-  if (!upgradeCache.has(ship)) {
-    upgradeCache.set(ship,
-      getJson(`/api/fleet/upgrades?ship=${encodeURIComponent(ship)}`).catch(() => null));
-  }
-
-  return upgradeCache.get(ship);
-}
-
-/** Ports are named for the game's files; this is what a pilot calls them. */
-const PORT_WORDS = {
-  QuantumDrive: 'Quantum drive',
-  Shield: 'Shield',
-  PowerPlant: 'Power plant',
-  Cooler: 'Cooler',
-  WeaponGun: 'Gun',
-  Turret: 'Gun mount',
-  MissileLauncher: 'Missile rack',
-  Missile: 'Missile',
-  Radar: 'Radar',
-  EMP: 'EMP',
-  QuantumInterdictionGenerator: 'Quantum interdiction',
-  MiningArm: 'Mining arm',
-};
-
-/**
- * @param ship The name to show.
- * @param key The game's class name, which is what the reference data is keyed
- *   by. "Drake Corsair" answers nothing; DRAK_Corsair answers everything.
- */
-async function showUpgrades(ship, key, card) {
-  const open = card.querySelector('.upgrade-panel');
-
-  if (open) {
-    open.remove();
-    card.classList.remove('opened');
-    return;
-  }
-
-  // One at a time: the cards are a grid, and two of them spanning the row
-  // pushes everything else off the screen.
-  $$('.ship-card.opened').forEach((other) => {
-    other.classList.remove('opened');
-    other.querySelector('.upgrade-panel')?.remove();
-  });
-
-  card.classList.add('opened');
-
-  const panel = el('div', 'upgrade-panel');
-  panel.append(el('div', 'muted', 'Reading the ship…'));
-  card.append(panel);
-
-  const answer = await upgradesFor(key || ship);
-  panel.textContent = '';
-
-  if (!answer?.known) {
-    panel.append(el('div', 'muted',
-      'The reference data on this machine predates ship ports. Refresh the '
-      + 'community dataset on the Settings page and this fills in.'));
-    return;
-  }
-
-  if (!answer.groups?.length) {
-    panel.append(el('div', 'muted',
-      'Nothing on this one is sold in game — every port it has is fixed, or '
-      + 'nobody stocks a part for it.'));
-    return;
-  }
-
-  const head = el('div', 'upgrade-head');
-  head.append(el('b', null, `What fits ${ship}`));
-  head.append(el('span', 'muted', 'the game’s own port list · prices from UEX'));
-  panel.append(head);
-
-  for (const group of answer.groups) {
-    const row = el('div', 'upgrade-group');
-
-    const title = el('button', 'upgrade-toggle');
-    title.append(el('span', 'upgrade-kind', `${PORT_WORDS[group.kind] || group.kind} S${group.size}`));
-    title.append(el('span', 'muted', `${group.ports} port${group.ports === 1 ? '' : 's'}`));
-
-    // What it flies with now is the only thing a candidate can be judged
-    // against, so it sits on the closed row rather than inside.
-    if (group.fitted?.length)
-      title.append(el('span', 'upgrade-fitted', `now: ${group.fitted.join(' · ')}`));
-
-    title.append(el('span', 'muted upgrade-count', `${group.options.length} sold`));
-
-    const body = el('div', 'upgrade-options');
-    body.hidden = true;
-
-    title.addEventListener('click', () => {
-      body.hidden = !body.hidden;
-      title.classList.toggle('open', !body.hidden);
-      if (!body.hidden && !body.dataset.filled) fillUpgradeOptions(body, group);
-    });
-
-    row.append(title);
-    row.append(body);
-    panel.append(row);
-  }
-}
-
-function fillUpgradeOptions(body, group) {
-  body.dataset.filled = '1';
-  body.textContent = '';
-
-  const table = el('table', 'upgrade-table');
-  const header = el('tr');
-  for (const [label, cls] of [['Part', null], ['Maker', null], ['Grade', 'num'],
-    ['Price', 'num'], ['Cheapest at', null], ['', 'num']]) {
-    header.append(el('th', cls, label));
-  }
-  table.append(header);
-
-  for (const option of group.options) {
-    const tr = el('tr');
-    const part = el('td');
-    part.append(el('span', null, option.name));
-
-    // The game's own flag for a component that has actually shipped. Shown as
-    // the absence of a caveat rather than a badge on everything: most options
-    // carry it, so marking those would be noise and marking the rest is news.
-    if (option.flightReady === false) {
-      const draft = el('span', 'muted not-ready', ' not flight ready');
-      draft.title = 'The game defines this but does not mark it as shipped';
-      part.append(draft);
-    }
-
-    tr.append(part);
-    tr.append(el('td', 'muted', option.manufacturer || '—'));
-    tr.append(el('td', 'num muted', gradeLetter(option.grade)));
-    tr.append(el('td', 'num', option.price ? money(option.price) : '—'));
-
-    // One shop on the row and the rest in the tooltip: the choice of counter
-    // belongs to the trip, and the trip is planned from the list.
-    const shop = option.shops[0];
-    const where = el('td');
-    const jump = el('button', 'place-link', shop.terminal);
-    jump.disabled = !shop.placeId;
-    jump.title = option.shops.map((s) => `${s.terminal} — ${money(s.price)}`).join('\n');
-    jump.addEventListener('click', () => {
-      showView('map');
-      centreOnTerminal(shop.terminal, shop.placeId);
-    });
-    where.append(jump);
-
-    if (shop.security === 'lawless')
-      where.append(el('span', 'sec sec-lawless', 'lawless'));
-
-    tr.append(where);
-
-    const add = el('td', 'num');
-    add.append(trackButton(option.name, 1, ''));
-    tr.append(add);
-
-    table.append(tr);
-  }
-
-  body.append(table);
-}
 
 /** "3 days ago", "2 months ago" - easier to scan than a date. */
 function relative(iso) {
@@ -19235,6 +20937,9 @@ async function boot() {
 
   if (deepCommodity) openCommodity(deepCommodity).catch(() => {});
   else if (requested) showView(requested);
+  // No fragment lands on Now without a view switch, and Now is not a page
+  // about prices: the notice starts as the chip there.
+  else $('#stale')?.classList.add('compact');
 
   // ?q= pre-fills the map search, so a commodity view is a shareable link:
   // /?q=Copper#map opens the map with the sellers lit.

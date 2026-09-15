@@ -80,6 +80,70 @@ public class ShipPictureTests
     }
 
     /// <summary>
+    /// A pick made on one page reaches every picture of that hull - the Fleet
+    /// card, the Hangar card, the Garage's model - and no other hull's. Fleet
+    /// does not redraw on entry, so a pick made on the Garage used to reach
+    /// its card only after a reload.
+    /// </summary>
+    [Fact]
+    public void A_pick_made_on_one_picture_redraws_every_picture_of_that_hull()
+    {
+        var page = Fresh();
+        page.Serve("/api/fleet/paints/DRAK_Corsair", """
+            [{"item":"Paint_Corsair_Black_Black_Gold_Camo","name":"Corsair Black Gold Camo Livery"},
+             {"item":"Paint_Corsair_Commando","name":"Corsair Commando Livery"}]
+            """);
+        page.Serve("/api/fleet/paints/DRAK_Cutlass_Black", "[]");
+        page.Do($$"""
+            const fleet = shipPicture({{Corsair}}, {{Maker}});
+            const garage = shipPicture({{Corsair}}, {{Maker}});
+            const other = shipPicture({name:'Drake Cutlass Black', className:'DRAK_Cutlass_Black'}, {{Maker}});
+            __dom.node('#t').append(fleet, garage, other);
+            await paintsForHull('DRAK_Corsair'); await Promise.resolve();
+            await openPaintChooser({{Corsair}}, fleet, fleet.byClass('ship-paint')[0]);
+            const select = fleet.byClass('ship-paint-select')[0];
+            select.value = 'Paint_Corsair_Commando';
+            select.fire('change');
+            """);
+
+        Assert.Equal("Paint_Corsair_Commando", page.Text("shipPaints.DRAK_Corsair"));
+        Assert.Contains("Paint_Corsair_Commando/render", page.Text("__dom.node('#t').children[0].byClass('ship-render')[0].src"));
+        Assert.Contains("Paint_Corsair_Commando/render", page.Text("__dom.node('#t').children[1].byClass('ship-render')[0].src"));
+        Assert.Equal(1, Convert.ToInt32(page.Eval("__dom.node('#t').children[2].byClass('ship-outline').length")));
+    }
+
+    /// <summary>
+    /// A loadout screenshot names the paint - the Hermes' estimate listed its
+    /// Keystone livery - and the server lists that paint first, dated. It
+    /// stands in on every picture until the pilot picks, and both the picture
+    /// and the chooser say it was photographed rather than chosen.
+    /// </summary>
+    [Fact]
+    public void The_paint_a_screenshot_showed_the_ship_wearing_stands_in_and_says_so()
+    {
+        var page = Fresh();
+        page.Serve("/api/fleet/paints/DRAK_Corsair", """
+            [{"item":"Paint_Corsair_Commando","name":"Corsair Commando Livery","stock":false,
+              "photographed":{"shot":"ScreenShot-2026-09-08_21-53-11-CD7.jpg","shotAt":"2026-09-09T01:53:11Z"}},
+             {"item":"Paint_Corsair_Black_Black_Gold_Camo","name":"Corsair Black Gold Camo Livery","stock":false,"photographed":null}]
+            """);
+        page.Do($"""
+            const box = shipPicture({Corsair}, {Maker});
+            __dom.node('#t').append(box);
+            await paintsForHull('DRAK_Corsair'); await Promise.resolve();
+            """);
+
+        Assert.Contains("Paint_Corsair_Commando/render", page.Text("__dom.node('#t').byClass('ship-render')[0].src"));
+        Assert.Contains("a loadout screenshot showed it wearing", page.Text("__dom.node('#t').byClass('ship-render')[0].title"));
+        Assert.True(page.Truth("shipPaints.DRAK_Corsair === undefined"));
+
+        page.Do($"await openPaintChooser({Corsair}, __dom.node('#t').children[0], __dom.node('#t').children[0].byClass('ship-paint')[0]);");
+        Assert.Contains("photographed", page.Text("__dom.node('#t').byClass('ship-paint-select')[0].options[1].textContent"));
+        Assert.Contains("shown until you pick", page.Text("__dom.node('#t').byClass('ship-paint-select')[0].options[1].textContent"));
+        Assert.Equal("Paint_Corsair_Commando", page.Text("__dom.node('#t').byClass('ship-paint-select')[0].value"));
+    }
+
+    /// <summary>
     /// Nothing picked and the game pictures paints for the hull: the first
     /// one stands in, labelled as a stand-in - which paint a ship wears is not
     /// in the logs, so the card cannot claim it is the pilot's.

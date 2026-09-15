@@ -84,7 +84,7 @@ public class ShardNoteStoreTests : IDisposable
             new JobStore(_root), new ChecklistStore(_root), new TripStore(_root),
             new MiningLogStore(_root), new MapNoteStore(_root), new GoalStore(_root),
             new WipeStore(_root), new ItemLabelStore(_root), new TombstoneStore(_root),
-            new KitStore(_root), new ScreenReadingStore(_root), store);
+            new KitStore(_root), new ScreenReadingStore(_root), store, new BuildStore(_root));
 
         var file = backup.Build(new ExportProducer("Quantumwake", "0.12.0"), Now).Backup!;
         Assert.Single(file.Shards!);
@@ -100,7 +100,7 @@ public class ShardNoteStoreTests : IDisposable
             new JobStore(other), new ChecklistStore(other), new TripStore(other),
             new MiningLogStore(other), new MapNoteStore(other), new GoalStore(other),
             new WipeStore(other), new ItemLabelStore(other), new TombstoneStore(other), new LogLibrary(sessions),
-            new KitStore(other), new ScreenReadingStore(other), target);
+            new KitStore(other), new ScreenReadingStore(other), target, new BuildStore(other));
 
         restore.Apply(file, restore.Plan(file, "h"), "h", new RestoreChoices());
 

@@ -940,66 +940,6 @@ body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
 .ship-upgrade { margin-top: 10px; font-size: 10px; padding: 5px 10px; }
 
 /*
- * A table of parts cannot live in a third of a row, so the card takes the
- * whole row while its panel is open and lays itself out downwards.
- */
-.ship-card.opened {
-  grid-column: 1 / -1;
-  display: block;
-}
-.ship-card.opened .ship-logo { display: none; }
-
-.upgrade-panel {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--rule);
-}
-
-.upgrade-head {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 8px;
-}
-.upgrade-head b { font-size: 12px; color: var(--cyan-hot); }
-.upgrade-head span { font-size: 10px; }
-
-.upgrade-group { border-bottom: 1px solid rgba(23, 41, 60, .6); }
-
-.upgrade-toggle {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  width: 100%;
-  padding: 7px 4px;
-  text-align: left;
-  flex-wrap: wrap;
-}
-.upgrade-toggle:hover { background: rgba(53, 200, 240, .05); }
-.upgrade-toggle.open .upgrade-kind { color: var(--cyan-hot); }
-.upgrade-kind { font-size: 11.5px; color: var(--cyan); min-width: 15ch; }
-.upgrade-fitted { font-size: 10.5px; color: var(--dim); flex: 1; }
-.upgrade-count { font-size: 10px; }
-
-.upgrade-options { padding: 2px 4px 12px; overflow-x: auto; }
-
-.upgrade-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
-.upgrade-table th {
-  text-align: left;
-  padding: 4px 8px;
-  font-size: 9px;
-  letter-spacing: .16em;
-  text-transform: uppercase;
-  color: var(--dim);
-  border-bottom: 1px solid var(--rule);
-}
-.upgrade-table th.num, .upgrade-table td.num { text-align: right; }
-.upgrade-table td { padding: 4px 8px; border-bottom: 1px solid rgba(23, 41, 60, .45); }
-.upgrade-table tr:hover td { background: rgba(53, 200, 240, .04); }
-.upgrade-table .sec { margin-left: 7px; }
-
-/*
  * The one paragraph on the settings page that describes writing to somebody
  * else's folder. Amber rather than red: this is a thing to read before
  * choosing, not a failure.
@@ -1104,8 +1044,7 @@ button:disabled { opacity: .35; cursor: default; }
 .trip-place,
 .trip-number,
 .seg button,
-.pager-btn,
-.upgrade-toggle {
+.pager-btn {
   text-transform: none;
   letter-spacing: normal;
   clip-path: none;
@@ -1923,6 +1862,10 @@ body.overlay .foot { display: none; }
   border: 1px solid var(--rule);
   clip-path: var(--chamfer);
 }
+
+.option-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
+.diag-summary { width: 100%; margin-top: 8px; font: 11.5px var(--mono); color: var(--text); background: var(--deep); border: 1px solid var(--rule); padding: 8px; resize: vertical; }
+.diag-summary[hidden] { display: none; }
 
 .option-head {
   display: flex;
@@ -3216,6 +3159,14 @@ body.entity-open .view { padding-right: 296px; }
   clip-path: var(--chamfer);
 }
 .notice[hidden] { display: none; }
+
+/* The stale-prices notice as a chip, on pages that are not about prices: one
+   line, no paragraph, the buttons small. The fact stays; the alarm does not. */
+.notice.compact { padding: 4px 10px; gap: 10px; margin-bottom: 8px; font-size: 11.5px; background: none; border-left-width: 2px; }
+.notice.compact .notice-body { flex-direction: row; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.notice.compact .notice-body b { font-size: 11.5px; font-weight: 600; }
+.notice.compact .notice-body .muted { font-size: 11px; }
+.notice.compact .notice-actions .ghost { padding: 1px 7px; font-size: 10px; }
 /* A settings block whose data has been overtaken by a game patch. Amber like
    the page notices, but inline and without buttons: the control that answers
    it is the Refresh sitting directly above. */
@@ -4281,6 +4232,23 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 .hangar-scale { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; font-size: 11.5px; }
 .hangar-bar line { stroke: var(--cyan); stroke-width: 2; }
 .hangar-group { margin: 14px 16px 0; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--cyan-hot); }
+
+/* What a compared picture is, on the picture: icon or render. */
+.hangar-source rect { fill: rgba(4, 10, 17, .78); stroke: var(--rule-hot); stroke-width: 1; }
+.hangar-source text { font: 600 9px var(--mono); letter-spacing: .12em; text-transform: uppercase; fill: var(--muted); }
+.hangar-source.icon text { fill: var(--cyan); }
+.hangar-source.render text { fill: var(--amber); }
+
+/* Two ships side by side: the pair is picked in a bar under the controls and
+   the figures sit under the deck, the better one for its row lit. */
+.hangar-compare-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; font-size: 12px; }
+.hangar-compare-bar .select.tiny { min-width: 150px; padding: 2px 6px; font-size: 11px; }
+.hangar-compare { margin: 16px 0 0; }
+.hangar-compare h3 { margin: 2px 0 6px; font-size: 14px; color: var(--text); }
+.hangar-compare > .muted { font-size: 11.5px; line-height: 1.4; margin: 0 0 8px; max-width: 900px; }
+.hangar-compare tbody td.better { color: var(--cyan); font-weight: 600; }
+.hangar-compare tbody tr.compare-group td { color: var(--dim); font: 600 9.5px var(--mono); letter-spacing: .18em; text-transform: uppercase; background: var(--panel-2); padding: 6px 15px; }
+.hangar-compare tbody tr.compare-group:hover { background: var(--panel-2); }
 /* The gallery: the same picture the Fleet card carries, larger, one card a ship. */
 .hangar-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--gap); padding: 14px; }
 .hangar-card { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid var(--rule); background: rgba(0, 0, 0, .18); }
@@ -4458,3 +4426,491 @@ body.overlay .ship-picture { display: none; }
    pulls the text into the last row's border - visible the moment the caption
    runs to more than one line, as the Servers footnote does. */
 .table-wrap + .caption { margin-top: 12px; }
+
+/* ---------- garage ---------- */
+
+.garage-head { margin: 4px 0 14px; }
+.garage-title { font-family: var(--display); font-size: 24px; letter-spacing: .02em; color: var(--text); }
+.garage-head .small { font-size: 11.5px; margin-top: 2px; }
+.garage-head #garage-sub { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.garage-subline { min-width: 0; }
+.garage-duty {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 5px;
+  border: 1px solid var(--garage-duty);
+  background: color-mix(in srgb, var(--garage-duty) 11%, transparent);
+  color: var(--garage-duty);
+  font: 9px var(--mono);
+  font-weight: 700;
+  letter-spacing: .09em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.garage-duty::before { content: "◇"; font-size: 12px; line-height: 8px; }
+.garage-duty.military { --garage-duty: #f27f68; }
+.garage-duty.military::before { content: "▲"; }
+.garage-duty.industrial { --garage-duty: #e8b35e; }
+.garage-duty.industrial::before { content: "▦"; }
+.garage-duty.civilian { --garage-duty: #6bbaff; }
+
+.garage-duty-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 10px;
+}
+
+.garage-duty-legend .legend-label {
+  margin-right: 2px;
+  color: var(--dim);
+  font: 9px var(--mono);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.garage-duty-legend .garage-duty { cursor: help; }
+
+/* The fitted layout is an instrument panel, not a fictional cutaway. The
+   game data gives us the real component ports but not their 3D coordinates,
+   so the cards orbit the game's ship picture and lead into the precise bench. */
+.garage-rig {
+  margin: 0 0 16px;
+  border: 1px solid var(--rule-hot);
+  background:
+    radial-gradient(ellipse at 50% 56%, rgba(53, 200, 240, .11), transparent 38%),
+    linear-gradient(145deg, rgba(53, 200, 240, .055), rgba(4, 10, 17, .78) 48%, rgba(53, 200, 240, .035));
+  clip-path: var(--chamfer);
+  overflow: hidden;
+}
+.garage-rig-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 14px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rule);
+  background: rgba(4, 10, 17, .48);
+}
+.garage-eyebrow { color: var(--cyan-hot); font: 10px var(--mono); letter-spacing: .19em; text-transform: uppercase; }
+.garage-rig-head p { margin: 3px 0 0; color: var(--muted); font-size: 11.5px; }
+.garage-rig-count { font: 10px var(--mono); color: var(--dim); white-space: nowrap; }
+.garage-rig-body {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) minmax(300px, 1.35fr) minmax(190px, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+}
+.garage-rig-slots { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.garage-rig-slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px;
+  border: 1px solid var(--rule);
+  background: rgba(5, 13, 22, .74);
+  color: var(--text);
+  text-align: left;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+  clip-path: var(--chamfer);
+}
+.garage-rig-left .garage-rig-slot { text-align: right; flex-direction: row-reverse; }
+.garage-rig-slot::after {
+  content: "";
+  position: absolute;
+  top: 50%; width: 14px; height: 1px;
+  background: var(--cyan-deep);
+  box-shadow: 0 0 7px rgba(53, 200, 240, .32);
+}
+.garage-rig-left .garage-rig-slot::after { right: -14px; }
+.garage-rig-right .garage-rig-slot::after { left: -14px; }
+.garage-rig-slot:hover, .garage-rig-slot.selected { border-color: var(--cyan); background: rgba(20, 55, 71, .72); }
+.garage-rig-slot:hover::after, .garage-rig-slot.selected::after { background: var(--cyan-hot); }
+.garage-rig-slot.changed { border-color: var(--cyan-deep); }
+.garage-rig-slot .part-mark { width: 38px; height: 34px; border-radius: 4px; }
+.garage-rig-slot .part-mark .mono-mark { font-size: 8px; }
+.garage-rig-slot-body { display: grid; gap: 1px; min-width: 0; }
+.garage-rig-slot-kind { color: var(--dim); font: 8.5px var(--mono); letter-spacing: .11em; text-transform: uppercase; }
+.garage-rig-slot-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; }
+.garage-rig-slot-name .chip { font-size: 8px; padding: 0 3px; margin-left: 4px; }
+.garage-rig-slot-spec { color: var(--cyan-hot); font: 9.5px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.garage-ship-stage {
+  position: relative;
+  min-height: 252px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-inline: 1px solid rgba(53, 200, 240, .12);
+}
+.garage-ship-grid {
+  position: absolute; inset: 0;
+  opacity: .45;
+  background-image: linear-gradient(rgba(53, 200, 240, .12) 1px, transparent 1px), linear-gradient(90deg, rgba(53, 200, 240, .12) 1px, transparent 1px);
+  background-size: 26px 26px;
+  mask-image: radial-gradient(ellipse, black, transparent 74%);
+}
+.garage-ship-stage::before, .garage-ship-stage::after { content: ""; position: absolute; background: rgba(53, 200, 240, .35); }
+.garage-ship-stage::before { width: 76%; height: 1px; top: 50%; }
+.garage-ship-stage::after { width: 1px; height: 78%; left: 50%; }
+/* Static on purpose: the Paint… button inside the picture is placed against the stage. */
+.garage-ship-model { z-index: 2; }
+.garage-ship-model .ship-picture { width: 285px; flex-basis: 285px; }
+.garage-ship-model .ship-outline { width: 270px; height: 154px; filter: drop-shadow(0 0 18px rgba(53, 200, 240, .38)); }
+.garage-ship-model .ship-render-wrap { width: 285px; height: 192px; flex-basis: 285px; }
+.garage-ship-model .ship-render { filter: drop-shadow(0 0 16px rgba(53, 200, 240, .3)); }
+/* The Paint… button stays on the Garage: the model is the biggest picture of the hull
+   on the site, and the one place a pilot compares a livery against the fit. */
+.garage-ship-model .ship-paint { position: absolute; top: 10px; right: 10px; z-index: 3; }
+.garage-ship-model .ship-paint-select { position: absolute; top: 10px; right: 10px; z-index: 3; max-width: 240px; }
+.garage-ship-summary { position: absolute; z-index: 3; bottom: 9px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; width: calc(100% - 18px); }
+.garage-ship-stat { min-width: 0; padding: 4px 6px; border: 1px solid rgba(53, 200, 240, .28); background: rgba(4, 10, 17, .78); text-align: center; }
+.garage-ship-stat span { display: block; color: var(--dim); font: 8px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.garage-ship-stat b { display: block; margin-top: 2px; color: var(--cyan-hot); font: 10px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.garage-ship-stat.alert { border-color: rgba(235, 174, 71, .7); }
+.garage-ship-stat.alert b { color: var(--amber); }
+@media (max-width: 900px) {
+  .garage-rig-body { grid-template-columns: 1fr; }
+  .garage-ship-stage { order: -1; min-height: 220px; border-inline: 0; border-bottom: 1px solid rgba(53, 200, 240, .12); }
+  .garage-rig-slots { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+  .garage-rig-left .garage-rig-slot { text-align: left; flex-direction: row; }
+  .garage-rig-slot::after { display: none; }
+}
+@media (max-width: 520px) {
+  .garage-rig-head { align-items: flex-start; flex-direction: column; }
+  .garage-ship-model .ship-picture { width: 230px; flex-basis: 230px; }
+  .garage-ship-model .ship-outline { width: 220px; height: 126px; }
+  .garage-ship-model .ship-render-wrap { width: 230px; height: 155px; flex-basis: 230px; }
+  .garage-rig-slots { grid-template-columns: 1fr; }
+}
+
+/* The sheet is groups of label/value rows. On a wide display the seven systems
+   are deliberately compact enough to read as one instrument bank, rather than
+   leaving Quantum alone beneath an expanse of empty space. */
+.sheet { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 264px), 1fr)); gap: 12px; align-items: stretch; }
+.sheet-group {
+  --sheet-accent: var(--cyan);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 218px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--sheet-accent) 10%, transparent), transparent 44%),
+    linear-gradient(145deg, rgba(15, 31, 43, .98), rgba(4, 10, 17, .99));
+  border: 1px solid color-mix(in srgb, var(--sheet-accent) 43%, var(--rule));
+  clip-path: var(--chamfer);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04), 0 9px 22px rgba(0, 0, 0, .12);
+}
+.sheet-group::before { content: ""; position: absolute; z-index: -1; inset: 0 0 auto; height: 3px; background: linear-gradient(90deg, var(--sheet-accent), color-mix(in srgb, var(--sheet-accent) 18%, transparent) 72%, transparent); box-shadow: 0 0 18px var(--sheet-accent); opacity: .92; }
+.sheet-group::after { content: attr(data-group); position: absolute; z-index: -1; right: -4px; bottom: -10px; color: color-mix(in srgb, var(--sheet-accent) 9%, transparent); font: 700 31px/.8 var(--mono); letter-spacing: -.08em; text-transform: uppercase; pointer-events: none; }
+.sheet-group[data-group="hull"] { --sheet-accent: #35c8f0; }
+.sheet-group[data-group="flight"] { --sheet-accent: #6bbaff; }
+.sheet-group[data-group="weapons"] { --sheet-accent: #f27f68; }
+.sheet-group[data-group="defence"] { --sheet-accent: #57d8ac; }
+.sheet-group[data-group="signature"] { --sheet-accent: #bc8cff; }
+.sheet-group[data-group="systems"] { --sheet-accent: #e8b35e; }
+.sheet-group[data-group="quantum"] { --sheet-accent: #7e9cff; }
+.sheet-group h3 {
+  margin: 0 0 3px;
+  padding: 12px 13px 10px;
+  font-size: 10.5px;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--sheet-accent) 18%, transparent), transparent 75%);
+  border-bottom: 1px solid color-mix(in srgb, var(--sheet-accent) 30%, transparent);
+}
+.sheet-title { display: inline-flex; align-items: center; gap: 8px; min-width: 0; color: var(--sheet-accent); text-shadow: 0 0 11px color-mix(in srgb, var(--sheet-accent) 40%, transparent); }
+.sheet-title::after { content: ""; width: 18px; height: 1px; background: linear-gradient(90deg, var(--sheet-accent), transparent); opacity: .72; }
+.sheet-icon { flex: 0 0 auto; width: 23px; height: 23px; padding: 3px; color: var(--sheet-accent); border: 1px solid color-mix(in srgb, var(--sheet-accent) 72%, transparent); background: color-mix(in srgb, var(--sheet-accent) 9%, rgba(4, 10, 17, .8)); box-shadow: inset 0 0 10px color-mix(in srgb, var(--sheet-accent) 14%, transparent), 0 0 10px color-mix(in srgb, var(--sheet-accent) 12%, transparent); fill: none; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round; }
+.sheet-group h3 .src { flex: 0 0 auto; padding: 3px 5px; border: 1px solid color-mix(in srgb, var(--sheet-accent) 35%, transparent); background: rgba(4, 10, 17, .6); font: 8.5px var(--mono); letter-spacing: .05em; text-transform: none; color: color-mix(in srgb, var(--dim) 82%, var(--sheet-accent)); }
+.sheet-row {
+  position: relative;
+  z-index: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  margin: 0 11px;
+  padding: 8px 4px;
+  border-top: 1px solid color-mix(in srgb, var(--sheet-accent) 14%, var(--rule));
+  align-items: baseline;
+}
+.sheet-row:first-of-type { border-top: 0; }
+.sheet-row:hover { background: linear-gradient(90deg, color-mix(in srgb, var(--sheet-accent) 11%, transparent), transparent 82%); }
+.sheet-row .k { color: var(--muted); font-size: 11.5px; }
+.sheet-row .v { padding: 2px 4px; border: 1px solid color-mix(in srgb, var(--sheet-accent) 17%, transparent); background: color-mix(in srgb, var(--sheet-accent) 5%, transparent); font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--text); text-align: right; white-space: nowrap; }
+.sheet-row .v small { color: var(--muted); font-family: var(--mono); margin-left: 4px; }
+.sheet-row .n { grid-column: 1 / -1; padding: 3px 0 1px 8px; border-left: 2px solid color-mix(in srgb, var(--sheet-accent) 58%, transparent); font-size: 10.5px; color: var(--dim); line-height: 1.4; margin-top: -3px; }
+.sheet-row.sub .k { padding-left: 14px; color: color-mix(in srgb, var(--muted) 78%, var(--sheet-accent)); }
+@media (max-width: 620px) {
+  .sheet { grid-template-columns: 1fr; }
+  .sheet-group { min-height: 0; }
+}
+
+/* Movement, once the bench changes something: up in cyan, down in amber,
+   with the old figure struck beside it. Which direction is good depends on
+   the figure - less IR is better, less DPS is not - so the colour says which
+   way it moved and the row says what that means. */
+.sheet-row .was { color: var(--dim); text-decoration: line-through; margin-right: 6px; font-size: 11px; }
+.sheet-row .v.up { color: var(--cyan); }
+.sheet-row .v.down { color: var(--amber); }
+
+.garage-notes { margin: 12px 0 0; padding: 10px 14px; border: 1px solid var(--amber); border-radius: 6px; color: var(--amber); font-size: 12.5px; }
+.garage-notes div + div { margin-top: 4px; }
+
+#garage-ports td.what { color: var(--muted); font-size: 12px; }
+
+/* ---------- the bench ---------- */
+
+.garage-optimizer {
+  display: grid;
+  grid-template-columns: minmax(230px, 1fr) auto;
+  gap: 10px 18px;
+  align-items: center;
+  margin: 14px 0 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule-hot);
+  background: linear-gradient(90deg, rgba(20, 55, 71, .3), rgba(4, 10, 17, .5));
+  clip-path: var(--chamfer);
+}
+.garage-optimizer h3 { margin: 2px 0 0; font-size: 14px; color: var(--text); }
+.garage-optimizer p { margin: 3px 0 0; font-size: 11.5px; line-height: 1.4; }
+.garage-optimizer-copy p { color: var(--muted); }
+.garage-optimizer-tools { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.garage-optimizer-tools .select { min-width: 170px; }
+.garage-optimizer > .muted { grid-column: 1 / -1; border-top: 1px solid rgba(53, 200, 240, .15); padding-top: 7px; }
+@media (max-width: 760px) {
+  .garage-optimizer { grid-template-columns: 1fr; }
+  .garage-optimizer-tools { justify-content: flex-start; }
+}
+
+.bench-bar { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.bench-bar h2 { margin-bottom: 0; }
+.bench-state { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.bench-state .changed { color: var(--cyan); }
+
+.bench { display: grid; grid-template-columns: minmax(280px, 2fr) minmax(320px, 3fr); gap: var(--gap); align-items: start; }
+@media (max-width: 900px) { .bench { grid-template-columns: 1fr; } }
+
+.bench-ports, .bench-panel {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.bench-kind {
+  padding: 8px 12px 4px;
+  font-size: 10.5px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--dim);
+  border-top: 1px solid var(--rule);
+}
+.bench-kind:first-child { border-top: 0; }
+
+/* A port row: the maker's mark, what is in it, the size and grade chip and
+   the one figure that matters for its kind. Clicking it opens the panel. */
+.bench-port {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 12px;
+  cursor: pointer;
+  border-top: 1px solid var(--rule);
+}
+.bench-port:hover { background: var(--panel-2); }
+.bench-port.selected { background: rgba(53, 200, 240, .08); box-shadow: inset 3px 0 0 var(--cyan); }
+.bench-port.changed .part-name { color: var(--cyan); }
+.bench-port .part-name { font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bench-port .port-name { font-size: 11px; color: var(--muted); }
+.bench-port .port-name .was { color: var(--dim); margin-left: 6px; }
+.bench-port .figure { font-family: var(--mono); font-size: 11.5px; color: var(--muted); text-align: right; white-space: nowrap; }
+.bench-port .figure b { display: block; color: var(--text); font-weight: normal; font-size: 12.5px; }
+
+/* The part's face: the wiki's cutout of it where the wiki has one (about half
+   the bench), else the maker's mark - the Fankit logo where the app has one,
+   a monogram of the maker's code where it does not. Component makers are
+   mostly the latter - Klaus & Werner, Behring, Gorgon - and the game files
+   carry no picture of a part at all. One frame size for all three, so a row
+   with a picture and a row without line up. */
+.part-mark {
+  width: 56px; height: 42px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--panel-2);
+  border: 1px solid var(--rule);
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+.part-mark img { max-width: 80%; max-height: 80%; opacity: .9; }
+.part-mark .mono-mark {
+  font-family: var(--display);
+  font-size: 11px;
+  letter-spacing: .06em;
+  color: var(--text);
+  opacity: .85;
+}
+.part-mark.small { width: 26px; height: 26px; }
+.part-mark.small .mono-mark { font-size: 8.5px; }
+/* The part's own picture, where the wiki has one: a cutout of the cooler or
+   the gun at the bench's scale, wider than tall because the parts are. */
+.part-mark.pic { background: #0b0f14; }
+.part-mark.pic img { width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; opacity: 1; }
+
+.chip {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--rule-hot);
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.chip.grade-a { border-color: var(--cyan); color: var(--cyan); }
+.chip.grade-b { border-color: var(--green); color: var(--green); }
+.chip.grade-c { border-color: var(--rule-hot); color: var(--text); }
+.chip.grade-d { border-color: var(--rule); color: var(--muted); }
+
+.component-class,
+.acquisition {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 5px;
+  padding: 1px 5px;
+  border: 1px solid var(--rule-hot);
+  border-radius: 3px;
+  font: 9px var(--mono);
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.component-class::before { content: "◇"; font-size: 11px; line-height: 8px; }
+.component-class.military { border-color: #f27f68; color: #f27f68; }
+.component-class.military::before { content: "▲"; }
+.component-class.industrial { border-color: #e8b35e; color: #e8b35e; }
+.component-class.industrial::before { content: "▦"; }
+.component-class.civilian { border-color: #6bbaff; color: #6bbaff; }
+.acquisition { margin: 0 5px 0 0; font-size: 8.5px; color: var(--cyan); border-color: var(--cyan-deep); }
+.acquisition.craft { color: var(--amber); border-color: var(--amber); }
+.acquisition.unlisted { color: var(--dim); border-color: var(--rule); }
+.acquisition.players { color: var(--green); border-color: var(--green); }
+.candidate .listing .uex-link { color: var(--cyan); text-decoration: none; border-bottom: 1px dotted var(--cyan-deep); white-space: nowrap; }
+.candidate .listing .uex-link:hover { border-bottom-style: solid; }
+
+/* ---------- the photographed fit, offered above the bench ---------- */
+
+.garage-photo {
+  display: grid;
+  grid-template-columns: minmax(230px, 1fr) auto;
+  gap: 10px 18px;
+  align-items: center;
+  margin: 14px 0 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule-hot);
+  background: linear-gradient(90deg, rgba(20, 55, 71, .3), rgba(4, 10, 17, .5));
+  clip-path: var(--chamfer);
+}
+.garage-photo h3 { margin: 2px 0 0; font-size: 14px; color: var(--text); }
+.garage-photo p { margin: 3px 0 0; font-size: 11.5px; line-height: 1.4; }
+.garage-photo-unsettled { list-style: none; margin: 6px 0 0; padding: 0; font-size: 11px; color: var(--muted); }
+.garage-photo-unsettled:empty { display: none; }
+.garage-photo-unsettled .what { color: var(--text); }
+.garage-photo-tools { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; text-align: right; }
+.garage-photo-tools .muted { font-size: 11px; max-width: 320px; }
+@media (max-width: 900px) { .garage-photo { grid-template-columns: 1fr; } .garage-photo-tools { align-items: flex-start; text-align: left; } }
+
+/* ---------- the player marketplace under the bench ---------- */
+
+.garage-market { margin: 16px 0 0; }
+.garage-market-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px 18px; flex-wrap: wrap; margin-bottom: 8px; }
+.garage-market-head h3 { margin: 2px 0 0; font-size: 14px; color: var(--text); }
+.garage-market-head .muted { font-size: 11.5px; line-height: 1.4; max-width: 720px; }
+.garage-market .market-list:empty { display: none; }
+
+.bench-panel .panel-head { padding: 12px 14px 8px; border-bottom: 1px solid var(--rule); }
+.bench-panel .panel-title { font-size: 14px; color: var(--text); }
+.bench-panel .panel-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.bench-panel .panel-tools { display: flex; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--rule); flex-wrap: wrap; align-items: center; }
+.bench-panel .panel-tools .search { flex: 1; min-width: 140px; }
+.bench-panel .panel-tools .muted { font-size: 11px; }
+
+.candidate {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 14px;
+  border-top: 1px solid var(--rule);
+}
+.candidate:first-child { border-top: 0; }
+.candidate.fitted { background: rgba(53, 200, 240, .06); }
+.candidate .c-name { font-size: 13px; color: var(--text); }
+.candidate .c-maker { font-size: 11px; color: var(--muted); }
+.candidate .c-figures { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-top: 3px; display: flex; gap: 10px; flex-wrap: wrap; }
+.candidate .c-figures b { color: var(--text); font-weight: normal; }
+.candidate .c-figures .d-up { color: var(--cyan); }
+.candidate .c-figures .d-down { color: var(--amber); }
+.candidate .c-shop { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.candidate .c-shop b { color: var(--text); font-weight: normal; font-family: var(--mono); }
+.candidate .c-act { text-align: right; }
+.candidate .c-act .state { font-size: 11px; color: var(--cyan); letter-spacing: .08em; text-transform: uppercase; }
+.chip.count { border-color: var(--cyan-deep); color: var(--cyan); }
+
+/* ---------- saved builds ---------- */
+
+.bench-state .compare-against { font-size: 11px; letter-spacing: .04em; text-transform: none; }
+.bench-state .select.tiny { min-width: 100px; padding: 2px 6px; font-size: 11px; }
+.build-name-form { display: flex; gap: 6px; margin: 8px 0 0; max-width: 520px; }
+.build-name-form input { flex: 1; min-width: 0; }
+
+/* One chip per saved build for this ship. The open one is lit; the rest are a
+   click away. Deleting is on the chip because a build is a small thing to
+   make and a small thing to lose. */
+.builds { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
+.build-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px 5px 11px;
+  border: 1px solid var(--rule-hot);
+  border-radius: 5px;
+  background: var(--panel);
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+.build-chip:hover { border-color: var(--cyan-deep); }
+.build-chip.open { border-color: var(--cyan); box-shadow: inset 3px 0 0 var(--cyan); }
+.build-chip .meta { color: var(--muted); font-size: 11px; }
+.build-chip .drop { background: none; border: 0; color: var(--dim); cursor: pointer; font-size: 13px; padding: 0 2px; }
+.build-chip .drop:hover { color: var(--red); }
+
+/* display:flex and display:grid on these beat the browser's [hidden] rule,
+   so hidden has to be said again with more weight. */
+#view-garage [hidden] { display: none !important; }
+.builds + .caption { margin-top: 10px; }
+
+/* What "Add to shopping list" did, said once where the button was pressed:
+   the job's name, the stop proposed, and what that stop does not have. */
+.shop-result { margin: 8px 0 0; padding: 8px 12px; border: 1px solid var(--cyan-deep); border-radius: 5px; font-size: 12.5px; color: var(--text); }
+.shop-result .muted { display: block; margin-top: 2px; }
+.shop-result a { color: var(--cyan); }

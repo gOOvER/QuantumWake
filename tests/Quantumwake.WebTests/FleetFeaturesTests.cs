@@ -68,6 +68,10 @@ public class FleetFeaturesTests
 
         Assert.Equal(2, Convert.ToInt32(page.Eval("hangarComparison.size")));
         Assert.Equal("scale", page.Text("__dom.node('#hangar-mode').value"));
-        Assert.Contains("Comparing: Drake Corsair · Greycat PTV", page.NodeText("#hangar-scale"));
+        // The pair now shows in the Hangar's own compare bar, with the
+        // side-by-side under the deck, rather than as a note on the scale bar.
+        Assert.Equal("Drake Corsair", page.Text("__dom.node('#hangar-compare-a').value"));
+        Assert.Equal("Greycat PTV", page.Text("__dom.node('#hangar-compare-b').value"));
+        Assert.Equal("Drake Corsair vs Greycat PTV", page.NodeText("#hangar-compare-title"));
     }
 }

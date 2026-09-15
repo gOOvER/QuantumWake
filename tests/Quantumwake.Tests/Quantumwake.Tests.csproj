@@ -30,4 +30,12 @@
     <ProjectReference Include="..\..\src\Quantumwake.Server\Quantumwake.Server.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Seven ships and the 173 parts they carry, cut from the community dump
+         with their own totals kept, plus the small coolers, shields, plants,
+         drives and S3-S4 guns a bench would swap in, so the garage sheet can be checked against
+         figures it never read. -->
+    <None Include="Fixtures/**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

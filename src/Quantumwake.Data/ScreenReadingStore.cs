@@ -40,6 +40,9 @@ public sealed record ScreenSighting(
     KioskReading? Kiosk = null,
     bool Dismissed = false);
 
+/// <summary>The paint a loadout screenshot showed a ship wearing, and which shot.</summary>
+public sealed record PhotographedPaint(string Item, string Name, string Shot, DateTimeOffset ShotAt);
+
 /// <summary>A cargo hold as the commodity terminal displayed it in one saved screenshot.</summary>
 /// <remarks>The number describes that photographed ship and its configuration at that moment.</remarks>
 public sealed record KioskCargoHold(string Ship, double CapacityScu, DateTimeOffset ShotAt);
@@ -360,6 +363,27 @@ public sealed class ScreenReadingStore
                 .Where(s => s.ShotAt < before)
                 .OrderByDescending(s => s.ShotAt)
                 .Select(s => new WalletBaseline(s.ShotAt, s.Wallet!.Balance!.Value, s.Shot))
+                .FirstOrDefault();
+        }
+    }
+
+    /// <summary>
+    /// The paint a ship was last photographed wearing: the livery row of its
+    /// newest loadout reading that resolved to a paint item, with when. Null
+    /// when no reading of the ship named one. The one thing the logs never
+    /// say about a ship that a screenshot does.
+    /// </summary>
+    public PhotographedPaint? LastPaint(string shipName)
+    {
+        lock (_gate)
+        {
+            return _sightings
+                .Where(s => !s.Dismissed)
+                .Where(s => string.Equals(s.Loadout?.Ship, shipName, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(s => s.ShotAt)
+                .SelectMany(s => s.Loadout!.Fittings
+                    .Where(f => f.ClassName is not null && f.ClassName.StartsWith("Paint_", StringComparison.OrdinalIgnoreCase))
+                    .Select(f => new PhotographedPaint(f.ClassName!, f.Name ?? f.ClassName!, s.Shot, s.ShotAt)))
                 .FirstOrDefault();
         }
     }

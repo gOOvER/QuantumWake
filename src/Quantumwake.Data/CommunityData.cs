@@ -371,6 +371,8 @@ public sealed partial class CommunityData
         var spawns = DigestResourceSpawns(resourcesJson, resourceLocationsJson);
         var blueprints = DigestBlueprints(blueprintsJson);
         var lore = DigestPlaceLore(starmapInfoJson);
+        var partStats = DigestPartStats(shipItemsJson);
+        var shipStats = DigestShipStats(shipsJson, partStats);
 
         Directory.CreateDirectory(_directory);
         File.WriteAllText(DigestPath, JsonSerializer.Serialize(digest));
@@ -382,6 +384,8 @@ public sealed partial class CommunityData
         File.WriteAllText(ResourceSpawnsDigestPath, JsonSerializer.Serialize(spawns));
         File.WriteAllText(BlueprintsDigestPath, JsonSerializer.Serialize(blueprints));
         File.WriteAllText(PlaceLoreDigestPath, JsonSerializer.Serialize(lore));
+        File.WriteAllText(PartStatsDigestPath, JsonSerializer.Serialize(partStats));
+        File.WriteAllText(ShipStatsDigestPath, JsonSerializer.Serialize(shipStats));
         // Cosmetic, so it must not be able to fail the fetch: the files are
         // already downloaded and digested by here, and a dataset that works
         // while declining to name its dump is better than no dataset.
@@ -399,6 +403,8 @@ public sealed partial class CommunityData
         _resourceSpawns = spawns;
         _blueprints = blueprints;
         _placeLore = lore;
+        _parts = partStats;
+        _shipBases = shipStats;
         FetchedAt = DateTimeOffset.UtcNow;
         Dump = dump;
         return _byId.Count;
@@ -505,6 +511,10 @@ public sealed partial class CommunityData
                         File.ReadAllText(PlaceLoreDigestPath))
                     is { } lore ? new Dictionary<string, string>(lore, StringComparer.OrdinalIgnoreCase)
                                 : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            // 0.13: the garage digests. Older caches have neither file, and
+            // HasGarage says so.
+            LoadGarage();
 
             if (File.Exists(MetaPath))
             {
@@ -1177,13 +1187,15 @@ public sealed partial class CommunityData
         return result;
     }
 
+    // Both guard the kind first: TryGetProperty throws on anything but an
+    // object, and a nested lookup that came back empty is not an object.
     private static string? Str(JsonElement element, string property) =>
-        element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
 
     private static double? Num(JsonElement element, string property) =>
-        element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Number
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Number
             ? value.GetDouble()
             : null;
 

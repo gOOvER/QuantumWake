@@ -71,6 +71,41 @@ public class ScreenReadingStoreTests : IDisposable
         Assert.Equal(At, hold.ShotAt);
     }
 
+    /// <summary>
+    /// The Hermes' loadout estimate of 8 September listed "Hermes Keystone
+    /// Livery", which the catalogue resolved to Paint_Hermes_White_Blue_Blue -
+    /// the one fact about a ship's paint the app can ever have. The newest
+    /// reading that names one wins; a reading of another ship, a dismissed
+    /// one, or a loadout with no livery row says nothing.
+    /// </summary>
+    [Fact]
+    public void The_paint_a_ship_was_last_photographed_wearing_is_the_newest_livery_read()
+    {
+        static ScreenFitting Livery(string cls, string name) => new("Liveries", name, name, cls, "Exact", [], []);
+        static LoadoutReading Loadout(string ship, params ScreenFitting[] fittings) => new(ship.ToUpperInvariant(), ship, [], null, fittings);
+
+        var store = new ScreenReadingStore(_dir);
+        store.Add(Sighting("older.jpg", At.AddDays(-3), ScreenKind.Loadout,
+            Loadout("RSI Hermes", Livery("Paint_Hermes_Black", "Hermes Black Livery"))));
+        store.Add(Sighting("estimate.jpg", At.AddDays(-1), ScreenKind.Loadout,
+            Loadout("RSI Hermes", new ScreenFitting("Cooler", "ColdSnap", "ColdSnap", "COOL_ColdSnap", "Exact", [], []),
+                Livery("Paint_Hermes_White_Blue_Blue", "Hermes Keystone Livery"))));
+        store.Add(Sighting("systems.jpg", At, ScreenKind.Loadout,
+            Loadout("RSI Hermes", new ScreenFitting("Cooler 1", "ColdSnap", "ColdSnap", "COOL_ColdSnap", "Exact", [], []))));
+        store.Add(Sighting("corsair.jpg", At, ScreenKind.Loadout,
+            Loadout("Drake Corsair", Livery("Paint_Corsair_Commando", "Corsair Commando Livery"))));
+        store.Add(Sighting("dismissed.jpg", At.AddMinutes(1), ScreenKind.Loadout,
+            Loadout("RSI Hermes", Livery("Paint_Hermes_Red", "Hermes Red Livery"))) with { Dismissed = true });
+
+        var worn = store.LastPaint("RSI Hermes");
+
+        Assert.NotNull(worn);
+        Assert.Equal("Paint_Hermes_White_Blue_Blue", worn.Item);
+        Assert.Equal("Hermes Keystone Livery", worn.Name);
+        Assert.Equal("estimate.jpg", worn.Shot);
+        Assert.Null(store.LastPaint("Anvil C8X Pisces"));
+    }
+
     [Fact]
     public void The_store_is_bounded()
     {

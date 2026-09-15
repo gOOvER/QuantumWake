@@ -109,6 +109,8 @@ public static class ServerHost
         builder.Services.AddSingleton<TripStore>();
         builder.Services.AddSingleton<MapNoteStore>();
         builder.Services.AddSingleton<ShardNoteStore>();
+        builder.Services.AddSingleton<BuildStore>();
+        builder.Services.AddSingleton<PartPictures>();
         builder.Services.AddSingleton<TombstoneStore>();
         builder.Services.AddSingleton<BackupBuilder>();
         builder.Services.AddSingleton<RestoreService>();
@@ -879,7 +881,24 @@ public static class ServerHost
 
             if (!File.Exists(cached))
             {
-                var dds = new P4kArchive(P4kArchive.PathFor(install.RootPath)).TryRead(entry);
+                var p4k = new P4kArchive(P4kArchive.PathFor(install.RootPath));
+                var dds = p4k.TryRead(entry);
+
+                // A split mip chain: the .dds is a 464-byte header with the
+                // smallest levels, and the full-size level sits alone in the
+                // highest-numbered .dds.N beside it. Nine of the maker logos
+                // ship that way (Chimera, WillsOp, Blue Triangle); glued back
+                // behind the header they decode like the rest.
+                if (dds is { Length: >= 128 and < 1024 })
+                {
+                    for (var n = 9; n >= 1; n--)
+                    {
+                        if (p4k.TryRead($"{entry}.{n}") is not { } top) continue;
+                        dds = [.. dds.AsSpan(0, 128), .. top];
+                        break;
+                    }
+                }
+
                 if (dds is null || VehicleIcons.Convert(dds) is not { } picture)
                     return Results.NotFound();
 
@@ -905,10 +924,26 @@ public static class ServerHost
                 : Results.NotFound());
 
         // The paints the game pictures for a hull, for the pilot to pick from.
-        // The app never picks: which paint a ship wears is not in the logs.
-        app.MapGet("/api/fleet/paints/{vehicleClass}", (string vehicleClass, LogLibrary lib) =>
-            Results.Ok(GamePaints.ForHull(lib.GameCommodities.Paints, vehicleClass)
-                .Select(p => new { p.Item, p.Name, p.Stock })));
+        // The app never guesses: which paint a ship wears is not in the logs.
+        // A loadout screenshot names it, though - the Liveries row - and that
+        // one comes first, dated, so the card can wear it until the pilot
+        // says otherwise.
+        app.MapGet("/api/fleet/paints/{vehicleClass}", (string vehicleClass, LogLibrary lib, ScreenReadingStore readings) =>
+        {
+            var name = lib.GameCommodities.Vehicle(vehicleClass)?.Name
+                ?? (lib.Community.Ships.TryGetValue(vehicleClass, out var info) ? info.Name : null);
+            var worn = name is null ? null : readings.LastPaint(name);
+
+            return Results.Ok(GamePaints.ForHull(lib.GameCommodities.Paints, vehicleClass)
+                .Select(p => new
+                {
+                    p.Item, p.Name, p.Stock,
+                    photographed = worn is not null && string.Equals(worn.Item, p.Item, StringComparison.OrdinalIgnoreCase)
+                        ? new { worn.Shot, worn.ShotAt } : null,
+                })
+                .OrderByDescending(p => p.photographed is not null)
+                .ToList());
+        });
 
         // The game's own picture of a hull in one paint: the paint item's logo.
         app.MapGet("/api/fleet/paints/{paintItem}/render", (string paintItem, LogLibrary lib) =>
@@ -2591,6 +2626,11 @@ public static class ServerHost
             // Where the watch looks, said out loud: the pilot is agreeing to a
             // folder being followed, and should be able to see which.
             folder = install is null ? null : Screenshots.FolderFor(install.RootPath),
+
+            // How many screenshots in that folder the app has never read. The
+            // watch reads nothing from before it began, so this is what the
+            // "read older" button has to offer - and zero is what hides it.
+            unread = insight.Unread(install?.RootPath).Count,
         }));
 
         app.MapPost("/api/screen/settings", (
@@ -2783,6 +2823,32 @@ public static class ServerHost
             return Results.Ok(await insight.ReadShotAsync(path, token));
         });
 
+        // The archive, on request. The watch reads nothing from before it
+        // began - the pilot enabled reading their screenshots, not their
+        // history - but the one loadout photograph of a ship is often from the
+        // evening before the app was installed. A bounded batch, newest first,
+        // and the count still waiting, so the button can say what is left and
+        // a folder of two thousand shots is not one request.
+        app.MapPost("/api/screen/readings/older", async (
+            ScreenInsightService insight,
+            ScreenSettingsStore settings,
+            int? take,
+            CancellationToken token) =>
+        {
+            if (settings.Current.Mode != ScreenMode.Screenshots)
+                return Results.BadRequest(new { trouble = "screenshot analysis is switched off" });
+
+            if (insight.Excuse(install?.RootPath) is { } excuse)
+                return Results.BadRequest(new { trouble = excuse });
+
+            var (read, remaining) = await insight.ReadOlderAsync(install?.RootPath, take is > 0 ? take.Value : 40, token);
+            return Results.Ok(new
+            {
+                read = read.Select(s => new { s.Shot, s.ShotAt, s.Kind, s.Summary }).ToList(),
+                remaining,
+            });
+        });
+
         app.MapGet("/api/runs/settings", (RunSettingsStore settings) => settings.Current);
 
         app.MapPost("/api/runs/settings", (RunSettingsStore settings, int? days) =>
@@ -2898,6 +2964,12 @@ public static class ServerHost
         app.MapGet("/api/uex/refineries", (UexFeeds feeds) => feeds.RefineryYields);
         app.MapGet("/api/uex/raw-prices", (UexFeeds feeds) => feeds.RawOrePrices);
         app.MapGet("/api/uex/places", (UexFeeds feeds) => feeds.PlaceDirectory);
+        app.MapGet("/api/uex/marketplace", (UexFeeds feeds) => new
+        {
+            enabled = feeds.IsEnabled(UexFeeds.Marketplace),
+            fetchedAt = feeds.FetchedAt(UexFeeds.Marketplace),
+            listings = feeds.Listings.Select(ListingCard)
+        });
 
         // ---- UEX: live prices in, logged sale prices out. Both opt-in. ----
 
@@ -2910,135 +2982,391 @@ public static class ServerHost
             source = "api.uexcorp.space"
         });
 
-        // Every terminal price for one commodity: the map grades its sellers
-        // and buyers by these, by price or by SCU capacity.
-        /*
-         * What can be bolted onto one of your ships, and where it is sold.
-         *
-         * The ship data carries every port with the rule for what may replace
-         * what is in it, so this is the game's own answer rather than a guess:
-         * a size 2 shield port takes a size 2 shield, and the shops that stock
-         * one are known. Ports nobody sells parts for come back empty and are
-         * dropped, so the page shows what can actually be shopped for today.
-         */
-        app.MapGet("/api/fleet/upgrades", (LogLibrary lib, UexData uex, string ship) =>
+        // ---- the garage: a ship's numbers, and what a part would do to them ----
+
+        // Who is in the garage: the ships the logs have seen you fly, most
+        // flown first, then everything the reference knows. Class names
+        // throughout, because that is what the sheet is keyed by.
+        app.MapGet("/api/garage", (LogLibrary lib) =>
         {
-            var slots = lib.Community.Slots(ship);
-
-            if (slots.Count == 0)
-                return Results.Ok(new
+            var community = lib.Community;
+            var mine = lib.Stats().Ships
+                .Select(s => (Ship: s, Base: community.GarageShip(s.ClassName)))
+                .Where(x => x.Base is not null)
+                .Select(x => new
                 {
-                    ship,
+                    x.Base!.Class,
+                    x.Base.Name,
+                    x.Ship.Sorties,
+                    x.Ship.LastFlown
+                })
+                .ToList();
 
-                    // Told apart on purpose: an install whose reference data
-                    // predates ports needs a refresh, which is a different
-                    // sentence from "this ship has nothing to change".
-                    known = lib.Community.HasSlots,
-                    groups = Array.Empty<object>()
+            return new
+            {
+                known = community.HasGarage,
+                dump = community.Dump,
+                mine,
+                all = community.GarageShips.Values
+                    .Where(s => s.IsSpaceship)
+                    .OrderBy(s => s.Manufacturer).ThenBy(s => s.Name)
+                    .Select(s => new { s.Class, s.Name, s.Manufacturer, s.Role, s.Size })
+            };
+        });
+
+        // The sheet for one ship as it comes, with the ports a pilot can change.
+        // Every figure is recomputed from the parts by the model docs/garage.md
+        // describes; the dump's own totals are kept beside them only for the
+        // test that checks the two agree.
+        app.MapGet("/api/garage/{cls}", (string cls, LogLibrary lib) =>
+            GarageSheet(lib, cls, null));
+
+        // The same sheet with parts changed: port id → class. Nothing is
+        // stored; this is the bench asking "and if I put this here".
+        app.MapPost("/api/garage/{cls}/sheet", (string cls, LogLibrary lib, GarageSwapRequest body) =>
+            GarageSheet(lib, cls, body.Swaps));
+
+        // What could go in one port: every part of a kind the port takes, in
+        // a size it takes, with its figures and - when UEX is on - what it
+        // costs and where. A part nobody sells is still offered: the bench is
+        // for finding out what a part would do, and the shop is the next
+        // question, not a gate on the first.
+        // ---- shopping for a fit ----
+
+        // The bench's changes as a shopping list: one line per distinct part
+        // with how many, a job of kind "list" like any the pilot writes by hand,
+        // and the destination that sells the most of it proposed - or none,
+        // said plainly, when UEX is off or nothing on the list is stocked.
+        // From here it is the ordinary flow: the Now page, the overlay, the
+        // MFD's List page.
+        app.MapPost("/api/garage/{cls}/shop", (string cls, LogLibrary lib, UexData uex, JobStore jobs, TombstoneStore deleted, GarageShopRequest body) =>
+        {
+            var community = lib.Community;
+            var ship = community.GarageShip(cls);
+            if (ship is null) return Results.NotFound();
+
+            var swaps = body.Swaps ?? new Dictionary<string, string?>();
+
+            // Only what actually changed, and only what can be bought: a port
+            // emptied is not a purchase, and a port put back to stock is not
+            // a change.
+            var wanted = new Dictionary<string, (PartStats Part, int Count)>(StringComparer.Ordinal);
+            foreach (var (portId, toClass) in swaps)
+            {
+                if (toClass is null) continue;
+                var port = FindPort(ship.Loadout, portId);
+                if (port is null || string.Equals(port.Class, toClass, StringComparison.Ordinal)) continue;
+                if (!community.Parts.TryGetValue(toClass, out var part)) continue;
+
+                var so = wanted.GetValueOrDefault(toClass);
+                wanted[toClass] = (part, so.Count + 1);
+            }
+
+            var title = string.IsNullOrWhiteSpace(body.Title) ? $"{ship.Name} fit" : body.Title.Trim();
+            var source = $"garage:{ship.Class}";
+            var existing = jobs.OpenList(source, title);
+
+            // A bench put back to stock has nothing to buy - and a list the
+            // Garage wrote for it is now a list of things not wanted. It goes,
+            // and the page says so; a list the Garage never wrote is not made.
+            if (wanted.Count == 0)
+            {
+                if (existing is not null && jobs.Remove(existing.Id))
+                {
+                    deleted.Record(TombstoneStore.Kinds.Jobs, existing.Id);
+                    return Results.Ok(new { job = (Job?)null, removed = true, removedTitle = existing.Title });
+                }
+                return body.OnlyIfExists == true
+                    ? Results.Ok(new { job = (Job?)null, removed = false })
+                    : Results.BadRequest(new { message = "Nothing on the bench differs from stock, so there is nothing to buy." });
+            }
+
+            // A bench edit reconciles a list the Garage already keeps; it does
+            // not start one the pilot never asked for.
+            if (body.OnlyIfExists == true && existing is null)
+                return Results.Ok(new { job = (Job?)null, removed = false });
+
+            var lines = wanted.Values
+                .Select(w => new ShoppingLine(
+                    w.Part.Name,
+                    w.Count,
+                    uex.ItemMarket(w.Part.Uuid)
+                        .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
+                        .Select(g => (g.Key, g.Min(r => r.Buy)))
+                        .ToList()))
+                .ToList();
+
+            var proposal = GarageShopping.Propose(lines);
+            var place = lib.Terminals.Resolve(proposal.Terminal);
+
+            // Before Garage shopping had a complete-fit button, a direct Fit
+            // made a one-part list named after that part. Fold exactly those
+            // legacy automatic lists into the fit the pilot is saving now;
+            // named saved-build lists remain separate work.
+            var legacyAutoTitles = wanted.Values
+                .SelectMany(w => new[]
+                {
+                    $"{ship.Name} · {w.Part.Name}",
+                    $"{ship.Name} - {w.Part.Name}",
+                })
+                .ToHashSet(StringComparer.Ordinal);
+            var saved = jobs.ReplaceOpenList(
+                title,
+                source,
+                [.. wanted.Values.Select(w => new JobItem(w.Part.Name, w.Count))],
+                place?.Name,
+                place?.RawId,
+                legacyAutoTitles);
+            foreach (var id in saved.ConsolidatedIds)
+                deleted.Record(TombstoneStore.Kinds.Jobs, id);
+
+            return Results.Ok(new
+            {
+                job = saved.Job,
+                saved.Created,
+                Consolidated = saved.ConsolidatedIds.Count,
+                saved.DestinationKept,
+                proposal = new
+                {
+                    proposal.Terminal,
+                    place = place?.Name,
+                    placeId = place?.RawId,
+                    system = place?.System,
+                    proposal.Covered,
+                    proposal.Of,
+                    proposal.Total,
+                    proposal.Missing,
+                    pricesKnown = uex.IsEnabled
+                }
+            });
+        });
+
+        // A part's picture, from the wiki once and the disk after. 404 is the
+        // answer for "no picture", and the page falls back to the maker's mark
+        // on it; the wiki has one for about half the bench.
+        app.MapGet("/api/garage/picture/{uuid}", async (string uuid, LogLibrary lib, PartPictures pictures, IHttpClientFactory httpFactory, HttpContext ctx) =>
+        {
+            if (!lib.Community.IsEnabled) return Results.NotFound();
+
+            var part = lib.Community.Parts.Values.FirstOrDefault(p => string.Equals(p.Uuid, uuid, StringComparison.OrdinalIgnoreCase));
+            if (part is null) return Results.NotFound();
+
+            var picture = await pictures.GetAsync(httpFactory.CreateClient("community"), part, ctx.RequestAborted);
+            if (picture is null) return Results.NotFound();
+
+            // A day in the browser: the file on disk is for ever, the bench
+            // reopens often, and a picture of a cooler does not change.
+            ctx.Response.Headers.CacheControl = "private, max-age=86400";
+            return Results.File(picture.Bytes, picture.ContentType);
+        });
+
+        // A component maker's logo, for the forty-five the Fankit does not
+        // cover. The game's own 256-square mark first - the archive has one
+        // for 127 makers, every component maker among them - the wiki's
+        // manufacturer page for a maker the install lacks, 404 for the
+        // monogram. The maker's name for the wiki comes from the dataset's
+        // own list, else from any part that names it.
+        app.MapGet("/api/garage/maker/{code}", async (string code, LogLibrary lib, PartPictures pictures, IHttpClientFactory httpFactory, HttpContext ctx) =>
+        {
+            if (lib.GameCommodities.MakerLogo(code) is { } entry)
+            {
+                ctx.Response.Headers.CacheControl = "private, max-age=86400";
+                return ArchivePicture(entry, "maker-logos");
+            }
+
+            if (!lib.Community.IsEnabled) return Results.NotFound();
+
+            var name = lib.Community.Manufacturers.GetValueOrDefault(code)
+                ?? lib.Community.Parts.Values.FirstOrDefault(p => string.Equals(p.MakerCode, code, StringComparison.OrdinalIgnoreCase))?.Manufacturer;
+            if (string.IsNullOrWhiteSpace(name)) return Results.NotFound();
+
+            var picture = await pictures.GetMakerAsync(httpFactory.CreateClient("community"), code, name, ctx.RequestAborted);
+            if (picture is null) return Results.NotFound();
+
+            ctx.Response.Headers.CacheControl = "private, max-age=86400";
+            return Results.File(picture.Bytes, picture.ContentType);
+        });
+
+        // ---- saved builds: a fit under a name ----
+
+        app.MapGet("/api/garage/builds", (BuildStore builds, string? ship) =>
+            ship is { Length: > 0 } ? builds.For(ship) : builds.All());
+
+        app.MapPost("/api/garage/builds", (BuildStore builds, BuildRequest body) =>
+        {
+            var build = builds.Add(body.ShipClass, body.Name, body.Swaps, body.Note);
+            return build is null ? Results.BadRequest(new { message = "A build needs a ship." }) : Results.Ok(build);
+        });
+
+        app.MapPut("/api/garage/builds/{id}", (string id, BuildStore builds, BuildRequest body) =>
+            builds.Update(id, body.Name, body.Swaps, body.Note) is { } build ? Results.Ok(build) : Results.NotFound());
+
+        app.MapDelete("/api/garage/builds/{id}", (string id, BuildStore builds, TombstoneStore deleted) =>
+        {
+            if (!builds.Remove(id)) return Results.NotFound();
+
+            deleted.Record(TombstoneStore.Kinds.Builds, id);
+            return Results.Ok(new { id });
+        });
+
+        // Who is selling a part fit for this ship on UEX's player marketplace,
+        // for the panel under the bench. Joined by uuid through the feed's
+        // item table, then kept to what some port on the ship accepts at a
+        // size it takes - a size 3 shield is not an offer for a Gladius. The
+        // count of what the feed holds altogether is returned too, because a
+        // panel of two rows needs to say whether that is two of five hundred
+        // or two of two.
+        app.MapGet("/api/garage/{cls}/market", (string cls, LogLibrary lib, UexFeeds feeds) =>
+        {
+            var community = lib.Community;
+            var ship = community.GarageShip(cls);
+            if (ship is null) return Results.NotFound();
+
+            var ports = new List<FitPort>();
+            void Walk(IReadOnlyList<FitPort> tree)
+            {
+                foreach (var port in tree)
+                {
+                    ports.Add(port);
+                    Walk(port.Children);
+                }
+            }
+            Walk(ship.Loadout);
+
+            bool Fits(PartStats part) => ports.Any(p =>
+                p.Accepts.Contains(part.Type, StringComparer.Ordinal) && part.Size >= p.MinSize && part.Size <= p.MaxSize);
+
+            var byUuid = community.Parts.Values
+                .Where(p => p.Uuid is { Length: > 0 } && GarageKinds.Contains(p.Type))
+                .GroupBy(p => p.Uuid!, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+            var listings = feeds.Listings
+                .Where(l => l.Operation.Equals("sell", StringComparison.OrdinalIgnoreCase) && !l.SoldOut && l.ItemUuid is not null)
+                .Select(l => (Listing: l, Part: byUuid.GetValueOrDefault(l.ItemUuid!)))
+                .Where(x => x.Part is not null && Fits(x.Part))
+                .OrderByDescending(x => x.Listing.Added)
+                .Select(x => new
+                {
+                    listing = ListingCard(x.Listing),
+                    part = PartCard(x.Part!),
+                    // The port(s) it would go in, so the row can open the bench there.
+                    ports = ports
+                        .Where(p => p.Accepts.Contains(x.Part!.Type, StringComparer.Ordinal) && x.Part.Size >= p.MinSize && x.Part.Size <= p.MaxSize)
+                        .Select(p => p.PortId)
+                        .Take(1)
+                })
+                .ToList();
+
+            return Results.Ok(new
+            {
+                enabled = feeds.IsEnabled(UexFeeds.Marketplace),
+                fetchedAt = feeds.FetchedAt(UexFeeds.Marketplace),
+                total = feeds.Listings.Count,
+                components = feeds.Listings.Count(l => l.ItemUuid is not null && byUuid.ContainsKey(l.ItemUuid)),
+                listings
+            });
+        });
+
+        // The ship's fit as last photographed at a Vehicle Loadout Manager,
+        // as bench swaps: what the screen read, port by port, and what it did
+        // not settle. 404 when no loadout reading is of this ship - the name
+        // has to have read exactly; "looks like Drake Corsair" is not one.
+        app.MapGet("/api/garage/{cls}/photographed", (string cls, LogLibrary lib, ScreenReadingStore readings) =>
+        {
+            var community = lib.Community;
+            var ship = community.GarageShip(cls);
+            if (ship is null) return Results.NotFound();
+
+            var fit = GaragePhotograph.Latest(ship, readings.LatestLoadouts(), community.Parts, community.Ships);
+            return fit is null
+                ? Results.NotFound(new { message = $"No loadout screenshot of the {ship.Name} has been read." })
+                : Results.Ok(new
+                {
+                    fit.Shot, fit.ShotAt, fit.Ship, fit.Scope, fit.Swaps, fit.Applied, fit.Changed,
+                    ports = fit.Ports.Select(p => new
+                    {
+                        p.Slot, p.PortId, p.Name, p.Class, p.Applied, p.Changed, p.Why,
+                        stockName = p.PortId is not null && FindPort(ship.Loadout, p.PortId)?.Class is { } stock
+                            && community.Parts.TryGetValue(stock, out var was) ? was.Name : null
+                    })
                 });
+        });
 
-            // Everything sold, by what it is and how big: one pass over the
-            // catalogue rather than one per port.
-            // Which kinds of component the game actually tags as shipped. The
-            // tag is not used evenly: 196 of 203 weapon guns carry it and not
-            // one of the 81 coolers does, so an untagged cooler means the tag
-            // was never applied to coolers rather than that the cooler is
-            // unfinished. Saying otherwise would put "not flight ready" on
-            // every cooler, shield and quantum drive in the game.
+        app.MapGet("/api/garage/{cls}/options", (string cls, string port, LogLibrary lib, UexData uex, UexFeeds feeds) =>
+        {
+            var community = lib.Community;
+            var ship = community.GarageShip(cls);
+            if (ship is null) return Results.NotFound();
+
+            var target = FindPort(ship.Loadout, port);
+            if (target is null) return Results.NotFound(new { message = $"{ship.Name} has no port {port}." });
+
+            var kinds = target.Accepts.Where(GarageKinds.Contains).ToHashSet(StringComparer.Ordinal);
+
+            // Which kinds the game tags as shipped at all. The tag is not used
+            // evenly - 196 of 203 guns carry it and not one of the 81 coolers -
+            // so an untagged cooler is silence, not a warning.
             var tagged = lib.GameCommodities.ItemFacts.Values
                 .Where(i => i.Tags.Contains("flightReady", StringComparison.OrdinalIgnoreCase))
                 .Select(i => i.Type)
                 .Where(t => t.Length > 0)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            // Keyed by class name rather than flattened to values, because the
-            // class is what joins these to the install's own facts.
-            var catalogue = lib.Community.Items
-                .Where(i => i.Value.Uuid is not null && i.Value.Type is { Length: > 0 })
-                .GroupBy(i => (i.Value.Type!, i.Value.Size))
-                .ToDictionary(g => g.Key, g => g.ToList());
-
-            var groups = slots
-                .GroupBy(s => (s.Kind, s.Size))
-                .Select(group =>
+            // A recipe in the install means the component has a craft route,
+            // not that the pilot already owns its blueprint. The bench needs
+            // that distinction when there is no shop counter to send them to.
+            var craftable = lib.GameCommodities.Blueprints
+                .Where(b => b.Kind.Equals("creation", StringComparison.OrdinalIgnoreCase))
+                .Select(b => b.OutputClass)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var options = community.Parts.Values
+                .Where(p => kinds.Contains(p.Type) && p.Size >= target.MinSize && p.Size <= target.MaxSize)
+                .Where(p => !p.Name.Equals(p.Class, StringComparison.Ordinal) && !p.Name.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase))
+                .Select(p =>
                 {
-                    var fitted = group
-                        .Select(s => s.Fitted)
-                        .Where(f => f is { Length: > 0 })
-                        .Distinct(StringComparer.OrdinalIgnoreCase)
-                        .ToList();
-
-                    var options = (catalogue.TryGetValue(group.Key, out var candidates) ? candidates : [])
-                        .Select(entry => new
-                        {
-                            Item = entry.Value,
-                            Facts = lib.GameCommodities.Item(entry.Key),
-                        })
-                        .Select(row => new
-                        {
-                            row.Item,
-                            // Null where the game does not use the tag for this
-                            // kind of part at all, which is most kinds. Only a
-                            // component of a kind the tag is applied to can be
-                            // said to be missing it.
-                            Ready = row.Facts is null || !tagged.Contains(row.Facts.Type)
-                                ? (bool?)null
-                                : row.Facts.Tags.Contains(
-                                    "flightReady", StringComparison.OrdinalIgnoreCase),
-                        })
-                        .Select(row => new
-                        {
-                            row.Item.Name,
-                            row.Item.Manufacturer,
-                            row.Item.Grade,
-                            flightReady = row.Ready,
-                            price = uex.ItemPrice(row.Item.Uuid),
-                            shops = uex.ItemMarket(row.Item.Uuid)
-                                .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
-                                .Select(g => g.MinBy(r => r.Buy)!)
-                                .OrderBy(r => r.Buy)
-                                .Take(4)
-                                .Select(r =>
-                                {
-                                    var place = lib.Terminals.Resolve(r.Terminal);
-
-                                    return new
-                                    {
-                                        terminal = r.Terminal,
-                                        placeId = place?.RawId ?? string.Empty,
-                                        place = place?.Name,
-                                        system = place?.System,
-                                        security = TerminalPlaces.SecurityOfSystem(place?.System),
-                                        price = r.Buy
-                                    };
-                                })
-                                .ToList()
-                        })
-
-                        // Nothing to buy is not an upgrade: an item with no
-                        // shop behind it would send the player nowhere.
-                        .Where(o => o.Name is { Length: > 0 } && o.shops.Count > 0)
-                        .OrderBy(o => o.price ?? decimal.MaxValue)
-                        .Take(12)
-                        .ToList();
-
+                    var facts = lib.GameCommodities.Item(p.Class);
                     return new
                     {
-                        kind = group.Key.Kind,
-                        size = group.Key.Size,
-                        ports = Holes(group),
-                        fitted,
-                        options
+                        part = PartCard(p),
+                        componentClass = ComponentClass(facts?.Description),
+                        craftable = craftable.Contains(p.Class),
+                        flightReady = facts is not null && tagged.Contains(facts.Type)
+                            ? facts.Tags.Contains("flightReady", StringComparison.OrdinalIgnoreCase)
+                            : (bool?)null,
+                        price = uex.ItemPrice(p.Uuid),
+                        // Players offering it this week, cheapest first, three at
+                        // most; the panel under the bench has the rest.
+                        listings = feeds.ListingsFor(p.Uuid).Take(3).Select(ListingCard).ToList(),
+                        shops = uex.ItemMarket(p.Uuid)
+                            .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
+                            .Select(g => g.MinBy(r => r.Buy)!)
+                            .OrderBy(r => r.Buy)
+                            .Take(4)
+                            .Select(r =>
+                            {
+                                var place = lib.Terminals.Resolve(r.Terminal);
+                                return new
+                                {
+                                    terminal = r.Terminal,
+                                    placeId = place?.RawId ?? string.Empty,
+                                    place = place?.Name,
+                                    system = place?.System,
+                                    price = r.Buy
+                                };
+                            })
+                            .ToList()
                     };
                 })
-                .Where(g => g.options.Count > 0)
-                .OrderBy(g => g.kind)
-                .ThenBy(g => g.size)
                 .ToList();
 
-            return Results.Ok(new { ship, known = true, groups });
+            return Results.Ok(new
+            {
+                port = new { target.PortId, target.Hardpoint, kinds, target.MinSize, target.MaxSize, fitted = target.Class },
+                pricesKnown = uex.IsEnabled,
+                marketKnown = feeds.IsEnabled(UexFeeds.Marketplace),
+                options
+            });
         });
-
         /*
          * Everything a shopping list can be written from.
          *
@@ -3506,25 +3834,6 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
         new([.. value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant)]);
 }
 
-/// <summary>
-/// How many holes of one kind and size a ship really has.
-/// </summary>
-/// <remarks>
-/// Two things stop this being a count of rows. A port that accepts sizes 1 to
-/// 3 is three rows and one hole. And a gimbal mount accepts a gun directly or
-/// a gimbal that then holds the gun, so the mount and the gun inside it are
-/// the same hole offered twice - which is why a Corsair looked like it had
-/// twelve size 2 gun ports instead of six. A port whose id extends another
-/// port's id is inside it, so only the outermost of each chain is counted.
-/// </remarks>
-static int Holes(IEnumerable<ShipSlot> slots)
-{
-    var ports = slots.Select(s => s.Port).Distinct(StringComparer.Ordinal).ToList();
-
-    return ports.Count(port =>
-        !ports.Any(other => other != port && port.StartsWith(other + ".", StringComparison.Ordinal)));
-}
-
 /// <summary>Bridges the library's progress callback to the shared status.</summary>
 
 
@@ -3855,6 +4164,127 @@ static int Holes(IEnumerable<ShipSlot> slots)
             // ranking still means something with prices switched off.
             .OrderByDescending(p => p.PerRock)
             .ThenByDescending(p => p.Ore);
+    }
+
+    /// <summary>
+    /// The garage's answer for one ship: what it is, the sheet for the given
+    /// fit, and the ports a pilot can change.
+    /// </summary>
+    /// <remarks>
+    /// Told apart on purpose: a reference that predates the garage needs a
+    /// refresh, a class the reference has never heard of needs nothing, and
+    /// neither is a sheet full of zeros.
+    /// </remarks>
+    static IResult GarageSheet(LogLibrary lib, string cls, IReadOnlyDictionary<string, string?>? swaps)
+    {
+        var community = lib.Community;
+
+        if (!community.HasGarage)
+            return Results.Json(new { known = false, message = "The reference data predates the garage. Refresh the community dataset in Settings." }, statusCode: 409);
+
+        var ship = community.GarageShip(cls);
+        if (ship is null)
+            return Results.NotFound(new { message = $"The reference does not know a ship called {cls}." });
+
+        var sheet = ShipSheet.Compute(ship, community.Parts, swaps);
+
+        // The bench's rows: every editable port, with what is in it now. Parts
+        // nobody can change - life support, armour, the thrusters - shape the
+        // numbers but are not offered as decisions.
+        var ports = sheet.Parts
+            .Where(p => IsEditable(ship.Loadout, p.PortId))
+            .Select(p => new
+            {
+                p.PortId, p.Hardpoint, p.Group, p.MinSize, p.MaxSize,
+                p.Class, p.Name, p.StockClass, p.Changed,
+                stockName = p.StockClass is not null && community.Parts.TryGetValue(p.StockClass, out var stock) ? stock.Name : null,
+                fitted = p.Class is not null && community.Parts.TryGetValue(p.Class, out var part) ? PartCard(part) : null
+            });
+
+        return Results.Ok(new
+        {
+            known = true,
+            dump = community.Dump,
+            ship = new
+            {
+                ship.Class, ship.Name, ship.Manufacturer, ship.Role, ship.Career, ship.Size, ship.Crew,
+                ship.HullMass, ship.Health, ship.CargoScu, ship.QuantumFuel, ship.HydrogenFuel,
+                ship.Flight, ship.PowerPools,
+                stockMass = ship.Dataset.MassTotal
+            },
+            sheet,
+            ports
+        });
+
+        static bool IsEditable(IReadOnlyList<FitPort> ports, string portId)
+        {
+            foreach (var port in ports)
+            {
+                if (port.PortId == portId) return port.Editable;
+                if (IsEditable(port.Children, portId)) return true;
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>The kinds the bench offers - what a shop counter sells and a pilot swaps.</summary>
+    static readonly HashSet<string> GarageKinds = new(StringComparer.Ordinal)
+    {
+        "QuantumDrive", "Shield", "PowerPlant", "Cooler",
+        "WeaponGun", "MissileLauncher", "Missile",
+        "Radar", "EMP", "QuantumInterdictionGenerator", "WeaponMining",
+    };
+
+    /// <summary>A port anywhere in the tree, by the dump's id for it.</summary>
+    static FitPort? FindPort(IReadOnlyList<FitPort> ports, string portId)
+    {
+        foreach (var port in ports)
+        {
+            if (port.PortId == portId) return port;
+            if (FindPort(port.Children, portId) is { } found) return found;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// A marketplace advertisement as a page shows it: the ask, who, where,
+    /// and the way to UEX. What the item is comes from the install by uuid,
+    /// on the part card beside this, never from UEX's copy of the same facts.
+    /// </summary>
+    static object ListingCard(UexListing l) => new
+    {
+        l.Id, l.Title, l.Operation, l.Type, l.ItemUuid,
+        l.Price, l.Unit, l.InStock, l.Quality, l.Location, l.Seller, l.Added, l.Expires, l.Photo, l.SoldOut, l.Url
+    };
+
+    /// <summary>A part as the bench shows it: identity plus the figures that matter for its kind.</summary>
+    static object PartCard(PartStats part) => new
+    {
+        part.Class, part.Type, part.SubType, part.Size, part.Grade, part.Name, part.Manufacturer, part.MakerCode, part.Uuid,
+        part.Mass, part.Em, part.Ir, part.Health,
+        part.PowerGen, part.PowerUseMax, part.CoolantGen, part.CoolantUseMax,
+        part.Weapon, part.Shield, part.Quantum, part.Missile, part.Armor
+    };
+
+    /// <summary>The component class stated in the game's own item description.</summary>
+    static string? ComponentClass(string? description)
+    {
+        if (string.IsNullOrWhiteSpace(description)) return null;
+
+        // DataCore's item prose stores line breaks as the literal two-character
+        // sequence "\\n", while the community file uses real newlines.
+        var line = description.Replace("\\n", "\n").Split('\n').FirstOrDefault(line =>
+            line.TrimStart().StartsWith("Class:", StringComparison.OrdinalIgnoreCase));
+        if (line is null) return null;
+
+        var value = line[(line.IndexOf(':') + 1)..].Trim();
+        return value.Equals("Civilian", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("Industrial", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("Military", StringComparison.OrdinalIgnoreCase)
+            ? value
+            : null;
     }
 
     /// <summary>Builds the short list of useful things at the player's live place.</summary>
@@ -4260,6 +4690,16 @@ public sealed record MapNoteRequest(
 
 /// <summary>Body of PUT /api/servers/{shard}/note. Blank clears the note.</summary>
 public sealed record ShardNoteRequest(string? Note);
+
+/// <summary>Body of POST /api/garage/{class}/sheet: port id → class to fit there, null to empty the port.</summary>
+public sealed record GarageSwapRequest(Dictionary<string, string?>? Swaps);
+
+/// <summary>Body of POST and PUT /api/garage/builds. On PUT, null leaves a field alone.</summary>
+public sealed record BuildRequest(string? ShipClass, string? Name, Dictionary<string, string?>? Swaps, string? Note);
+
+/// <summary>Body of POST /api/garage/{class}/shop: the bench's swaps, and a title for the job.</summary>
+/// <param name="OnlyIfExists">Reconcile a list the Garage already keeps; never start one. What a bench edit sends.</param>
+public sealed record GarageShopRequest(Dictionary<string, string?>? Swaps, string? Title, bool? OnlyIfExists = null);
 
 /// <summary>Body of PUT /api/servers/{shard}/favorite.</summary>
 public sealed record ShardFavoriteRequest(bool Favorite);

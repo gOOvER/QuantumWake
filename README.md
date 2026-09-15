@@ -147,6 +147,7 @@ position tracker.*
 | **Flight plan and checklist** | What is my next stop, what has to happen there, and what can be checked off? |
 | **Sessions, contracts and crew** | How long did I play, which contracts changed, and who did the log name? |
 | **Fleet, loadout and stash** | Which ships and gear have appeared, what fits, and where something was last seen? |
+| **Hangar and Garage** | How big is each ship against the others, how do two compare on every number, and what would a different part do to a ship's sheet - DPS, shields, signatures, power - before buying it? |
 | **Ledger, cargo and market** | Which transactions were confirmed, what did a counter record, and where is a commodity traded? |
 | **Mining, crafting and items** | What the installed game data says about deposits, recipes, parts and shops. |
 | **Screen readings** | What a saved screenshot or copied `/showlocation` says, checked against the logbook where possible. |
@@ -363,6 +364,329 @@ trademarks of Cloud Imperium Rights LLC. Quantum Wake is an unofficial fan
 project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
+
+### 0.13.32
+
+- **The Garage opens a ship as its screenshot showed it.** With a loadout
+  photograph read — a Vehicle Loadout Manager frame or the Fleet Manager's
+  loadout estimate — the bench now starts from it the moment the ship is
+  opened, dated, with what the screenshot did not settle listed under it;
+  before, it opened at stock until you pressed *Start from the photographed
+  fit*. A tick above the bench, *Start from the newest photograph*, turns
+  that off and brings the button back; it also acts on the bench you are
+  looking at, and it is remembered in this browser like the paint pick.
+
+- **A ship wears the paint its screenshot showed.** A loadout screenshot
+  names the livery — the Hermes' estimate listed *Hermes Keystone Livery* —
+  and that paint now stands in on the Fleet card, the Hangar and the Garage
+  until you pick one yourself, labelled as photographed and dated, in place
+  of the first paint the game happens to list. Your own pick still wins.
+
+- **Every screenshot in the folder is read, the ones already there
+  included.** With *Watch screenshots* on, the app used to read only what
+  landed after it was switched on, which meant a loadout photographed the
+  evening before was never seen: on this install the only photographs of the
+  Hermes' fit — eight Vehicle Loadout Manager frames and its loadout
+  estimate — sat unread for a week while the Garage said nothing. The watch
+  now reads the archive too, newest first, a few files at a time, and the
+  Log tab says how many are still to come. Untick *Watch screenshots* to
+  stop, or invalidate a reading you do not want believed. With the watch
+  off, a **Read N older screenshots** button does a one-off read.
+
+- **The Garage says when it has no photograph of a ship** instead of hiding
+  the section. Reading the Fleet Manager's loadout estimate now fills every
+  port of a counted kind (*Cooler ×2* is both coolers), and its *Quantum
+  Drives* row — which the engine reads with an O — reaches the quantum drive
+  port.
+
+- **A paint picked anywhere shows everywhere.** Choosing a paint on the
+  Garage, the Hangar or a Fleet card redraws every picture of that hull on
+  the page; before, a pick made on one page reached the others only after a
+  reload.
+
+- **The Hangar's cards open the Garage too.** Each ship card in the Hangar
+  gallery carries the same *Garage* button as its Fleet card, so a ship you
+  are looking at can be taken to its numbers, what fits it and what a part
+  would change without going back through Fleet. Ground vehicles get no
+  button there, as on Fleet: nobody sells parts for their ports.
+
+- **The Garage no longer shows one ship's sheet under another's name.** A
+  slow answer for the ship you had just left could land after the one you
+  picked and overwrite it - Ship B selected, Ship A displayed, and a build
+  saved then carried A's ports under B's class. Every ask the page makes
+  (the ship, a port's candidates, a refit) now carries a ticket, and an
+  answer that is no longer the newest is dropped.
+
+- **Changing one cooler no longer changes its twin.** Two ports that started
+  alike and were fitted apart show as two rows, but the change was decided
+  from the stock fit, so a part fitted to cooler 1 went on cooler 2 as well.
+  Rows are now decided from the fit on screen, on the bench and in Auto-fit.
+
+- **A swapped missile rack takes its missiles with it.** Replacing or
+  emptying a rack left the stock missiles in the missile count and damage.
+  They now leave with the rack; the reference says what the stock rack
+  carried and nothing about what another would, so the sheet counts the new
+  rack for itself and a note says why the missile row fell.
+
+- **The bench filter keeps its focus.** Typing "cold" left "c": every
+  keystroke rebuilt the box it was typed into. The rows redraw around it now.
+
+- **A purchase undone on the bench leaves Shopping too.** *Back to stock* and
+  *Reset to stock* now reconcile the list the Garage keeps for the fit; a
+  bench back at stock takes its list off Shopping and says so. A bench that
+  never made a list still makes none.
+
+- **A destination you chose on Shopping is yours.** Updating a Garage list
+  used to write the newly proposed shop over it, or clear it when nothing
+  resolved. A destination you picked is kept, and the proposal is offered
+  beside it instead.
+
+- **The diagnostic summary redacts paths.** The one free-text field it
+  carries - why the game data could not be read - is an exception's message,
+  which on a file error names the file, user folder and all. Every Windows,
+  UNC and Unix path in it is replaced with `<path>` before the text reaches
+  the clipboard.
+
+- **The pilot/turret DPS split says when the dataset disagrees.** On seven
+  hulls - the Asgard, Cutlass Steel, Starlancer MAX and TAC and their Wikelo
+  variants - remote turrets are named as pilot mounts in the loadout, so
+  their guns sit in the pilot row where the dataset's own total puts them on
+  turrets (the Starlancer MAX reads 7,373.6 pilot DPS here and 4,102 there).
+  Those hulls now say so beside both rows, with both figures; the guns are on
+  the sheet either way and the sum agrees.
+
+- **A compared picture says what it is.** In a Hangar comparison each ship
+  wears a small badge on its picture - *top-down icon* for the game's own
+  vehicle icon, which is the hull's real footprint, or *gallery render* for
+  the three-quarter paint render fitted into that footprint's box - so two
+  pictures of different kinds side by side cannot be mistaken for the same
+  kind of picture.
+
+- **"Prices are getting old" is a chip, except where it matters.** The
+  notice keeps its full wording and buttons on Market, the commodity page,
+  Garage, Shopping and Routes, where an old price is a wrong number. On
+  every other page it shrinks to one line: the fact stays in view, the
+  paragraph and the buttons stop crowding a page that is not about prices.
+
+- **Copy diagnostic summary.** Settings › Report a problem has a second
+  button beside *Save a report*: one click puts a few lines of text on the
+  clipboard - app version and build, whether the install was found and how
+  many backup logs it has, the game-data read, the community dataset, UEX
+  prices and feeds with their ages, sessions read and counted, game builds,
+  parser health, the counts behind each page and the wipe line. Built from
+  the same chosen lists as the full report, so no handle, id, folder or key
+  can be in it; where the clipboard is not available the text is shown to
+  copy by hand.
+
+- **A backup with saved Garage builds now refuses an older build.** The
+  backup format is 2: a build before 0.13.3 restoring a newer backup says to
+  update rather than putting everything else back and dropping the builds
+  without a word. Backups from older builds restore as before.
+
+- **Comparing two ships in the Hangar compares their numbers now, not just
+  their outlines.** Pick the pair in the Hangar's own *Compare … with …* bar
+  (or on two Fleet cards, as before) and a side-by-side appears under the
+  deck: size from your game files, your own sorties and hours from the logs,
+  and the Garage's recomputed sheet for each hull - hull HP, mass, crew,
+  cargo, fuel, SCM and boost, pitch · yaw · roll, shield HP and regen, pilot
+  and turret DPS, alpha, missiles, quantum speed, range and spool, EM and IR
+  signatures, power and cooling - with UEX buy and rental prices, claim wait
+  and expedite fee where known. The better figure for each row is lit the
+  right way round (less mass, less signature and less money win; more of
+  everything else does) and the difference is given in the row's own unit.
+  Size and use carry no verdict. The comparison can be cleared from the
+  Hangar, which it could not be before, and picking the same ship twice is
+  refused. A hull the community dataset cannot draw keeps its size and use
+  and the note says why the rest is missing. The to-scale deck draws a
+  compared pair to fit - both on one shelf whatever the zoom, and no bigger
+  than the game's 256-pixel paint render can stand - where a hull wider than
+  it is long (the Hermes is 73 m across) used to overrun half the deck and
+  push the other ship under the fold, so the comparison seemed to show one
+  ship, very large and blurred. If only one of the two has an installed
+  top-down icon, it now stays just as compact while the other is explicitly
+  named below as unavailable to draw. When the game has that missing hull's
+  Gallery render, the comparison now uses it inside the hull's verified
+  length × beam box, labelled *gallery render*, so both selected vessels are
+  present without pretending a perspective picture is a top-down silhouette.
+
+- **Start the Garage bench from a screenshot of the ship.** When the screen
+  reader has read a Vehicle Loadout Manager frame of the open ship, the
+  Garage offers it above the bench - *RSI Hermes, as photographed 12 Sep
+  2026 21:55* - with how many ports it settled, how many differ from stock,
+  and a list of what it did not settle and why: nothing read under a port, a
+  line that named no one part, a reading two parts answer to. *Start from
+  the photographed fit* puts those parts in the bench and the sheet moves to
+  match; *Reset to stock* takes it back. It is offered, never applied on its
+  own, and it is dated: a screenshot is a moment, not a state, and the ports
+  are matched to the screen's labels by kind and number rather than read
+  from it. The ship's name has to have read exactly - a frame that only
+  looks like a Corsair is offered to no bench.
+
+- **One Garage fit, one shopping list.** Fitting a component sold at a terminal
+  now adds it to the ship's existing fit list instead of creating a second,
+  one-part list. Using *Add changed parts to Shopping* refreshes that same
+  list, and folds in the older automatic one-part list when it finds one.
+
+- **Terminal aUEC only now filters an open Bench as well as Auto-fit.** Toggle
+  it while comparing a port and the Bench immediately leaves only compatible
+  parts with a recorded NPC-terminal seller, while retaining the fitted part
+  as the useful baseline for comparison.
+
+- **Half the parts that had no picture have one now.** The bench used to ask
+  the Star Citizen Wiki for a part's picture by the name of its page, and
+  about half the bench came back empty - most coolers, shields and power
+  plants among them. It now asks by the game's own id first, through the
+  wiki's item API, which also gathers the pictures cstone.space's item finder
+  and the German star-citizen.wiki hold. On this install that filled 48 of
+  the 78 blanks - 14 of 15 coolers, every plant and drive, 10 of 11 shields.
+  Radars, missile racks and turrets mostly stay on the maker's mark: nobody
+  has photographed them anywhere public, and the app does not pretend
+  otherwise. Parts already recorded as "no picture" are asked about again
+  once, so nothing needs clearing.
+
+- **Who is selling a part on UEX's player marketplace, on the Garage.** A new
+  optional feed under UEX in Settings - *Player marketplace*, off until you
+  fetch it, and enabling UEX prices does not turn it on - reads the newest
+  five hundred advertisements on uexcorp.space and joins them to the bench by
+  item. A candidate with a player offering it shows the cheapest ask under
+  the terminal price as a *Player listing* - who, where, how many, and a
+  link to the advertisement on UEX, which is where the deal is made. Under
+  the bench, *For sale by players* lists every advertised part that fits a
+  port on the open ship at its size, newest first, with a Bench button that
+  opens that port. Asks are shown as asks, never as prices: the note says
+  how many of the feed's listings they are, when it was fetched, and that
+  two days of advertisements are not a verdict on the market. The optimiser's
+  *Terminal aUEC only* ignores them, as it says. Only what UEX alone knows is
+  taken from it - the ask, the seller, the place, and which of its item ids
+  the seller picked; what the item *is* comes from your install, as
+  everywhere else on the bench.
+
+- **Every component maker has a logo now, not a four-letter monogram - the
+  game's own.** The Fankit only ships marks for the fifteen hull makers;
+  Behring, Juno Starwerk, Klaus & Werner and the other forty-five that make
+  coolers, shields and guns had none, which is why half the bench read ACOM,
+  JUST, CHCO. Their marks were in `Data.p4k` all along: every manufacturer
+  record names a 256-square logo texture under `UI\SharedAssets\ManufacturerLogos`,
+  and the install has one for 127 makers - 57 of the 59 on the bench. They
+  are decoded once into `maker-logos\` like the ship silhouettes, offline.
+  The two the install lacks (Associated Sciences, and any future maker) fall
+  back to the Star Citizen Wiki's manufacturer page, and a part with no maker
+  keeps its monogram.
+- **The Garage now starts with the ship, not a wall of numbers.** Its game
+  picture is centred in a fitted-layout panel, with the components currently
+  slotted into it arranged as clickable cards around it. Each card carries the
+  component picture or maker mark, size and grade, plus the one or two figures
+  that matter for that kind. Pick one there to open its compatible replacements
+  on the Bench; the ship card, selected component and recomputed sheet all
+  stay in step. The component positions are intentionally not drawn onto the
+  hull: the data names real ports but supplies no 3D coordinates to guess at.
+
+- **A component click now lands on its choices.** Choosing a card in the
+  fitted layout smoothly brings the compatible-parts results into view and
+  gives that result panel keyboard focus. The ship's centre readout also now
+  includes remaining power capacity (or how far over budget the fit is), so a
+  brown-out risk is visible before changing a part.
+
+- **Fitting a buyable component now makes its shopping list automatically.**
+  The list contains that new part (and every identical port fitted with it),
+  names its best known destination, and is ready on Shopping. Parts the price
+  data cannot place remain fit-able without creating an un-routable list.
+
+- **Auto-fit answers a specific question instead of guessing at a generic
+  “best.”** Optimise the whole loadout for stealth, alpha or sustained DPS,
+  missile damage, shield capacity, quantum speed or range, cooling, or power
+  headroom. Turn on **Buyable via UEX** to choose only parts with a known
+  seller; the sheet shows exactly what the selected goal changed before you
+  add anything to Shopping.
+
+- **The Garage labels its ship-discipline marks and does not treat a missing
+  game tag as a verdict on a component.** Its key names the civilian,
+  industrial and military marks. The raw `flightReady` tag no longer labels a
+  part or excludes it from Auto-fit: a missing tag is not proof that the part
+  cannot be used.
+
+- **Components now name their own class and acquisition route.** A Military,
+  Industrial or Civilian mark comes from the installed game's description,
+  rather than from the ship carrying it. Terminal aUEC, Blueprint recipe and
+  no-terminal-seller states are distinct; Auto-fit's optional filter now says
+  exactly what it can guarantee: a known NPC-terminal aUEC seller.
+
+- **The ship sheet is now legible at a glance.** Hull, flight, weapons,
+  defence, signature, systems and quantum read as distinct instrument cards:
+  each has its own accent, mark and header, while the explanation for a figure
+  is set apart as a small callout. The data is unchanged; it is simply easier
+  to scan while choosing a fit.
+
+- **The sheet uses the full display, and each system now feels like an
+  instrument.** On a wide screen the seven system cards form one complete
+  bank rather than leaving Quantum stranded below the others. Brighter system
+  accents, a large card mark, subtle watermark and contained readouts give
+  each card a clearer identity without hiding the data.
+
+- **Each Garage system now has its own visual shorthand.** Hull is a frame,
+  flight an arrow, weapons a reticle, defence a shield, signature a scanner,
+  systems a circuit, and quantum a drive vector. They pair with the cards'
+  coloured accents so the section you want is recognisable before reading it.
+
+- **Ships now carry a small purpose badge in the Garage.** Industrial, military
+  and civilian are readable beside the ship name, with a distinct mark and
+  colour. The badge is derived from the community reference's career and role;
+  its tooltip shows exactly what supplied that classification.
+
+- **The part's own picture on the bench.** Where the Star Citizen Wiki has a
+  cutout of a cooler, gun or drive, the bench and the candidate list show it
+  instead of the maker's mark - the game files carry no picture of any part,
+  so the wiki is the only place one exists. It has one for about half the
+  bench (most guns and power plants, almost no radars or missile racks); the
+  rest keep the mark. Pictures are fetched once, by the part's name, only
+  after the community dataset is on, and kept under
+  `community\part-pictures`.
+- **Add the bench to your shopping list.** Once the bench differs from stock,
+  **Add to shopping list** writes the changed parts - two coolers is one line
+  with a two on it - as a job on the Shopping page, named after the open build
+  or "*ship* fit", and proposes the one stop for it: the terminal that sells
+  the most of the list, the cheapest such terminal when two tie, from the UEX
+  prices you already have. It says what that stop lacks ("Not sold there:
+  Endo") rather than sending you somewhere for half of it, and with UEX off
+  the list is still written, just without a destination, and says why.
+  Emptied ports and ports put back to stock are not purchases and are left off.
+- **Save a build, open it later, set two side by side.** *Save build…* keeps
+  the bench's fit under a name - "Starlancer, quiet fit" - in `builds.json`
+  beside your jobs: it survives rescans, travels in a backup, and is
+  recomputed from the reference every time it opens, so a dataset refresh
+  that changes a part's figures changes the build's with it. The ship's
+  builds sit as chips under the bench; open one, change it, *Update build*.
+  *Compare against* measures the struck figures from a saved build instead
+  of stock, which is how two fits are read against each other without a
+  second sheet. The Fleet card's **Upgrades** button is now **Garage** and
+  opens the page on that ship; the old panel is gone.
+
+- **The bench: try a part and watch the sheet move.** Under the sheet, every
+  port a shop sells parts for, grouped by kind with the maker's mark, the
+  fitted part, its size and grade, and the figure that matters for its kind.
+  Pick one and every part that fits is listed best-first, each figure shown
+  beside how it compares with what is fitted now - more coolant in cyan,
+  more IR in amber - with its price and where it is sold when UEX is on. Fit
+  it and the sheet above redraws with the old figure struck beside the new,
+  coloured by whether it got better *for that figure*. Identical ports fold
+  into one row - sixteen missiles are one decision - and a fit goes on all of
+  them. The game files carry no picture
+  of a component, so a part's face is its maker: the Fankit mark where the
+  app has one, a monogram of the maker's initials where it does not.
+
+- **The Garage: every number about a ship, recomputed from its parts.** A
+  new page under Gear. Pick a ship - yours first, most flown at the top, or
+  any of the 269 in the reference - and read its sheet: hull, flight,
+  weapons (pilot DPS with every gun named, turret DPS, missiles), defence
+  (shield HP and regen, the pool cap when it bites, the armour's signal
+  multipliers), **signature** (EM by component group and IR, shields up and
+  in quantum), systems (power drawn against generated, cooling load) and
+  quantum (speed, spool, range, fuel). Every figure is worked out from the
+  fitted parts with the community dataset's own model, and checked against
+  its published totals on every ship: EM, IR, power, cooling, shields and
+  range agree on 269 of 269. Signatures are the shields-up,
+  everything-at-maximum scenario, and the page says so. Needs a refresh of
+  the community dataset, which now keeps the part figures it used to drop.
 
 ### 0.12.4
 

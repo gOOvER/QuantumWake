@@ -162,7 +162,8 @@ public sealed record ExportBackup(
     // before points existed has no key for it, and the reader fills the null.
     IReadOnlyList<PinnedLocation>? Pins = null,
     // Same rule as Pins: a backup from before servers were kept has no key.
-    IReadOnlyList<ShardNote>? Shards = null);
+    IReadOnlyList<ShardNote>? Shards = null,
+    IReadOnlyList<ShipBuild>? Builds = null);
 
 /// <summary>
 /// The user's own commodity trades.

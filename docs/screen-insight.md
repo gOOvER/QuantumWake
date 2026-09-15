@@ -863,10 +863,29 @@ A listing every two seconds, not a file-system watcher: the folder does not
 exist until the first screenshot, and eight files cost nothing to list. A
 file counts once its last write is two seconds in the past — the game writes
 a JPEG over some tens of milliseconds, and reading on creation reads half a
-file. **Nothing already in the folder when the watch is switched on is read.**
-The pilot enabled reading their screenshots, not their archive, and the
-button for the newest one is still there for that. The setting names the
-folder it follows.
+file. **Everything in the folder the app has not read is read, newest first**
+— the archive included, five files a tick so a fresh screenshot never waits
+behind a hundred old ones, and only the newest three hundred files (the
+store's bound) are ever considered, because a reading of anything older
+would be dropped the moment it was made and the file would be back next
+tick. The setting names the folder it follows and says how many are still
+to come.
+
+That is the reverse of how it shipped. From 0.10.1 to 0.13.30 nothing already
+in the folder when the watch was switched on was read — "the pilot enabled
+reading their screenshots, not their archive" — and on this install the only
+photographs of the Hermes' loadout, eight Vehicle Loadout Manager frames and
+the Fleet Manager's loadout estimate from 8 September 21:48-21:53, were taken
+the evening the watch shipped and sat unread for a week while the Garage
+said nothing. 0.13.29 added a **Read N older screenshots** button; 0.13.31
+made the watch read the archive itself and kept the button for the pilot
+with the watch off. The choice is the switch, and the way out is the same
+switch, or invalidating a reading on the Log tab so nothing is believed from
+it — not a second choice per screenshot. 34 unread on this install read in
+about five seconds: 14 loadouts, 5 unknown, the rest kiosks, maps, contracts
+and the Fleet Manager. A file the engine refuses is kept as a refusal once
+it is a minute old — younger, it may still be being written — or it would
+head the list for ever.
 
 Readings are kept, newest first, three hundred at most, dated by the
 screenshot and never by the read. A frame with no reader keeps every line the
