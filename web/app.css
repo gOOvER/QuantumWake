@@ -4427,6 +4427,24 @@ body.overlay .ship-picture { display: none; }
 .garage-duty.industrial::before { content: "▦"; }
 .garage-duty.civilian { --garage-duty: #6bbaff; }
 
+.garage-duty-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 10px;
+}
+
+.garage-duty-legend .legend-label {
+  margin-right: 2px;
+  color: var(--dim);
+  font: 9px var(--mono);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.garage-duty-legend .garage-duty { cursor: help; }
+
 /* The fitted layout is an instrument panel, not a fictional cutaway. The
    game data gives us the real component ports but not their 3D coordinates,
    so the cards orbit the game's ship picture and lead into the precise bench. */
@@ -4792,9 +4810,6 @@ body.overlay .ship-picture { display: none; }
 .build-chip .meta { color: var(--muted); font-size: 11px; }
 .build-chip .drop { background: none; border: 0; color: var(--dim); cursor: pointer; font-size: 13px; padding: 0 2px; }
 .build-chip .drop:hover { color: var(--red); }
-
-/* A part the game has not marked as shipped, where it marks the kind at all. */
-.chip.unready { border-color: var(--amber); color: var(--amber); }
 
 /* display:flex and display:grid on these beat the browser's [hidden] rule,
    so hidden has to be said again with more weight. */

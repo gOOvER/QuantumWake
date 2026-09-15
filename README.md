@@ -364,7 +364,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.13
+### 0.13.14
 
 - **Every component maker has a logo now, not a four-letter monogram - the
   game's own.** The Fankit only ships marks for the fifteen hull makers;
@@ -403,6 +403,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   headroom. Turn on **Buyable via UEX** to choose only parts with a known
   seller; the sheet shows exactly what the selected goal changed before you
   add anything to Shopping.
+
+- **The Garage labels its ship-discipline marks and does not treat a missing
+  game tag as a verdict on a component.** Its key names the civilian,
+  industrial and military marks. The raw `flightReady` tag no longer labels a
+  part or excludes it from Auto-fit: a missing tag is not proof that the part
+  cannot be used.
 
 - **The ship sheet is now legible at a glance.** Hull, flight, weapons,
   defence, signature, systems and quantum read as distinct instrument cards:
@@ -452,8 +458,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   *Compare against* measures the struck figures from a saved build instead
   of stock, which is how two fits are read against each other without a
   second sheet. The Fleet card's **Upgrades** button is now **Garage** and
-  opens the page on that ship; the old panel is gone, its one signal - a
-  part the game has not marked flight-ready - now a chip on the bench.
+  opens the page on that ship; the old panel is gone.
 
 - **The bench: try a part and watch the sheet move.** Under the sheet, every
   port a shop sells parts for, grouped by kind with the maker's mark, the

@@ -466,14 +466,14 @@ public class GaragePageTests
     }
 
     [Fact]
-    public void A_part_the_game_has_not_marked_as_shipped_says_so_on_the_bench()
+    public void An_untagged_part_is_offered_without_a_readiness_warning()
     {
         var page = Bench();
         page.Serve("/api/garage/AEGS_Gladius/options?port=p1", CoolerOptions.Replace("\"price\":12000", "\"flightReady\":false,\"price\":12000"));
         page.Do("await selectBenchPort('p1');");
 
         var glacier = "__dom.node('#garage-bench-panel').descendants().filter(n => n.classList.contains('candidate')).find(n => n.textContent.includes('Glacier'))";
-        Assert.True(page.Truth($"{glacier}.descendants().some(n => n.classList.contains('unready'))"));
+        Assert.False(page.Truth($"{glacier}.descendants().some(n => n.classList.contains('unready'))"));
     }
 
     /// <summary>The Fleet card's button opens the Garage on that ship rather than a panel of its own.</summary>
@@ -572,6 +572,7 @@ public class GaragePageTests
     public void Optimiser_picks_the_quietest_part_and_explains_what_it_changed()
     {
         var page = Bench();
+        page.Serve("/api/garage/AEGS_Gladius/options?port=p1", CoolerOptions.Replace("\"name\":\"Endo\"", "\"flightReady\":false,\"name\":\"Endo\""));
         page.Do("__dom.node('#garage-optimise-goal').value = 'stealth'; await optimiseGarage();");
 
         Assert.False(page.Truth("__dom.node('#garage-optimizer').hidden"));

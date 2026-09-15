@@ -9417,8 +9417,6 @@ function renderBenchPanel() {
     const mid = el('div');
     const name = el('div', 'c-name', part.name);
     name.append(partChip(part));
-    // Only where the game applies the tag to the kind at all - see the options route.
-    if (option.flightReady === false) name.append(el('span', 'chip unready', 'not flight-ready'));
     mid.append(name);
     mid.append(el('div', 'c-maker', part.manufacturer || part.makerCode || ''));
 
@@ -9541,7 +9539,6 @@ async function optimiseGarage() {
       if (!options) { unavailable += row.portIds.length; continue; }
 
       const ranked = (options.options || [])
-        .filter((option) => option.flightReady !== false)
         .filter((option) => !buyableOnly || option.shops?.length)
         .map((option) => ({ option, score: optimiseScore(option.part, goal, garageStock.ship) }))
         .filter((entry) => Number.isFinite(entry.score))
