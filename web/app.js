@@ -5737,14 +5737,15 @@ function renderHangar() {
   // ship silently wraps onto its own oversized shelf.
   let scale = ((width - 40 - HANGAR_SHIP_GAP) / 2 / longest) * zoom;   // px per metre
 
-  // A pair is drawn to fit: both on one shelf whatever the zoom, and never
-  // blown up past what the pictures can stand. The rule above sizes by
-  // length alone, and a hull wider than it is long - the Hermes is 58 m long
-  // and 73 m across - overran its half and pushed the other ship under the
-  // fold, which read as the comparison showing one ship, very large. The cap
-  // is the paint render's own 256 px at one and a half times: past that the
-  // finish is a blur, and the silhouette gains nothing from being bigger.
-  const comparing = pictured.length === 2 && hangarComparison.size === 2;
+  // A comparison is drawn to fit: every pictured member stays on one shelf
+  // whatever the zoom, and never blows up past what the pictures can stand.
+  // This deliberately follows the picked pair rather than pictured.length:
+  // a ship without a game icon is listed below as an omission, but used to
+  // leave its visible counterpart subject to the normal full-deck scale.
+  // That read as one enormous, blurred ship instead of an honest partial
+  // comparison. The cap is the paint render's own 256 px at one and a half
+  // times; past that the finish is a blur and the silhouette gains nothing.
+  const comparing = hangarComparison.size === 2;
   if (comparing) {
     const across = pictured.reduce((sum, s) => sum + Math.max(s.length, 90 / scale), 0);
     const fit = (width - 40 - HANGAR_SHIP_GAP) / across;

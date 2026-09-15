@@ -181,4 +181,24 @@ public class HangarCompareTests
         Assert.True(page.Truth("__dom.node('#hangar-zoom').hidden"));
         Assert.Contains("Compared · 2", page.NodeText("#hangar-canvas"));
     }
+
+    /// <summary>
+    /// Comparing still means comparing when only one chosen hull has a
+    /// top-down icon. The missing hull is called out below; it must not make
+    /// the visible ship ignore the comparison cap and turn into a blur.
+    /// </summary>
+    [Fact]
+    public void A_compared_ship_without_an_icon_keeps_its_visible_partner_compact()
+    {
+        var page = Loaded();
+        page.Serve("/api/fleet/hangar", Fleet.Replace("\"length\":53,\"height\":25,\"icon\":true", "\"length\":53,\"height\":25,\"icon\":false"));
+        page.Do("__dom.node('#hangar-zoom').value = '4'; hangarComparison = new Set(['Aegis Gladius', 'Drake Corsair']); await loadHangar();");
+
+        Assert.Equal(1, (int)page.Number("__dom.node('#hangar-canvas').byClass('hangar-ship').length"));
+        var tallest = page.Number("Math.max(...__dom.node('#hangar-canvas').byClass('hangar-ship').map(g => Number(g.querySelector('image').getAttribute('height'))))");
+        Assert.True(tallest <= 384.5, $"tallest {tallest}");
+        Assert.True(page.Truth("__dom.node('#hangar-zoom').hidden"));
+        Assert.Contains("Compared · 1", page.NodeText("#hangar-canvas"));
+        Assert.Contains("Drake Corsair", page.NodeText("#hangar-unsized"));
+    }
 }
