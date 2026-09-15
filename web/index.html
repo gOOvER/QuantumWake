@@ -1912,6 +1912,32 @@
 
     <div id="garage-notes" class="garage-notes" hidden></div>
 
+    <section class="garage-optimizer" id="garage-optimizer" hidden aria-labelledby="garage-optimizer-title">
+      <div class="garage-optimizer-copy">
+        <div class="garage-eyebrow">Auto-fit</div>
+        <h3 id="garage-optimizer-title">Optimise this loadout</h3>
+        <p>Only the component types that affect the chosen goal are changed. Review the sheet before buying.</p>
+      </div>
+      <div class="garage-optimizer-tools">
+        <select class="select" id="garage-optimise-goal" aria-label="Optimisation goal">
+          <option value="stealth">Best stealth</option>
+          <option value="alpha">Best alpha DPS</option>
+          <option value="sustained">Best sustained DPS</option>
+          <option value="missile">Most missile damage</option>
+          <option value="shield">Strongest shields</option>
+          <option value="quantumSpeed">Fastest quantum drive</option>
+          <option value="quantumRange">Longest quantum range</option>
+          <option value="cooling">Most cooling</option>
+          <option value="power">Most power headroom</option>
+        </select>
+        <label class="toggle" title="Only consider parts whose seller is known to UEX">
+          <input type="checkbox" id="garage-optimise-buyable" /> Buyable via UEX
+        </label>
+        <button type="button" class="ghost tiny" id="garage-optimise">Optimise fit</button>
+      </div>
+      <p class="muted" id="garage-optimise-status" aria-live="polite"></p>
+    </section>
+
     <div class="bench-bar" id="garage-bench-bar" hidden>
       <h2 class="spaced">Bench</h2>
       <div class="bench-state">

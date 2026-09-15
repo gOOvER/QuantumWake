@@ -4523,36 +4523,55 @@ body.overlay .ship-picture { display: none; }
    screen, one on a phone. */
 .sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--gap); }
 .sheet-group {
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  padding: 12px 14px 8px;
+  --sheet-accent: var(--cyan);
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(145deg, rgba(15, 31, 43, .96), rgba(4, 10, 17, .98));
+  border: 1px solid color-mix(in srgb, var(--sheet-accent) 34%, var(--rule));
+  clip-path: var(--chamfer);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025);
 }
+.sheet-group::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--sheet-accent); box-shadow: 0 0 14px var(--sheet-accent); opacity: .78; }
+.sheet-group[data-group="hull"] { --sheet-accent: #35c8f0; }
+.sheet-group[data-group="flight"] { --sheet-accent: #6bbaff; }
+.sheet-group[data-group="weapons"] { --sheet-accent: #f27f68; }
+.sheet-group[data-group="defence"] { --sheet-accent: #57d8ac; }
+.sheet-group[data-group="signature"] { --sheet-accent: #bc8cff; }
+.sheet-group[data-group="systems"] { --sheet-accent: #e8b35e; }
+.sheet-group[data-group="quantum"] { --sheet-accent: #7e9cff; }
 .sheet-group h3 {
-  margin: 0 0 8px;
+  margin: 0 0 2px;
+  padding: 10px 14px 9px;
   font-size: 11px;
   letter-spacing: .12em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--text);
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--sheet-accent) 13%, transparent), transparent 72%);
+  border-bottom: 1px solid color-mix(in srgb, var(--sheet-accent) 22%, transparent);
 }
-.sheet-group h3 .src { font-weight: normal; letter-spacing: .04em; text-transform: none; color: var(--dim); }
+.sheet-title { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.sheet-icon { display: inline-grid; place-items: center; width: 18px; height: 18px; color: var(--sheet-accent); border: 1px solid color-mix(in srgb, var(--sheet-accent) 55%, transparent); background: rgba(4, 10, 17, .62); font: 12px var(--mono); letter-spacing: 0; }
+.sheet-group h3 .src { flex: 0 0 auto; padding: 2px 5px; border: 1px solid color-mix(in srgb, var(--sheet-accent) 28%, transparent); background: rgba(4, 10, 17, .46); font: 9px var(--mono); letter-spacing: .04em; text-transform: none; color: var(--dim); }
 .sheet-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
-  padding: 5px 0;
+  margin: 0 12px;
+  padding: 7px 2px;
   border-top: 1px solid var(--rule);
   align-items: baseline;
 }
 .sheet-row:first-of-type { border-top: 0; }
+.sheet-row:hover { background: linear-gradient(90deg, color-mix(in srgb, var(--sheet-accent) 7%, transparent), transparent 82%); }
 .sheet-row .k { color: var(--muted); font-size: 12px; }
-.sheet-row .v { font-family: var(--mono); font-size: 13px; color: var(--text); text-align: right; white-space: nowrap; }
+.sheet-row .v { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text); text-align: right; white-space: nowrap; }
 .sheet-row .v small { color: var(--muted); font-family: var(--mono); margin-left: 4px; }
-.sheet-row .n { grid-column: 1 / -1; font-size: 11px; color: var(--dim); line-height: 1.4; margin-top: -2px; }
-.sheet-row.sub .k { padding-left: 14px; }
+.sheet-row .n { grid-column: 1 / -1; padding: 3px 0 1px 8px; border-left: 1px solid color-mix(in srgb, var(--sheet-accent) 48%, transparent); font-size: 11px; color: var(--dim); line-height: 1.4; margin-top: -3px; }
+.sheet-row.sub .k { padding-left: 14px; color: color-mix(in srgb, var(--muted) 78%, var(--sheet-accent)); }
 
 /* Movement, once the bench changes something: up in cyan, down in amber,
    with the old figure struck beside it. Which direction is good depends on
@@ -4568,6 +4587,28 @@ body.overlay .ship-picture { display: none; }
 #garage-ports td.what { color: var(--muted); font-size: 12px; }
 
 /* ---------- the bench ---------- */
+
+.garage-optimizer {
+  display: grid;
+  grid-template-columns: minmax(230px, 1fr) auto;
+  gap: 10px 18px;
+  align-items: center;
+  margin: 14px 0 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule-hot);
+  background: linear-gradient(90deg, rgba(20, 55, 71, .3), rgba(4, 10, 17, .5));
+  clip-path: var(--chamfer);
+}
+.garage-optimizer h3 { margin: 2px 0 0; font-size: 14px; color: var(--text); }
+.garage-optimizer p { margin: 3px 0 0; font-size: 11.5px; line-height: 1.4; }
+.garage-optimizer-copy p { color: var(--muted); }
+.garage-optimizer-tools { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.garage-optimizer-tools .select { min-width: 170px; }
+.garage-optimizer > .muted { grid-column: 1 / -1; border-top: 1px solid rgba(53, 200, 240, .15); padding-top: 7px; }
+@media (max-width: 760px) {
+  .garage-optimizer { grid-template-columns: 1fr; }
+  .garage-optimizer-tools { justify-content: flex-start; }
+}
 
 .bench-bar { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .bench-bar h2 { margin-bottom: 0; }

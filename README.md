@@ -397,6 +397,19 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   names its best known destination, and is ready on Shopping. Parts the price
   data cannot place remain fit-able without creating an un-routable list.
 
+- **Auto-fit answers a specific question instead of guessing at a generic
+  “best.”** Optimise the whole loadout for stealth, alpha or sustained DPS,
+  missile damage, shield capacity, quantum speed or range, cooling, or power
+  headroom. Turn on **Buyable via UEX** to choose only parts with a known
+  seller; the sheet shows exactly what the selected goal changed before you
+  add anything to Shopping.
+
+- **The ship sheet is now legible at a glance.** Hull, flight, weapons,
+  defence, signature, systems and quantum read as distinct instrument cards:
+  each has its own accent, mark and header, while the explanation for a figure
+  is set apart as a small callout. The data is unchanged; it is simply easier
+  to scan while choosing a fit.
+
 - **The part's own picture on the bench.** Where the Star Citizen Wiki has a
   cutout of a cooler, gun or drive, the bench and the candidate list show it
   instead of the maker's mark - the game files carry no picture of any part,

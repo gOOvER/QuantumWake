@@ -8831,6 +8831,7 @@ async function openGarage(cls) {
   garageSwaps = {};
   garageSelectedPort = null;
   garageOptions = null;
+  $('#garage-optimise-status').textContent = '';
   for (const id of ['#garage-mine', '#garage-all']) {
     const select = $(id);
     if (select && [...select.options].some((o) => o.value === cls)) select.value = cls;
@@ -9035,12 +9036,24 @@ function garageRigSlot(port, ship) {
 
 function sheetGroup(title, source, rows) {
   const group = el('section', 'sheet-group');
-  const h = el('h3', null, title);
+  const groupKey = title.toLowerCase();
+  group.dataset.group = groupKey;
+  const h = el('h3');
+  const label = el('span', 'sheet-title');
+  label.append(el('span', 'sheet-icon', SHEET_GROUP_ICONS[groupKey] || '◆'), document.createTextNode(title));
   h.append(el('span', 'src', source === 'model' ? 'signature model' : source));
+  h.prepend(label);
   group.append(h);
   for (const r of rows) if (r) group.append(r);
   return group;
 }
+
+// The groups are different questions a pilot asks of a fit. The small marks
+// make that separation readable at a glance without pretending they are game
+// instrument icons or adding decorative artwork to the data sheet.
+const SHEET_GROUP_ICONS = {
+  hull: '◆', flight: '↗', weapons: '✦', defence: '◈', signature: '◌', systems: '▦', quantum: '≋',
+};
 
 /**
  * One line of the sheet.
@@ -9228,10 +9241,11 @@ function siblingsOf(portId) {
 
 function renderBench(data) {
   const ports = (data.ports || []).filter((p) => BENCH_KINDS.includes(p.group));
+  const optimizer = $('#garage-optimizer');
   const bar = $('#garage-bench-bar');
   const bench = $('#garage-bench');
   const caption = $('#garage-bench-caption');
-  bar.hidden = bench.hidden = caption.hidden = ports.length === 0;
+  optimizer.hidden = bar.hidden = bench.hidden = caption.hidden = ports.length === 0;
   if (!ports.length) return;
 
   const changed = ports.filter((p) => p.changed).length;
@@ -9442,6 +9456,79 @@ async function fitPart(portId, cls, autoShop = null) {
   }
 }
 
+/* One goal, one honest measure. A DPS fit does not silently replace coolers,
+ * and a stealth fit only scores components whose two signatures are known. */
+const GARAGE_OPTIMISE_GOALS = {
+  stealth: 'stealth', alpha: 'alpha DPS', sustained: 'sustained DPS', missile: 'missile damage', shield: 'shield HP',
+  quantumSpeed: 'quantum speed', quantumRange: 'quantum range', cooling: 'cooling', power: 'power headroom',
+};
+
+function optimiseScore(part, goal, ship) {
+  if (goal === 'stealth') {
+    if (!Number.isFinite(part.em) || !Number.isFinite(part.ir)) return null;
+    return -(part.em + part.ir);
+  }
+  if (goal === 'alpha') return Number.isFinite(part.weapon?.alpha) ? part.weapon.alpha : null;
+  if (goal === 'sustained') return Number.isFinite(part.weapon?.sustainedDps) ? part.weapon.sustainedDps : null;
+  if (goal === 'missile') return Number.isFinite(part.missile?.damage) ? part.missile.damage : null;
+  if (goal === 'shield') return Number.isFinite(part.shield?.hp) ? part.shield.hp : null;
+  if (goal === 'quantumSpeed') return Number.isFinite(part.quantum?.speed) ? part.quantum.speed : null;
+  if (goal === 'quantumRange') {
+    if (!Number.isFinite(part.quantum?.fuelRate) || part.quantum.fuelRate <= 0 || !Number.isFinite(ship.quantumFuel)) return null;
+    return ship.quantumFuel / part.quantum.fuelRate;
+  }
+  if (goal === 'cooling') return part.type === 'Cooler' && Number.isFinite(part.coolantGen) ? part.coolantGen : null;
+  if (goal === 'power') return part.type === 'PowerPlant' && Number.isFinite(part.powerGen) ? part.powerGen : null;
+  return null;
+}
+
+async function optimiseGarage() {
+  if (!garageClass || !garageStock) return;
+  const button = $('#garage-optimise');
+  const status = $('#garage-optimise-status');
+  const goal = $('#garage-optimise-goal').value;
+  const buyableOnly = $('#garage-optimise-buyable').checked;
+  const rows = benchRows((garageStock.ports || []).filter((p) => BENCH_KINDS.includes(p.group)));
+  button.disabled = true;
+  status.textContent = `Finding the best ${GARAGE_OPTIMISE_GOALS[goal] || 'fit'}…`;
+
+  let changed = 0;
+  let unavailable = 0;
+  try {
+    for (const row of rows) {
+      const options = garageOptions?.port?.portId === row.portIds[0]
+        ? garageOptions
+        : await getJson(`/api/garage/${encodeURIComponent(garageClass)}/options?port=${encodeURIComponent(row.portIds[0])}`).catch(() => null);
+      if (!options) { unavailable += row.portIds.length; continue; }
+
+      const ranked = (options.options || [])
+        .filter((option) => option.flightReady !== false)
+        .filter((option) => !buyableOnly || option.shops?.length)
+        .map((option) => ({ option, score: optimiseScore(option.part, goal, garageStock.ship) }))
+        .filter((entry) => Number.isFinite(entry.score))
+        .sort((a, b) => b.score - a.score || a.option.part.name.localeCompare(b.option.part.name));
+      if (!ranked.length) continue; // This port does not affect the selected goal.
+
+      const best = ranked[0].option.part;
+      if (best.class === currentClassOf(row)) continue;
+      for (const id of row.portIds) {
+        if (best.class === (garageStock.ports || []).find((p) => p.portId === id)?.stockClass) delete garageSwaps[id];
+        else garageSwaps[id] = best.class;
+      }
+      changed += row.portIds.length;
+    }
+
+    if (changed) await refitGarage();
+    const scope = buyableOnly ? ' from known UEX sellers' : '';
+    status.textContent = changed
+      ? `Optimised ${changed} port${changed === 1 ? '' : 's'} for ${GARAGE_OPTIMISE_GOALS[goal]}${scope}. Review the sheet, then add the changed parts to Shopping when you are ready to buy.`
+      : `Nothing on this fit changed for ${GARAGE_OPTIMISE_GOALS[goal]}${scope}.`;
+    if (unavailable) status.textContent += ` ${unavailable} port${unavailable === 1 ? '' : 's'} could not be read.`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
 /* ---------- saved builds ---------- */
 
 /** The builds saved for the ship on the bench, the one open for editing, and what deltas are measured from. */
@@ -9586,6 +9673,7 @@ async function refitGarage() {
 
 async function resetGarage() {
   garageSwaps = {};
+  $('#garage-optimise-status').textContent = '';
   await refitGarage();
 }
 
@@ -9704,6 +9792,7 @@ async function addFittedPartToShopping(portIds, part) {
 }
 
 $('#garage-shop')?.addEventListener('click', () => shopForBench().catch(() => {}));
+$('#garage-optimise')?.addEventListener('click', () => optimiseGarage().catch(() => {}));
 
 onInput('#garage-mine', () => { const v = $('#garage-mine').value; if (v) openGarage(v).catch(() => {}); });
 onInput('#garage-all', () => { const v = $('#garage-all').value; if (v) openGarage(v).catch(() => {}); });

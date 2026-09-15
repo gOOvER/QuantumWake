@@ -91,6 +91,17 @@ public class GaragePageTests
         Assert.Contains("ships.json", text);
     }
 
+    [Fact]
+    public void The_stat_cards_identify_the_question_each_group_answers()
+    {
+        var page = Opened();
+        var cards = "__dom.node('#garage-sheet').descendants().filter(n => n.classList.contains('sheet-group'))";
+
+        Assert.Equal("hull|flight|weapons|defence|signature|systems|quantum",
+            page.Text($"{cards}.map(n => n.dataset.group).join('|')"));
+        Assert.True(page.Truth($"{cards}.every(n => n.descendants().some(c => c.classList.contains('sheet-icon')))"));
+    }
+
     /// <summary>The figures a stealth pilot came for, with the scenario stated beside them.</summary>
     [Fact]
     public void Signatures_carry_their_scenario_and_their_breakdown()
@@ -540,6 +551,44 @@ public class GaragePageTests
             """);
 
         Assert.DoesNotContain(page.Fetched(), url => url.StartsWith("POST /api/jobs"));
+    }
+
+    // ---- loadout optimisation ----
+
+    [Fact]
+    public void Optimiser_picks_the_quietest_part_and_explains_what_it_changed()
+    {
+        var page = Bench();
+        page.Do("__dom.node('#garage-optimise-goal').value = 'stealth'; await optimiseGarage();");
+
+        Assert.False(page.Truth("__dom.node('#garage-optimizer').hidden"));
+        Assert.Contains("\"p1\":\"COOL_ACAS_S01_Endo_SCItem\"", page.BodyOf("/api/garage/AEGS_Gladius/sheet"));
+        Assert.Contains("Optimised 1 port for stealth", page.NodeText("#garage-optimise-status"));
+    }
+
+    [Fact]
+    public void Optimiser_can_limit_the_fit_to_parts_UEX_knows_are_for_sale()
+    {
+        var page = Bench();
+        page.Do("__dom.node('#garage-optimise-goal').value = 'stealth'; __dom.node('#garage-optimise-buyable').checked = true; await optimiseGarage();");
+
+        Assert.Contains("\"p1\":\"COOL_JUST_S01_Glacier_SCItem\"", page.BodyOf("/api/garage/AEGS_Gladius/sheet"));
+        Assert.Contains("known UEX sellers", page.NodeText("#garage-optimise-status"));
+    }
+
+    [Theory]
+    [InlineData("alpha", "{weapon:{alpha:91,sustainedDps:42}}", "91")]
+    [InlineData("sustained", "{weapon:{alpha:91,sustainedDps:42}}", "42")]
+    [InlineData("missile", "{missile:{damage:3200}}", "3200")]
+    [InlineData("shield", "{shield:{hp:18000}}", "18000")]
+    [InlineData("quantumSpeed", "{quantum:{speed:200000000}}", "200000000")]
+    [InlineData("quantumRange", "{quantum:{fuelRate:2}}", "300")]
+    [InlineData("cooling", "{type:'Cooler',coolantGen:38}", "38")]
+    [InlineData("power", "{type:'PowerPlant',powerGen:16}", "16")]
+    public void Optimiser_uses_the_measure_that_matches_its_goal(string goal, string part, string expected)
+    {
+        var page = new Page();
+        Assert.Equal(expected, page.Text($"String(optimiseScore({part}, '{goal}', {{quantumFuel:600}}))"));
     }
 
     /// <summary>A list made from an open build carries the build's name, so the two can be told apart later.</summary>
