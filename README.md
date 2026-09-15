@@ -364,7 +364,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.19
+### 0.13.20
 
 - **Start the Garage bench from a screenshot of the ship.** When the screen
   reader has read a Vehicle Loadout Manager frame of the open ship, the
@@ -413,7 +413,10 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   opens that port. Asks are shown as asks, never as prices: the note says
   how many of the feed's listings they are, when it was fetched, and that
   two days of advertisements are not a verdict on the market. The optimiser's
-  *Terminal aUEC only* ignores them, as it says.
+  *Terminal aUEC only* ignores them, as it says. Only what UEX alone knows is
+  taken from it - the ask, the seller, the place, and which of its item ids
+  the seller picked; what the item *is* comes from your install, as
+  everywhere else on the bench.
 
 - **Every component maker has a logo now, not a four-letter monogram - the
   game's own.** The Fankit only ships marks for the fifteen hull makers;

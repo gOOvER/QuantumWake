@@ -234,9 +234,14 @@ current panel.
   and never in its place, and the optimiser's *Terminal aUEC only* ignores
   them. The feed is its own switch under UEX in Settings - enabling UEX does
   not turn it on - and the join runs through UEX's `items` table read a
-  category at a time (`marketplace-items.json`, 886 KB for the categories
-  advertised), because the price feed the app already holds resolved only 26
-  of the 441 listed item ids: what players advertise is what no shop stocks.
+  category at a time (`marketplace-items.json`), because the price feed the
+  app already holds resolved only 26 of the 441 listed item ids: what players
+  advertise is what no shop stocks. **Only the id-to-uuid pair is kept from
+  that table.** UEX's name, section and category for an item are dropped at
+  the digest, and its `categories` endpoint is not called at all: the install
+  says what a uuid is - name, kind, size, grade, maker - and the page reads
+  those from the part card, so nothing the app can read itself is taken from
+  UEX. A listing UEX cannot put a uuid to keeps only the seller's own title.
   On this install's Hermes: 17 of the 52 component listings fit a port at
   its size.
 - **Makers' marks, on the other hand, are in the game files.** The Fankit
