@@ -4,7 +4,7 @@ namespace Quantumwake.Data;
 public sealed record ScreenFile(string Path, long Length, DateTimeOffset LastWrite);
 
 /// <summary>
-/// Decides which screenshots in the folder are new and finished being written.
+/// Decides which screenshots in the folder are waiting to be read.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -13,15 +13,21 @@ public sealed record ScreenFile(string Path, long Length, DateTimeOffset LastWri
 /// server and holds no rules of its own.
 /// </para>
 /// <para>
-/// Two rules, both from the folder's behaviour. The game writes a JPEG over
-/// some tens of milliseconds, and a watcher that reads on creation reads half
-/// a file - so a file counts only once its last write is comfortably in the
-/// past. And nothing that was already there when the watch was switched on is
-/// read: the pilot enabled reading their screenshots, not their archive, and
-/// the button for the newest one is still there for that. The archive is read
-/// only when asked for by name - <see cref="Unread"/> - because a loadout
-/// photographed the evening before the app was first run is still the only
-/// photograph of that ship.
+/// Everything in the folder the app has not read is read, newest first. The
+/// watch used to begin from the moment it was switched on and leave the
+/// archive alone; that left the only photographs of the Hermes' loadout -
+/// taken the evening the watch shipped - unread for a week while the Garage
+/// said nothing. Reading is the pilot's choice once, at the switch, and the
+/// way out is the same switch, or invalidating a reading they do not want
+/// believed; it is not a second choice per screenshot.
+/// </para>
+/// <para>
+/// Two limits, both from the folder's behaviour. The game writes a JPEG over
+/// some tens of milliseconds, and a watcher that reads on creation reads
+/// half a file - so a file counts only once its last write is comfortably in
+/// the past. And only as many of the newest files as the store keeps are
+/// considered, because a reading of anything older would be dropped as soon
+/// as it was made, and the file would be back in this list the next tick.
 /// </para>
 /// </remarks>
 public static class ScreenFolder
@@ -34,42 +40,21 @@ public static class ScreenFolder
     /// </remarks>
     public static readonly TimeSpan Settled = TimeSpan.FromSeconds(2);
 
-    /// <summary>The files worth reading now, oldest first.</summary>
-    /// <param name="baseline">When the watch began; nothing written before it counts.</param>
+    /// <summary>The settled files the app has never read, newest first.</summary>
     /// <param name="seen">Files already read, by full path.</param>
-    public static IReadOnlyList<ScreenFile> Ready(
-        IEnumerable<ScreenFile> listing,
-        DateTimeOffset baseline,
-        DateTimeOffset now,
-        Func<string, bool> seen)
-    {
-        return [.. listing
-            .Where(file => file.Length > 0)
-            .Where(file => file.LastWrite >= baseline)
-            .Where(file => now - file.LastWrite >= Settled)
-            .Where(file => !seen(file.Path))
-            .OrderBy(file => file.LastWrite)];
-    }
-
-    /// <summary>
-    /// The archive: every settled screenshot the app has never read, newest
-    /// first. What the pilot gets when they ask for the older ones by name.
-    /// </summary>
-    /// <remarks>
-    /// Newest first rather than oldest, unlike <see cref="Ready"/>: a pilot
-    /// asking for the archive wants last night's loadout before last month's,
-    /// and a bounded read has to start at the useful end.
-    /// </remarks>
+    /// <param name="keep">How many of the newest files are worth considering - the store's bound.</param>
     public static IReadOnlyList<ScreenFile> Unread(
         IEnumerable<ScreenFile> listing,
         DateTimeOffset now,
-        Func<string, bool> seen)
+        Func<string, bool> seen,
+        int keep = ScreenReadingStore.Keep)
     {
         return [.. listing
             .Where(file => file.Length > 0)
             .Where(file => now - file.LastWrite >= Settled)
-            .Where(file => !seen(file.Path))
-            .OrderByDescending(file => file.LastWrite)];
+            .OrderByDescending(file => file.LastWrite)
+            .Take(keep)
+            .Where(file => !seen(file.Path))];
     }
 
     /// <summary>Whether a file is one the game writes as a screenshot.</summary>

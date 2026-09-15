@@ -5014,29 +5014,30 @@ function applyScreenMode() {
   const folderLabel = $('#screen-watch-folder-label');
   if (folderLabel) folderLabel.hidden = !shots;
 
-  // The archive, offered by count. The watch reads nothing from before it
-  // began, and the one photograph of a ship's loadout is often from the
-  // evening before the app was installed - so the older ones are a button,
-  // with the number on it, and no button at all when there are none.
+  // The watch reads the archive itself, newest first, so the button for the
+  // older ones is for the pilot who has the watch off: a one-off read, by
+  // count, and no button at all when there is nothing waiting.
+  const unread = Number(screenSettings.unread) || 0;
+  const watching = shots && screenSettings.watchScreenshots;
   const older = $('#screen-read-older');
   if (older) {
-    const unread = Number(screenSettings.unread) || 0;
-    older.hidden = !shots || !screenSettings.canReadScreenshots || unread === 0;
+    older.hidden = !shots || !screenSettings.canReadScreenshots || watching || unread === 0;
     older.textContent = `Read ${unread} older screenshot${unread === 1 ? '' : 's'}`;
   }
 
   // The folder being followed, named. The pilot is agreeing to a directory
-  // being watched and should be able to see which one.
+  // being read and should be able to see which one, and how much of it is
+  // still to come.
   const folder = $('#screen-folder');
   if (folder) {
-    const watching = shots && screenSettings.watchScreenshots && screenSettings.folder;
-    const unread = Number(screenSettings.unread) || 0;
-    folder.hidden = !watching;
-    folder.textContent = watching
-      ? `Reading new screenshots from ${screenSettings.folder} as they land.`
+    const named = watching && screenSettings.folder;
+    folder.hidden = !named;
+    folder.textContent = named
+      ? `Reading every screenshot in ${screenSettings.folder}, the ones already there and each new one as it lands.`
         + (unread
-          ? ` ${unread} already there ${unread === 1 ? 'was' : 'were'} never read - the button above reads them, newest first.`
-          : ' Nothing already there is read unless you ask.')
+          ? ` ${unread} still to read, newest first.`
+          : ' Nothing is waiting.')
+        + ' Untick Watch screenshots to stop; invalidate a reading below to have nothing believed from it.'
       : '';
   }
 
@@ -9326,8 +9327,8 @@ function renderGaragePhoto() {
     const name = garageStock?.ship?.name || 'this ship';
     $('#garage-photo-title').textContent = `No photograph of the ${name} has been read`;
     $('#garage-photo-sub').textContent = `Open it at a Vehicle Loadout Manager, or its loadout estimate at a Fleet Manager, `
-      + `with screenshots being read, and the bench can start from what the screen shows. `
-      + `A screenshot from before the app was watching is read from the Log tab - "Read older screenshots".`;
+      + `and take a screenshot; with Watch screenshots on (Log tab) it is read as it lands, `
+      + `the ones already in the folder included, and the bench can start from what the screen shows.`;
     $('#garage-photo-unsettled').textContent = '';
     if (tools) tools.hidden = true;
     return;

@@ -365,7 +365,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.13.30
+### 0.13.31
 
 - **A ship wears the paint its screenshot showed.** A loadout screenshot
   names the livery — the Hermes' estimate listed *Hermes Keystone Livery* —
@@ -373,19 +373,22 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   until you pick one yourself, labelled as photographed and dated, in place
   of the first paint the game happens to list. Your own pick still wins.
 
-- **Screenshots from before the app was watching can now be read.** The
-  folder watch reads nothing that was already there when it was switched on,
-  which meant a loadout photographed the evening before was never seen: on
-  this install the only photographs of the Hermes' fit — eight Vehicle Loadout
-  Manager frames and its loadout estimate — sat unread for a week while the
-  Garage said nothing. The Log tab now offers **Read N older screenshots**,
-  newest first, forty a press, and says what each batch turned out to be.
+- **Every screenshot in the folder is read, the ones already there
+  included.** With *Watch screenshots* on, the app used to read only what
+  landed after it was switched on, which meant a loadout photographed the
+  evening before was never seen: on this install the only photographs of the
+  Hermes' fit — eight Vehicle Loadout Manager frames and its loadout
+  estimate — sat unread for a week while the Garage said nothing. The watch
+  now reads the archive too, newest first, a few files at a time, and the
+  Log tab says how many are still to come. Untick *Watch screenshots* to
+  stop, or invalidate a reading you do not want believed. With the watch
+  off, a **Read N older screenshots** button does a one-off read.
 
-- **The Garage says when it has no photograph of a ship**, and where the
-  older screenshots are read, instead of hiding the section. Reading the
-  Fleet Manager's loadout estimate now fills every port of a counted kind
-  (*Cooler ×2* is both coolers), and its *Quantum Drives* row — which the
-  engine reads with an O — reaches the quantum drive port.
+- **The Garage says when it has no photograph of a ship** instead of hiding
+  the section. Reading the Fleet Manager's loadout estimate now fills every
+  port of a counted kind (*Cooler ×2* is both coolers), and its *Quantum
+  Drives* row — which the engine reads with an O — reaches the quantum drive
+  port.
 
 - **A paint picked anywhere shows everywhere.** Choosing a paint on the
   Garage, the Hangar or a Fleet card redraws every picture of that hull on

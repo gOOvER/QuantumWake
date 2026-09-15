@@ -69,14 +69,15 @@ public class ScreenPanelTests
     }
 
     /// <summary>
-    /// The watch reads nothing from before it began, so the older screenshots
-    /// are a button with the count on it: the one photograph of a ship's
-    /// loadout is often from the evening before the app was installed. Each
-    /// press reads a batch, says what came of it, and re-counts from the
-    /// folder rather than from what it thinks it did.
+    /// The watch reads the archive itself - the ones already there, newest
+    /// first - and the sentence naming the folder says how many are still to
+    /// come and how to stop. The button for the older ones is for the pilot
+    /// with the watch off: a one-off read by count. Each press reads a
+    /// batch, says what came of it, and re-counts from the folder rather than
+    /// from what it thinks it did.
     /// </summary>
     [Fact]
-    public void The_older_screenshots_are_offered_by_count_and_read_a_batch_at_a_time()
+    public void The_watch_reads_the_archive_and_the_button_is_for_the_watch_being_off()
     {
         var page = new Page();
         page.Serve("/api/screen/settings", """
@@ -86,9 +87,21 @@ public class ScreenPanelTests
         page.Serve("/api/screen/readings?take=50", """{"readings":[],"clipboard":[],"total":0,"pastes":0}""");
         page.Do("await renderScreenPanel();");
 
+        // Watching: the archive is being read on its own, so no button.
+        Assert.True(page.Truth("__dom.node('#screen-read-older').hidden"));
+        var folder = page.NodeText("#screen-folder");
+        Assert.Contains("the ones already there", folder);
+        Assert.Contains("45 still to read, newest first", folder);
+        Assert.Contains("Untick Watch screenshots to stop", folder);
+
+        page.Serve("/api/screen/settings", """
+            {"mode":"Screenshots","watch":false,"watchScreenshots":false,"canReadScreenshots":true,"canReadClipboard":true,
+             "folder":"E:\\rsi\\StarCitizen\\LIVE\\screenshots","unread":45}
+            """);
+        page.Do("await renderScreenPanel();");
+
         Assert.False(page.Truth("__dom.node('#screen-read-older').hidden"));
         Assert.Equal("Read 45 older screenshots", page.NodeText("#screen-read-older"));
-        Assert.Contains("45 already there were never read", page.NodeText("#screen-folder"));
 
         page.Serve("/api/screen/readings/older?take=40", """
             {"read":[{"shot":"a.jpg","shotAt":"2026-09-09T01:49:20Z","kind":"Loadout","summary":"RSI Hermes, 8 parts named"},
@@ -97,7 +110,7 @@ public class ScreenPanelTests
              "remaining":5}
             """);
         page.Serve("/api/screen/settings", """
-            {"mode":"Screenshots","watch":false,"watchScreenshots":true,"canReadScreenshots":true,"canReadClipboard":true,
+            {"mode":"Screenshots","watch":false,"watchScreenshots":false,"canReadScreenshots":true,"canReadClipboard":true,
              "folder":"E:\\rsi\\StarCitizen\\LIVE\\screenshots","unread":5}
             """);
         page.Do("await readOlderScreenshots();");

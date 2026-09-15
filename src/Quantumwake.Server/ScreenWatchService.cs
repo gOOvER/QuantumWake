@@ -4,7 +4,9 @@ using Quantumwake.Data;
 namespace Quantumwake.Server;
 
 /// <summary>
-/// Reads each screenshot as the game writes it, while the pilot has said so.
+/// Reads every screenshot in the game's folder the app has not read, while
+/// the pilot has said so - the ones already there and each new one as the
+/// game writes it.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -15,11 +17,12 @@ namespace Quantumwake.Server;
 /// live in <see cref="ScreenFolder"/> and are tested there; this is the loop.
 /// </para>
 /// <para>
-/// The watch begins from the moment it is switched on. Whatever was already
-/// in the folder stays unread, because the pilot enabled reading their new
-/// screenshots and not their archive - the button for the newest one is
-/// still there for that. Switching it off and on again starts a fresh
-/// baseline for the same reason.
+/// The archive is read too, newest first, a few files a tick so the newest
+/// screenshot is never queued behind a hundred old ones. The watch used to
+/// begin from the moment it was switched on, which left the only photographs
+/// of a ship's loadout - taken the evening the watch shipped - unread for a
+/// week. The switch is the pilot's choice; a reading they do not want
+/// believed is invalidated on the Log tab.
 /// </para>
 /// </remarks>
 public sealed class ScreenWatchService(
@@ -31,8 +34,21 @@ public sealed class ScreenWatchService(
 {
     private static readonly TimeSpan Every = TimeSpan.FromSeconds(2);
 
-    /// <summary>When the current watch began, or null while it is off.</summary>
-    private DateTimeOffset? _since;
+    /// <summary>
+    /// Files read per tick. The engine takes a few hundred milliseconds a
+    /// frame, so this is about a second of work between listings, and a new
+    /// screenshot waits at most that long behind the archive.
+    /// </summary>
+    private const int BatchPerTick = 5;
+
+    /// <summary>
+    /// How long a file the engine refused is given before the refusal is
+    /// kept. A screenshot the game is still saving reads as nothing and is
+    /// worth another look; one from last week that reads as nothing will
+    /// read as nothing next tick too, and kept unread it would head the list
+    /// for ever.
+    /// </summary>
+    private static readonly TimeSpan GiveUpAfter = TimeSpan.FromMinutes(1);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -43,49 +59,25 @@ public sealed class ScreenWatchService(
             return;
         }
 
-        var folder = Screenshots.FolderFor(install.RootPath);
         using var timer = new PeriodicTimer(Every);
 
         try
         {
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
-                var wanted = settings.Current.WatchScreenshots;
+                if (!settings.Current.WatchScreenshots) continue;
 
-                if (!wanted)
-                {
-                    _since = null;
-                    continue;
-                }
+                var waiting = insight.Unread(install.RootPath);
 
-                _since ??= DateTimeOffset.UtcNow;
-
-                if (!Directory.Exists(folder)) continue;
-
-                IReadOnlyList<ScreenFile> ready;
-
-                try
-                {
-                    ready = ScreenFolder.Ready(
-                        new DirectoryInfo(folder).EnumerateFiles()
-                            .Where(f => ScreenFolder.IsScreenshot(f.Name))
-                            .Select(f => new ScreenFile(f.FullName, f.Length, new DateTimeOffset(f.LastWriteTimeUtc, TimeSpan.Zero))),
-                        _since.Value,
-                        DateTimeOffset.UtcNow,
-                        path => readings.Has(Path.GetFileName(path)));
-                }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                {
-                    logger.LogDebug(e, "Could not list {Folder}", folder);
-                    continue;
-                }
-
-                foreach (var file in ready)
+                foreach (var file in waiting.Take(BatchPerTick))
                 {
                     try
                     {
                         var sighting = await insight.ReadShotAsync(file.Path, stoppingToken);
                         logger.LogInformation("Read {Shot}: {Summary}", sighting.Shot, sighting.Summary);
+
+                        if (!readings.Has(sighting.Shot) && DateTimeOffset.UtcNow - file.LastWrite >= GiveUpAfter)
+                            readings.Add(sighting);
                     }
                     catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                     {

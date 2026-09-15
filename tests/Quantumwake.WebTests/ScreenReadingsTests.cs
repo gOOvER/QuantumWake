@@ -73,10 +73,10 @@ public class ScreenReadingsTests
 
     /// <summary>
     /// The pilot is agreeing to a folder being followed, and should be able
-    /// to see which one, and that nothing already in it is read.
+    /// to see which one, and that everything in it is read - the archive too.
     /// </summary>
     [Fact]
-    public void Watching_names_the_folder_it_follows_and_what_it_leaves_alone()
+    public void Watching_names_the_folder_it_follows_and_says_the_archive_is_read_too()
     {
         var page = Panel(watchScreenshots: true);
 
@@ -84,7 +84,7 @@ public class ScreenReadingsTests
 
         Assert.False(page.Truth("__dom.node('#screen-folder').hidden"));
         Assert.Contains(@"E:\rsi\StarCitizen\LIVE\screenshots", folder);
-        Assert.Contains("Nothing already there", folder);
+        Assert.Contains("the ones already there", folder);
         Assert.Contains("every screenshot", page.NodeText("#screen-mode-status"));
     }
 

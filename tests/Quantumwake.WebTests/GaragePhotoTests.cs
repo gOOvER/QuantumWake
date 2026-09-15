@@ -62,7 +62,7 @@ public class GaragePhotoTests
         Assert.Contains("GET /api/garage/AEGS_Gladius/photographed", page.Fetched());
         Assert.False(page.Truth("__dom.node('#garage-photo').hidden"));
         Assert.Equal("No photograph of the Aegis Gladius has been read", page.NodeText("#garage-photo-title"));
-        Assert.Contains("Read older screenshots", page.NodeText("#garage-photo-sub"));
+        Assert.Contains("Watch screenshots", page.NodeText("#garage-photo-sub"));
         Assert.True(page.Truth("__dom.node('#garage-photo-tools').hidden"));
         Assert.Equal("Stock fit", page.NodeText("#garage-changes"));
     }

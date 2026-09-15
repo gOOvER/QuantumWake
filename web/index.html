@@ -877,12 +877,12 @@
             <button class="ghost" id="screen-parse">Read copied location</button>
             <button class="ghost" id="screen-scan" hidden>Read last screenshot</button>
             <button class="ghost" id="screen-read-older" hidden
-                    title="Read the screenshots already in the folder that the watch never saw - newest first, forty at a time"></button>
+                    title="Read the screenshots already in the folder without switching the watch on - newest first, forty at a time"></button>
             <label class="muted" title="Check the clipboard on its own every few seconds">
               <input type="checkbox" id="screen-watch"> Watch clipboard
             </label>
             <label class="muted" id="screen-watch-folder-label" hidden
-                   title="Read each new screenshot as the game saves it. Nothing already in the folder is read unless you ask for the older ones.">
+                   title="Read every screenshot in the folder - the ones already there, newest first, and each new one as the game saves it. Untick to stop.">
               <input type="checkbox" id="screen-watch-folder"> Watch screenshots
             </label>
           </div>
@@ -2844,7 +2844,7 @@
         </details>
         <details class="faq-item">
           <summary>Does screenshot reading capture my screen?</summary>
-          <p>No. The optional reader only reads a screenshot file you saved in Star Citizen's screenshots folder, after you turn it on, and only files saved after that — nothing already there is read unless you press <b>Read older screenshots</b> on the Log tab. It does not capture the display, read game memory or send the image away. The dashboard keeps a dated reading; the overlay and MFDs receive only a small summary.</p>
+          <p>No. The optional reader only reads a screenshot file you saved in Star Citizen's screenshots folder, after you turn it on — every file in that folder, the ones already there included. Untick <b>Watch screenshots</b> to stop, invalidate a reading on the Log tab to have nothing believed from it, or clear them all. It does not capture the display, read game memory or send the image away. The dashboard keeps a dated reading; the overlay and MFDs receive only a small summary.</p>
         </details>
         <details class="faq-item">
           <summary>Which screens can it read?</summary>
