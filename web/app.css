@@ -5085,3 +5085,32 @@ body.overlay .ship-picture { display: none; }
 .armoury-finish.clickable { cursor: pointer; }
 .armoury-finish.clickable:hover { border-color: var(--cyan-deep); }
 .armoury-detail::after { content: ""; display: block; clear: both; }
+
+/* ---------- cargo fit ---------- */
+.garage-cargo { margin: 14px 0 12px; padding: 12px 14px; border: 1px solid var(--rule-hot); background: linear-gradient(90deg, rgba(20, 55, 71, .3), rgba(4, 10, 17, .5)); }
+.garage-cargo h3 { margin: 2px 0 4px; font-size: 15px; }
+.garage-cargo-load { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 10px 0 8px; }
+.garage-cargo-crate { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.garage-cargo-crate input { width: 52px; padding: 3px 6px; font: inherit; color: var(--text); background: var(--deep); border: 1px solid var(--rule); border-radius: 4px; text-align: right; }
+.garage-cargo-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.garage-cargo-total { font-size: 12px; margin-left: 6px; }
+.garage-cargo-tools { display: flex; gap: 8px; margin-bottom: 8px; }
+.garage-cargo-verdict { margin: 6px 0 10px; font-size: 13px; }
+.garage-cargo-verdict.fits { color: var(--green); }
+.garage-cargo-verdict.no { color: var(--amber); }
+.garage-cargo-grids { display: flex; flex-wrap: wrap; gap: 14px 22px; }
+.garage-cargo-grid { display: flex; flex-direction: column; gap: 4px; max-width: 360px; }
+.garage-cargo-grid .small { white-space: normal; }
+.garage-cargo-grid-title { font-size: 12px; color: var(--text); }
+.garage-cargo-layers { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
+.garage-cargo-layer { display: flex; flex-direction: column; gap: 2px; }
+.garage-cargo-svg { display: block; border: 1px solid var(--rule-hot); background: var(--deep); }
+.garage-cargo-svg .cargo-floor { fill: rgba(53, 200, 240, .05); }
+.garage-cargo-svg .cargo-line { stroke: rgba(53, 200, 240, .18); stroke-width: 1; }
+.garage-cargo-svg .cargo-crate { stroke: rgba(0, 0, 0, .45); stroke-width: 1; opacity: .92; }
+.garage-cargo-svg .cargo-crate-upper { opacity: .55; }
+.garage-cargo-svg .cargo-label { font: 700 9px var(--mono); fill: #061018; pointer-events: none; }
+.garage-cargo-fleet h4 { margin: 12px 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.garage-cargo-ships { margin: 0; padding-left: 18px; font-size: 12.5px; }
+.garage-cargo-ships li.fits a { color: var(--green); }
+.garage-cargo-ships li.no a { color: var(--amber); }

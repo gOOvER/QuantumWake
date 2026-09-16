@@ -365,7 +365,25 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.8
+### 0.14.9
+
+- **Does 4 × 32 + 2 × 16 fit in the Hermes?** A cargo-fit panel on the
+  Garage page. Type how many crates of each size, and it says whether the
+  hull's grids take them and draws where each one goes, layer by layer;
+  under that, which of your ships take the load and the smallest hulls in
+  the reference that do, each a link that tries the same load there. The
+  grids are the community dataset's own placement — one entry per grid a
+  hull carries, which is the count the game files withhold, and their sum
+  matches the dataset's capacity on all 149 hulls that have one — and the
+  crates are read from your install: the 16, 24 and 32 are long boxes one
+  lane wide, a crate keeps its top up and turns on the spot, anything stacks
+  on anything. A grid's own largest-box rule is honoured (the Corsair takes a
+  24 and not a 32; the Cutlass Black's main grid takes nothing over 2 SCU),
+  except where the dataset left it at one cell on a big hold, which the row
+  says. **The packing is this app's**: a fit found is real; a fit not found
+  within the volume is called "no packing found", not "does not fit".
+  Refresh the community dataset once (Settings) for the grids to appear.
+  (`docs/cargo-fit.md`; `--cargo` in the CLI prints the tables.)
 
 - **An Armoury page, under Gear.** Which rifle, what armour, where to buy
   it — read from your own game files. Every gun the game sells (46 on this

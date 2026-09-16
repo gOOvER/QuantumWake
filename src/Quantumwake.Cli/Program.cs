@@ -131,6 +131,38 @@ if (args.Contains("--mining"))
 // and the figures that actually differ between pieces. The table behind
 // docs/armoury.md; run it again after a patch and against the community
 // tables, which read the same files. --armoury=all lists the finishes too.
+// Cargo fit: the crates as the install sizes them, every hull's grids as the
+// community digest places them, the check that the grids sum to the dump's
+// own capacity, and the question that started it. The table behind
+// docs/cargo-fit.md; run it again after a patch or a dataset refresh.
+if (args.Contains("--cargo", StringComparer.OrdinalIgnoreCase))
+{
+    var cache = Path.Combine(Path.GetDirectoryName(SessionStore.DatabasePathFor(install.RootPath))!, "commodities.json");
+    var crates = GameCommodities.Load(install.RootPath, cache).Crates;
+    Console.WriteLine($"{crates.Count} crate sizes read from the install" + (crates.Count == 0 ? " - the built-in table stands in" : ""));
+    foreach (var c in crates.Count > 0 ? crates : CargoFit.StandardCrates)
+        Console.WriteLine($"  {c.Scu,3} SCU  {c.X:0.##} x {c.Y:0.##} x {c.Z:0.##} m  ({c.X / CargoFit.CellMetres:0} x {c.Y / CargoFit.CellMetres:0} x {c.Z / CargoFit.CellMetres:0} cells)  {c.Mass:N0} kg full");
+
+    var community = new CommunityData();
+    if (!community.HasCargoGrids) { Console.WriteLine("\nThe community digest has no cargo grids - refresh the reference data first."); return 1; }
+    var withGrids = community.GarageShips.Values.Where(s => s.CargoGrids is { Count: > 0 }).ToList();
+    var agree = withGrids.Count(s => Math.Abs(s.CargoGrids!.Sum(g => g.Scu) - s.CargoScu) < 0.01);
+    var offLattice = withGrids.SelectMany(s => s.CargoGrids!).Count(g => !CargoFit.OnLattice(g));
+    Console.WriteLine($"\n{withGrids.Count} hulls with grids of {community.GarageShips.Count}; the grids sum to the dump's capacity on {agree}; {offLattice} grids off the 1.25 m lattice");
+    foreach (var s in withGrids.Where(s => Math.Abs(s.CargoGrids!.Sum(g => g.Scu) - s.CargoScu) >= 0.01))
+        Console.WriteLine($"  ! {s.Class}: grids {s.CargoGrids!.Sum(g => g.Scu)} vs {s.CargoScu}");
+    foreach (var s in withGrids.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase))
+        Console.WriteLine($"  {s.Name,-34} {s.CargoScu,6:0} SCU  " + string.Join("; ", s.CargoGrids!.GroupBy(g => g.Class).Select(g => $"{g.Count()}x {g.Key} {g.First().X:0.##}x{g.First().Y:0.##}x{g.First().Z:0.##} m, up to {g.First().MaxBox.X:0.##}x{g.First().MaxBox.Y:0.##}x{g.First().MaxBox.Z:0.##}")));
+
+    if (community.GarageShip("RSI_Hermes") is { CargoGrids: { Count: > 0 } } hermes)
+    {
+        var fit = CargoFit.Pack(hermes.CargoGrids, new CargoLoad(new Dictionary<int, int> { [32] = 4, [16] = 2 }), crates.Count > 0 ? crates : null);
+        Console.WriteLine($"\n4 x 32 + 2 x 16 in the Hermes: {(fit.Fits ? "fits" : "no packing found")}, {fit.PlacedScu} of {fit.LoadScu} SCU placed in {fit.CapacityScu}");
+        foreach (var g in fit.Grids) Console.WriteLine($"  {g.Grid.Class} {g.Cells.W}x{g.Cells.L}x{g.Cells.H}: " + string.Join(", ", g.Placed.Select(p => $"{p.Scu}@({p.X},{p.Y},{p.Z}) {p.DX}x{p.DY}x{p.DZ}")) + (g.RuleIgnored ? "  [one-cell rule ignored]" : ""));
+    }
+    return 0;
+}
+
 if (args.Any(a => a.StartsWith("--armoury", StringComparison.OrdinalIgnoreCase)))
 {
     var all = args.Contains("--armoury=all", StringComparer.OrdinalIgnoreCase);

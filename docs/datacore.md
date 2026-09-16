@@ -461,6 +461,12 @@ nothing in the data to tell them apart — which is the sort of number this
 project does not ship. Records ending `_Template` read 35 x 35 x 35 and are
 placeholders; they must be excluded or every ship comes out at 21,952 SCU.
 
+**Resolved on 2026-09-16 from the other side.** The community dump's
+`ships.json` carries a `CargoGrids` block with one entry per grid the hull
+places, and its sum equals the dump's own capacity on all 149 hulls that
+have one - the count the blob withholds. `docs/cargo-fit.md` is what was
+built on it.
+
 ## What came of it
 
 All of the following now comes out of this file instead of a 110 MB download,

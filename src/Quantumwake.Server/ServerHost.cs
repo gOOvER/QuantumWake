@@ -1271,6 +1271,79 @@ public static class ServerHost
             });
         });
 
+        // Does a load of crates fit a hull? The grids are the community dump's
+        // - one entry per grid the hull places, metres and the largest box
+        // each takes - the crates are the install's, and the packing is this
+        // app's, on the game's 1.25 m lattice, largest crate first. "Fits" is
+        // a packing found; "does not fit" is none found, which for a load
+        // within the volume is not proof, and the answer says which.
+        app.MapGet("/api/cargo/{className}", (string className, LogLibrary lib) =>
+        {
+            var ship = lib.Community.GarageShip(className);
+            if (ship is null) return Results.NotFound(new { message = "No such ship in the reference." });
+            return Results.Ok(new
+            {
+                ship.Class, ship.Name, ship.CargoScu,
+                gridsKnown = lib.Community.HasCargoGrids,
+                grids = ship.CargoGrids ?? [],
+                crates = Crates(lib),
+                cratesFromInstall = lib.GameCommodities.Crates.Count > 0,
+            });
+        });
+
+        app.MapPost("/api/cargo/fit", (CargoFitRequest request, LogLibrary lib) =>
+        {
+            if (!lib.Community.HasCargoGrids)
+                return Results.BadRequest(new { message = "The reference data predates cargo grids; refresh it in Settings." });
+
+            var load = new CargoLoad((request.Crates ?? new Dictionary<int, int>()).Where(c => c.Value > 0).ToDictionary(c => c.Key, c => c.Value));
+            var crates = Crates(lib);
+
+            // The asked ship in full, with every crate's place.
+            object? ship = null;
+            if (request.Ship is { Length: > 0 } && lib.Community.GarageShip(request.Ship) is { } asked)
+            {
+                var fit = CargoFit.Pack(asked.CargoGrids ?? [], load, crates);
+                ship = new
+                {
+                    asked.Class, asked.Name, asked.CargoScu,
+                    fit.Fits, fit.Left, fit.Reasons, fit.CapacityScu, fit.LoadScu, fit.PlacedScu,
+                    grids = fit.Grids.Select(g => new { g.Grid, cells = new { w = g.Cells.W, l = g.Cells.L, h = g.Cells.H }, g.Placed, g.UsedScu, g.RuleIgnored }),
+                };
+            }
+
+            // Every other hull, in one line each: yours first, then the smallest
+            // in the reference that takes it, so "what would carry this" has an
+            // answer without opening each ship.
+            var flown = lib.Stats().Ships
+                .Where(s => s.ClassName is not null)
+                .ToDictionary(s => s.ClassName!, s => s, StringComparer.OrdinalIgnoreCase);
+            var others = lib.Community.GarageShips.Values
+                .Where(s => s.CargoGrids is { Count: > 0 } && s.IsSpaceship)
+                .Select(s =>
+                {
+                    var fit = CargoFit.Pack(s.CargoGrids!, load, crates);
+                    flown.TryGetValue(s.Class, out var mine);
+                    return new
+                    {
+                        s.Class, s.Name, s.CargoScu, fit.Fits, fit.PlacedScu, fit.CapacityScu,
+                        flown = mine is not null, hours = mine is not null ? Math.Round(mine.EstimatedTime.TotalHours, 1) : 0,
+                    };
+                })
+                .OrderByDescending(s => s.flown).ThenByDescending(s => s.Fits).ThenBy(s => s.CargoScu).ThenBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return Results.Ok(new
+            {
+                ship,
+                load = new { crates = load.Crates, scu = load.TotalScu, count = load.Count },
+                yours = others.Where(s => s.flown).ToList(),
+                // The smallest hulls that take it, and no more than a dozen.
+                smallest = others.Where(s => !s.flown && s.Fits).Take(12).ToList(),
+                cratesFromInstall = lib.GameCommodities.Crates.Count > 0,
+            });
+        });
+
         // A picture of a gun or a piece of armour, by the game's uuid: the
         // game files hold only a 64-pixel loadout glyph for a gun and one
         // generic icon per armour class, so the picture is the wiki's, fetched
@@ -4399,6 +4472,10 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
     /// <summary>A hull with mining heads.</summary>
     public sealed record MiningShip(string Class, string Name, IReadOnlyList<MiningHead> Heads);
 
+    /// <summary>The crates the install sizes, or the table read from it on 2026-09-16 until the install is in.</summary>
+    static IReadOnlyList<CargoCrate> Crates(LogLibrary lib) =>
+        lib.GameCommodities.Crates.Count > 0 ? lib.GameCommodities.Crates : CargoFit.StandardCrates;
+
     /// <summary>
     /// The hulls that carry a mining head, from the community dataset's
     /// loadout trees: a <c>WeaponMining</c> port anywhere in the tree. The
@@ -4931,6 +5008,9 @@ public sealed record ReadingRereadRequest(string Shot);
 
 /// <summary>Body of POST /api/mining/crack: the rock as the HUD scanned it, and the fit.</summary>
 public sealed record MiningCrackRequest(double MassKg, double Resistance, double Instability, List<MiningHeadRequest>? Heads, string? Gadget);
+
+/// <summary>A load to fit: crates by size, and the hull to draw it in, or none for the fleet answer alone.</summary>
+public sealed record CargoFitRequest(string? Ship, Dictionary<int, int>? Crates);
 
 /// <summary>One head of the fit: the laser's class and the module classes in its slots.</summary>
 public sealed record MiningHeadRequest(string Laser, List<string>? Modules);

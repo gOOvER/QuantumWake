@@ -2122,6 +2122,26 @@
       <p class="muted" id="garage-optimise-status" aria-live="polite"></p>
     </section>
 
+    <!-- Does a load of crates fit this hull? The grids are the community
+         dump's, the crates the install's, the packing this app's - the
+         panel says which is which. -->
+    <section class="garage-cargo" id="garage-cargo" hidden aria-labelledby="garage-cargo-title">
+      <div class="garage-cargo-copy">
+        <div class="garage-eyebrow">Cargo fit</div>
+        <h3 id="garage-cargo-title">Will it fit?</h3>
+        <p class="muted" id="garage-cargo-sub"></p>
+      </div>
+      <div class="garage-cargo-load" id="garage-cargo-load" aria-label="Crates to fit"></div>
+      <div class="garage-cargo-tools">
+        <button type="button" class="ghost tiny" id="garage-cargo-fit">Fit it</button>
+        <button type="button" class="ghost tiny" id="garage-cargo-clear">Clear</button>
+      </div>
+      <p class="garage-cargo-verdict" id="garage-cargo-verdict" aria-live="polite"></p>
+      <div class="garage-cargo-grids" id="garage-cargo-grids"></div>
+      <div class="garage-cargo-fleet" id="garage-cargo-fleet" hidden></div>
+      <p class="muted small" id="garage-cargo-note"></p>
+    </section>
+
     <!-- The ship's fit as last photographed at a Vehicle Loadout Manager,
          offered as a starting point. Dated, because a screenshot is a moment
          and not a state; hidden when no loadout reading is of this ship. -->

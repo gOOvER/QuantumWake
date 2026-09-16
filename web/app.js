@@ -10250,7 +10250,290 @@ async function openGarage(cls) {
   await loadBuilds();
   loadGarageMarket(cls).catch(() => { /* the panel says the feed is off or unread */ });
   loadGaragePhoto(cls).catch(() => { /* no reading of this ship: the offer stays hidden */ });
+  loadGarageCargo(cls).catch(() => { /* the panel hides itself when the hull has no grids to draw */ });
 }
+
+/* ---------- cargo fit: does a load of crates fit this hull? ---------- */
+
+let garageCargo = null;
+let garageCargoResult = null;
+const CARGO_CRATE_SIZES = [1, 2, 4, 8, 16, 24, 32];
+const CARGO_CRATE_COLOURS = { 1: '#6bbaff', 2: '#57d8ac', 4: '#e8b35e', 8: '#f27f68', 16: '#bc8cff', 24: '#35c8f0', 32: '#ff9ad5' };
+
+/** The counts typed in, by crate size; kept across ships so the same load can be tried on the next hull. */
+let garageCargoLoad = {};
+try {
+  const kept = JSON.parse(localStorage.getItem('qw-cargo-load') || '{}');
+  if (kept && typeof kept === 'object') garageCargoLoad = kept;
+} catch { /* a private window has no memory, which is fine */ }
+
+/** The ship's grids, drawn empty; the load inputs; the fleet answer only once asked. */
+async function loadGarageCargo(cls) {
+  const box = $('#garage-cargo');
+  if (!box) return;
+  garageCargoResult = null;
+  try {
+    garageCargo = await getJson(`/api/cargo/${encodeURIComponent(cls)}`);
+  } catch {
+    garageCargo = null;
+  }
+  if (!garageCargo) { box.hidden = true; return; }
+  box.hidden = false;
+
+  const sub = $('#garage-cargo-sub');
+  const grids = garageCargo.grids || [];
+  if (!garageCargo.gridsKnown) {
+    sub.textContent = 'The reference data predates cargo grids. Refresh the community dataset in Settings and this hull’s holds will be drawn.';
+  } else if (grids.length === 0) {
+    sub.textContent = `The dataset places no cargo grid on the ${garageCargo.name}${garageCargo.cargoScu ? ` though it credits it with ${fmt1(garageCargo.cargoScu)} SCU` : ''} — nothing to pack into.`;
+  } else {
+    const kinds = new Map();
+    for (const g of grids) kinds.set(g.class, (kinds.get(g.class) || 0) + 1);
+    sub.textContent = `${grids.length} grid${grids.length === 1 ? '' : 's'}, ${fmt1(grids.reduce((a, g) => a + g.scu, 0))} SCU by the dataset’s own placement: `
+      + [...kinds].map(([k, n]) => { const g = grids.find((x) => x.class === k); return `${n > 1 ? `${n} × ` : ''}${fmt1(g.x)} × ${fmt1(g.y)} × ${fmt1(g.z)} m`; }).join(', ')
+      + '. Type a load and see where each crate would go.';
+  }
+
+  renderCargoLoadInputs();
+  renderCargoGrids(grids.map(cargoEmpty), null);
+  const fleet = $('#garage-cargo-fleet');
+  if (fleet) { fleet.hidden = true; fleet.textContent = ''; }
+  $('#garage-cargo-verdict').textContent = '';
+  $('#garage-cargo-note').textContent = garageCargo.cratesFromInstall
+    ? 'Crate sizes are read from your install: 1 SCU is 1.25 m cubed, and the 16, 24 and 32 are one lane wide and 5, 7.5 and 10 m long. A crate keeps its top up and may turn on the spot; anything stacks on anything; nothing hangs over an edge. The packing is this app’s, largest crate first: a fit found is real, a fit not found is not proof.'
+    : 'The install has not been read yet, so the crate sizes are the table read from it on 16 Sep 2026. The packing is this app’s, largest crate first: a fit found is real, a fit not found is not proof.';
+
+  // A load already typed - or brought from another hull's answer - is tried
+  // straight away, so the fleet list is a link and not a form.
+  if (garageCargo.gridsKnown && grids.length && Object.keys(cargoLoadNow()).length) await fitCargo();
+}
+
+function cargoCells(g) {
+  return { w: Math.round(g.x / 1.25), l: Math.round(g.y / 1.25), h: Math.round(g.z / 1.25) };
+}
+
+/** The empty drawing, before a fit: the same one-cell-rule line the packer draws, so the caption does not change under the crates. */
+function cargoEmpty(g) {
+  const one = g.maxBox && Math.round(g.maxBox.x / 1.25) === 1 && Math.round(g.maxBox.y / 1.25) === 1 && Math.round(g.maxBox.z / 1.25) === 1;
+  return { grid: g, cells: cargoCells(g), placed: [], usedScu: 0, ruleIgnored: !!one && g.scu >= 16 };
+}
+
+function renderCargoLoadInputs() {
+  const box = $('#garage-cargo-load');
+  if (!box) return;
+  box.textContent = '';
+  for (const size of CARGO_CRATE_SIZES) {
+    const field = el('label', 'garage-cargo-crate');
+    const swatch = el('span', 'garage-cargo-swatch');
+    swatch.style.background = CARGO_CRATE_COLOURS[size];
+    field.append(swatch, el('span', 'garage-cargo-size', `${size} SCU`));
+    const input = el('input');
+    input.type = 'number';
+    input.min = '0';
+    input.max = '999';
+    input.inputMode = 'numeric';
+    input.dataset.size = String(size);
+    input.value = garageCargoLoad[size] ? String(garageCargoLoad[size]) : '';
+    input.placeholder = '0';
+    input.setAttribute('aria-label', `${size} SCU crates`);
+    input.addEventListener('input', () => {
+      garageCargoLoad[size] = Math.max(0, parseInt(input.value, 10) || 0);
+      try { localStorage.setItem('qw-cargo-load', JSON.stringify(garageCargoLoad)); } catch { /* as above */ }
+      renderCargoTotal();
+    });
+    field.append(input);
+    box.append(field);
+  }
+  box.append(el('span', 'garage-cargo-total muted', ''));
+  renderCargoTotal();
+}
+
+function cargoLoadNow() {
+  const crates = {};
+  for (const size of CARGO_CRATE_SIZES) if (garageCargoLoad[size] > 0) crates[size] = garageCargoLoad[size];
+  return crates;
+}
+
+function renderCargoTotal() {
+  const total = $('#garage-cargo-load')?.querySelector('.garage-cargo-total');
+  if (!total) return;
+  const crates = cargoLoadNow();
+  const scu = Object.entries(crates).reduce((a, [s, n]) => a + Number(s) * n, 0);
+  const count = Object.values(crates).reduce((a, n) => a + n, 0);
+  total.textContent = count ? `${count} crate${count === 1 ? '' : 's'}, ${fmtInt(scu)} SCU` : '';
+}
+
+/** The load as the panel has it, into this hull and every other. */
+async function fitCargo() {
+  const crates = cargoLoadNow();
+  const verdict = $('#garage-cargo-verdict');
+  if (!Object.keys(crates).length) { verdict.textContent = 'Type how many crates of each size.'; verdict.className = 'garage-cargo-verdict'; return; }
+  if (!garageCargo) return;
+
+  let data;
+  try {
+    const response = await fetch('/api/cargo/fit', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ship: garageCargo.class, crates }),
+    });
+    data = await response.json();
+    if (!response.ok) { verdict.textContent = data.message || 'The fit could not be worked out.'; verdict.className = 'garage-cargo-verdict'; return; }
+  } catch {
+    verdict.textContent = 'The fit could not be worked out.';
+    verdict.className = 'garage-cargo-verdict';
+    return;
+  }
+  garageCargoResult = data;
+  renderCargoVerdict(data);
+  if (data.ship) renderCargoGrids(data.ship.grids, data.ship);
+  renderCargoFleet(data);
+}
+
+function renderCargoVerdict(data) {
+  const verdict = $('#garage-cargo-verdict');
+  const s = data.ship;
+  if (!s) { verdict.textContent = ''; return; }
+  const load = data.load;
+  if (s.fits) {
+    verdict.className = 'garage-cargo-verdict fits';
+    verdict.textContent = `Fits: ${load.count} crate${load.count === 1 ? '' : 's'}, ${fmtInt(load.scu)} of ${fmtInt(s.capacityScu)} SCU, with ${fmtInt(s.capacityScu - s.placedScu)} SCU to spare.`;
+  } else {
+    verdict.className = 'garage-cargo-verdict no';
+    const left = Object.entries(s.left || {}).sort((a, b) => Number(b[0]) - Number(a[0])).map(([size, n]) => `${n} × ${size} SCU`).join(', ');
+    const byRule = (s.reasons || []).length > 0;
+    verdict.textContent = load.scu > s.capacityScu
+      ? `Does not fit: ${fmtInt(load.scu)} SCU asked of a ${fmtInt(s.capacityScu)} SCU hold. Left out: ${left}.`
+      : byRule
+        ? `Does not fit: ${left} left out. ${s.reasons.join(' ')}`
+        : `No packing found for ${left}: ${fmtInt(s.placedScu)} of ${fmtInt(load.scu)} SCU placed in ${fmtInt(s.capacityScu)}. The volume is there; this packer, largest crate first, could not arrange the rest, which is not proof it cannot be done.`;
+  }
+}
+
+/**
+ * Each grid as layers seen from above, one square a cell, crates coloured by
+ * size with the size written on them. Layers because the holds are two
+ * cells high and a crate on top hides the one under it.
+ */
+function renderCargoGrids(grids, fit) {
+  const box = $('#garage-cargo-grids');
+  if (!box) return;
+  box.textContent = '';
+  const cell = 14;
+  for (const g of grids || []) {
+    const card = el('div', 'garage-cargo-grid');
+    const cells = g.cells;
+    const title = el('div', 'garage-cargo-grid-title',
+      `${g.grid.class.replace(/^.*?_CargoGrid_?|^.*?_CargoInventory_?/i, '') || g.grid.class} — ${cells.w} × ${cells.l} × ${cells.h} cells, ${fmtInt(cells.w * cells.l * cells.h)} SCU${g.grid.external ? ', outside the hull' : ''}`);
+    card.append(title);
+    const rule = g.grid.maxBox;
+    const ruleText = g.ruleIgnored
+      ? 'The dataset gives this grid a largest box of one cell, a placeholder on a hold this size; packed by its geometry instead.'
+      : rule && rule.x > 0 ? `Takes a crate up to ${fmt1(rule.x)} × ${fmt1(rule.y)} × ${fmt1(rule.z)} m.` : '';
+    if (ruleText) card.append(el('div', 'muted small', ruleText));
+    const layers = el('div', 'garage-cargo-layers');
+    for (let z = 0; z < cells.h; z++) {
+      const layer = el('div', 'garage-cargo-layer');
+      layer.append(el('div', 'muted small', cells.h > 1 ? (z === 0 ? 'Floor' : `Layer ${z + 1}`) : ''));
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      const width = cells.w * cell, height = cells.l * cell;
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      svg.setAttribute('width', String(width));
+      svg.setAttribute('height', String(height));
+      svg.classList.add('garage-cargo-svg');
+      const back = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      back.setAttribute('width', String(width)); back.setAttribute('height', String(height));
+      back.setAttribute('class', 'cargo-floor');
+      svg.append(back);
+      for (let x = 1; x < cells.w; x++) { const l = document.createElementNS('http://www.w3.org/2000/svg', 'line'); l.setAttribute('x1', String(x * cell)); l.setAttribute('x2', String(x * cell)); l.setAttribute('y1', '0'); l.setAttribute('y2', String(height)); l.setAttribute('class', 'cargo-line'); svg.append(l); }
+      for (let y = 1; y < cells.l; y++) { const l = document.createElementNS('http://www.w3.org/2000/svg', 'line'); l.setAttribute('y1', String(y * cell)); l.setAttribute('y2', String(y * cell)); l.setAttribute('x1', '0'); l.setAttribute('x2', String(width)); l.setAttribute('class', 'cargo-line'); svg.append(l); }
+      for (const p of g.placed || []) {
+        if (z < p.z || z >= p.z + p.dz) continue;
+        const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        r.setAttribute('x', String(p.x * cell + 1)); r.setAttribute('y', String(p.y * cell + 1));
+        r.setAttribute('width', String(p.dx * cell - 2)); r.setAttribute('height', String(p.dy * cell - 2));
+        r.setAttribute('rx', '2');
+        r.setAttribute('fill', CARGO_CRATE_COLOURS[p.scu] || '#888');
+        r.setAttribute('class', `cargo-crate${z > p.z ? ' cargo-crate-upper' : ''}`);
+        const t = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+        t.textContent = `${p.scu} SCU at ${p.x + 1}, ${p.y + 1}, layer ${p.z + 1}`;
+        r.append(t);
+        svg.append(r);
+        if (z === p.z) {
+          const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          label.setAttribute('x', String(p.x * cell + p.dx * cell / 2));
+          label.setAttribute('y', String(p.y * cell + p.dy * cell / 2 + 3));
+          label.setAttribute('text-anchor', 'middle');
+          label.setAttribute('class', 'cargo-label');
+          label.textContent = String(p.scu);
+          svg.append(label);
+        }
+      }
+      layer.append(svg);
+      layers.append(layer);
+    }
+    card.append(layers);
+    if (fit) card.append(el('div', 'muted small', `${fmtInt(g.usedScu)} of ${fmtInt(cells.w * cells.l * cells.h)} SCU used`));
+    box.append(card);
+  }
+}
+
+/** Your ships that take the load, then the smallest in the reference that do. */
+function renderCargoFleet(data) {
+  const box = $('#garage-cargo-fleet');
+  if (!box) return;
+  box.textContent = '';
+  box.hidden = false;
+  const mine = data.yours || [];
+  const line = (s) => {
+    const li = el('li', s.fits ? 'fits' : 'no');
+    const link = el('a', null, s.name);
+    link.href = `#garage`;
+    link.addEventListener('click', (e) => { e.preventDefault(); openGarageShipForCargo(s.class); });
+    li.append(link, el('span', 'muted', ` — ${s.fits ? 'fits' : `${fmtInt(s.placedScu)} of ${fmtInt(data.load.scu)} SCU`}, ${fmtInt(s.cargoScu)} SCU hold${s.flown && s.hours ? `, flown ${s.hours} h` : ''}`));
+    return li;
+  };
+  const fitting = mine.filter((s) => s.fits);
+  const not = mine.filter((s) => !s.fits);
+  if (mine.length) {
+    box.append(el('h4', null, 'Your ships'));
+    if (fitting.length) {
+      const ul = el('ul', 'garage-cargo-ships');
+      for (const s of fitting) ul.append(line(s));
+      box.append(ul);
+    } else {
+      box.append(el('p', 'muted small', 'None of the ships the logs have seen you fly takes this load.'));
+    }
+    // The rest in one line, hold sizes attached, so the list is what fits
+    // and not a roll-call of fighters with a 2 SCU boot.
+    if (not.length) box.append(el('p', 'muted small', `Not in: ${not.map((s) => `${s.name} (${fmtInt(s.cargoScu)} SCU)`).join(', ')}.`));
+  } else {
+    box.append(el('p', 'muted small', 'None of the ships the logs have seen you fly has a cargo grid in the dataset.'));
+  }
+  const smallest = data.smallest || [];
+  if (smallest.length) {
+    box.append(el('h4', null, 'Smallest hulls in the reference that take it'));
+    const ul = el('ul', 'garage-cargo-ships');
+    for (const s of smallest) ul.append(line(s));
+    box.append(ul);
+  }
+}
+
+/** Opens the Garage on another hull and runs the same load there. */
+function openGarageShipForCargo(cls) {
+  const pick = $('#garage-all');
+  if (pick) { pick.value = cls; pick.dispatchEvent(new Event('change')); }
+}
+
+$('#garage-cargo-fit')?.addEventListener('click', () => fitCargo().catch(() => {}));
+$('#garage-cargo-clear')?.addEventListener('click', () => {
+  garageCargoLoad = {};
+  try { localStorage.removeItem('qw-cargo-load'); } catch { /* as above */ }
+  renderCargoLoadInputs();
+  $('#garage-cargo-verdict').textContent = '';
+  const fleet = $('#garage-cargo-fleet');
+  if (fleet) { fleet.hidden = true; fleet.textContent = ''; }
+  if (garageCargo) renderCargoGrids((garageCargo.grids || []).map(cargoEmpty), null);
+});
 
 /* ---------- the photographed fit ---------- */
 
