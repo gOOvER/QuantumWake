@@ -268,6 +268,7 @@ function showView(name) {
     loadMiningPlaces().catch(() => {});
     loadLikelyMined().catch(() => {});
     loadMiningLog().catch(() => {});
+    loadCrackModel().catch(() => {});
   }
 
   // Settings reflects live state (the tray can change it), so re-read on entry.
@@ -4537,6 +4538,214 @@ $('#mining-log-form')?.addEventListener('submit', async (e) => {
 
   await loadMiningLog().catch(() => {});
 });
+
+/* ---------- can it be cracked? ---------- */
+
+/**
+ * The rock calculator. The model comes from the server once per page - the
+ * lasers, modules, gadgets, minerals and ships as the install has them - and
+ * every change to the form asks the server for the verdict, because the rule
+ * lives in one place there and is tested there. The ship picked decides how
+ * many heads there are and what size; each head starts as the laser the ship
+ * ships with and takes up to three modules, which is more slots than any head
+ * has - the game's slot count per head is not read yet, and the page says so.
+ */
+let crackModel = null;
+
+async function loadCrackModel() {
+  const box = $('#crack');
+  const unready = $('#crack-unready');
+  if (!box) return;
+
+  try {
+    crackModel = await getJson('/api/mining/model');
+  } catch {
+    crackModel = null;
+  }
+
+  if (!crackModel?.ready) {
+    box.hidden = true;
+    if (unready) {
+      unready.hidden = false;
+      unready.textContent = gameDataExcuse() || 'The install has not been read yet - Settings says when the game data is ready.';
+    }
+    return;
+  }
+  if (unready) unready.hidden = true;
+  box.hidden = false;
+
+  const rule = $('#crack-rule');
+  if (rule && crackModel.rule) rule.textContent = `${crackModel.rule.requiredWattsPerKg} W per kilogram at zero resistance, breaking solo from ${Math.round(crackModel.rule.soloRatio * 100)}% and with a gadget from ${Math.round(crackModel.rule.gadgetRatio * 100)}% (${crackModel.rule.source})`;
+
+  // Ships you have flown first, then the rest of the mining hulls.
+  const ship = $('#crack-ship');
+  const keep = ship.value;
+  ship.textContent = '';
+  const ships = [...crackModel.ships].sort((a, b) => (b.flown - a.flown) || a.name.localeCompare(b.name));
+  for (const s of ships) {
+    const heads = s.heads.length;
+    ship.append(new Option(`${s.name} · ${heads} S${s.heads[0]?.size ?? '?'} head${heads === 1 ? '' : 's'}${s.flown ? ' · flown' : ''}`, s.class));
+  }
+  ship.value = keep && ships.some((s) => s.class === keep) ? keep : (ships[0]?.class || '');
+
+  const mineral = $('#crack-mineral');
+  mineral.textContent = '';
+  mineral.append(new Option('Not said', ''));
+  for (const m of crackModel.minerals) mineral.append(new Option(m.name, m.class));
+
+  const gadget = $('#crack-gadget');
+  gadget.textContent = '';
+  gadget.append(new Option('None', ''));
+  for (const g of crackModel.gadgets) gadget.append(new Option(`${g.name} · ${describeModifiers(g.modifiers) || 'no figures'}`, g.class));
+
+  renderCrackHeads();
+  await assessCrack();
+}
+
+/** "-30% resistance, +40% window" - the game's percentage points, in the game's numbers. */
+function describeModifiers(m) {
+  if (!m) return '';
+  const signed = (v) => `${v > 0 ? '+' : '−'}${Math.abs(v)}%`;
+  return [
+    m.resistance ? `${signed(m.resistance)} resistance` : null,
+    m.instability ? `${signed(m.instability)} instability` : null,
+    m.windowSize ? `${signed(m.windowSize)} window` : null,
+    m.windowRate ? `${signed(m.windowRate)} charge rate` : null,
+    m.catastrophicRate ? `${signed(m.catastrophicRate)} overcharge` : null,
+    m.shatterDamage ? `${signed(m.shatterDamage)} shatter` : null,
+    m.clusterFactor ? `${signed(m.clusterFactor)} cluster` : null,
+  ].filter(Boolean).join(', ');
+}
+
+/** One row per head on the picked ship: its laser, and three module slots. */
+function renderCrackHeads() {
+  const host = $('#crack-heads');
+  if (!host || !crackModel) return;
+  const ship = crackModel.ships.find((s) => s.class === $('#crack-ship').value);
+  host.textContent = '';
+  if (!ship) return;
+
+  ship.heads.forEach((head, i) => {
+    const row = el('div', 'crack-head');
+    row.append(el('span', 'crack-head-label', `Head ${i + 1} · S${head.size}`));
+
+    const laser = document.createElement('select');
+    laser.className = 'select crack-laser';
+    for (const l of crackModel.lasers.filter((l) => l.size === head.size)) {
+      laser.append(new Option(`${l.name} · ${fmtInt(l.power)} · ${describeModifiers(l.modifiers) || 'no modifiers'}`, l.class));
+    }
+    if (head.stock && [...laser.options].some((o) => o.value === head.stock)) laser.value = head.stock;
+    laser.title = 'The head; the ship\'s own is picked first';
+    laser.addEventListener('change', () => assessCrack().catch(() => {}));
+    row.append(laser);
+
+    for (let slot = 0; slot < 3; slot++) {
+      const module = document.createElement('select');
+      module.className = 'select tiny crack-module';
+      module.append(new Option(slot === 0 ? 'No module' : '—', ''));
+      for (const m of crackModel.modules) {
+        module.append(new Option(`${m.active ? '⚡ ' : ''}${m.name} · ×${m.powerMultiplier} power${m.modifiers ? (describeModifiers(m.modifiers) ? ', ' + describeModifiers(m.modifiers) : '') : ''}${m.active ? ` · ${m.lifetime}s × ${m.charges}` : ''}`, m.class));
+      }
+      module.title = 'A module in this head\'s slot; an active one counts as switched on';
+      module.addEventListener('change', () => assessCrack().catch(() => {}));
+      row.append(module);
+    }
+    host.append(row);
+  });
+}
+
+function crackRequest() {
+  const heads = [...($('#crack-heads')?.querySelectorAll('.crack-head') || [])].map((row) => ({
+    laser: row.querySelector('.crack-laser')?.value || '',
+    modules: [...row.querySelectorAll('.crack-module')].map((s) => s.value).filter(Boolean),
+  }));
+  return {
+    massKg: Number($('#crack-mass').value) || 0,
+    resistance: Number($('#crack-resistance').value) || 0,
+    instability: Number($('#crack-instability').value) || 0,
+    heads,
+    gadget: $('#crack-gadget').value || null,
+  };
+}
+
+const CRACK_VERDICTS = {
+  solo: ['Breaks on this fit', 'good'],
+  gadget: ['Needs a gadget or an active', 'warn'],
+  crew: ['Not this fit', 'bad'],
+  none: ['No laser', 'bad'],
+};
+
+async function assessCrack() {
+  const out = $('#crack-verdict');
+  if (!out || !crackModel?.ready) return;
+  const request = crackRequest();
+
+  let got;
+  try {
+    const response = await fetch('/api/mining/crack', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request),
+    });
+    if (!response.ok) throw new Error(`${response.status}`);
+    got = await response.json();
+  } catch (err) {
+    out.textContent = '';
+    out.append(el('p', 'muted', `Could not assess the rock: ${err.message}`));
+    return;
+  }
+
+  const v = got.verdict;
+  const [label, tone] = CRACK_VERDICTS[v.verdict] || [v.verdict, ''];
+  out.textContent = '';
+
+  const head = el('div', `crack-call ${tone}`);
+  head.append(el('b', null, label));
+  head.append(el('span', 'muted', ` · ${fmtInt(v.powerDelivered)} delivered against ${fmtInt(v.powerRequired)} needed · ${Math.round(v.ratio * 100)}% · estimate, community rule`));
+  out.append(head);
+
+  const facts = el('div', 'crack-facts');
+  const fact = (k, val, title) => { const f = el('span'); f.append(el('span', 'k', k), el('b', null, val)); if (title) f.title = title; facts.append(f); };
+  fact('Resistance after fit', `${v.effectiveResistancePercent}%`, 'The HUD figure scaled by the heads\', modules\' and gadget\'s resistance points');
+  fact('Instability after fit', `${v.effectiveInstabilityPercent}%`);
+  fact('Window', `${v.windowPercent}% of gauge`, 'The game\'s optimal window, widened or narrowed by the fit');
+  fact('Breaks up to', `${fmtInt(v.maxCrackableMassKg)} kg`, 'At this resistance, on this fit');
+  if (v.energyCapacity) fact('Rock holds', `${fmtInt(v.energyCapacity)} · sheds ${fmtInt(v.energyDecayPerSecond)}/s`, 'By the game\'s own constants: capacity per kilogram and decay per kilogram a second');
+  out.append(facts);
+
+  // The mineral is for the notes: what the game says about it, in its own figures.
+  const mineral = crackModel.minerals.find((m) => m.class === $('#crack-mineral').value);
+  const notes = [...(v.notes || [])];
+  if (mineral) {
+    notes.push(`${mineral.name}: element resistance ${mineral.resistance}, instability ${mineral.instability}, window at ${Math.round(mineral.windowMidpoint * 100)}%±${Math.round(mineral.windowRandomness * 100)} of the gauge, overcharge blast ×${mineral.explosionMultiplier}${mineral.instability >= 600 ? ' - an overcharge here is the rock gone' : ''}.`);
+  }
+  if (notes.length) {
+    const list = el('ul', 'crack-notes');
+    for (const n of notes) list.append(el('li', null, n));
+    out.append(list);
+  }
+
+  const body = $('#crack-matrix tbody');
+  body.textContent = '';
+  for (const r of got.matrix || []) {
+    const tr = el('tr');
+    if (request.heads.some((h) => h.laser === r.laser)) tr.classList.add('current');
+    const [rl, rt] = CRACK_VERDICTS[r.verdict] || [r.verdict, ''];
+    tr.append(el('td', null, r.name));
+    tr.append(el('td', 'num', fmtInt(r.power)));
+    tr.append(el('td', 'num', fmtInt(r.powerDelivered)));
+    tr.append(el('td', 'num', `${Math.round(r.ratio * 100)}%`));
+    tr.append(el('td', 'num', fmtInt(r.maxCrackableMassKg)));
+    const verdict = el('td', null, rl);
+    verdict.classList.add(`crack-${rt}`);
+    tr.append(verdict);
+    body.append(tr);
+  }
+  const heads = request.heads.length;
+  $('#crack-matrix-note').textContent = `Every S${crackModel.ships.find((s) => s.class === $('#crack-ship').value)?.heads[0]?.size ?? '?'} head on this rock, ${heads} to a fit with the same modules; only the laser changes. Module slots are shown as three per head because the game's count per head is not read yet.`;
+}
+
+$('#crack-ship')?.addEventListener('change', () => { renderCrackHeads(); assessCrack().catch(() => {}); });
+for (const id of ['#crack-mass', '#crack-resistance', '#crack-instability']) $(id)?.addEventListener('input', () => assessCrack().catch(() => {}));
+for (const id of ['#crack-mineral', '#crack-gadget']) $(id)?.addEventListener('change', () => assessCrack().catch(() => {}));
 
 async function loadMiningPlaces() {
   const body = $('#mining-places tbody');

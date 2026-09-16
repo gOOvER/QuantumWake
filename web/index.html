@@ -1703,6 +1703,61 @@
       long a rock takes to mine; respawn is how long it takes to come back,
       which is a different question.
     </p>
+    <h3 class="spaced">Can it be cracked?</h3>
+    <p class="muted caption" id="crack-caption">
+      The rock as the HUD scans it against the heads on your ship. The lasers,
+      modules, gadgets and minerals are the game's own figures, read from your
+      install. <b>The line itself is not the game's</b>: it does not publish how
+      mass, resistance and power meet, so this uses the community's rule
+      &mdash; <span id="crack-rule">0.36 W per kilogram at zero resistance</span>
+      &mdash; and calls the result an estimate. The game's own constants for the
+      rock are quoted beside it.
+    </p>
+    <p class="muted" id="crack-unready" hidden></p>
+    <div class="crack" id="crack" hidden>
+      <div class="crack-rock">
+        <label>Ship
+          <select id="crack-ship" class="select" title="The heads come from the ship's own loadout"></select>
+        </label>
+        <label>Mass
+          <input type="number" id="crack-mass" class="search" min="0" step="100" value="5000" title="Kilograms, as the scan HUD prints it">
+          <span class="unit">kg</span>
+        </label>
+        <label>Resistance
+          <input type="number" id="crack-resistance" class="search" min="0" max="100" step="1" value="0" title="The HUD's resistance, in percent">
+          <span class="unit">%</span>
+        </label>
+        <label>Instability
+          <input type="number" id="crack-instability" class="search" min="0" max="100" step="1" value="15" title="The HUD's instability, in percent">
+          <span class="unit">%</span>
+        </label>
+        <label>Mineral
+          <select id="crack-mineral" class="select" title="What most of the rock is - for the notes; the HUD's figures above are what count"></select>
+        </label>
+        <label>Gadget
+          <select id="crack-gadget" class="select" title="A gadget placed on the rock"></select>
+        </label>
+      </div>
+      <div class="crack-heads" id="crack-heads"></div>
+      <div class="crack-verdict" id="crack-verdict"></div>
+      <div class="table-wrap">
+        <table id="crack-matrix">
+          <thead>
+            <tr>
+              <th>Head</th>
+              <th class="num" title="The fracture beam's energy a second, before modules">Power</th>
+              <th class="num" title="After the fit's modules and the rock's resistance">Delivered</th>
+              <th class="num" title="Delivered over what the rock needs">Ratio</th>
+              <th class="num" title="The heaviest rock this head breaks at this resistance">Up to</th>
+              <th>Verdict</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted crack-note" id="crack-matrix-note"></p>
+    </div>
+
     <h3 class="spaced">Where to go</h3>
     <p class="muted caption">
       Every place ranked by what a rock found there is worth. <em>Rich</em> is how

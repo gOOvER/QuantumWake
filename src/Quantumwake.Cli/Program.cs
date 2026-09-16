@@ -75,6 +75,57 @@ if (GetOption(args, "--screen") is { } screenFile)
     return Screen(screenFile, install.RootPath, GetOption(args, "--catalogue"));
 }
 
+// The mining model as the install has it: the constants, every mineral's
+// resistance and instability, every laser's power and modifiers, the modules
+// and the gadgets. The table behind docs/mining.md; run it again after a
+// patch and against the community tools, which read the same files.
+if (args.Contains("--mining"))
+{
+    var cache = Path.Combine(Path.GetDirectoryName(SessionStore.DatabasePathFor(install.RootPath))!, "commodities.json");
+    var mining = GameCommodities.Load(install.RootPath, cache).Mining;
+
+    if (mining.Constants is { } k)
+    {
+        Console.WriteLine($"constants: capacity {k.PowerCapacityPerMass}/kg, decay {k.DecayPerMass}/kg/s, window {k.OptimalWindowSize} (max {k.OptimalWindowMaxSize}, factor {k.OptimalWindowFactor}), "
+            + $"resistance curve {k.ResistanceCurveFactor}, thinness curve {k.OptimalWindowThinnessCurveFactor}, fill {k.ControlledBreakingFillRate}/s (danger {k.DangerBreakingFillRate}/s), "
+            + $"absorbable below {k.AbsorbableVolumeThreshold}, {k.CentiScuPerVolume} cSCU per volume");
+    }
+    else Console.WriteLine("constants: none read");
+
+    Console.WriteLine($"\n{mining.Minerals.Count} minerals");
+    foreach (var m in mining.Minerals)
+        Console.WriteLine($"  {m.Name,-24} {m.Method,-6} resistance {m.Resistance,6:0.00}  instability {m.Instability,6:0}  window {m.WindowMidpoint:0.00}±{m.WindowRandomness:0.00} thin {m.WindowThinness,5:0.0}  explosion ×{m.ExplosionMultiplier,-5:0}  cluster {m.ClusterFactor:0.00}  [{m.Class}]");
+
+    static string Mods(MiningModifiers x) => string.Join(" ", new[]
+    {
+        x.Resistance != 0 ? $"res {x.Resistance:+0.#;-0.#}%" : null,
+        x.Instability != 0 ? $"inst {x.Instability:+0.#;-0.#}%" : null,
+        x.WindowSize != 0 ? $"window {x.WindowSize:+0.#;-0.#}%" : null,
+        x.WindowRate != 0 ? $"rate {x.WindowRate:+0.#;-0.#}%" : null,
+        x.CatastrophicRate != 0 ? $"overcharge {x.CatastrophicRate:+0.#;-0.#}%" : null,
+        x.ShatterDamage != 0 ? $"shatter {x.ShatterDamage:+0.#;-0.#}%" : null,
+        x.ClusterFactor != 0 ? $"cluster {x.ClusterFactor:+0.#;-0.#}%" : null,
+    }.Where(s => s is not null));
+
+    Console.WriteLine($"\n{mining.Lasers.Count} lasers");
+    foreach (var l in mining.Lasers)
+        Console.WriteLine($"  S{l.Size} {l.Name,-28} power {l.Power,6:0}  extraction {l.ExtractionPower,5:0}  filter {l.FilterModifier,3:0}%  throttle min {l.ThrottleMinimum:0.00}  {Mods(l.Modifiers)}  [{l.Class}]");
+
+    Console.WriteLine($"\n{mining.Modules.Count} modules");
+    foreach (var m in mining.Modules)
+        Console.WriteLine($"  {(m.Active ? "active " : "passive")} {m.Name,-22} power ×{m.PowerMultiplier:0.00}  extraction ×{m.ExtractionMultiplier:0.00}  filter {m.FilterModifier,4:0.#}%  {(m.Active ? $"{m.Lifetime:0}s × {m.Charges}  " : "")}{Mods(m.Modifiers)}  [{m.Class}]");
+
+    Console.WriteLine($"\n{mining.Gadgets.Count} gadgets");
+    foreach (var g in mining.Gadgets)
+        Console.WriteLine($"  {g.Name,-12} {Mods(g.Modifiers)}  [{g.Class}]");
+
+    Console.WriteLine($"\n{mining.Compositions.Count} compositions");
+    foreach (var c in mining.Compositions.OrderBy(c => c.Class, StringComparer.OrdinalIgnoreCase))
+        Console.WriteLine($"  {c.Class,-36} {c.Name,-24} min {c.MinimumDistinctElements} distinct: {string.Join(", ", c.Parts.Select(p => $"{p.Element} {p.MinPercent:0}-{p.MaxPercent:0}% p{p.Probability:0.00}"))}");
+
+    return 0;
+}
+
 var liveOnly = args.Contains("--live-only");
 
 // Machine-readable mode. Everything the human report would say goes to stderr

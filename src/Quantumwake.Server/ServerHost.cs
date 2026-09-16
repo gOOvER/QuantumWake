@@ -1002,6 +1002,78 @@ public static class ServerHost
         // the Now page's mining focus asks the same question of.
         app.MapGet("/api/mining/places", (LogLibrary lib, UexData uex) => MiningPlaces(lib, uex));
 
+        // The mining model as the install has it - lasers, modules, gadgets,
+        // minerals, the game's constants - and the ships that carry a mining
+        // head, with how many and what size. Nothing here is from the logs,
+        // which record no mining; it is all read from the game files, and the
+        // page says so. Ready is false until the install has been read.
+        app.MapGet("/api/mining/model", (LogLibrary lib) =>
+        {
+            var mining = lib.GameCommodities.Mining;
+            var flown = lib.Stats().Ships.Select(s => s.ClassName).Where(c => c is not null).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            return Results.Ok(new
+            {
+                ready = mining.Lasers.Count > 0,
+                mining.Constants,
+                // Ship heads only: the S0 heads are the ROC's and the hand tool's,
+                // and the MPUV arm reuses the Arbor's name for a weaker beam.
+                lasers = mining.Lasers.Where(l => l.Size >= 1 && !l.Class.Contains("MPUV", StringComparison.OrdinalIgnoreCase)),
+                mining.Modules,
+                mining.Gadgets,
+                minerals = mining.Minerals.Where(m => m.Method == "Ship"),
+                // Ship heads only, as above: the ROC and the ATLS mine under the
+                // ground-vehicle constants, which this does not model.
+                ships = MiningShips(lib.Community).Where(s => s.Heads.Any(h => h.Size >= 1))
+                    .Select(s => new { s.Class, s.Name, s.Heads, flown = flown.Contains(s.Class) }),
+                rule = new
+                {
+                    RockCracking.RequiredWattsPerKg, RockCracking.SoloRatio, RockCracking.GadgetRatio,
+                    source = "scminer.rocks, 2026-09-15 - the community's line, not the game's",
+                },
+            });
+        });
+
+        // A rock as scanned against a fit: the verdict, and the same rock on
+        // every head of that size so the pilot sees what a different head
+        // would do without refitting.
+        app.MapPost("/api/mining/crack", (MiningCrackRequest request, LogLibrary lib) =>
+        {
+            var mining = lib.GameCommodities.Mining;
+            if (mining.Lasers.Count == 0)
+                return Results.BadRequest(new { message = "The game data has not been read yet; Settings says when it is ready." });
+
+            var lasers = mining.Lasers.ToDictionary(l => l.Class, StringComparer.OrdinalIgnoreCase);
+            var modules = mining.Modules.ToDictionary(m => m.Class, StringComparer.OrdinalIgnoreCase);
+            var gadget = request.Gadget is { Length: > 0 } g ? mining.Gadgets.FirstOrDefault(x => x.Class.Equals(g, StringComparison.OrdinalIgnoreCase)) : null;
+
+            var heads = (request.Heads ?? [])
+                .Where(h => h.Laser is { Length: > 0 } && lasers.ContainsKey(h.Laser))
+                .Select(h => new LaserFit(lasers[h.Laser],
+                    (h.Modules ?? []).Where(modules.ContainsKey).Select(m => modules[m]).ToList()))
+                .ToList();
+
+            var rock = new RockScan(Math.Max(0, request.MassKg), Math.Clamp(request.Resistance, 0, 100), Math.Clamp(request.Instability, 0, 100));
+            var verdict = RockCracking.Assess(mining.Constants, rock, heads, gadget);
+
+            // The matrix keeps the head count and each head's modules and
+            // swaps only the laser, size for size.
+            var size = heads.FirstOrDefault()?.Laser.Size ?? 1;
+            var matrix = mining.Lasers
+                .Where(l => l.Size == size && !l.Class.Contains("MPUV", StringComparison.OrdinalIgnoreCase))
+                .Select(l =>
+                {
+                    var swapped = heads.Count == 0
+                        ? [new LaserFit(l, [])]
+                        : heads.Select(h => new LaserFit(l, h.Modules)).ToList();
+                    var v = RockCracking.Assess(mining.Constants, rock, swapped, gadget);
+                    return new { laser = l.Class, l.Name, l.Power, v.PowerDelivered, v.Ratio, v.Verdict, v.MaxCrackableMassKg, v.EffectiveResistancePercent };
+                })
+                .OrderByDescending(r => r.Ratio);
+
+            return Results.Ok(new { verdict, matrix });
+        });
+
         // What the game says each place has. Separate from the service badges,
         // which are UEX's account of where you can actually trade: this is the
         // star map's own list, and the two disagree usefully often.
@@ -4076,6 +4148,41 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
             ? []
             : [.. value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
 
+    /// <summary>One mining head on a hull: the port, its size, and the laser it ships with.</summary>
+    public sealed record MiningHead(string PortId, int Size, string? Stock);
+
+    /// <summary>A hull with mining heads.</summary>
+    public sealed record MiningShip(string Class, string Name, IReadOnlyList<MiningHead> Heads);
+
+    /// <summary>
+    /// The hulls that carry a mining head, from the community dataset's
+    /// loadout trees: a <c>WeaponMining</c> port anywhere in the tree. The
+    /// Prospector's sits under its arm's gimbal, the MOLE's three under its
+    /// cab turrets, the Golem's under its arm - the tree is walked, not
+    /// the top level. Variants (Alliance, Teach's) are their own hulls and
+    /// come out on their own.
+    /// </summary>
+    static IEnumerable<MiningShip> MiningShips(CommunityData community)
+    {
+        foreach (var ship in community.GarageShips.Values.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            var heads = new List<MiningHead>();
+            Walk(ship.Loadout);
+            if (heads.Count > 0) yield return new MiningShip(ship.Class, ship.Name, heads);
+
+            void Walk(IReadOnlyList<FitPort> ports)
+            {
+                foreach (var port in ports)
+                {
+                    if (string.Equals(port.Type, "WeaponMining", StringComparison.Ordinal)
+                        || (port.Class?.StartsWith("Mining_Laser_", StringComparison.OrdinalIgnoreCase) ?? false))
+                        heads.Add(new MiningHead(port.PortId, port.MaxSize, port.Class));
+                    Walk(port.Children);
+                }
+            }
+        }
+    }
+
     static IEnumerable<MiningPlace> MiningPlaces(LogLibrary lib, UexData uex)
     {
         var spawns = lib.GameCommodities.Spawns.Count > 0
@@ -4576,6 +4683,12 @@ public sealed record ReadingDismissRequest(string Shot, bool Dismissed = true);
 
 /// <summary>Which screenshot to put through the reader again.</summary>
 public sealed record ReadingRereadRequest(string Shot);
+
+/// <summary>Body of POST /api/mining/crack: the rock as the HUD scanned it, and the fit.</summary>
+public sealed record MiningCrackRequest(double MassKg, double Resistance, double Instability, List<MiningHeadRequest>? Heads, string? Gadget);
+
+/// <summary>One head of the fit: the laser's class and the module classes in its slots.</summary>
+public sealed record MiningHeadRequest(string Laser, List<string>? Modules);
 
 /// <summary>The pilot-owned details attached to an existing point of interest.</summary>
 /// <param name="Note">Why the point was kept; null leaves the note as it is, blank clears it.</param>

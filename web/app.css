@@ -4918,3 +4918,32 @@ body.overlay .ship-picture { display: none; }
 .shop-result { margin: 8px 0 0; padding: 8px 12px; border: 1px solid var(--cyan-deep); border-radius: 5px; font-size: 12.5px; color: var(--text); }
 .shop-result .muted { display: block; margin-top: 2px; }
 .shop-result a { color: var(--cyan); }
+
+/* ---------- can it be cracked? ---------- */
+.crack { margin: 10px 0 18px; display: grid; gap: 10px; }
+.crack-rock { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: flex-end; }
+.crack-rock label { display: flex; flex-direction: column; gap: 3px; font-size: 10.5px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+.crack-rock .search { width: 9ch; }
+.crack-rock .unit { position: absolute; right: 8px; bottom: 6px; font-size: 10px; color: var(--muted); pointer-events: none; }
+.crack-rock label:has(.unit) { position: relative; }
+.crack-heads { display: grid; gap: 6px; }
+.crack-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 8px; border: 1px solid var(--rule); background: rgba(0, 0, 0, .18); }
+.crack-head-label { font-family: var(--mono); font-size: 10.5px; color: var(--muted); min-width: 9ch; }
+.crack-head .crack-laser { flex: 1 1 26ch; min-width: 0; }
+.crack-head .crack-module { flex: 1 1 18ch; min-width: 0; }
+.crack-call { font-size: 13px; padding: 8px 10px; border-left: 3px solid var(--rule-hot); background: rgba(0, 0, 0, .18); }
+.crack-call.good { border-left-color: var(--green); }
+.crack-call.good b { color: var(--green); }
+.crack-call.warn { border-left-color: var(--amber); }
+.crack-call.warn b { color: var(--amber); }
+.crack-call.bad { border-left-color: var(--red, #e06060); }
+.crack-call.bad b { color: var(--red, #e06060); }
+.crack-facts { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 11.5px; }
+.crack-facts .k { color: var(--muted); margin-right: 6px; }
+.crack-facts b { font-family: var(--mono); }
+.crack-notes { margin: 0; padding-left: 16px; font-size: 11px; color: var(--dim); line-height: 1.5; }
+#crack-matrix tr.current td { color: var(--text); font-weight: 600; }
+#crack-matrix td.crack-good { color: var(--green); }
+#crack-matrix td.crack-warn { color: var(--amber); }
+#crack-matrix td.crack-bad { color: var(--red, #e06060); }
+.crack-note { font-size: 11px; margin: 4px 0 0; line-height: 1.5; }

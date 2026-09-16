@@ -365,6 +365,25 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.14.0
+
+- **Can it be cracked?** A rock calculator on the Mining page. Pick the ship
+  — the heads come from its own loadout, the Prospector's one S1, the MOLE's
+  three S2, the Golem's Pitman — put the HUD's mass, resistance and
+  instability in, choose the lasers, up to three modules a head and a gadget
+  on the rock, and it says whether the fit breaks it, how much power reaches
+  the rock against what it needs, the heaviest rock the fit breaks at that
+  resistance, and the same rock on every other head of that size. The
+  lasers, modules, gadgets and minerals are read from your own game files —
+  18 heads, 29 modules, 6 gadgets, 31 ship minerals, the game's rock
+  constants — and their figures agree with scminer.rocks's, which reads the
+  same files. **The line itself is not the game's**: it does not publish how
+  mass, resistance and power meet, so the verdict uses the community's rule
+  (0.36 W per kilogram at zero resistance, solo from 115 %, with a gadget
+  from 70 %), is called an estimate, and says whose it is. The game's own
+  constants for the rock are quoted beside it. `docs/mining.md` has the
+  whole model and the dump.
+
 ### 0.13.33
 
 - **The Garage counts your pips.** The HUD draws one lead indicator per
