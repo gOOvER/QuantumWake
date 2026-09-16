@@ -993,10 +993,25 @@ public static class ServerHost
         // somebody dug it up rather than hauled it, and it is an inference
         // rather than an observation. Worded that way on the page.
         app.MapGet("/api/mining/mine", (LogLibrary lib, UexData uex) =>
-            lib.Market(uex)
+        {
+            // Only what the game's deposit tables say comes out of a rock. Sold
+            // and never bought is also how a mission reward or a found trinket
+            // leaves the hold - a Year of the Rat Envelope was listed as ore on
+            // this install - so the inference is kept to the minerals.
+            var mineable = SpawnMerge.Merge(lib.GameCommodities.Spawns, lib.Community.ResourceSpawns)
+                .Select(s => s.Resource)
+                .Concat(lib.GameCommodities.Mining.Minerals.Select(m => m.Name))
+                .Concat(lib.GameCommodities.Mining.Minerals.Select(m => m.Name
+                    .Replace(" (Raw)", "", StringComparison.OrdinalIgnoreCase).Replace("Raw ", "", StringComparison.OrdinalIgnoreCase)
+                    .Replace(" (Ore)", "", StringComparison.OrdinalIgnoreCase).Replace("Ore ", "", StringComparison.OrdinalIgnoreCase).Trim()))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            return lib.Market(uex)
                 .Where(e => e.MyScuSold > 0 && e.MyScuBought == 0)
+                .Where(e => mineable.Count == 0 || mineable.Contains(e.Name))
                 .Select(e => new { e.Name, scu = e.MyScuSold, revenue = e.MyRevenue, trips = e.MyTrades })
-                .OrderByDescending(e => e.revenue));
+                .OrderByDescending(e => e.revenue);
+        });
 
         // Where to go, rather than what to shoot. Ranked in MiningPlaces, which
         // the Now page's mining focus asks the same question of.

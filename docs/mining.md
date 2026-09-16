@@ -15,7 +15,10 @@ of it and a little more. None of it was being read: the Garage's community
 part digest carries a mining laser's mass and health and nothing it does to a
 rock, and the logs record no mining at all - no scan, no fracture, no
 extraction - which is why the Mining page's "mine" figure is ore sold that
-was never bought, an inference, and stays so.
+was never bought, an inference, and stays so - kept to the minerals the
+deposit tables name since 0.14.5, because a mission reward or a found
+trinket leaves the hold the same way (a Year of the Rat Envelope sold for
+60,000 aUEC was listed as a SCU of ore on this install).
 
 ## What the files hold
 

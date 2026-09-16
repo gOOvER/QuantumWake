@@ -365,7 +365,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.4
+### 0.14.5
 
 - **A second copy of Quantum Wake closes itself.** Starting the app while it
   was already running used to leave the second copy up without a dashboard
@@ -413,6 +413,8 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   take is what the reader gets checked against. Instability is left as
   typed: the panel prints a figure and the rule wants a percentage, and
   nothing measured says they are the same scale.
+
+- **What you brought back lists only minerals.** The Mining page infers what you mined from ore sold that was never bought; a mission reward or a found trinket leaves the hold the same way, and a Year of the Rat Envelope had been listed as a SCU of ore. The list is kept to the minerals the game's deposit tables name.
 
 - **A ship you own but never flew has a card.** The Fleet page's cards are sorties, so a ship the Fleet Manager listed that the logs never saw aboard — the Ironclad, delivered and not yet flown — was a line in the berth list and on no card. It gets a card under the berths now, marked *never flown*, with its picture, the terminal's word on where it is, and the Garage.
 
