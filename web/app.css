@@ -4947,3 +4947,5 @@ body.overlay .ship-picture { display: none; }
 #crack-matrix td.crack-warn { color: var(--amber); }
 #crack-matrix td.crack-bad { color: var(--red, #e06060); }
 .crack-note { font-size: 11px; margin: 4px 0 0; line-height: 1.5; }
+.crack-deposit { margin-top: 4px; }
+.crack-noslots { font-size: 10.5px; }

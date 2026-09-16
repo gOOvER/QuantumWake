@@ -1007,10 +1007,35 @@ public static class ServerHost
         // head, with how many and what size. Nothing here is from the logs,
         // which record no mining; it is all read from the game files, and the
         // page says so. Ready is false until the install has been read.
-        app.MapGet("/api/mining/model", (LogLibrary lib) =>
+        app.MapGet("/api/mining/model", (LogLibrary lib, UexData uex) =>
         {
             var mining = lib.GameCommodities.Mining;
             var flown = lib.Stats().Ships.Select(s => s.ClassName).Where(c => c is not null).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var minerals = mining.Minerals.ToDictionary(m => m.Class, StringComparer.OrdinalIgnoreCase);
+
+            // What a SCU of each mineral sells for, refined, as the places
+            // table values rock: UEX names the refined commodity ("Quantainium")
+            // and the element names the raw ("Quantainium (Raw)", "Ore Iron").
+            static string Refined(string name) => name
+                .Replace(" (Raw)", "", StringComparison.OrdinalIgnoreCase).Replace("Raw ", "", StringComparison.OrdinalIgnoreCase)
+                .Replace(" (Ore)", "", StringComparison.OrdinalIgnoreCase).Replace("Ore ", "", StringComparison.OrdinalIgnoreCase).Trim();
+            decimal? SellPerScu(string elementClass) =>
+                minerals.TryGetValue(elementClass, out var m) && uex.Best(Refined(m.Name))?.BestSell is { } best && best > 0 ? best : null;
+
+            // Ship deposits only: every element in the mix is a ship mineral.
+            var compositions = mining.Compositions
+                .Where(c => c.Parts.All(pt => minerals.TryGetValue(pt.Element, out var m) && m.Method == "Ship"))
+                .Select(c => new
+                {
+                    c.Class, c.Name, c.MinimumDistinctElements,
+                    parts = c.Parts.Select(pt => new
+                    {
+                        pt.Element, name = minerals[pt.Element].Name, pt.MinPercent, pt.MaxPercent, pt.Probability,
+                        sellPerScu = SellPerScu(pt.Element),
+                    }).ToList(),
+                })
+                .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ThenBy(c => c.Class, StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
             return Results.Ok(new
             {
@@ -1022,6 +1047,8 @@ public static class ServerHost
                 mining.Modules,
                 mining.Gadgets,
                 minerals = mining.Minerals.Where(m => m.Method == "Ship"),
+                compositions,
+                pricesKnown = compositions.Any(c => c.parts.Any(pt => pt.sellPerScu is not null)),
                 // Ship heads only, as above: the ROC and the ATLS mine under the
                 // ground-vehicle constants, which this does not model.
                 ships = MiningShips(lib.Community).Where(s => s.Heads.Any(h => h.Size >= 1))

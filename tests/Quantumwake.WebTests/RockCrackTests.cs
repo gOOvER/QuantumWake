@@ -11,12 +11,20 @@ public class RockCrackTests
         {"ready":true,
          "constants":{"powerCapacityPerMass":10,"decayPerMass":0.2,"optimalWindowSize":0.1,"optimalWindowMaxSize":0.5},
          "lasers":[
-           {"class":"Mining_Laser_GRIN_Arbor_S1","name":"Arbor MH1 Mining Laser","size":1,"power":2340,"modifiers":{"instability":-35,"windowSize":40,"resistance":25}},
-           {"class":"Mining_Laser_THCN_Helix_S1","name":"Helix I Mining Laser","size":1,"power":3900,"modifiers":{"windowSize":-40,"resistance":-30}},
-           {"class":"Mining_Laser_GRIN_Arbor_S2","name":"Arbor MH2 Mining Laser","size":2,"power":2900,"modifiers":{}}],
+           {"class":"Mining_Laser_GRIN_Arbor_S1","name":"Arbor MH1 Mining Laser","size":1,"power":2340,"slots":1,"modifiers":{"instability":-35,"windowSize":40,"resistance":25}},
+           {"class":"Mining_Laser_THCN_Helix_S1","name":"Helix I Mining Laser","size":1,"power":3900,"slots":2,"modifiers":{"windowSize":-40,"resistance":-30}},
+           {"class":"Mining_Laser_SHIN_Klein_S1","name":"Klein-S1 Mining Laser","size":1,"power":3120,"slots":0,"modifiers":{"resistance":-45}},
+           {"class":"Mining_Laser_GRIN_Arbor_S2","name":"Arbor MH2 Mining Laser","size":2,"power":2900,"slots":2,"modifiers":{}}],
          "modules":[{"class":"Mining_Modules_Active_Surge","name":"Surge Module","active":true,"lifetime":15,"charges":7,"powerMultiplier":1.5,"modifiers":{"resistance":-15.5,"instability":10}}],
          "gadgets":[{"class":"Mining_Gadget_SHIN_Sabir","name":"Sabir","modifiers":{"resistance":-50,"windowSize":50,"instability":15}}],
-         "minerals":[{"class":"Quantainium_Raw","name":"Quantainium (Raw)","resistance":0.95,"instability":1000,"windowMidpoint":0.5,"windowRandomness":0.2,"explosionMultiplier":260}],
+         "minerals":[{"class":"Quantainium_Raw","name":"Quantainium (Raw)","resistance":0.95,"instability":1000,"windowMidpoint":0.5,"windowRandomness":0.2,"explosionMultiplier":260},
+                     {"class":"Copper_Ore","name":"Copper (Ore)","resistance":-0.7,"instability":50,"windowMidpoint":0.6,"windowRandomness":0.15,"explosionMultiplier":-20}],
+         "compositions":[
+           {"class":"Asteroid_PType_Copper","name":"Asteroid (P-Type)","minimumDistinctElements":3,
+            "parts":[{"element":"Copper_Ore","name":"Copper (Ore)","minPercent":30,"maxPercent":70,"probability":1,"sellPerScu":4200},
+                     {"element":"Quantainium_Raw","name":"Quantainium (Raw)","minPercent":20,"maxPercent":50,"probability":0.02,"sellPerScu":170000}]},
+           {"class":"Asteroid_PType_Tin","name":"Asteroid (P-Type)","minimumDistinctElements":3,"parts":[{"element":"Copper_Ore","name":"Copper (Ore)","minPercent":10,"maxPercent":20,"probability":0.5,"sellPerScu":4200}]}],
+         "pricesKnown":true,
          "ships":[
            {"class":"ARGO_MOLE","name":"Argo MOLE","heads":[{"portId":"a","size":2,"stock":"Mining_Laser_GRIN_Arbor_S2"},{"portId":"b","size":2,"stock":"Mining_Laser_GRIN_Arbor_S2"},{"portId":"c","size":2,"stock":"Mining_Laser_GRIN_Arbor_S2"}],"flown":false},
            {"class":"MISC_Prospector","name":"MISC Prospector","heads":[{"portId":"p","size":1,"stock":"Mining_Laser_GRIN_Arbor_S1"}],"flown":true}],
@@ -55,8 +63,9 @@ public class RockCrackTests
         var heads = "__dom.node('#crack-heads').querySelectorAll('.crack-head')";
         Assert.Equal(1, page.Count($"{heads}.length"));
         Assert.Equal("Mining_Laser_GRIN_Arbor_S1", page.Text($"{heads}[0].querySelectorAll('.crack-laser')[0].value"));
-        // Only S1 heads are offered on an S1 port.
-        Assert.Equal(2, page.Count($"{heads}[0].querySelectorAll('.crack-laser')[0].options.length"));
+        // Only S1 heads are offered on an S1 port, and the Arbor MH1 has one module slot.
+        Assert.Equal(3, page.Count($"{heads}[0].querySelectorAll('.crack-laser')[0].options.length"));
+        Assert.Equal(1, page.Count($"{heads}[0].querySelectorAll('.crack-module').length"));
 
         Assert.Contains("0.36 W per kilogram", page.NodeText("#crack-rule"));
         Assert.Contains("scminer.rocks", page.NodeText("#crack-rule"));
@@ -83,7 +92,58 @@ public class RockCrackTests
         var matrix = page.NodeText("#crack-matrix tbody");
         Assert.Contains("Helix I Mining Laser", matrix);
         Assert.Contains("10,833", matrix);
-        Assert.Contains("three per head because the game's count per head is not read yet", page.NodeText("#crack-matrix-note"));
+        Assert.Contains("only the laser changes", page.NodeText("#crack-matrix-note"));
+    }
+
+    /// <summary>The slots follow the head: two on a Helix I, none on a Klein-S1 - and a pick survives where its slot does.</summary>
+    [Fact]
+    public void Module_slots_follow_the_head()
+    {
+        var page = Opened();
+        var row = "__dom.node('#crack-heads').querySelectorAll('.crack-head')[0]";
+
+        page.Do($"{row}.querySelectorAll('.crack-module')[0].value = 'Mining_Modules_Active_Surge'; {row}.querySelectorAll('.crack-laser')[0].value = 'Mining_Laser_THCN_Helix_S1'; renderCrackSlots({row});");
+        Assert.Equal(2, page.Count($"{row}.querySelectorAll('.crack-module').length"));
+        Assert.Equal("Mining_Modules_Active_Surge", page.Text($"{row}.querySelectorAll('.crack-module')[0].value"));
+
+        page.Do($"{row}.querySelectorAll('.crack-laser')[0].value = 'Mining_Laser_SHIN_Klein_S1'; renderCrackSlots({row});");
+        Assert.Equal(0, page.Count($"{row}.querySelectorAll('.crack-module').length"));
+        Assert.Contains("no module slots", page.Text($"{row}.textContent"));
+    }
+
+    /// <summary>
+    /// A deposit shows the game's mix - share when present, chance of being
+    /// present - with the refined price a SCU, a rough worth of a SCU of the
+    /// mix, and the honest gap: nothing read turns kilograms into SCU.
+    /// </summary>
+    [Fact]
+    public void A_deposit_shows_its_mix_and_says_what_per_rock_would_need()
+    {
+        var page = Opened();
+
+        // Two presets share the HUD name, so the class's mineral tells them apart.
+        Assert.Contains("Asteroid (P-Type) · copper", page.Text("[...__dom.node('#crack-deposit').options].map(o => o.textContent).join('|')"));
+
+        page.Do("__dom.node('#crack-deposit').value = 'Asteroid_PType_Copper'; renderCrackDeposit();");
+
+        Assert.False(page.Truth("__dom.node('#crack-deposit-panel').hidden"));
+        var mix = page.NodeText("#crack-mix tbody");
+        Assert.Contains("Copper (Ore)", mix);
+        Assert.Contains("30–70%", mix);
+        Assert.Contains("100%", mix);
+        Assert.Contains("4,200", mix);
+        Assert.Contains("res -0.7", mix);
+        Assert.Contains("Quantainium (Raw)", mix);
+        Assert.Contains("2%", mix);
+
+        var note = page.NodeText("#crack-mix-note");
+        Assert.Contains("at least 3 minerals a rock", note);
+        // 0.5 × 1 × 4,200 + 0.35 × 0.02 × 170,000 = 2,100 + 1,190 = 3,290.
+        Assert.Contains("Roughly 3,290 aUEC a SCU", note);
+        Assert.Contains("Per rock is not given", note);
+
+        // The likeliest mineral is picked for the notes.
+        Assert.Equal("Copper_Ore", page.Text("__dom.node('#crack-mineral').value"));
     }
 
     [Fact]

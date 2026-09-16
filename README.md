@@ -381,8 +381,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   mass, resistance and power meet, so the verdict uses the community's rule
   (0.36 W per kilogram at zero resistance, solo from 115 %, with a gadget
   from 70 %), is called an estimate, and says whose it is. The game's own
-  constants for the rock are quoted beside it. `docs/mining.md` has the
-  whole model and the dump.
+  constants for the rock are quoted beside it. Each head takes as many
+  modules as it has slots — one on the Arbor MH1, three on the Helix II,
+  none on the Klein-S1 — read from the head itself. Pick a deposit and the
+  game's mix for it is shown, share and chance per mineral with the refined
+  price a SCU and a rough worth of a SCU of the mix; per rock is not given,
+  because nothing in the files turns the HUD's kilograms into SCU, and it
+  says so. `docs/mining.md` has the whole model and the dump.
 
 ### 0.13.33
 

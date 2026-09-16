@@ -1731,6 +1731,9 @@
           <input type="number" id="crack-instability" class="search" min="0" max="100" step="1" value="15" title="The HUD's instability, in percent">
           <span class="unit">%</span>
         </label>
+        <label>Deposit
+          <select id="crack-deposit" class="select" title="The kind of rock, as the game defines its mix; picks the likeliest mineral below"></select>
+        </label>
         <label>Mineral
           <select id="crack-mineral" class="select" title="What most of the rock is - for the notes; the HUD's figures above are what count"></select>
         </label>
@@ -1740,6 +1743,23 @@
       </div>
       <div class="crack-heads" id="crack-heads"></div>
       <div class="crack-verdict" id="crack-verdict"></div>
+      <div class="crack-deposit" id="crack-deposit-panel" hidden>
+        <div class="table-wrap">
+          <table id="crack-mix">
+            <thead>
+              <tr>
+                <th>Mineral</th>
+                <th class="num" title="The share of the rock this mineral takes when it is present, as the game's preset has it">Share</th>
+                <th class="num" title="How likely the preset is to include it at all">Chance</th>
+                <th class="num" title="UEX's best sell for a SCU, refined - as the places table values rock">Refined /SCU</th>
+                <th class="num" title="The rock's resistance and instability figures for this mineral, from the game's element table">Element</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="muted crack-note" id="crack-mix-note"></p>
+      </div>
       <div class="table-wrap">
         <table id="crack-matrix">
           <thead>

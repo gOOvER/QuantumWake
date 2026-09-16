@@ -96,16 +96,39 @@ already reads that HUD's family; a `Mining` frame kind reading those four
 figures is the natural next step, and it would feed this calculator without
 a form.
 
+## Module slots
+
+The head's own item ports (`SItemPortContainerComponentParams.Ports`, a
+class array) name the slots: `BONE_ItemPort_Consumable_1`, `_2`, `_3`
+take a `MiningModifier`; the `VEN` port beside them takes a weapon
+attachment and is not one. On this install: Arbor MH1, Hofstede-S1, Lancet
+MH1 and Klein-S2 one; Helix I, Impact I, Pitman, Arbor MH2, Hofstede-S2 and
+Lancet MH2 two; Helix II and Impact II three; Klein-S1 none. The page shows
+that many selects per head and says "no module slots" for the Klein-S1.
+
+## The deposit on the page
+
+Picking a deposit shows the preset's mix - each mineral's share when it is
+present and its chance of being present - with UEX's best sell for the
+refined mineral a SCU beside it, the way the places table values rock (the
+element's "(Raw)"/"Ore" stripped to reach the UEX name). The likeliest
+mineral goes into the notes. A rough worth of a SCU of the mix is given -
+middle share × chance × refined price, summed - and called rough: the game
+normalises the shares of the minerals that turn up and this does not.
+
+**Per rock is not given, and says so.** The HUD's mass is kilograms; the
+game's `cSCUPerVolume 3` is cargo per unit of *volume*, and nothing read
+carries a density to get from one to the other. scminer's "Is It Worth
+Mining?" takes the extracted cSCU as input for the same reason. The
+extraction beam's power is read and unused until that gap is closed.
+
 ## Not read yet
 
-- Module slots per head. The page offers three per head and says so; the
-  count is on the head's item ports and is the next thing to read.
-- Extraction: the second beam's power is read and unused; extraction rate
-  against `absorbableVolumeThreshold` and `cSCUPerVolume` would give SCU per
-  fracture, and with the quality bands and UEX prices already on the Mining
-  page, value per rock.
-- The compositions on the page. Read and dumped, not yet shown; the "what is
-  this rock likely to be" question they answer belongs beside the verdict.
+- The scan HUD. It prints the four inputs - mass, resistance, instability,
+  and the composition with percentages - and a `Mining` frame kind for the
+  screen reader would fill the form from a screenshot. Every reader so far
+  was written from a frame already in the log, and there is no mining frame
+  on this install: the first one a pilot takes is what it gets written from.
 
 ## The dump
 
@@ -113,24 +136,24 @@ a form.
 
 ```
 18 lasers
-  S0 Arbor MHV Mining Laser       power      1  extraction     0  filter   0%  throttle min 0.20  inst -40%  [Mining_Laser_GRIN_Arbor_S0]
-  S0 Lawson Mining Laser          power      1  extraction     0  filter   0%  throttle min 0.20  res -40% inst +30% window +40%  [Mining_Laser_SHIN_Klein_S0]
-  S0 Mining Laser SHIN Hofstede S0 power      1  extraction     0  filter   0%  throttle min 0.20  res -40% inst +30% window +40% rate +20%  [Mining_Laser_SHIN_Hofstede_S0]
-  S0 Mining Laser THCN Helix S0   power      1  extraction     0  filter   0%  throttle min 0.15  window -40% rate +20%  [Mining_Laser_THCN_Helix_S0]
-  S1 Arbor MH1 Mining Laser       power   1850  extraction  1000  filter   0%  throttle min 0.00    [Mining_Laser_MPUV_Arm]
-  S1 Arbor MH1 Mining Laser       power   2340  extraction  1850  filter  30%  throttle min 0.05  res +25% inst -35% window +40%  [Mining_Laser_GRIN_Arbor_S1]
-  S1 Helix I Mining Laser         power   3900  extraction  1850  filter  30%  throttle min 0.20  res -30% window -40%  [Mining_Laser_THCN_Helix_S1]
-  S1 Hofstede-S1 Mining Laser     power   2600  extraction  1295  filter  30%  throttle min 0.05  res -30% inst +10% window +60% rate +20%  [Mining_Laser_SHIN_Hofstede_S1]
-  S1 Impact I Mining Laser        power   2600  extraction  2775  filter  30%  throttle min 0.20  res +10% inst -10% window +20% rate -40%  [Mining_Laser_THCN_Impact_S1]
-  S1 Klein-S1 Mining Laser        power   3120  extraction  2220  filter  30%  throttle min 0.15  res -45% inst +35% window +20%  [Mining_Laser_SHIN_Klein_S1]
-  S1 Lancet MH1 Mining Laser      power   3120  extraction  1850  filter  30%  throttle min 0.20  inst -10% window -60% rate +40%  [Mining_Laser_GRIN_Lancet_S1]
-  S1 Pitman Mining Laser          power   3900  extraction  1295  filter  40%  throttle min 0.20  res +25% inst +35% window +40% rate -40%  [Mining_Laser_DRAK_Golem_S1]
-  S2 Arbor MH2 Mining Laser       power   2900  extraction  2590  filter  40%  throttle min 0.05  res +25% inst -35% window +40%  [Mining_Laser_GRIN_Arbor_S2]
-  S2 Helix II Mining Laser        power   4930  extraction  2590  filter  40%  throttle min 0.30  res -30% window -40%  [Mining_Laser_THCN_Helix_S2]
-  S2 Hofstede-S2 Mining Laser     power   4060  extraction  1295  filter  40%  throttle min 0.10  res -30% inst +10% window +60% rate +20%  [Mining_Laser_SHIN_Hofstede_S2]
-  S2 Impact II Mining Laser       power   4060  extraction  3145  filter  40%  throttle min 0.30  res +10% inst -10% window +20% rate -40%  [Mining_Laser_THCN_Impact_S2]
-  S2 Klein-S2 Mining Laser        power   4350  extraction  2775  filter  40%  throttle min 0.20  res -45% inst +35% window +20%  [Mining_Laser_SHIN_Klein_S2]
-  S2 Lancet MH2 Mining Laser      power   4350  extraction  2590  filter  40%  throttle min 0.30  inst -10% window -60% rate +40%  [Mining_Laser_GRIN_Lancet_S2]
+  S0 Arbor MHV Mining Laser       power      1  extraction     0  slots 0  filter   0%  throttle min 0.20  inst -40%  [Mining_Laser_GRIN_Arbor_S0]
+  S0 Lawson Mining Laser          power      1  extraction     0  slots 0  filter   0%  throttle min 0.20  res -40% inst +30% window +40%  [Mining_Laser_SHIN_Klein_S0]
+  S0 Mining Laser SHIN Hofstede S0 power      1  extraction     0  slots 0  filter   0%  throttle min 0.20  res -40% inst +30% window +40% rate +20%  [Mining_Laser_SHIN_Hofstede_S0]
+  S0 Mining Laser THCN Helix S0   power      1  extraction     0  slots 0  filter   0%  throttle min 0.15  window -40% rate +20%  [Mining_Laser_THCN_Helix_S0]
+  S1 Arbor MH1 Mining Laser       power   1850  extraction  1000  slots 1  filter   0%  throttle min 0.00    [Mining_Laser_MPUV_Arm]
+  S1 Arbor MH1 Mining Laser       power   2340  extraction  1850  slots 1  filter  30%  throttle min 0.05  res +25% inst -35% window +40%  [Mining_Laser_GRIN_Arbor_S1]
+  S1 Helix I Mining Laser         power   3900  extraction  1850  slots 2  filter  30%  throttle min 0.20  res -30% window -40%  [Mining_Laser_THCN_Helix_S1]
+  S1 Hofstede-S1 Mining Laser     power   2600  extraction  1295  slots 1  filter  30%  throttle min 0.05  res -30% inst +10% window +60% rate +20%  [Mining_Laser_SHIN_Hofstede_S1]
+  S1 Impact I Mining Laser        power   2600  extraction  2775  slots 2  filter  30%  throttle min 0.20  res +10% inst -10% window +20% rate -40%  [Mining_Laser_THCN_Impact_S1]
+  S1 Klein-S1 Mining Laser        power   3120  extraction  2220  slots 0  filter  30%  throttle min 0.15  res -45% inst +35% window +20%  [Mining_Laser_SHIN_Klein_S1]
+  S1 Lancet MH1 Mining Laser      power   3120  extraction  1850  slots 1  filter  30%  throttle min 0.20  inst -10% window -60% rate +40%  [Mining_Laser_GRIN_Lancet_S1]
+  S1 Pitman Mining Laser          power   3900  extraction  1295  slots 2  filter  40%  throttle min 0.20  res +25% inst +35% window +40% rate -40%  [Mining_Laser_DRAK_Golem_S1]
+  S2 Arbor MH2 Mining Laser       power   2900  extraction  2590  slots 2  filter  40%  throttle min 0.05  res +25% inst -35% window +40%  [Mining_Laser_GRIN_Arbor_S2]
+  S2 Helix II Mining Laser        power   4930  extraction  2590  slots 3  filter  40%  throttle min 0.30  res -30% window -40%  [Mining_Laser_THCN_Helix_S2]
+  S2 Hofstede-S2 Mining Laser     power   4060  extraction  1295  slots 2  filter  40%  throttle min 0.10  res -30% inst +10% window +60% rate +20%  [Mining_Laser_SHIN_Hofstede_S2]
+  S2 Impact II Mining Laser       power   4060  extraction  3145  slots 3  filter  40%  throttle min 0.30  res +10% inst -10% window +20% rate -40%  [Mining_Laser_THCN_Impact_S2]
+  S2 Klein-S2 Mining Laser        power   4350  extraction  2775  slots 1  filter  40%  throttle min 0.20  res -45% inst +35% window +20%  [Mining_Laser_SHIN_Klein_S2]
+  S2 Lancet MH2 Mining Laser      power   4350  extraction  2590  slots 2  filter  40%  throttle min 0.30  inst -10% window -60% rate +40%  [Mining_Laser_GRIN_Lancet_S2]
 
 29 modules
   passive Deluge Module          power ×1.15  extraction ×0.85  filter    0%  res -15.5%  [Mining_Modules_Passive_Deluge]
@@ -170,5 +193,4 @@ a form.
   Sabir        res -50% inst +15% window +50%  [Mining_Gadget_SHIN_Sabir]
   Stalwart     inst -35% window -30% rate +50% cluster +30%  [Mining_Gadget_THCN_Stalwart]
   Waveshift    inst -35% window +100% rate -30%  [Mining_Gadget_GRIN_WaveShift]
-
 ```

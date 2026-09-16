@@ -38,6 +38,7 @@ public sealed record MiningModifiers(
 /// <param name="ExtractionPower">The extraction beam's, once the rock is in pieces.</param>
 /// <param name="FilterModifier">How much waste the head's own filter removes, in percent.</param>
 /// <param name="ThrottleMinimum">The lowest the beam can be throttled, as a share of full power.</param>
+/// <param name="Slots">Module ports on the head: the Arbor MH1 has one, most heads two.</param>
 public sealed record MiningLaser(
     string Class,
     string Name,
@@ -47,7 +48,8 @@ public sealed record MiningLaser(
     double FilterModifier,
     double ThrottleMinimum,
     MiningModifiers Modifiers,
-    string Manufacturer);
+    string Manufacturer,
+    int Slots = 0);
 
 /// <summary>A module in a laser's slot: passive and always on, or active with charges and a lifetime.</summary>
 /// <param name="PowerMultiplier">On the fracture beam's power; 1 is unchanged.</param>
@@ -308,6 +310,7 @@ public static class GameMining
         double power = 0, extraction = 0, filter = 0, throttleMin = 0;
         var modifiers = MiningModifiers.None;
         var seen = false;
+        var slots = 0;
 
         foreach (var component in core.PointerArray(record, "Components"))
         {
@@ -327,6 +330,19 @@ public static class GameMining
                     if (i == 0) power = energy; else if (i == 1) extraction = energy;
                 }
             }
+            else if (name == "SItemPortContainerComponentParams")
+            {
+                // The module slots: item ports that take a MiningModifier. The
+                // VEN port beside them takes a weapon attachment and is not one.
+                var ports = core.ClassArrayAt(at, s, "Ports");
+                foreach (var port in ports)
+                {
+                    var pat = core.InstanceAt(port);
+                    var types = core.ClassArrayAt(pat, port.StructIndex, "Types");
+                    if (types.Any(t => string.Equals(core.EnumAt(core.InstanceAt(t), t.StructIndex, "Type"), "MiningModifier", StringComparison.Ordinal)))
+                        slots++;
+                }
+            }
             else if (name == "SEntityComponentMiningLaserParams")
             {
                 seen = true;
@@ -340,7 +356,7 @@ public static class GameMining
 
         facts.TryGetValue(cls, out var item);
         return new MiningLaser(cls, item?.Name is { Length: > 0 } n && n != cls ? n : Words(cls),
-            item?.Size ?? SizeOf(cls), power, extraction, filter, throttleMin, modifiers, item?.Manufacturer ?? "");
+            item?.Size ?? SizeOf(cls), power, extraction, filter, throttleMin, modifiers, item?.Manufacturer ?? "", slots);
     }
 
     private static MiningModule? Module(DataCore core, DataRecord record, string cls, IReadOnlyDictionary<string, GameItem> facts)

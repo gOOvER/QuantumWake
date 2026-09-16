@@ -109,7 +109,7 @@ if (args.Contains("--mining"))
 
     Console.WriteLine($"\n{mining.Lasers.Count} lasers");
     foreach (var l in mining.Lasers)
-        Console.WriteLine($"  S{l.Size} {l.Name,-28} power {l.Power,6:0}  extraction {l.ExtractionPower,5:0}  filter {l.FilterModifier,3:0}%  throttle min {l.ThrottleMinimum:0.00}  {Mods(l.Modifiers)}  [{l.Class}]");
+        Console.WriteLine($"  S{l.Size} {l.Name,-28} power {l.Power,6:0}  extraction {l.ExtractionPower,5:0}  slots {l.Slots}  filter {l.FilterModifier,3:0}%  throttle min {l.ThrottleMinimum:0.00}  {Mods(l.Modifiers)}  [{l.Class}]");
 
     Console.WriteLine($"\n{mining.Modules.Count} modules");
     foreach (var m in mining.Modules)

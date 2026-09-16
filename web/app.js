@@ -4547,8 +4547,8 @@ $('#mining-log-form')?.addEventListener('submit', async (e) => {
  * every change to the form asks the server for the verdict, because the rule
  * lives in one place there and is tested there. The ship picked decides how
  * many heads there are and what size; each head starts as the laser the ship
- * ships with and takes up to three modules, which is more slots than any head
- * has - the game's slot count per head is not read yet, and the page says so.
+ * ships with and takes as many modules as that head has slots for - one on
+ * the Arbor MH1, three on the Helix II - read from the head's own item ports.
  */
 let crackModel = null;
 
@@ -4598,8 +4598,64 @@ async function loadCrackModel() {
   gadget.append(new Option('None', ''));
   for (const g of crackModel.gadgets) gadget.append(new Option(`${g.name} · ${describeModifiers(g.modifiers) || 'no figures'}`, g.class));
 
+  // The deposits: the HUD's name for the kind, and where several presets
+  // share it, the mineral the class names - Asteroid (P-Type) · copper.
+  const deposit = $('#crack-deposit');
+  deposit.textContent = '';
+  deposit.append(new Option('Not said', ''));
+  for (const c of crackModel.compositions || []) {
+    const bits = c.class.split('_');
+    const shared = (crackModel.compositions || []).filter((o) => o.name === c.name).length > 1;
+    const twin = shared && bits.length > 2 ? ` · ${bits.slice(2).join(' ').toLowerCase()}` : shared ? ` · ${bits.slice(1).join(' ').toLowerCase() || 'plain'}` : '';
+    deposit.append(new Option(`${c.name}${twin}`, c.class));
+  }
+
   renderCrackHeads();
+  renderCrackDeposit();
   await assessCrack();
+}
+
+/**
+ * The deposit's mix, as the game's preset has it: each mineral's share when
+ * present and its chance of being present, with UEX's refined price a SCU
+ * beside it. Value per rock is not given: the HUD's mass is kilograms and
+ * nothing read says what a kilogram of this rock is in SCU.
+ */
+function renderCrackDeposit() {
+  const panel = $('#crack-deposit-panel');
+  if (!panel || !crackModel) return;
+  const chosen = (crackModel.compositions || []).find((c) => c.class === $('#crack-deposit').value);
+  panel.hidden = !chosen;
+  if (!chosen) return;
+
+  const body = $('#crack-mix tbody');
+  body.textContent = '';
+  const parts = [...chosen.parts].sort((a, b) => (b.probability * (b.minPercent + b.maxPercent)) - (a.probability * (a.minPercent + a.maxPercent)));
+  for (const pt of parts) {
+    const mineral = crackModel.minerals.find((m) => m.class === pt.element);
+    const tr = el('tr');
+    tr.append(el('td', null, pt.name));
+    tr.append(el('td', 'num', `${fmtInt(pt.minPercent)}–${fmtInt(pt.maxPercent)}%`));
+    tr.append(el('td', 'num', `${Math.round(pt.probability * 100)}%`));
+    tr.append(el('td', 'num', pt.sellPerScu ? fmtInt(pt.sellPerScu) : '—'));
+    tr.append(el('td', 'num', mineral ? `res ${mineral.resistance} · inst ${fmtInt(mineral.instability)}` : '—'));
+    body.append(tr);
+  }
+
+  // A rough worth of a SCU of the mix: each mineral's middle share, times
+  // its chance, times the refined price. Rough because the shares of the
+  // minerals present are normalised by the game and are not here.
+  const priced = parts.filter((pt) => pt.sellPerScu);
+  const rough = priced.reduce((sum, pt) => sum + ((pt.minPercent + pt.maxPercent) / 200) * pt.probability * Number(pt.sellPerScu), 0);
+  $('#crack-mix-note').textContent = `${chosen.name}: at least ${chosen.minimumDistinctElements} mineral${chosen.minimumDistinctElements === 1 ? '' : 's'} a rock. `
+    + (priced.length
+      ? `Roughly ${fmtInt(rough)} aUEC a SCU of the mix at refined prices - middle share × chance × UEX's best sell, ${priced.length} of ${parts.length} minerals priced. `
+      : 'No UEX prices for these minerals (Settings). ')
+    + 'Per rock is not given: the HUD\'s mass is in kilograms and nothing read says what a kilogram of rock is in SCU.';
+
+  // The likeliest mineral is the one the notes speak to, unless the pilot picked one.
+  const mineral = $('#crack-mineral');
+  if (mineral && !mineral.value && parts[0]) mineral.value = parts[0].element;
 }
 
 /** "-30% resistance, +40% window" - the game's percentage points, in the game's numbers. */
@@ -4636,22 +4692,37 @@ function renderCrackHeads() {
     }
     if (head.stock && [...laser.options].some((o) => o.value === head.stock)) laser.value = head.stock;
     laser.title = 'The head; the ship\'s own is picked first';
-    laser.addEventListener('change', () => assessCrack().catch(() => {}));
+    laser.addEventListener('change', () => { renderCrackSlots(row); assessCrack().catch(() => {}); });
     row.append(laser);
-
-    for (let slot = 0; slot < 3; slot++) {
-      const module = document.createElement('select');
-      module.className = 'select tiny crack-module';
-      module.append(new Option(slot === 0 ? 'No module' : '—', ''));
-      for (const m of crackModel.modules) {
-        module.append(new Option(`${m.active ? '⚡ ' : ''}${m.name} · ×${m.powerMultiplier} power${m.modifiers ? (describeModifiers(m.modifiers) ? ', ' + describeModifiers(m.modifiers) : '') : ''}${m.active ? ` · ${m.lifetime}s × ${m.charges}` : ''}`, m.class));
-      }
-      module.title = 'A module in this head\'s slot; an active one counts as switched on';
-      module.addEventListener('change', () => assessCrack().catch(() => {}));
-      row.append(module);
-    }
+    renderCrackSlots(row);
     host.append(row);
   });
+}
+
+/** As many module slots as the head has: the Arbor MH1's one, the Helix II's three. Picks stay where a slot remains. */
+function renderCrackSlots(row) {
+  const laser = crackModel.lasers.find((l) => l.class === row.querySelector('.crack-laser')?.value);
+  const slots = laser?.slots ?? 0;
+  const kept = [...row.querySelectorAll('.crack-module')].map((m) => m.value);
+  for (const old of [...row.querySelectorAll('.crack-module')]) old.remove();
+  for (const old of [...row.querySelectorAll('.crack-noslots')]) old.remove();
+
+  if (slots === 0) {
+    row.append(el('span', 'muted crack-noslots', 'no module slots'));
+    return;
+  }
+  for (let slot = 0; slot < slots; slot++) {
+    const module = document.createElement('select');
+    module.className = 'select tiny crack-module';
+    module.append(new Option(slot === 0 ? 'No module' : '—', ''));
+    for (const m of crackModel.modules) {
+      module.append(new Option(`${m.active ? '⚡ ' : ''}${m.name} · ×${m.powerMultiplier} power${m.modifiers ? (describeModifiers(m.modifiers) ? ', ' + describeModifiers(m.modifiers) : '') : ''}${m.active ? ` · ${m.lifetime}s × ${m.charges}` : ''}`, m.class));
+    }
+    if (kept[slot] && crackModel.modules.some((m) => m.class === kept[slot])) module.value = kept[slot];
+    module.title = 'A module in this head\'s slot; an active one counts as switched on';
+    module.addEventListener('change', () => assessCrack().catch(() => {}));
+    row.append(module);
+  }
 }
 
 function crackRequest() {
@@ -4740,12 +4811,13 @@ async function assessCrack() {
     body.append(tr);
   }
   const heads = request.heads.length;
-  $('#crack-matrix-note').textContent = `Every S${crackModel.ships.find((s) => s.class === $('#crack-ship').value)?.heads[0]?.size ?? '?'} head on this rock, ${heads} to a fit with the same modules; only the laser changes. Module slots are shown as three per head because the game's count per head is not read yet.`;
+  $('#crack-matrix-note').textContent = `Every S${crackModel.ships.find((s) => s.class === $('#crack-ship').value)?.heads[0]?.size ?? '?'} head on this rock, ${heads} to a fit with the same modules; only the laser changes, and a module is carried over even where the other head has no slot for it.`;
 }
 
 $('#crack-ship')?.addEventListener('change', () => { renderCrackHeads(); assessCrack().catch(() => {}); });
 for (const id of ['#crack-mass', '#crack-resistance', '#crack-instability']) $(id)?.addEventListener('input', () => assessCrack().catch(() => {}));
 for (const id of ['#crack-mineral', '#crack-gadget']) $(id)?.addEventListener('change', () => assessCrack().catch(() => {}));
+$('#crack-deposit')?.addEventListener('change', () => { $('#crack-mineral').value = ''; renderCrackDeposit(); assessCrack().catch(() => {}); });
 
 async function loadMiningPlaces() {
   const body = $('#mining-places tbody');
