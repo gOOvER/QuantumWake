@@ -1683,9 +1683,12 @@
   </section>
 
   <!-- REFERENCE: mining and salvage spawns -->
-  <section id="view-mining" class="view">
+  <section id="view-mining" class="view mining-view">
     <div class="section-bar">
-      <h2>Mining &amp; salvage</h2>
+      <div class="mining-title">
+        <span class="mining-kicker">Resource operations</span>
+        <h2>Mining &amp; salvage</h2>
+      </div>
       <div class="controls">
         <select id="mining-kind" class="select" title="Filter by resource kind"></select>
         <select id="mining-system" class="select" title="Filter by system"></select>
@@ -1695,13 +1698,15 @@
     </div>
 
     <nav class="subtabs" id="mining-tabs" aria-label="Mining pages">
-      <button type="button" data-pane="go" class="active">Where to go</button>
-      <button type="button" data-pane="crack">Can it be cracked?</button>
-      <button type="button" data-pane="runs">Your runs</button>
+      <button type="button" data-pane="go" class="active"><span>01</span> Where to go</button>
+      <button type="button" data-pane="crack"><span>02</span> Can it be cracked?</button>
+      <button type="button" data-pane="runs"><span>03</span> Your runs</button>
     </nav>
 
     <div class="mining-pane active" id="mining-pane-go">
-    <p class="muted caption">
+    <div class="mining-brief">
+      <span class="mining-brief-mark" aria-hidden="true"></span>
+      <p class="muted caption">
       <span id="mining-source"></span>The game's own deposit tables, ranked by
       what a SCU of rock is actually worth &mdash; how much of the rock is this
       ore, times what it sells for. <em>Find</em> is how much of everything
@@ -1710,9 +1715,13 @@
       <b>There is no per-hour ranking</b>, because nothing in the logs says how
       long a rock takes to mine; respawn is how long it takes to come back,
       which is a different question.
-    </p>
-    <h3 class="spaced">Where to go</h3>
-    <p class="muted caption">
+      </p>
+    </div>
+    <div class="mining-section-head">
+      <div><span class="mining-overline">Prospect board</span><h3>Where to go</h3></div>
+      <span class="mining-section-note">Ranked by value per rock</span>
+    </div>
+    <p class="muted caption mining-explainer">
       Every place ranked by what a rock found there is worth. <em>Rich</em> is how
       much of an average rock here is actually ore; <em>Quality</em> is the best
       floor on offer, starred where this place beats the usual. <em>Per rock</em>
@@ -1722,7 +1731,7 @@
       respawn cannot be compared with a poor one on twenty minutes. Respawn is
       there so you can judge that yourself.
     </p>
-    <div class="table-wrap">
+    <div class="table-wrap mining-table-wrap">
       <table id="mining-places">
         <thead>
           <tr>
@@ -1739,9 +1748,12 @@
       </table>
     </div>
     <p class="muted caption" id="mining-places-note"></p>
-    <h3 class="spaced">Every deposit</h3>
+    <div class="mining-section-head mining-section-head-secondary">
+      <div><span class="mining-overline">Reference catalogue</span><h3>Every deposit</h3></div>
+      <span class="mining-section-note">Filter by resource, kind or system</span>
+    </div>
 
-    <div class="table-wrap">
+    <div class="table-wrap mining-table-wrap">
       <table id="mining-table">
         <thead>
           <tr>
@@ -1765,8 +1777,11 @@
     </div>
 
     <div class="mining-pane" id="mining-pane-crack">
-    <h3 class="spaced">Can it be cracked?</h3>
-    <p class="muted caption" id="crack-caption">
+    <div class="mining-section-head mining-crack-head">
+      <div><span class="mining-overline">Fit analysis</span><h3>Can it be cracked?</h3></div>
+      <span class="mining-section-note">A community-rule estimate</span>
+    </div>
+    <p class="muted caption mining-explainer" id="crack-caption">
       The rock as the HUD scans it against the heads on your ship. The lasers,
       modules, gadgets and minerals are the game's own figures, read from your
       install. <b>The line itself is not the game's</b>: it does not publish how
@@ -1894,7 +1909,10 @@
 
 
     <div class="mining-pane" id="mining-pane-runs">
-    <h3 class="spaced">What you have brought back</h3>
+    <div class="mining-section-head mining-runs-head">
+      <div><span class="mining-overline">Personal log</span><h3>What you have brought back</h3></div>
+      <span class="mining-section-note">Your notes stay separate from game data</span>
+    </div>
     <div class="summary-strip" id="mining-mine"></div>
     <p class="muted caption" id="mining-mine-note" hidden></p>
 
@@ -1906,16 +1924,16 @@
     </p>
 
     <form class="mining-form" id="mining-log-form">
-      <input type="text" id="mining-log-resource" class="search" maxlength="30"
-             placeholder="Ore" autocomplete="off" required>
-      <input type="text" id="mining-log-place" class="search" maxlength="30"
-             placeholder="Where" autocomplete="off">
-      <input type="number" id="mining-log-scu" class="search" min="0" step="0.01"
-             placeholder="SCU" required>
-      <input type="number" id="mining-log-quality" class="search" min="1" max="1000"
-             placeholder="Quality">
-      <input type="number" id="mining-log-revenue" class="search" min="0" step="1"
-             placeholder="Sold for">
+      <label>Ore<input type="text" id="mining-log-resource" class="search" maxlength="30"
+             placeholder="e.g. Quantanium" autocomplete="off" required></label>
+      <label>Where<input type="text" id="mining-log-place" class="search" maxlength="30"
+             placeholder="Optional" autocomplete="off"></label>
+      <label>SCU<input type="number" id="mining-log-scu" class="search" min="0" step="0.01"
+             placeholder="0" required></label>
+      <label>Quality<input type="number" id="mining-log-quality" class="search" min="1" max="1000"
+             placeholder="Optional"></label>
+      <label>Sold for<input type="number" id="mining-log-revenue" class="search" min="0" step="1"
+             placeholder="Optional"></label>
       <button type="submit" class="ghost">Record</button>
     </form>
 

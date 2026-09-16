@@ -3733,14 +3733,22 @@ body.overlay .advice li { font-size: 10.5px; padding: 3px 0; }
 }
 .goal-form .search { flex: 1 1 9ch; min-width: 0; }
 
-/* Recording a haul, on the page that plans them. */
+/* Recording a haul, on the page that plans them. Inputs need names here: the
+   obvious five blanks are not obvious once somebody returns to the page mid-run. */
 .mining-form {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin: 10px 0 14px;
+  display: grid;
+  grid-template-columns: minmax(15ch, 1.4fr) minmax(13ch, 1.2fr) repeat(3, minmax(9ch, .7fr)) auto;
+  gap: 8px;
+  align-items: end;
+  margin: 12px 0 16px;
+  padding: 12px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--cyan-deep);
+  background: linear-gradient(115deg, rgba(14, 25, 38, .95), rgba(7, 12, 20, .82));
 }
-.mining-form .search { flex: 1 1 9ch; min-width: 0; }
+.mining-form label { display: grid; gap: 4px; min-width: 0; color: var(--dim); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; }
+.mining-form .search { width: 100%; min-width: 0; }
+.mining-form button { min-height: 31px; }
 
 /* A component the game defines but has not marked as shipped. */
 .not-ready { font-size: 10.5px; opacity: .75; }
@@ -4919,26 +4927,94 @@ body.overlay .ship-picture { display: none; }
 .shop-result .muted { display: block; margin-top: 2px; }
 .shop-result a { color: var(--cyan); }
 
+/* ---------- mining workstation ---------- */
+.mining-view { --mining-glow: rgba(53, 200, 240, .12); }
+.mining-title { display: grid; gap: 2px; }
+.mining-kicker, .mining-overline { font: 9.5px var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--cyan); }
+.mining-title h2 { font-size: clamp(21px, 2vw, 28px); }
+
+/* A framed operational header gives this reference-heavy page an identity of
+   its own without competing with its tables. */
+.mining-view > .section-bar {
+  position: relative;
+  align-items: end;
+  padding: 15px 16px 14px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--cyan);
+  background:
+    linear-gradient(90deg, var(--mining-glow), transparent 38%),
+    linear-gradient(125deg, rgba(14, 25, 38, .98), rgba(7, 12, 20, .98));
+  clip-path: var(--chamfer);
+}
+.mining-view > .section-bar::after {
+  content: "MINING // SALVAGE";
+  position: absolute;
+  right: 18px;
+  top: 9px;
+  color: var(--dim);
+  font: 9px var(--mono);
+  letter-spacing: .18em;
+  pointer-events: none;
+}
+.mining-view .controls { padding-top: 10px; }
+
+.subtabs#mining-tabs { gap: 8px; margin: 0 0 18px; padding: 0 2px; border: 0; }
+.subtabs#mining-tabs button {
+  flex: 1 1 190px;
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  min-height: 43px;
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--rule);
+  background: rgba(10, 18, 28, .72);
+  color: var(--muted);
+  text-align: left;
+  transition: border-color .14s, background .14s, color .14s, transform .14s;
+}
+.subtabs#mining-tabs button > span { color: var(--dim); font: 10px var(--mono); }
+.subtabs#mining-tabs button:hover { border-color: var(--cyan-deep); background: rgba(13, 39, 55, .48); transform: translateY(-1px); }
+.subtabs#mining-tabs button.active { color: var(--cyan-hot); border-color: var(--cyan-deep); border-left: 3px solid var(--cyan); background: linear-gradient(110deg, rgba(21, 80, 105, .38), rgba(9, 20, 31, .84)); }
+.subtabs#mining-tabs button.active > span { color: var(--cyan); }
+
+.mining-pane { animation: mining-pane-in 180ms ease-out; }
+.mining-brief { display: grid; grid-template-columns: 3px minmax(0, 1fr); gap: 12px; margin: 0 0 20px; padding: 12px 14px; border: 1px solid var(--rule); background: rgba(7, 12, 20, .62); }
+.mining-brief-mark { background: linear-gradient(var(--cyan), var(--cyan-deep)); box-shadow: 0 0 14px rgba(53, 200, 240, .35); }
+.mining-brief .caption { margin: 0; max-width: 122ch; line-height: 1.55; }
+.mining-section-head { display: flex; justify-content: space-between; gap: 16px; align-items: end; margin: 22px 0 8px; padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
+.mining-section-head h3 { margin: 3px 0 0; color: var(--text); }
+.mining-section-note { max-width: 34ch; color: var(--dim); font-size: 10.5px; line-height: 1.35; text-align: right; }
+.mining-section-head-secondary { margin-top: 26px; }
+.mining-explainer { max-width: 130ch; margin: 0 0 11px; line-height: 1.52; }
+.mining-table-wrap { box-shadow: 0 10px 22px rgba(0, 0, 0, .14); }
+#mining-places tbody tr:first-child { background: linear-gradient(90deg, rgba(53, 200, 240, .08), transparent 68%); }
+#mining-places tbody tr:first-child td:first-child { color: var(--cyan-hot); }
+
 /* ---------- can it be cracked? ---------- */
-.crack { margin: 10px 0 18px; display: grid; gap: 10px; }
-.crack-rock { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: flex-end; }
-.crack-rock label { display: flex; flex-direction: column; gap: 3px; font-size: 10.5px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
-.crack-rock .search { width: 9ch; }
+.mining-crack-head { margin-top: 0; }
+.crack { margin: 12px 0 18px; display: grid; gap: 10px; }
+.crack-rock { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px; align-items: end; padding: 14px; border: 1px solid var(--rule); border-top: 2px solid var(--cyan-deep); background: linear-gradient(145deg, rgba(14, 25, 38, .98), rgba(6, 12, 19, .92)); }
+.crack-rock label { display: flex; flex-direction: column; gap: 4px; font-size: 9.5px; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; }
+.crack-rock .select, .crack-rock .search { min-width: 0; width: 100%; }
 .crack-rock .unit { position: absolute; right: 8px; bottom: 6px; font-size: 10px; color: var(--muted); pointer-events: none; }
 .crack-rock label:has(.unit) { position: relative; }
-.crack-heads { display: grid; gap: 6px; }
-.crack-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 8px; border: 1px solid var(--rule); background: rgba(0, 0, 0, .18); }
-.crack-head-label { font-family: var(--mono); font-size: 10.5px; color: var(--muted); min-width: 9ch; }
+.crack-heads { display: grid; gap: 7px; }
+.crack-head { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; padding: 9px 10px; border: 1px solid var(--rule); background: rgba(0, 0, 0, .22); }
+.crack-head-label { font-family: var(--mono); font-size: 10.5px; color: var(--cyan); min-width: 9ch; }
 .crack-head .crack-laser { flex: 1 1 26ch; min-width: 0; }
 .crack-head .crack-module { flex: 1 1 18ch; min-width: 0; }
-.crack-call { font-size: 13px; padding: 8px 10px; border-left: 3px solid var(--rule-hot); background: rgba(0, 0, 0, .18); }
+.crack-call { font-size: 13px; padding: 11px 12px; border-left: 3px solid var(--rule-hot); background: linear-gradient(90deg, rgba(14, 25, 38, .9), rgba(0, 0, 0, .18)); }
 .crack-call.good { border-left-color: var(--green); }
 .crack-call.good b { color: var(--green); }
 .crack-call.warn { border-left-color: var(--amber); }
 .crack-call.warn b { color: var(--amber); }
 .crack-call.bad { border-left-color: var(--red, #e06060); }
 .crack-call.bad b { color: var(--red, #e06060); }
-.crack-facts { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 11.5px; }
+.crack-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 1px; border: 1px solid var(--rule); background: var(--rule); font-size: 11.5px; }
+.crack-facts > span { padding: 8px 10px; background: var(--deep); }
 .crack-facts .k { color: var(--muted); margin-right: 6px; }
 .crack-facts b { font-family: var(--mono); }
 .crack-notes { margin: 0; padding-left: 16px; font-size: 11px; color: var(--dim); line-height: 1.5; }
@@ -4949,7 +5025,7 @@ body.overlay .ship-picture { display: none; }
 .crack-note { font-size: 11px; margin: 4px 0 0; line-height: 1.5; }
 .crack-deposit { margin-top: 4px; }
 .crack-noslots { font-size: 10.5px; }
-.crack-fittings { margin-top: 6px; }
+.crack-fittings { margin-top: 8px; padding: 10px 12px; border: 1px solid var(--rule); background: rgba(7, 12, 20, .55); }
 .crack-fittings summary { cursor: pointer; font-size: 12px; color: var(--muted); }
 .crack-fittings h4 { margin: 12px 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 
@@ -4960,5 +5036,23 @@ body.overlay .ship-picture { display: none; }
 .subtabs button.active { color: var(--cyan); border-bottom-color: var(--cyan); }
 .mining-pane { display: none; }
 .mining-pane.active { display: block; }
+@keyframes mining-pane-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (max-width: 850px) {
+  .mining-view > .section-bar { align-items: start; }
+  .mining-view > .section-bar::after { display: none; }
+  .mining-view .controls { width: 100%; flex-wrap: wrap; }
+  .mining-view .controls .search { flex: 1 1 220px; }
+  .mining-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mining-form button { grid-column: span 2; }
+}
+@media (max-width: 560px) {
+  .subtabs#mining-tabs { display: grid; grid-template-columns: 1fr; }
+  .subtabs#mining-tabs button { min-height: 39px; }
+  .mining-section-head { align-items: start; flex-direction: column; gap: 5px; }
+  .mining-section-note { text-align: left; }
+  .crack-rock { grid-template-columns: 1fr; }
+  .mining-form { grid-template-columns: 1fr; }
+  .mining-form button { grid-column: auto; }
+}
 .ship-card.unflown { opacity: .92; }
 .ship-card.unflown .ship-name::after { content: " · never flown"; font-size: 10px; color: var(--muted); font-weight: 400; }

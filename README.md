@@ -365,7 +365,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.5
+### 0.14.6
+
+- **Mining is easier to work from at a glance.** The page now separates its
+  prospecting, rock-fit and personal-log workspaces with a stronger operations
+  header, clearer tab states, ranked prospect board, structured rock analysis
+  and labelled haul form. It remains the same data and calculations, just less
+  of a wall of tables when you are deciding what to do next.
 
 - **A second copy of Quantum Wake closes itself.** Starting the app while it
   was already running used to leave the second copy up without a dashboard
