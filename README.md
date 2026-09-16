@@ -365,7 +365,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.3
+### 0.14.4
 
 - **A second copy of Quantum Wake closes itself.** Starting the app while it
   was already running used to leave the second copy up without a dashboard
@@ -373,6 +373,8 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   looked like one app. A layout saved in one copy's setup window did nothing
   to the other copy's frames, which read as "the MFD settings don't save".
   The second copy now says the first is running, opens it, and closes.
+
+- **The Mining page is three pages.** *Where to go*, *Can it be cracked?* and *Your runs* are tabs under the heading now, one at a time and remembered, with the kind, system and search filters on the first alone; the page had grown into one long scroll.
 
 - **Can it be cracked?** A rock calculator on the Mining page. Pick the ship
   — the heads come from its own loadout, the Prospector's one S1, the MOLE's
@@ -411,6 +413,8 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   take is what the reader gets checked against. Instability is left as
   typed: the panel prints a figure and the rule wants a percentage, and
   nothing measured says they are the same scale.
+
+- **A ship you own but never flew has a card.** The Fleet page's cards are sorties, so a ship the Fleet Manager listed that the logs never saw aboard — the Ironclad, delivered and not yet flown — was a line in the berth list and on no card. It gets a card under the berths now, marked *never flown*, with its picture, the terminal's word on where it is, and the Garage.
 
 - **The Fleet Manager reads the Ironclad.** The row glyph in the terminal's
   margin came back as a letter — "V Drake Ironclad" — and with two Ironclads

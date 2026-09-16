@@ -1693,6 +1693,14 @@
                autocomplete="off" spellcheck="false">
       </div>
     </div>
+
+    <nav class="subtabs" id="mining-tabs" aria-label="Mining pages">
+      <button type="button" data-pane="go" class="active">Where to go</button>
+      <button type="button" data-pane="crack">Can it be cracked?</button>
+      <button type="button" data-pane="runs">Your runs</button>
+    </nav>
+
+    <div class="mining-pane active" id="mining-pane-go">
     <p class="muted caption">
       <span id="mining-source"></span>The game's own deposit tables, ranked by
       what a SCU of rock is actually worth &mdash; how much of the rock is this
@@ -1703,6 +1711,60 @@
       long a rock takes to mine; respawn is how long it takes to come back,
       which is a different question.
     </p>
+    <h3 class="spaced">Where to go</h3>
+    <p class="muted caption">
+      Every place ranked by what a rock found there is worth. <em>Rich</em> is how
+      much of an average rock here is actually ore; <em>Quality</em> is the best
+      floor on offer, starred where this place beats the usual. <em>Per rock</em>
+      multiplies the two ideas out: each ore's share of what spawns, times what a
+      SCU of it sells for. It is value per rock, <b>not per hour</b> &mdash;
+      nothing says how long a rock takes to mine, so a rich place on a two-hour
+      respawn cannot be compared with a poor one on twenty minutes. Respawn is
+      there so you can judge that yourself.
+    </p>
+    <div class="table-wrap">
+      <table id="mining-places">
+        <thead>
+          <tr>
+            <th>Place</th><th>System</th>
+            <th class="num" title="How much of an average rock here is ore">Rich</th>
+            <th class="num" title="The best quality floor available here">Quality</th>
+            <th class="num" title="What an average rock found here is worth">Per rock</th>
+            <th class="num">Ores</th>
+            <th>Mostly</th>
+            <th class="num">Respawn</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="muted caption" id="mining-places-note"></p>
+    <h3 class="spaced">Every deposit</h3>
+
+    <div class="table-wrap">
+      <table id="mining-table">
+        <thead>
+          <tr>
+            <th>Resource</th><th>Deposit</th>
+            <th class="num" title="How much of the rock this ore makes up">In rock</th>
+            <th class="num" title="The quality this comes out at here">Quality</th>
+            <th class="num" title="How long the slot takes to refill">Respawn</th>
+            <th>Kind</th>
+            <th>Where</th><th>System</th><th>Spawn group</th>
+            <th class="num" title="How much of what spawns here is this">Find</th>
+            <th class="num" title="What a SCU of this rock is worth once sold">Worth</th>
+            <th class="num">Best sell</th>
+            <th class="num" title="What the unrefined rock fetches">Raw</th>
+            <th class="num" title="Best refinery station bonus for this ore, on the method's own yield (UEX)">Bonus</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="muted caption" id="mining-count"></p>
+    </div>
+
+    <div class="mining-pane" id="mining-pane-crack">
     <h3 class="spaced">Can it be cracked?</h3>
     <p class="muted caption" id="crack-caption">
       The rock as the HUD scans it against the heads on your ship. The lasers,
@@ -1828,36 +1890,10 @@
         </div>
       </details>
     </div>
-
-    <h3 class="spaced">Where to go</h3>
-    <p class="muted caption">
-      Every place ranked by what a rock found there is worth. <em>Rich</em> is how
-      much of an average rock here is actually ore; <em>Quality</em> is the best
-      floor on offer, starred where this place beats the usual. <em>Per rock</em>
-      multiplies the two ideas out: each ore's share of what spawns, times what a
-      SCU of it sells for. It is value per rock, <b>not per hour</b> &mdash;
-      nothing says how long a rock takes to mine, so a rich place on a two-hour
-      respawn cannot be compared with a poor one on twenty minutes. Respawn is
-      there so you can judge that yourself.
-    </p>
-    <div class="table-wrap">
-      <table id="mining-places">
-        <thead>
-          <tr>
-            <th>Place</th><th>System</th>
-            <th class="num" title="How much of an average rock here is ore">Rich</th>
-            <th class="num" title="The best quality floor available here">Quality</th>
-            <th class="num" title="What an average rock found here is worth">Per rock</th>
-            <th class="num">Ores</th>
-            <th>Mostly</th>
-            <th class="num">Respawn</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
     </div>
-    <p class="muted caption" id="mining-places-note"></p>
 
+
+    <div class="mining-pane" id="mining-pane-runs">
     <h3 class="spaced">What you have brought back</h3>
     <div class="summary-strip" id="mining-mine"></div>
     <p class="muted caption" id="mining-mine-note" hidden></p>
@@ -1902,30 +1938,8 @@
       </table>
     </div>
     <p class="muted caption" id="mining-log-note"></p>
-
-    <h3 class="spaced">Every deposit</h3>
-
-    <div class="table-wrap">
-      <table id="mining-table">
-        <thead>
-          <tr>
-            <th>Resource</th><th>Deposit</th>
-            <th class="num" title="How much of the rock this ore makes up">In rock</th>
-            <th class="num" title="The quality this comes out at here">Quality</th>
-            <th class="num" title="How long the slot takes to refill">Respawn</th>
-            <th>Kind</th>
-            <th>Where</th><th>System</th><th>Spawn group</th>
-            <th class="num" title="How much of what spawns here is this">Find</th>
-            <th class="num" title="What a SCU of this rock is worth once sold">Worth</th>
-            <th class="num">Best sell</th>
-            <th class="num" title="What the unrefined rock fetches">Raw</th>
-            <th class="num" title="Best refinery station bonus for this ore, on the method's own yield (UEX)">Bonus</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
     </div>
-    <p class="muted caption" id="mining-count"></p>
+
   </section>
 
   <!-- REFERENCE: crafting blueprints -->

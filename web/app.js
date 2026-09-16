@@ -269,6 +269,9 @@ function showView(name) {
     loadLikelyMined().catch(() => {});
     loadMiningLog().catch(() => {});
     loadCrackModel().catch(() => {});
+    // A rock handed over from the Log opens on the calculator; otherwise the
+    // page opens where it was left.
+    showMiningPane(crackFromScan ? 'crack' : miningPane);
   }
 
   // Settings reflects live state (the tray can change it), so re-read on entry.
@@ -4539,6 +4542,42 @@ $('#mining-log-form')?.addEventListener('submit', async (e) => {
   await loadMiningLog().catch(() => {});
 });
 
+/* ---------- the Mining page's three panes ---------- */
+
+/**
+ * Where to go, can it be cracked, your runs: three questions that had grown
+ * into one long page. The pane is remembered in this browser, and the
+ * deposit filters in the header belong to the first alone.
+ */
+const MINING_PANES = ['go', 'crack', 'runs'];
+let miningPane = 'go';
+try {
+  const kept = localStorage.getItem('qw-mining-pane');
+  if (MINING_PANES.includes(kept)) miningPane = kept;
+} catch { /* private browsing keeps the default */ }
+
+function showMiningPane(name) {
+  if (!MINING_PANES.includes(name)) name = 'go';
+  miningPane = name;
+  try { localStorage.setItem('qw-mining-pane', name); } catch { /* as above */ }
+
+  for (const id of ['#mining-pane-go', '#mining-pane-crack', '#mining-pane-runs']) {
+    const pane = $(id);
+    if (pane) pane.classList.toggle('active', id === `#mining-pane-${name}`);
+  }
+  for (const button of $('#mining-tabs')?.querySelectorAll('button') || [])
+    button.classList.toggle('active', button.dataset.pane === name);
+
+  // The kind, system and search filters shape the deposit tables and nothing else.
+  for (const id of ['#mining-kind', '#mining-system', '#mining-search']) {
+    const control = $(id);
+    if (control) control.hidden = name !== 'go';
+  }
+}
+
+for (const button of $('#mining-tabs')?.querySelectorAll('button') || [])
+  button.addEventListener('click', () => showMiningPane(button.dataset.pane));
+
 /* ---------- can it be cracked? ---------- */
 
 /**
@@ -7793,6 +7832,37 @@ async function renderFleetBerths() {
   const feed = el('ul', 'feed screen-fittings');
   for (const row of rows) feed.append(fleetRow(row));
   list.append(feed);
+
+  // A ship the terminal lists that the logs never saw fly has no card above -
+  // the cards are sorties - so it gets one here that says exactly that, with
+  // the terminal's word on where it is and the Garage a click away. Without
+  // this the Ironclad was in the reading and on no card anywhere.
+  const unflown = rows.filter((row) => row.ship && !row.flown);
+  if (!unflown.length) return;
+
+  list.append(el('h3', 'spaced', `Owned, never flown in the logs · ${unflown.length}`));
+  list.append(el('p', 'muted caption', 'Listed at the Fleet Manager and never seen aboard in a session: no sorties, no hours, no photographed fit. The numbers a card would carry are all zero, so it carries the terminal\'s instead.'));
+  const grid = el('div', 'ship-grid');
+  for (const row of unflown) {
+    const card = el('article', 'ship-card unflown');
+    const maker = makerOf(row.ship);
+    if (row.className) card.append(shipPicture({ name: row.ship, className: row.className }, maker));
+    const body = el('div', 'ship-body');
+    body.append(el('div', 'ship-name', row.ship));
+    const facts = [row.location ? `at ${row.location}` : null, row.state ? row.state.toLowerCase() : null, row.focus, row.cargo != null ? `${row.cargo} SCU` : null].filter(Boolean);
+    body.append(el('div', 'ship-ref muted', facts.join(' · ') || 'no berth read'));
+    body.append(el('div', 'ship-ref muted', 'never flown in the logs'));
+    if (row.className) {
+      const garage = el('button', 'ghost ship-upgrade', 'Garage');
+      garage.type = 'button';
+      garage.title = `${row.ship}'s numbers, what fits it, and what a part would change`;
+      garage.addEventListener('click', () => openGarageFor(row.className));
+      body.append(garage);
+    }
+    card.append(body);
+    grid.append(card);
+  }
+  list.append(grid);
 }
 
 $('#screen-log-refresh')?.addEventListener('click', () => {

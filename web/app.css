@@ -4952,3 +4952,13 @@ body.overlay .ship-picture { display: none; }
 .crack-fittings { margin-top: 6px; }
 .crack-fittings summary { cursor: pointer; font-size: 12px; color: var(--muted); }
 .crack-fittings h4 { margin: 12px 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+/* ---------- sub-tabs inside a view ---------- */
+.subtabs { display: flex; gap: 4px; margin: 4px 0 12px; border-bottom: 1px solid var(--rule); }
+.subtabs button { background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 6px 12px; font: inherit; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); cursor: pointer; }
+.subtabs button:hover { color: var(--text); }
+.subtabs button.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+.mining-pane { display: none; }
+.mining-pane.active { display: block; }
+.ship-card.unflown { opacity: .92; }
+.ship-card.unflown .ship-name::after { content: " · never flown"; font-size: 10px; color: var(--muted); font-weight: 400; }

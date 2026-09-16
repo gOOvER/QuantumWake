@@ -126,6 +126,41 @@ public class ScreenAppsTests
         Assert.Contains("at Levski", berths);
     }
 
+    /// <summary>
+    /// A ship the terminal lists that the logs never flew has no sortie card,
+    /// so it gets one under the berths that says so - with its picture and
+    /// the Garage - rather than being a line in a list and nowhere else. The
+    /// Ironclad of 2026-09-15 was the case.
+    /// </summary>
+    [Fact]
+    public void A_ship_at_the_fleet_manager_the_logs_never_flew_gets_a_card_that_says_so()
+    {
+        var page = new Page();
+        page.Serve("/api/screen/fittings", "[]");
+        page.Serve("/api/fleet/paints/DRAK_Ironclad", "[]");
+        page.Serve("/api/screen/fleet", """
+            {"shot":"ScreenShot-2026-09-15_23-32-06-0A7.jpg","shotAt":"2026-09-16T03:32:06Z",
+             "ships":[{"read":"Drake Corsair","ship":"Drake Corsair","looksLike":[],"location":"Levski","state":"Stored","focus":"Expedition","cargo":72,"className":"DRAK_Corsair","flown":true},
+                      {"read":"V Drake Ironclad","ship":"Drake Ironclad","looksLike":[],"location":null,"state":"Deliverable","focus":"Heavy Freight","cargo":null,"className":"DRAK_Ironclad","flown":false}]}
+            """);
+
+        page.Do("window.scrollTo = () => {}; await renderFleetFittings();");
+
+        var berths = page.NodeText("#fleet-berths");
+        Assert.Contains("Owned, never flown in the logs · 1", berths);
+        Assert.Contains("never flown in the logs", berths);
+        var card = "__dom.node('#fleet-berths').descendants().find(n => n.classList.contains('unflown'))";
+        Assert.Contains("Drake Ironclad", page.Text($"{card}.textContent"));
+        Assert.Contains("deliverable · Heavy Freight", page.Text($"{card}.textContent"));
+        Assert.True(page.Truth($"{card}.descendants().some(n => n.classList.contains('ship-picture'))"));
+
+        // The Corsair flew, so it stays a line here and a card above; no second card.
+        Assert.Equal(1, page.Count("__dom.node('#fleet-berths').descendants().filter(n => n.classList.contains('unflown')).length"));
+
+        page.Do($"{card}.descendants().find(n => n.classList.contains('ship-upgrade')).click();");
+        Assert.Equal("DRAK_Ironclad", page.Text("garageClass"));
+    }
+
     [Fact]
     public void With_no_fleet_photographed_the_berths_stay_hidden()
     {

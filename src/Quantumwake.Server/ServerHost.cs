@@ -2873,10 +2873,34 @@ public static class ServerHost
         // The newest Fleet Manager reading: where each ship was, the last time
         // the terminal was photographed. Nothing in the logs says where a
         // ship sits, so this is the only source.
-        app.MapGet("/api/screen/fleet", (ScreenReadingStore readings) =>
-            readings.LatestFleet() is { } s
-                ? Results.Ok(new { s.Shot, s.ShotAt, ships = s.Fleet!.Ships })
-                : Results.Ok(new { shot = (string?)null, shotAt = (DateTimeOffset?)null, ships = Array.Empty<FleetRow>() }));
+        // Each berth with the class behind the name and whether the logs ever
+        // saw it flown. A ship at the Fleet Manager the logs never flew has no
+        // card on the Fleet page - the cards are sorties - so this is how the
+        // page knows to give it one that says so. The Ironclad of 2026-09-15
+        // was in the terminal's list, in this reading, and nowhere on the page.
+        app.MapGet("/api/screen/fleet", (ScreenReadingStore readings, LogLibrary lib) =>
+        {
+            if (readings.LatestFleet() is not { } s)
+                return Results.Ok(new { shot = (string?)null, shotAt = (DateTimeOffset?)null, ships = Array.Empty<object>() });
+
+            var flown = lib.Stats().Ships.Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var byName = lib.GameCommodities.Vehicles.Values
+                .GroupBy(v => v.Name, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First().Class, StringComparer.OrdinalIgnoreCase);
+            foreach (var ship in lib.Community.Ships)
+                byName.TryAdd(ship.Value.Name, ship.Key);
+
+            return Results.Ok(new
+            {
+                s.Shot, s.ShotAt,
+                ships = s.Fleet!.Ships.Select(row => new
+                {
+                    row.Read, row.Ship, row.LooksLike, row.Location, row.State, row.Focus, row.Cargo,
+                    className = row.Ship is not null && byName.TryGetValue(row.Ship, out var cls) ? cls : null,
+                    flown = row.Ship is not null && flown.Contains(row.Ship),
+                }),
+            });
+        });
 
         app.MapDelete("/api/screen/readings", (ScreenReadingStore readings) =>
         {
