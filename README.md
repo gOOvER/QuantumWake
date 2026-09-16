@@ -365,7 +365,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.0
+### 0.14.1
+
+- **A second copy of Quantum Wake closes itself.** Starting the app while it
+  was already running used to leave the second copy up without a dashboard
+  — its own tray icon, overlay, MFD frames and MFD setup window — and the two
+  looked like one app. A layout saved in one copy's setup window did nothing
+  to the other copy's frames, which read as "the MFD settings don't save".
+  The second copy now says the first is running, opens it, and closes.
 
 - **Can it be cracked?** A rock calculator on the Mining page. Pick the ship
   — the heads come from its own loadout, the Prospector's one S1, the MOLE's
