@@ -365,7 +365,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.7
+### 0.14.8
 
 - **An Armoury page, under Gear.** Which rifle, what armour, where to buy
   it — read from your own game files. Every gun the game sells (46 on this
@@ -384,6 +384,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   says that once above the table rather than repeating it down a column.
   Damage a second, per magazine and time to empty are derived by holding
   the trigger down and are called derived; the game publishes none of them.
+  Open a gun or a set and the wiki's photograph of it sits beside the figures
+  — every finish and colour has its own, a click on the chip swaps it in —
+  fetched once and kept, as the Garage keeps a cooler's, and only with the
+  community dataset on; the game files hold no picture of a gun beyond a
+  64-pixel loadout glyph.
   Knives, grenades and attachments are not read yet, and the page says so.
   (`docs/armoury.md`; `--armoury` in the CLI prints the same tables.)
 

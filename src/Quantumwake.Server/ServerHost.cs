@@ -1214,7 +1214,7 @@ public static class ServerHost
 
             var weapons = armoury.Weapons.Where(w => w.BaseClass is null).Select(w => new
             {
-                w.Class, w.Name, w.Kind, w.Weight, w.Size, w.Manufacturer, w.Damage, w.ProjectileSpeed, w.ProjectileLifetime,
+                w.Class, uuid = lib.GameCommodities.ItemUuid(w.Class), w.Name, w.Kind, w.Weight, w.Size, w.Manufacturer, w.Damage, w.ProjectileSpeed, w.ProjectileLifetime,
                 w.DropStart, w.DropPerMetre, w.DropFloor, floorAt = Armoury.FloorAt(w), w.Magazine, w.MagazineClass, w.Mass, w.Explosion,
                 modes = w.Modes.Select(m => new
                 {
@@ -1231,7 +1231,7 @@ public static class ServerHost
                 market = WeaponMarket(w),
                 finishes = (finishesOf.GetValueOrDefault(w.Class) ?? [])
                     .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
-                    .Select(f => new { f.Class, f.Name, market = Market(f.Class) }),
+                    .Select(f => new { f.Class, uuid = lib.GameCommodities.ItemUuid(f.Class), f.Name, market = Market(f.Class) }),
             });
 
             // Colours of one set share every figure, so the page gets a row per
@@ -1251,7 +1251,7 @@ public static class ServerHost
                         first.TemperatureMin, first.TemperatureMax, first.RadiationCapacity, first.RadiationDissipation, first.GForceResistance,
                         first.CapacityMicroScu, first.EmSignature, first.IrSignature, first.MotionPenalty, first.ViewPenalty, first.Mass,
                         name = first.Name,
-                        pieces = priced.Select(p => new { @class = p.Class, name = p.Name, market = new { price = p.Market.Price, shops = p.Market.Shops } }).ToList(),
+                        pieces = priced.Select(p => new { @class = p.Class, uuid = lib.GameCommodities.ItemUuid(p.Class), name = p.Name, market = new { price = p.Market.Price, shops = p.Market.Shops } }).ToList(),
                         market = new { price = cheapest.Market.Price, shops = cheapest.Market.Shops ?? [] },
                     };
                 })
@@ -1264,8 +1264,35 @@ public static class ServerHost
                 weapons,
                 armour,
                 itemPricesKnown = uex.IsEnabled,
+                // Pictures come from the wiki, and the wiki is asked only once the
+                // community dataset is on - the app's consent to talk to the network.
+                picturesKnown = lib.Community.IsEnabled,
                 counts = new { weapons = armoury.Weapons.Count, plain = weapons.Count(), armour = armoury.Armour.Count, sets = armour.Count },
             });
+        });
+
+        // A picture of a gun or a piece of armour, by the game's uuid: the
+        // game files hold only a 64-pixel loadout glyph for a gun and one
+        // generic icon per armour class, so the picture is the wiki's, fetched
+        // once and kept as the Garage keeps a cooler's. Only an item the
+        // Armoury lists is asked for, so the endpoint cannot be used to look
+        // up arbitrary ids, and only once the community dataset is on.
+        app.MapGet("/api/armoury/picture/{uuid}", async (string uuid, LogLibrary lib, PartPictures pictures, IHttpClientFactory httpFactory, HttpContext ctx) =>
+        {
+            if (!lib.Community.IsEnabled) return Results.NotFound();
+
+            var armoury = lib.GameCommodities.Armoury;
+            var name = armoury.Weapons.Select(w => (w.Class, w.Name)).Concat(armoury.Armour.Select(a => (a.Class, a.Name)))
+                .Where(i => string.Equals(lib.GameCommodities.ItemUuid(i.Class), uuid, StringComparison.OrdinalIgnoreCase))
+                .Select(i => i.Name)
+                .FirstOrDefault();
+            if (name is null) return Results.NotFound();
+
+            var picture = await pictures.GetItemAsync(httpFactory.CreateClient("community"), uuid, name, ctx.RequestAborted);
+            if (picture is null) return Results.NotFound();
+
+            ctx.Response.Headers.CacheControl = "private, max-age=86400";
+            return Results.File(picture.Bytes, picture.ContentType);
         });
 
         // What the game says each place has. Separate from the service badges,

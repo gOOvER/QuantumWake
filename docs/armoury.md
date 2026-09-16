@@ -169,6 +169,22 @@ where. On 16 Sep 2026 UEX prices 20 of the 46 guns and 126 of the 384 sets.
 A blank is "no terminal recorded", not free; with UEX off the column says
 what it needs.
 
+## Pictures
+
+The game files hold no photograph of a gun or a piece of armour: a gun's
+`EntityUIDisplayParams.displayIcon` is a 64-pixel Star Marine loadout glyph
+(`ui/textures/ea/loadouticons/behring_p4_ar_rifle_64.tif`) and every piece
+of armour points at one generic icon for its class (`medium_armour_64.tif`).
+The picture in an open row is the Star Citizen Wiki's, fetched through the
+same `PartPictures` the Garage bench uses - the wiki's item API by the
+game's uuid, once, kept under `community/part-pictures/`, a miss remembered
+for a month - behind `GET /api/armoury/picture/{uuid}`, which answers only
+for an id the Armoury lists and only once the community dataset is on, the
+app's consent to talk to the network. Probed 2026-09-16: the P4-AR is a
+1920×1080 in-game shot served as a 600-px thumbnail (41 KB), the Testudo
+core a 522×612 render (533 KB). Every finish and every colour has its own
+uuid, so the chips under a row swap the picture to that one.
+
 ## Storage, API
 
 Read in the same pass as the rest of the game data (`GameArmoury.Read`,

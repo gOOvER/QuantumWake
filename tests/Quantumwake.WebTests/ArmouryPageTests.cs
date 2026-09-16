@@ -8,16 +8,16 @@ namespace Quantumwake.WebTests;
 public class ArmouryPageTests
 {
     private const string Model = """
-        {"ready":true,"itemPricesKnown":true,
+        {"ready":true,"itemPricesKnown":true,"picturesKnown":true,
          "counts":{"weapons":327,"plain":3,"armour":2349,"sets":3},
          "weapons":[
-           {"class":"behr_rifle_ballistic_01","name":"P4-AR Rifle","kind":"Rifle","weight":"Medium","size":2,"manufacturer":"Behring",
+           {"class":"behr_rifle_ballistic_01","uuid":"02d4cd2e-fa98-4086-aee1-6b2dfce8ea27","name":"P4-AR Rifle","kind":"Rifle","weight":"Medium","size":2,"manufacturer":"Behring",
             "damage":{"physical":12,"energy":0,"distortion":0,"thermal":0,"biochemical":0,"stun":0,"total":12,"dominant":"physical"},
             "projectileSpeed":550,"projectileLifetime":2,"dropStart":40,"dropPerMetre":0.05,"dropFloor":10,"floorAt":80,"magazine":40,"magazineClass":"behr_rifle_ballistic_01_mag","mass":2.65,
             "modes":[{"name":"AUTO","kind":"Auto","roundsPerMinute":810,"pellets":1,"ammoPerShot":1,"burstShots":0,"heatPerShot":0,"condition":"","hit":{"physical":12,"total":12},"sustainedRoundsPerMinute":810,"damagePerShot":12,"damagePerSecond":162,"damagePerMagazine":480,"secondsToEmpty":2.96},
                      {"name":"SEMI","kind":"Semi","roundsPerMinute":810,"pellets":1,"ammoPerShot":1,"burstShots":0,"heatPerShot":0,"condition":"","hit":{"physical":12,"total":12},"sustainedRoundsPerMinute":810,"damagePerShot":12,"damagePerSecond":162,"damagePerMagazine":480,"secondsToEmpty":2.96}],
             "market":{"price":4138,"shops":[{"terminal":"Guns Rod's Fuel","place":"Rod's Fuel & Supplies","system":"Pyro","price":4138},{"terminal":"Live Fire ARC-L1","place":"ARC-L1","system":"Stanton","price":4200}]},
-            "finishes":[{"class":"behr_rifle_ballistic_01_black01","name":"P4-AR \"Blackguard\" Rifle","market":{"price":null,"shops":[]}}]},
+            "finishes":[{"class":"behr_rifle_ballistic_01_black01","uuid":"11111111-2222-3333-4444-555555555555","name":"P4-AR \"Blackguard\" Rifle","market":{"price":null,"shops":[]}}]},
            {"class":"volt_smg_energy_01","name":"Quartz Energy SMG","kind":"SMG","weight":"Medium","size":2,"manufacturer":"",
             "damage":{"physical":0,"energy":5,"distortion":0,"thermal":0,"biochemical":0,"stun":0,"total":5,"dominant":"energy"},
             "projectileSpeed":600,"projectileLifetime":2,"dropStart":0,"dropPerMetre":0,"dropFloor":0,"floorAt":0,"magazine":45,"magazineClass":"volt_smg_energy_01_mag","mass":1.55,
@@ -34,8 +34,8 @@ public class ArmouryPageTests
             "resistances":{"macro":"MediumArmor","physical":0.7,"energy":0.7,"distortion":0.7,"thermal":0.7,"biochemical":0.7,"stun":0.55,"impact":0.6925},
             "protects":["torso"],"temperatureMin":-50,"temperatureMax":80,"radiationCapacity":26400,"radiationDissipation":145.8,"gForceResistance":-0.25,"capacityMicroScu":8000,"emSignature":6,"irSignature":0,"motionPenalty":0.5,"viewPenalty":0.5,"mass":5,
             "name":"Testudo Core",
-            "pieces":[{"class":"qrt_combat_medium_core_01_01_01","name":"Testudo Core","market":{"price":3150,"shops":[{"terminal":"Cubby Area 18","place":"Area18","system":"Stanton","price":3150}]}},
-                      {"class":"qrt_combat_medium_core_04_01_01","name":"Testudo Core Deathblow","market":{"price":null,"shops":[]}}],
+            "pieces":[{"class":"qrt_combat_medium_core_01_01_01","uuid":"edaf0b70-e1a4-48ff-b827-37e9324014bd","name":"Testudo Core","market":{"price":3150,"shops":[{"terminal":"Cubby Area 18","place":"Area18","system":"Stanton","price":3150}]}},
+                      {"class":"qrt_combat_medium_core_04_01_01","uuid":"66666666-7777-8888-9999-000000000000","name":"Testudo Core Deathblow","market":{"price":null,"shops":[]}}],
             "market":{"price":3150,"shops":[{"terminal":"Cubby Area 18","place":"Area18","system":"Stanton","price":3150}]}},
            {"family":"Lynx","slot":"Arms","weight":"Light","kind":"Armor: Arms","manufacturer":"Kastak Arms",
             "resistances":{"macro":"LightArmor","physical":0.8,"energy":0.8,"distortion":0.8,"thermal":0.8,"biochemical":0.8,"stun":0.7,"impact":0.9},
@@ -239,5 +239,37 @@ public class ArmouryPageTests
 
         Assert.Contains("prices need UEX (Settings)", page.Text("__dom.node('#armoury-guns tbody').children[0].textContent"));
         Assert.Contains("Prices need UEX, in Settings", page.NodeText("#armoury-gun-count"));
+    }
+
+    [Fact]
+    public void An_open_row_shows_the_wiki_picture_and_a_colour_chip_swaps_it()
+    {
+        var page = Opened();
+
+        page.Do("armouryOpenGun = 'behr_rifle_ballistic_01'; renderArmouryGuns();");
+        var gun = "__dom.node('#armoury-guns tbody').children[3]";
+        Assert.Equal("/api/armoury/picture/02d4cd2e-fa98-4086-aee1-6b2dfce8ea27", page.Text($"{gun}.querySelectorAll('.armoury-picture')[0].querySelectorAll('img')[0].src"));
+        Assert.Equal("P4-AR Rifle", page.Text($"{gun}.querySelectorAll('.armoury-picture')[0].querySelectorAll('img')[0].alt"));
+
+        // A finish is the same gun photographed in its own colour.
+        page.Do($"{gun}.querySelectorAll('.armoury-finish')[0].click();");
+        Assert.Equal("/api/armoury/picture/11111111-2222-3333-4444-555555555555", page.Text($"{gun}.querySelectorAll('.armoury-picture')[0].querySelectorAll('img')[0].src"));
+
+        page.Do("armouryOpenSet = 'Core|Testudo Core'; renderArmouryArmour();");
+        var set = "__dom.node('#armoury-armour tbody').children[3]";
+        Assert.Equal("/api/armoury/picture/edaf0b70-e1a4-48ff-b827-37e9324014bd", page.Text($"{set}.querySelectorAll('.armoury-picture')[0].querySelectorAll('img')[0].src"));
+        page.Do($"{set}.querySelectorAll('.armoury-finish')[1].click();");
+        Assert.Equal("/api/armoury/picture/66666666-7777-8888-9999-000000000000", page.Text($"{set}.querySelectorAll('.armoury-picture')[0].querySelectorAll('img')[0].src"));
+    }
+
+    [Fact]
+    public void Without_the_community_dataset_the_picture_says_what_it_needs()
+    {
+        var page = new Page();
+        page.Serve("/api/armoury", Model.Replace("\"picturesKnown\":true", "\"picturesKnown\":false"));
+        page.Do("await loadArmoury(); armouryOpenGun = 'behr_rifle_ballistic_01'; renderArmouryGuns();");
+        var gun = "__dom.node('#armoury-guns tbody').children[3]";
+        Assert.Equal(0, page.Count($"{gun}.querySelectorAll('.armoury-picture img').length"));
+        Assert.Contains("community dataset is on (Settings)", page.Text($"{gun}.querySelectorAll('.armoury-picture')[0].textContent"));
     }
 }

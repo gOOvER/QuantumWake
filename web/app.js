@@ -5369,6 +5369,45 @@ function armouryMode(m) {
 }
 
 /** The mode a pilot would hold the trigger on: the highest derived DPS. */
+/**
+ * The wiki's picture of an item, by the game's uuid, in a frame that says
+ * why it is blank when it is: the community dataset off, or the wiki has
+ * none. The game files hold no photograph of a gun or a helmet - a 64-pixel
+ * loadout glyph and one generic icon per armour class are all there is.
+ */
+function armouryPicture(uuid, name) {
+  const frame = el('div', 'armoury-picture');
+  const note = el('span', 'muted small');
+  if (!armouryModel?.picturesKnown) {
+    note.textContent = 'Pictures come from the Star Citizen Wiki once the community dataset is on (Settings).';
+    frame.append(note);
+    return frame;
+  }
+  if (!uuid) {
+    note.textContent = 'No id to ask the wiki with.';
+    frame.append(note);
+    return frame;
+  }
+  const img = el('img');
+  img.alt = name;
+  img.loading = 'lazy';
+  img.src = `/api/armoury/picture/${encodeURIComponent(uuid)}`;
+  img.addEventListener('error', () => {
+    img.remove();
+    note.textContent = 'The wiki has no picture of this one.';
+    frame.append(note);
+  });
+  frame.append(img);
+  return frame;
+}
+
+/** Points the expansion's picture at another colour or finish of the same thing. */
+function armouryShowPicture(frame, uuid, name) {
+  const fresh = armouryPicture(uuid, name);
+  frame.replaceWith(fresh);
+  return fresh;
+}
+
 function armouryBestMode(w) {
   return [...(w.modes || [])].sort((a, b) => b.damagePerSecond - a.damagePerSecond)[0] || null;
 }
@@ -5456,6 +5495,8 @@ function renderArmouryGunDetail(w) {
   const inner = el('div', 'armoury-detail');
   inner.append(el('div', 'panel-title', w.name));
   inner.append(el('div', 'panel-sub', `${w.kind} · ${w.weight} holster · ${w.manufacturer || 'maker unnamed'} · ${w.class}`));
+  let picture = armouryPicture(w.uuid, w.name);
+  inner.append(picture);
 
   inner.append(el('h4', null, 'Fire modes, trigger held'));
   const table = el('table');
@@ -5500,6 +5541,9 @@ function renderArmouryGunDetail(w) {
     const list = el('div', 'armoury-finishes');
     for (const f of w.finishes) {
       const chip = el('span', 'armoury-finish', f.name);
+      chip.classList.add('clickable');
+      chip.title = 'Show this finish';
+      chip.addEventListener('click', () => { picture = armouryShowPicture(picture, f.uuid, f.name); });
       chip.append(el('span', 'muted', f.market?.price ? `${fmtInt(f.market.price)} aUEC · ${armouryWhere(f.market)}` : 'no terminal recorded'));
       list.append(chip);
     }
@@ -5601,6 +5645,8 @@ function renderArmouryArmourDetail(a) {
   const inner = el('div', 'armoury-detail');
   inner.append(el('div', 'panel-title', `${a.family} · ${a.slot}`));
   inner.append(el('div', 'panel-sub', `${a.kind || a.slot}${a.weight ? ` · ${a.weight}` : ''} · ${a.manufacturer || 'maker unnamed'}`));
+  let picture = armouryPicture(a.pieces?.[0]?.uuid, a.pieces?.[0]?.name || a.name);
+  inner.append(picture);
 
   const facts = [];
   if (a.resistances) {
@@ -5616,6 +5662,9 @@ function renderArmouryArmourDetail(a) {
   const list = el('div', 'armoury-finishes');
   for (const p of a.pieces || []) {
     const chip = el('span', 'armoury-finish', p.name);
+    chip.classList.add('clickable');
+    chip.title = 'Show this colour';
+    chip.addEventListener('click', () => { picture = armouryShowPicture(picture, p.uuid, p.name); });
     chip.append(el('span', 'muted', p.market?.price ? `${fmtInt(p.market.price)} aUEC · ${armouryWhere(p.market)}` : 'no terminal recorded'));
     list.append(chip);
   }
