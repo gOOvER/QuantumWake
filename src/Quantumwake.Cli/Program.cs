@@ -126,6 +126,73 @@ if (args.Contains("--mining"))
     return 0;
 }
 
+// The personal armoury as the install has it: every gun with its damage,
+// rate, magazine and fire modes, every piece of armour with its resistances
+// and the figures that actually differ between pieces. The table behind
+// docs/armoury.md; run it again after a patch and against the community
+// tables, which read the same files. --armoury=all lists the finishes too.
+if (args.Any(a => a.StartsWith("--armoury", StringComparison.OrdinalIgnoreCase)))
+{
+    var all = args.Contains("--armoury=all", StringComparer.OrdinalIgnoreCase);
+    var cache = Path.Combine(Path.GetDirectoryName(SessionStore.DatabasePathFor(install.RootPath))!, "commodities.json");
+    var armoury = GameCommodities.Load(install.RootPath, cache).Armoury;
+
+    static string Kinds(DamageKinds d) => string.Join("+", new[]
+    {
+        d.Physical > 0 ? $"{d.Physical:0.##} phys" : null, d.Energy > 0 ? $"{d.Energy:0.##} energy" : null,
+        d.Distortion > 0 ? $"{d.Distortion:0.##} dist" : null, d.Thermal > 0 ? $"{d.Thermal:0.##} therm" : null,
+        d.Biochemical > 0 ? $"{d.Biochemical:0.##} bio" : null, d.Stun > 0 ? $"{d.Stun:0.##} stun" : null,
+    }.Where(s => s is not null));
+
+    static string Mode(FireMode m) => m.Kind switch
+    {
+        "Beam" => $"{m.Name} {Kinds(m.BeamDamagePerSecond ?? DamageKinds.None)}/s to {m.BeamFullRange:0}m (none past {m.BeamZeroRange:0}m) {m.BeamAmmoPerSecond:0.#} rounds/s",
+        "Charge" => $"{m.Name} {m.RoundsPerMinute:0} rpm, ×{m.ChargeDamageMultiplier:0.##} after {m.ChargeSeconds:0.##}s for ×{m.ChargeAmmoMultiplier:0.##} rounds",
+        "Burst" => $"{m.Name} {m.BurstShots}×{m.Pellets} at {m.RoundsPerMinute:0} rpm, {m.BurstCooldown:0.##}s between (sustained {Armoury.SustainedRoundsPerMinute(m):0})",
+        _ => $"{m.Name} {m.RoundsPerMinute:0} rpm" + (m.Pellets > 1 ? $" ×{m.Pellets} pellets" : "") + (m.AmmoPerShot != 1 ? $" {m.AmmoPerShot} rounds/shot" : ""),
+    } + (m.Condition.Length > 0 ? $" when {m.Condition}" : "");
+
+    var guns = armoury.Weapons.Where(w => all || w.BaseClass is null).ToList();
+    Console.WriteLine($"{armoury.Weapons.Count} personal weapons, {armoury.Weapons.Count(w => w.BaseClass is null)} of them plain and the rest finishes of one");
+    foreach (var w in guns)
+    {
+        var finishes = armoury.Weapons.Count(o => o.BaseClass == w.Class);
+        Console.WriteLine($"  {w.Name,-38} {w.Kind,-16} {w.Weight,-6} S{w.Size} {w.Mass,5:0.##}kg  hit {Kinds(w.Damage),-22} {w.ProjectileSpeed,5:0} m/s for {w.ProjectileLifetime:0.#}s"
+            + (w.DropStart > 0 ? $"  drops {w.DropPerMetre:0.###}/m past {w.DropStart:0}m to {w.DropFloor:0.##}" : "")
+            + $"  mag {w.Magazine}"
+            + (w.Explosion is { } x ? $"  blast {Kinds(x.Damage)} over {x.Radius:0.#}-{x.OuterRadius:0.#}m" : "")
+            + (finishes > 0 ? $"  +{finishes} finishes" : "") + (w.BaseClass is not null ? $"  finish of {w.BaseClass}" : "")
+            + $"  [{w.Class}] {w.Manufacturer}");
+        foreach (var m in w.Modes)
+            Console.WriteLine($"      {Mode(m),-80} {Armoury.DamagePerSecond(w, m),7:0} dps  {Armoury.DamagePerMagazine(w, m),7:0}/mag  empties in {Armoury.SecondsToEmpty(w, m),5:0.#}s");
+    }
+
+    Console.WriteLine($"\n{armoury.Armour.Count} pieces of armour");
+    foreach (var group in armoury.Armour.GroupBy(a => a.Resistances?.Macro ?? "(none)").OrderBy(g => g.Key))
+    {
+        var r = group.First().Resistances;
+        Console.WriteLine(r is null
+            ? $"  {group.Key}: {group.Count()} pieces, no resistance block"
+            : $"  {group.Key}: {group.Count()} pieces at ×{r.Physical:0.###} phys ×{r.Energy:0.###} energy ×{r.Distortion:0.###} dist ×{r.Thermal:0.###} therm ×{r.Biochemical:0.###} bio ×{r.Stun:0.###} stun, impact ×{r.Impact:0.###}");
+    }
+    Console.WriteLine();
+    foreach (var slot in armoury.Armour.GroupBy(a => a.Slot))
+    {
+        Console.WriteLine($"  {slot.Key}: {slot.Count()} pieces in {slot.Select(a => a.Family).Distinct(StringComparer.OrdinalIgnoreCase).Count()} sets");
+        foreach (var family in slot.GroupBy(a => (a.Family, a.Weight, a.Resistances?.Macro, a.TemperatureMin, a.TemperatureMax, a.RadiationCapacity, a.CapacityMicroScu, a.EmSignature, a.IrSignature, a.Mass)).OrderBy(g => g.Key.Weight).ThenBy(g => g.Key.Family))
+        {
+            var a = family.First();
+            Console.WriteLine($"    {a.Family,-34} {a.Weight,-6} {family.Count(),3}× {a.Resistances?.Macro ?? "-",-20} {a.TemperatureMin,4:0}..{a.TemperatureMax,-4:0}C rad {a.RadiationCapacity,6:0} -{a.RadiationDissipation:0.#}/s"
+                + (a.GForceResistance != 0 ? $" g {a.GForceResistance:+0.##;-0.##}" : "")
+                + (a.CapacityMicroScu > 0 ? $" carries {a.CapacityMicroScu / 1_000_000.0:0.###} SCU" : "")
+                + $" em {a.EmSignature:0.#} ir {a.IrSignature:0.#} {a.Mass:0.#}kg" + (a.MotionPenalty > 0 ? $" broken -{a.MotionPenalty:P0} move" : "")
+                + $"  {a.Manufacturer}" + (all ? "  " + string.Join(" | ", family.Select(p => p.Name)) : ""));
+        }
+    }
+
+    return 0;
+}
+
 var liveOnly = args.Contains("--live-only");
 
 // Machine-readable mode. Everything the human report would say goes to stderr

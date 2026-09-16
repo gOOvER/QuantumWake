@@ -29,6 +29,7 @@ Compiled 2026-08-20 against a real install: **SC 4.9.188.23497**, handle `nekron
 | [precise-poi.md](precise-poi.md) | Plan, unbuilt: marking a place by coordinates the game hands over, and the line that keeps it out of macro territory. |
 | [garage.md](garage.md) | Plan for 0.13: a ship's full stat sheet from the community dump, try a part and see what moves - DPS, shields, EM, IR, power - save the build, shop for it. Includes the signature model, re-derived from the dataset's generator and checked on 269 ships. |
 | [mining.md](mining.md) | The 0.14 line: the mining model read from the install - constants, 42 minerals, 213 compositions, 18 lasers, 29 modules, 6 gadgets - and the rock calculator that runs the community's rule on it, with whose rule it is and what would replace it. |
+| [armoury.md](armoury.md) | The personal armoury: 46 guns and 2,349 pieces of armour read from the install - where a gun's damage actually sits (on the ammunition), how the fire modes nest, why armour resistance is by class and not by piece - the derived figures and whose they are, and UEX prices by the game's own id. |
 | [wikelo.md](wikelo.md) | Wikelo's emporium read from the game files: every trade, its requirements, rewards and rank gates, what the guides got wrong, and what the logs add. |
 | [releasing.md](releasing.md) | Bump, tag, and what the pipeline does with it. |
 | [bug-reports.md](bug-reports.md) | What the report Settings saves holds, what it deliberately leaves out, and the one thing it cannot promise. |

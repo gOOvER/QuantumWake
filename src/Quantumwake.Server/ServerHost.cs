@@ -1165,6 +1165,109 @@ public static class ServerHost
             return Results.Ok(new { verdict, matrix });
         });
 
+        // The personal armoury as the install has it: every gun with its
+        // damage, rate, magazine and fire modes, every piece of armour with
+        // the figures that differ between pieces, and UEX's price for each.
+        // Nothing here is from the logs, which name the pilot's gear only as
+        // it is attached; it is all read from the game files, and the page
+        // says so. Ready is false until the install has been read.
+        app.MapGet("/api/armoury", (LogLibrary lib, UexData uex) =>
+        {
+            var armoury = lib.GameCommodities.Armoury;
+            // Taken once: the resolver is rebuilt from the atlas on every read of
+            // the property, and three thousand pieces each asking for it took
+            // thirty seconds.
+            var terminals = lib.Terminals;
+
+            // UEX's cheapest terminal for a class, the way the Mining page
+            // prices a head. Null is "no terminal recorded", not free.
+            (decimal? Price, List<object> Shops) Priced(string cls)
+            {
+                var uuid = lib.GameCommodities.ItemUuid(cls);
+                return (uex.ItemPrice(uuid), uex.ItemMarket(uuid)
+                    .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => g.MinBy(r => r.Buy)!)
+                    .OrderBy(r => r.Buy)
+                    .Take(3)
+                    .Select(r =>
+                    {
+                        var place = terminals.Resolve(r.Terminal);
+                        return (object)new { terminal = r.Terminal, place = place?.Name, system = place?.System, price = r.Buy };
+                    })
+                    .ToList());
+            }
+            object Market(string cls) { var (price, shops) = Priced(cls); return new { price, shops }; }
+
+            // UEX files a gun under whichever of its classes it met first - its
+            // P4-AR is behr_rifle_ballistic_01_contestedzonereward, not the
+            // plain class - so the plain gun's price is the cheapest across
+            // every class the game gives the same name.
+            var finishesOf = armoury.Weapons.Where(w => w.BaseClass is not null)
+                .GroupBy(w => w.BaseClass!, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+            object WeaponMarket(PersonalWeapon w)
+            {
+                var same = new[] { w }.Concat(finishesOf.GetValueOrDefault(w.Class) ?? []).Where(x => x.Name == w.Name).ToList();
+                var priced = same.Select(x => (x, Priced(x.Class))).Where(p => p.Item2.Price is not null).OrderBy(p => p.Item2.Price).FirstOrDefault();
+                return priced == default ? new { price = (decimal?)null, shops = new List<object>() } : new { price = priced.Item2.Price, shops = priced.Item2.Shops };
+            }
+
+            var weapons = armoury.Weapons.Where(w => w.BaseClass is null).Select(w => new
+            {
+                w.Class, w.Name, w.Kind, w.Weight, w.Size, w.Manufacturer, w.Damage, w.ProjectileSpeed, w.ProjectileLifetime,
+                w.DropStart, w.DropPerMetre, w.DropFloor, floorAt = Armoury.FloorAt(w), w.Magazine, w.MagazineClass, w.Mass, w.Explosion,
+                modes = w.Modes.Select(m => new
+                {
+                    m.Name, m.Kind, m.RoundsPerMinute, m.Pellets, m.AmmoPerShot, m.BurstShots, m.BurstCooldown,
+                    m.ChargeSeconds, m.ChargeDamageMultiplier, m.ChargeAmmoMultiplier, m.ChargePellets,
+                    m.BeamDamagePerSecond, m.BeamFullRange, m.BeamZeroRange, m.BeamAmmoPerSecond, m.HeatPerShot, m.Condition, m.SecondaryAmmo,
+                    hit = Armoury.Hit(w, m),
+                    sustainedRoundsPerMinute = Armoury.SustainedRoundsPerMinute(m),
+                    damagePerShot = Armoury.DamagePerShot(w, m),
+                    damagePerSecond = Armoury.DamagePerSecond(w, m),
+                    damagePerMagazine = Armoury.DamagePerMagazine(w, m),
+                    secondsToEmpty = Armoury.SecondsToEmpty(w, m),
+                }),
+                market = WeaponMarket(w),
+                finishes = (finishesOf.GetValueOrDefault(w.Class) ?? [])
+                    .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+                    .Select(f => new { f.Class, f.Name, market = Market(f.Class) }),
+            });
+
+            // Colours of one set share every figure, so the page gets a row per
+            // set-and-figures with the pieces under it; a set whose figures
+            // changed between two editions is two rows, which is the truth.
+            var armour = armoury.Armour
+                .GroupBy(a => (a.Family, a.Slot, a.Weight, Macro: a.Resistances?.Macro ?? "", a.TemperatureMin, a.TemperatureMax,
+                    a.RadiationCapacity, a.RadiationDissipation, a.GForceResistance, a.CapacityMicroScu, a.EmSignature, a.IrSignature, a.MotionPenalty, a.ViewPenalty, a.Mass))
+                .Select(g =>
+                {
+                    var first = g.OrderBy(a => a.Name.Length).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase).First();
+                    var priced = g.OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase).Select(a => (a.Class, a.Name, Market: Priced(a.Class))).ToList();
+                    var cheapest = priced.Where(p => p.Market.Price is not null).OrderBy(p => p.Market.Price).FirstOrDefault();
+                    return new
+                    {
+                        first.Family, first.Slot, first.Weight, first.Kind, first.Manufacturer, first.Resistances, first.Protects,
+                        first.TemperatureMin, first.TemperatureMax, first.RadiationCapacity, first.RadiationDissipation, first.GForceResistance,
+                        first.CapacityMicroScu, first.EmSignature, first.IrSignature, first.MotionPenalty, first.ViewPenalty, first.Mass,
+                        name = first.Name,
+                        pieces = priced.Select(p => new { @class = p.Class, name = p.Name, market = new { price = p.Market.Price, shops = p.Market.Shops } }).ToList(),
+                        market = new { price = cheapest.Market.Price, shops = cheapest.Market.Shops ?? [] },
+                    };
+                })
+                .OrderBy(r => r.Slot, StringComparer.OrdinalIgnoreCase).ThenBy(r => r.Weight, StringComparer.OrdinalIgnoreCase).ThenBy(r => r.Family, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return Results.Ok(new
+            {
+                ready = armoury.Weapons.Count > 0 || armoury.Armour.Count > 0,
+                weapons,
+                armour,
+                itemPricesKnown = uex.IsEnabled,
+                counts = new { weapons = armoury.Weapons.Count, plain = weapons.Count(), armour = armoury.Armour.Count, sets = armour.Count },
+            });
+        });
+
         // What the game says each place has. Separate from the service badges,
         // which are UEX's account of where you can actually trade: this is the
         // star map's own list, and the two disagree usefully often.

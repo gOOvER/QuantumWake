@@ -434,7 +434,7 @@ public static class GameMining
     /// in the parent and some sit behind a pointer, and the same name is one
     /// or the other on different records. Null when the field is absent.
     /// </summary>
-    private static (long At, int StructIndex)? Nested(DataCore core, long at, int structIndex, string name)
+    internal static (long At, int StructIndex)? Nested(DataCore core, long at, int structIndex, string name)
     {
         if (core.PointerAt(at, structIndex, name) is { } pointer)
             return (core.InstanceAt(pointer), pointer.StructIndex);

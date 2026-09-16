@@ -365,7 +365,27 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.6
+### 0.14.7
+
+- **An Armoury page, under Gear.** Which rifle, what armour, where to buy
+  it — read from your own game files. Every gun the game sells (46 on this
+  install, 327 counting the colours) with one projectile's damage by kind,
+  every fire mode with its rate, the magazine, the projectile's speed and
+  where its damage starts to fall, and every piece of armour (2,349 pieces
+  in 384 sets) with the temperatures it keeps you comfortable in, the
+  radiation it soaks, what its pockets hold, its signature and its mass.
+  UEX's cheapest terminal sits beside each, as the Garage prices a part; a
+  blank is no terminal recorded, not free. Click a gun for every mode's
+  figures, its drop curve and its finishes with their own prices; click a
+  set for its colours. **Two things the files say that the wikis do not
+  make obvious**: a gun's damage is on the ammunition its magazine loads,
+  not the gun, and armour resistance is by class, not by piece — every
+  medium piece lets 70 % of a hit through, every heavy 60 % — so the page
+  says that once above the table rather than repeating it down a column.
+  Damage a second, per magazine and time to empty are derived by holding
+  the trigger down and are called derived; the game publishes none of them.
+  Knives, grenades and attachments are not read yet, and the page says so.
+  (`docs/armoury.md`; `--armoury` in the CLI prints the same tables.)
 
 - **Mining is easier to work from at a glance.** The page now separates its
   prospecting, rock-fit and personal-log workspaces with a stronger operations

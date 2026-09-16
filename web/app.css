@@ -5056,3 +5056,27 @@ body.overlay .ship-picture { display: none; }
 }
 .ship-card.unflown { opacity: .92; }
 .ship-card.unflown .ship-name::after { content: " · never flown"; font-size: 10px; color: var(--muted); font-weight: 400; }
+
+/* ---------- armoury ---------- */
+.armoury-pane { display: none; }
+.armoury-pane.active { display: block; }
+.armoury-pane[hidden], #armoury-tabs[hidden] { display: none; }
+.armoury-filters { flex-wrap: wrap; margin: 0 0 8px; }
+#armoury-guns tbody tr, #armoury-armour tbody tr { cursor: pointer; }
+#armoury-guns tbody tr.open, #armoury-armour tbody tr.open { background: rgba(53, 200, 240, .09); }
+.armoury-modes { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; }
+.armoury-modes .armoury-when { color: var(--dim); }
+.armoury-kind { color: var(--muted); font-size: 11px; }
+/* width 0 with min-width 100%: fills the cell without widening the table past its own columns. */
+.armoury-detail { padding: 12px 14px; width: 0; min-width: 100%; box-sizing: border-box; white-space: normal; }
+.armoury-detail p { white-space: normal; }
+.armoury-detail h4 { margin: 10px 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.armoury-detail table { width: 100%; }
+.armoury-finishes { display: flex; flex-wrap: wrap; gap: 6px; }
+.armoury-finish { border: 1px solid var(--rule); border-radius: 4px; padding: 3px 8px; font-size: 11.5px; }
+.armoury-finish .muted { margin-left: 6px; }
+#armoury-guns tbody tr.armoury-expand, #armoury-armour tbody tr.armoury-expand { cursor: default; background: var(--panel); }
+#armoury-guns tbody tr.armoury-expand:hover, #armoury-armour tbody tr.armoury-expand:hover { background: var(--panel); }
+.armoury-expand > td { padding: 0; border-left: 3px solid var(--cyan-deep); }
+.armoury-detail .panel-title { font-size: 14px; color: var(--text); }
+.armoury-detail .panel-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }

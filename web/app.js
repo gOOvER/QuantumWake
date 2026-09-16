@@ -298,6 +298,7 @@ function showView(name) {
   if (name === 'crew') loadCrew().catch(() => {});
   if (name === 'servers') loadServers().catch(() => {});
   if (name === 'garage') loadGarage().catch(() => {});
+  if (name === 'armoury') loadArmoury().catch(() => {});
   if (name === 'points') loadPoints().catch(() => {});
   if (name === 'wikelo') loadWikelo().catch(() => {});
 
@@ -5229,6 +5230,405 @@ function renderMiningRef() {
 onInput('#mining-search', renderMiningRef);
 $('#mining-kind')?.addEventListener('change', renderMiningRef);
 $('#mining-system')?.addEventListener('change', renderMiningRef);
+
+/* ---------- the armoury: guns and armour, read from the install ---------- */
+
+let armouryModel = null;
+let armouryPane = 'guns';
+let armouryOpenGun = null;
+let armouryOpenSet = null;
+
+try {
+  const kept = localStorage.getItem('qw-armoury-pane');
+  if (kept === 'guns' || kept === 'armour') armouryPane = kept;
+} catch { /* a private window has no memory, which is fine */ }
+
+function showArmouryPane(name) {
+  if (name !== 'guns' && name !== 'armour') name = 'guns';
+  armouryPane = name;
+  try { localStorage.setItem('qw-armoury-pane', name); } catch { /* as above */ }
+  for (const id of ['#armoury-pane-guns', '#armoury-pane-armour']) {
+    const pane = $(id);
+    if (pane) pane.classList.toggle('active', id === `#armoury-pane-${name}`);
+  }
+  for (const button of $('#armoury-tabs')?.querySelectorAll('button') || [])
+    button.classList.toggle('active', button.dataset.pane === name);
+}
+
+$('#armoury-tabs')?.addEventListener('click', (e) => {
+  const button = e.target.closest('button[data-pane]');
+  if (button) showArmouryPane(button.dataset.pane);
+});
+
+async function loadArmoury() {
+  const unready = $('#armoury-unready');
+  try {
+    armouryModel = await getJson('/api/armoury');
+  } catch {
+    armouryModel = null;
+  }
+
+  const panes = [$('#armoury-pane-guns'), $('#armoury-pane-armour'), $('#armoury-tabs')];
+  if (!armouryModel?.ready) {
+    for (const p of panes) if (p) p.hidden = true;
+    if (unready) {
+      unready.hidden = false;
+      unready.textContent = gameDataExcuse() || 'The install has not been read yet - Settings says when the game data is ready.';
+    }
+    return;
+  }
+  if (unready) unready.hidden = true;
+  for (const p of panes) if (p) p.hidden = false;
+
+  // The kind filter lists what the install actually has, in the order a
+  // holster would: pistols first, the shouldered things last.
+  const order = ['Pistol', 'SMG', 'Rifle', 'Shotgun', 'Sniper rifle', 'Crossbow', 'LMG', 'Grenade launcher', 'Heavy'];
+  const kinds = [...new Set(armouryModel.weapons.map((w) => w.kind))]
+    .sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99) || a.localeCompare(b));
+  const kind = $('#armoury-gun-kind');
+  if (kind) {
+    const keep = kind.value;
+    kind.textContent = '';
+    kind.append(new Option('Every kind', ''));
+    for (const k of kinds) kind.append(new Option(k, k));
+    kind.value = kinds.includes(keep) ? keep : '';
+  }
+
+  const slotOrder = ['Helmet', 'Core', 'Arms', 'Legs', 'Undersuit', 'Backpack'];
+  const slots = [...new Set(armouryModel.armour.map((a) => a.slot))]
+    .sort((a, b) => (slotOrder.indexOf(a) + 1 || 99) - (slotOrder.indexOf(b) + 1 || 99) || a.localeCompare(b));
+  const slot = $('#armoury-armour-slot');
+  if (slot) {
+    const keep = slot.value;
+    slot.textContent = '';
+    slot.append(new Option('Every slot', ''));
+    for (const s of slots) slot.append(new Option(s, s));
+    slot.value = slots.includes(keep) ? keep : '';
+  }
+
+  showArmouryPane(armouryPane);
+  renderArmouryGuns();
+  renderArmouryArmour();
+}
+
+/** A detail row under the one clicked, spanning the table, so the figures open where the eye is. */
+function armouryExpansion(inner, columns) {
+  const tr = el('tr', 'armoury-expand');
+  const td = el('td');
+  td.colSpan = columns;
+  td.append(inner);
+  tr.append(td);
+  // A click inside the expansion is reading, not closing.
+  tr.addEventListener('click', (e) => e.stopPropagation());
+  return tr;
+}
+
+/** "4,138 aUEC" or a dash: UEX's cheapest terminal for the item, or none recorded. */
+function armouryPrice(market) {
+  return market?.price ? `${fmtInt(market.price)} aUEC` : '—';
+}
+
+function armouryWhere(market) {
+  const best = market?.shops?.[0];
+  if (!best) return armouryModel?.itemPricesKnown ? 'no terminal recorded' : 'prices need UEX (Settings)';
+  // "Guns Checkmate, Checkmate" says the place twice; the terminal name
+  // carries it, so the place is added only when it adds something.
+  const place = best.place && !best.terminal.toLowerCase().includes(best.place.toLowerCase()) ? `, ${best.place}` : '';
+  return `${best.terminal}${place}${market.shops.length > 1 ? ` +${market.shops.length - 1}` : ''}`;
+}
+
+/** "12 ballistic", "32.5 energy + 7.5 distortion + 1 stun": one hit, by kind. */
+function armouryHit(d) {
+  if (!d) return '—';
+  const parts = [
+    ['physical', 'ballistic'], ['energy', 'energy'], ['distortion', 'distortion'], ['thermal', 'thermal'], ['biochemical', 'biochemical'], ['stun', 'stun'],
+  ].filter(([k]) => d[k] > 0).map(([k, word]) => `${fmtDamage(d[k])} ${word}`);
+  return parts.length ? parts.join(' + ') : '—';
+}
+
+function fmtDamage(n) {
+  const v = Number(n) || 0;
+  return v >= 100 ? fmtInt(v) : String(Math.round(v * 100) / 100);
+}
+
+/** The mode in one line: "AUTO 810 rpm", "BURST 3 × 900 rpm", "CHARGE ×2 after 3.5 s", "BEAM 225/s to 10 m". */
+function armouryMode(m) {
+  let text;
+  if (m.kind === 'Beam') {
+    const reach = m.beamFullRange >= m.beamZeroRange ? `to ${fmtInt(m.beamZeroRange)} m` : `to ${fmtInt(m.beamFullRange)} m, none past ${fmtInt(m.beamZeroRange)} m`;
+    text = `${m.name} ${fmtDamage(m.beamDamagePerSecond?.total)}/s ${reach}`;
+  } else if (m.kind === 'Charge') {
+    text = `${m.name} ×${m.chargeDamageMultiplier}${m.chargePellets > 0 ? ` in ${m.chargePellets}` : ''} after ${m.chargeSeconds} s${m.chargeAmmoMultiplier > 1 ? `, ${m.chargeAmmoMultiplier} rounds` : ''}`;
+  } else if (m.kind === 'Burst') {
+    text = `${m.name} ${m.burstShots} × ${fmtInt(m.roundsPerMinute)} rpm`;
+  } else {
+    text = `${m.name} ${fmtInt(m.roundsPerMinute)} rpm`;
+  }
+  if (m.pellets > 1 && m.kind !== 'Charge') text += ` × ${m.pellets}`;
+  return text;
+}
+
+/** The mode a pilot would hold the trigger on: the highest derived DPS. */
+function armouryBestMode(w) {
+  return [...(w.modes || [])].sort((a, b) => b.damagePerSecond - a.damagePerSecond)[0] || null;
+}
+
+function armouryGunsFiltered() {
+  if (!armouryModel) return [];
+  const kind = $('#armoury-gun-kind')?.value || '';
+  const damage = $('#armoury-gun-damage')?.value || '';
+  const sort = $('#armoury-gun-sort')?.value || 'dps';
+  const priced = $('#armoury-gun-priced')?.checked;
+  const q = ($('#armoury-search')?.value || '').trim().toLowerCase();
+
+  const rows = armouryModel.weapons.filter((w) => {
+    if (kind && w.kind !== kind) return false;
+    if (damage && (w.damage?.dominant || '') !== damage) return false;
+    if (priced && !w.market?.price) return false;
+    if (q && !`${w.name} ${w.kind} ${w.manufacturer}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const best = (w) => armouryBestMode(w)?.damagePerSecond || 0;
+  const hit = (w) => armouryBestMode(w)?.damagePerShot || 0;
+  rows.sort((a, b) => {
+    switch (sort) {
+      case 'hit': return hit(b) - hit(a) || a.name.localeCompare(b.name);
+      case 'mag': return (armouryBestMode(b)?.damagePerMagazine || 0) - (armouryBestMode(a)?.damagePerMagazine || 0) || a.name.localeCompare(b.name);
+      case 'reach': return (b.dropStart || 1e9) - (a.dropStart || 1e9) || a.name.localeCompare(b.name);
+      case 'price': return (a.market?.price || 1e12) - (b.market?.price || 1e12) || a.name.localeCompare(b.name);
+      case 'name': return a.name.localeCompare(b.name);
+      default: return best(b) - best(a) || a.name.localeCompare(b.name);
+    }
+  });
+  return rows;
+}
+
+function renderArmouryGuns() {
+  const body = $('#armoury-guns tbody');
+  if (!body || !armouryModel?.ready) return;
+  body.textContent = '';
+  const rows = armouryGunsFiltered();
+  const count = $('#armoury-gun-count');
+  if (count) {
+    const c = armouryModel.counts || {};
+    count.textContent = `${rows.length} of ${c.plain ?? armouryModel.weapons.length} guns; the install describes ${c.weapons ?? '?'} counting every finish. `
+      + `${armouryModel.itemPricesKnown ? `UEX prices ${armouryModel.weapons.filter((w) => w.market?.price).length} of them.` : 'Prices need UEX, in Settings.'}`;
+  }
+  for (const w of rows) {
+    const best = armouryBestMode(w);
+    const tr = el('tr');
+    tr.dataset.class = w.class;
+    if (armouryOpenGun === w.class) tr.classList.add('open');
+    const name = el('td', null, w.name);
+    if (w.manufacturer) name.append(el('div', 'armoury-kind', w.manufacturer));
+    tr.append(name);
+    const kind = el('td', null, w.kind);
+    kind.append(el('div', 'armoury-kind', `${w.weight} holster`));
+    tr.append(kind);
+    tr.append(el('td', 'num', w.damage?.total > 0
+      ? armouryHit(w.damage) : (w.explosion ? `blast ${armouryHit(w.explosion.damage)}` : '—')));
+    const modes = el('td');
+    const list = el('div', 'armoury-modes');
+    for (const m of w.modes) {
+      const line = el('span', null, armouryMode(m));
+      if (m.condition) line.append(el('span', 'armoury-when', ` when ${m.condition}`));
+      list.append(line);
+    }
+    modes.append(list);
+    tr.append(modes);
+    tr.append(el('td', 'num', best ? fmtInt(best.damagePerSecond) : '—'));
+    tr.append(el('td', 'num', w.magazine > 0 ? String(w.magazine) : '—'));
+    tr.append(el('td', 'num', best && w.magazine > 0 ? fmtInt(best.damagePerMagazine) : '—'));
+    tr.append(el('td', 'num', w.dropStart > 0 ? `${fmtInt(w.dropStart)} m → ${fmtDamage(w.dropFloor)}` : 'none'));
+    tr.append(el('td', 'num', armouryPrice(w.market)));
+    tr.append(el('td', 'muted', armouryWhere(w.market)));
+    tr.addEventListener('click', () => {
+      armouryOpenGun = armouryOpenGun === w.class ? null : w.class;
+      renderArmouryGuns();
+    });
+    body.append(tr);
+    if (armouryOpenGun === w.class) body.append(armouryExpansion(renderArmouryGunDetail(w), 11));
+  }
+}
+
+/** Every mode's figures for one gun, its drop curve, its blast, and every finish with a price. */
+function renderArmouryGunDetail(w) {
+  const inner = el('div', 'armoury-detail');
+  inner.append(el('div', 'panel-title', w.name));
+  inner.append(el('div', 'panel-sub', `${w.kind} · ${w.weight} holster · ${w.manufacturer || 'maker unnamed'} · ${w.class}`));
+
+  inner.append(el('h4', null, 'Fire modes, trigger held'));
+  const table = el('table');
+  const head = el('thead');
+  const hr = el('tr');
+  for (const [label, cls] of [['Mode', null], ['Per shot', 'num'], ['Cyclic', 'num'], ['Sustained', 'num'], ['DPS', 'num'], ['Per mag', 'num'], ['Empties in', 'num'], ['Heat', 'num']])
+    hr.append(el('th', cls, label));
+  head.append(hr);
+  table.append(head);
+  const tb = el('tbody');
+  for (const m of w.modes) {
+    const tr = el('tr');
+    const label = el('td', null, armouryMode(m));
+    if (m.condition) label.append(el('span', 'armoury-when', ` when ${m.condition}`));
+    if (m.secondaryAmmo) label.append(el('span', 'armoury-when', ' · the magazine’s second load'));
+    tr.append(label);
+    tr.append(el('td', 'num', m.kind === 'Beam' ? `${fmtDamage(m.damagePerSecond)}/s` : `${fmtDamage(m.damagePerShot)} (${armouryHit(m.hit)}${m.pellets > 1 || m.chargePellets > 0 ? ` × ${m.chargePellets > 0 && m.kind === 'Charge' ? m.chargePellets : m.pellets}` : ''}${m.kind === 'Charge' ? ` × ${m.chargeDamageMultiplier}` : ''})`));
+    tr.append(el('td', 'num', m.roundsPerMinute > 0 ? `${fmtInt(m.roundsPerMinute)} rpm` : '—'));
+    tr.append(el('td', 'num', m.sustainedRoundsPerMinute > 0 ? `${fmtInt(m.sustainedRoundsPerMinute)} rpm` : '—'));
+    tr.append(el('td', 'num', fmtInt(m.damagePerSecond)));
+    tr.append(el('td', 'num', w.magazine > 0 ? fmtInt(m.damagePerMagazine) : '—'));
+    tr.append(el('td', 'num', m.secondsToEmpty > 0 ? `${Math.round(m.secondsToEmpty * 10) / 10} s` : '—'));
+    tr.append(el('td', 'num', m.heatPerShot > 0 ? String(m.heatPerShot) : '—'));
+    tb.append(tr);
+  }
+  table.append(tb);
+  inner.append(table);
+
+  const notes = [];
+  notes.push(`Projectile ${fmtInt(w.projectileSpeed)} m/s for ${w.projectileLifetime} s (${fmtInt(w.projectileSpeed * w.projectileLifetime)} m before it is gone).`);
+  if (w.dropStart > 0) notes.push(`Damage holds to ${fmtInt(w.dropStart)} m, then loses ${w.dropPerMetre} a metre down to ${fmtDamage(w.dropFloor)} at ${fmtInt(w.floorAt)} m.`);
+  else notes.push('No damage drop with distance.');
+  if (w.explosion) notes.push(`On arrival: ${armouryHit(w.explosion.damage)} over ${w.explosion.radius}${w.explosion.outerRadius > w.explosion.radius ? `–${w.explosion.outerRadius}` : ''} m.`);
+  if (w.magazine > 0) notes.push(`Magazine ${w.magazine} rounds (${w.magazineClass}).`);
+  else notes.push('The files give this magazine no round count.');
+  notes.push(`${Math.round(w.mass * 100) / 100} kg.`);
+  inner.append(el('p', 'muted small', notes.join(' ')));
+
+  inner.append(el('h4', null, `Finishes${w.finishes?.length ? ` (${w.finishes.length})` : ''}`));
+  if (!w.finishes?.length) inner.append(el('p', 'muted small', 'The plain gun only.'));
+  else {
+    const list = el('div', 'armoury-finishes');
+    for (const f of w.finishes) {
+      const chip = el('span', 'armoury-finish', f.name);
+      chip.append(el('span', 'muted', f.market?.price ? `${fmtInt(f.market.price)} aUEC · ${armouryWhere(f.market)}` : 'no terminal recorded'));
+      list.append(chip);
+    }
+    inner.append(list);
+    inner.append(el('p', 'muted small', 'A finish is the same gun in another colour: same figures, its own price.'));
+  }
+  return inner;
+}
+
+function armouryArmourFiltered() {
+  if (!armouryModel) return [];
+  const slot = $('#armoury-armour-slot')?.value || '';
+  const weight = $('#armoury-armour-weight')?.value || '';
+  const sort = $('#armoury-armour-sort')?.value || 'name';
+  const priced = $('#armoury-armour-priced')?.checked;
+  const q = ($('#armoury-search')?.value || '').trim().toLowerCase();
+
+  const rows = armouryModel.armour.filter((a) => {
+    if (slot && a.slot !== slot) return false;
+    if (weight && a.weight !== weight) return false;
+    if (priced && !a.market?.price) return false;
+    if (q && !`${a.family} ${a.name} ${a.slot} ${a.manufacturer} ${(a.pieces || []).map((p) => p.name).join(' ')}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const byName = (a, b) => a.family.localeCompare(b.family) || a.slot.localeCompare(b.slot) || a.name.localeCompare(b.name);
+  rows.sort((a, b) => {
+    switch (sort) {
+      case 'cold': return a.temperatureMin - b.temperatureMin || byName(a, b);
+      case 'hot': return b.temperatureMax - a.temperatureMax || byName(a, b);
+      case 'carry': return b.capacityMicroScu - a.capacityMicroScu || byName(a, b);
+      case 'quiet': return (a.emSignature + a.irSignature) - (b.emSignature + b.irSignature) || byName(a, b);
+      case 'light': return a.mass - b.mass || byName(a, b);
+      case 'price': return (a.market?.price || 1e12) - (b.market?.price || 1e12) || byName(a, b);
+      default: return byName(a, b);
+    }
+  });
+  return rows;
+}
+
+/** "70%" - what a hit leaves after the class's multiplier; the same for every piece of the class. */
+function armouryTakes(r) {
+  if (!r) return '—';
+  return `${Math.round(r.physical * 100)}%${Math.abs(r.energy - r.physical) > 0.001 ? ` / ${Math.round(r.energy * 100)}% energy` : ''}`;
+}
+
+function renderArmouryArmour() {
+  const body = $('#armoury-armour tbody');
+  if (!body || !armouryModel?.ready) return;
+  body.textContent = '';
+  const rows = armouryArmourFiltered();
+  const count = $('#armoury-armour-count');
+  if (count) {
+    const c = armouryModel.counts || {};
+    count.textContent = `${rows.length} of ${c.sets ?? armouryModel.armour.length} sets, from ${c.armour ?? '?'} pieces in the install. `
+      + `${armouryModel.itemPricesKnown ? `UEX prices ${armouryModel.armour.filter((a) => a.market?.price).length} of the sets.` : 'Prices need UEX, in Settings.'}`;
+  }
+  const note = $('#armoury-armour-note');
+  if (note) {
+    // Said once, above the table, so a column of identical figures is not
+    // mistaken for a finding: the resistance is the class's, not the piece's.
+    const macros = new Map();
+    for (const a of armouryModel.armour) if (a.resistances) macros.set(a.resistances.macro, a.resistances);
+    const light = macros.get('LightArmor'), medium = macros.get('MediumArmor'), heavy = macros.get('HeavyArmor');
+    note.textContent = light && medium && heavy
+      ? `Resistance is by class, not by piece: every light piece lets ${Math.round(light.physical * 100)}% of a hit through, every medium ${Math.round(medium.physical * 100)}%, every heavy ${Math.round(heavy.physical * 100)}% (stun ${Math.round(light.stun * 100)} / ${Math.round(medium.stun * 100)} / ${Math.round(heavy.stun * 100)}%). What differs between two pieces of a class is the rest of the row.`
+      : 'Resistance is by class, not by piece; what differs between two pieces of a class is the rest of the row.';
+  }
+  for (const a of rows) {
+    const tr = el('tr');
+    const key = `${a.slot}|${a.name}`;
+    tr.dataset.key = key;
+    if (armouryOpenSet === key) tr.classList.add('open');
+    const name = el('td', null, a.family);
+    if (a.manufacturer) name.append(el('div', 'armoury-kind', a.manufacturer));
+    tr.append(name);
+    tr.append(el('td', null, a.slot));
+    tr.append(el('td', null, a.weight || (a.resistances?.macro === 'CombatFlightsuitArmor' ? 'Flight suit' : '—')));
+    tr.append(el('td', 'num', armouryTakes(a.resistances)));
+    tr.append(el('td', 'num', a.resistances ? `${Math.round(a.resistances.stun * 100)}%` : '—'));
+    tr.append(el('td', 'num', a.temperatureMin || a.temperatureMax ? `${fmtInt(a.temperatureMin)} to ${fmtInt(a.temperatureMax)} °C` : '—'));
+    tr.append(el('td', 'num', a.radiationCapacity > 0 ? `${fmtInt(a.radiationCapacity)} · ${a.radiationDissipation}/s` : '—'));
+    tr.append(el('td', 'num', a.capacityMicroScu > 0 ? `${fmtInt(a.capacityMicroScu / 1000)} mSCU` : '—'));
+    tr.append(el('td', 'num', a.emSignature > 0 || a.irSignature > 0 ? `${a.emSignature}${a.irSignature > 0 ? ` · IR ${a.irSignature}` : ''}` : '0'));
+    tr.append(el('td', 'num', String(Math.round(a.mass * 100) / 100)));
+    tr.append(el('td', 'num', String(a.pieces?.length || 1)));
+    tr.append(el('td', 'num', armouryPrice(a.market)));
+    tr.append(el('td', 'muted', armouryWhere(a.market)));
+    tr.addEventListener('click', () => {
+      armouryOpenSet = armouryOpenSet === key ? null : key;
+      renderArmouryArmour();
+    });
+    body.append(tr);
+    if (armouryOpenSet === key) body.append(armouryExpansion(renderArmouryArmourDetail(a), 13));
+  }
+}
+
+/** Every colour of one set with its own price, and the figures the row could not fit. */
+function renderArmouryArmourDetail(a) {
+  const inner = el('div', 'armoury-detail');
+  inner.append(el('div', 'panel-title', `${a.family} · ${a.slot}`));
+  inner.append(el('div', 'panel-sub', `${a.kind || a.slot}${a.weight ? ` · ${a.weight}` : ''} · ${a.manufacturer || 'maker unnamed'}`));
+
+  const facts = [];
+  if (a.resistances) {
+    const r = a.resistances;
+    facts.push(`Takes ${Math.round(r.physical * 100)}% of ballistic, ${Math.round(r.energy * 100)}% of energy, ${Math.round(r.distortion * 100)}% of distortion, ${Math.round(r.thermal * 100)}% of thermal, ${Math.round(r.biochemical * 100)}% of biochemical and ${Math.round(r.stun * 100)}% of stun damage, ${Math.round(r.impact * 100)}% of an impact's force - the ${r.macro} table, shared by every piece that reads it.`);
+  } else facts.push('No resistance block: it stops nothing.');
+  if (a.protects?.length) facts.push(`Covers ${a.protects.join(', ')}.`);
+  if (a.gForceResistance) facts.push(`G tolerance ${a.gForceResistance > 0 ? '+' : ''}${a.gForceResistance}.`);
+  if (a.motionPenalty > 0 || a.viewPenalty > 0) facts.push(`Restriction penalty ${Math.round(a.motionPenalty * 100)}% movement, ${Math.round(a.viewPenalty * 100)}% view - the game's own figure; what puts the piece into that state is not read.`);
+  inner.append(el('p', 'muted small', facts.join(' ')));
+
+  inner.append(el('h4', null, `Colours and editions (${a.pieces?.length || 0})`));
+  const list = el('div', 'armoury-finishes');
+  for (const p of a.pieces || []) {
+    const chip = el('span', 'armoury-finish', p.name);
+    chip.append(el('span', 'muted', p.market?.price ? `${fmtInt(p.market.price)} aUEC · ${armouryWhere(p.market)}` : 'no terminal recorded'));
+    list.append(chip);
+  }
+  inner.append(list);
+  return inner;
+}
+
+for (const id of ['#armoury-gun-kind', '#armoury-gun-damage', '#armoury-gun-sort', '#armoury-gun-priced'])
+  $(id)?.addEventListener('change', renderArmouryGuns);
+for (const id of ['#armoury-armour-slot', '#armoury-armour-weight', '#armoury-armour-sort', '#armoury-armour-priced'])
+  $(id)?.addEventListener('change', renderArmouryArmour);
+onInput('#armoury-search', () => { renderArmouryGuns(); renderArmouryArmour(); });
+
 
 /* ---------- crafting blueprints ---------- */
 

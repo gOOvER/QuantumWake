@@ -76,6 +76,7 @@
         <button data-view="stash">Stash</button>
         <button data-view="loot">Loot</button>
         <button data-view="garage">Garage</button>
+        <button data-view="armoury">Armoury</button>
       </div>
     </div>
     <div class="tab-group">
@@ -2190,6 +2191,119 @@
       </div>
       <div class="bench-panel market-list" id="garage-market-body"></div>
     </section>
+  </section>
+
+  <section id="view-armoury" class="view">
+    <div class="section-bar">
+      <h2>Armoury</h2>
+      <div class="controls">
+        <input type="search" id="armoury-search" class="search" placeholder="Search guns and armour…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <p class="muted caption">
+      Which rifle, what armour, where to buy it. Every figure is read from your
+      own game files &mdash; a gun's damage sits on the ammunition its magazine
+      loads, a fire mode's rate on the gun, a piece of armour's resistance on a
+      table its class shares &mdash; and the price is UEX's cheapest terminal
+      for the item, as the Garage prices a part. <b>Nothing here is from your
+      logs</b>: they name what you had attached, never what it does.
+      Rates and damage a second are derived by holding the trigger down, and
+      say so; the game publishes neither. (<code>docs/armoury.md</code>)
+    </p>
+    <p class="muted" id="armoury-unready" hidden></p>
+
+    <nav class="subtabs" id="armoury-tabs" aria-label="Armoury pages">
+      <button type="button" data-pane="guns" class="active">Guns</button>
+      <button type="button" data-pane="armour">Armour</button>
+    </nav>
+
+    <div class="armoury-pane active" id="armoury-pane-guns">
+      <div class="controls armoury-filters">
+        <select id="armoury-gun-kind" class="select" title="Kind of gun"></select>
+        <select id="armoury-gun-damage" class="select" title="Damage kind">
+          <option value="">Any damage</option>
+          <option value="physical">Ballistic</option>
+          <option value="energy">Energy</option>
+          <option value="mixed">Mixed</option>
+        </select>
+        <select id="armoury-gun-sort" class="select" title="Sort guns by">
+          <option value="dps">Best damage a second</option>
+          <option value="hit">Hardest hit</option>
+          <option value="mag">Most a magazine</option>
+          <option value="reach">Longest before the drop</option>
+          <option value="price">Cheapest first</option>
+          <option value="name">By name</option>
+        </select>
+        <label class="toggle"><input type="checkbox" id="armoury-gun-priced"> Only guns UEX prices</label>
+      </div>
+      <p class="muted small" id="armoury-gun-count"></p>
+      <div class="table-wrap">
+        <table id="armoury-guns">
+          <thead><tr>
+            <th>Gun</th><th title="The kind, and the holster it takes: small on the hip, medium and large on the back">Kind</th>
+            <th class="num" title="One projectile at the muzzle, and what kind of damage it is">Hit</th>
+            <th title="Every way it fires, with the cyclic rate">Modes</th>
+            <th class="num" title="The best mode's damage a second with the trigger held - derived, not the game's">DPS</th>
+            <th class="num" title="Rounds in the magazine it ships with">Mag</th>
+            <th class="num" title="What a whole magazine does in the best mode - derived">Per mag</th>
+            <th class="num" title="Where the damage starts to fall, and the floor it falls to">Drop</th>
+            <th class="num" title="UEX's cheapest terminal for the plain gun, or a finish the game names the same">Price</th>
+            <th>Cheapest at</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted small">
+        DPS and per-magazine figures assume the trigger is held and, for a charge
+        mode, every shot held to full charge; a burst's sustained rate counts its
+        cooldown. Damage is at the muzzle, before the drop and before armour.
+        A launcher's blast is shown in the row's details. Knives, grenades and
+        the gadgets are not read yet.
+      </p>
+    </div>
+
+    <div class="armoury-pane" id="armoury-pane-armour">
+      <div class="controls armoury-filters">
+        <select id="armoury-armour-slot" class="select" title="Where it is worn"></select>
+        <select id="armoury-armour-weight" class="select" title="Light, medium or heavy">
+          <option value="">Any weight</option>
+          <option value="Light">Light</option>
+          <option value="Medium">Medium</option>
+          <option value="Heavy">Heavy</option>
+        </select>
+        <select id="armoury-armour-sort" class="select" title="Sort armour by">
+          <option value="name">By set</option>
+          <option value="cold">Coldest it takes</option>
+          <option value="hot">Hottest it takes</option>
+          <option value="carry">Carries most</option>
+          <option value="quiet">Quietest</option>
+          <option value="light">Lightest</option>
+          <option value="price">Cheapest first</option>
+        </select>
+        <label class="toggle"><input type="checkbox" id="armoury-armour-priced"> Only sets UEX prices</label>
+      </div>
+      <p class="muted small" id="armoury-armour-count"></p>
+      <p class="muted small" id="armoury-armour-note"></p>
+      <div class="table-wrap">
+        <table id="armoury-armour">
+          <thead><tr>
+            <th>Set</th><th>Slot</th><th>Weight</th>
+            <th class="num" title="How much of a hit gets through: the class's shared table, so every medium piece reads the same">Takes</th>
+            <th class="num" title="Of a stun hit">Stun</th>
+            <th class="num" title="The temperatures it keeps you comfortable in">Temp</th>
+            <th class="num" title="Radiation it soaks before you take it, and how fast it sheds it a second">Radiation</th>
+            <th class="num" title="What its pockets hold">Carries</th>
+            <th class="num" title="Electromagnetic emission it adds">EM</th>
+            <th class="num">kg</th>
+            <th class="num" title="Colours and editions the game sells with these figures">Colours</th>
+            <th class="num" title="UEX's cheapest terminal across the set's colours">From</th>
+            <th>Cheapest at</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
 
