@@ -365,7 +365,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.1
+### 0.14.2
 
 - **A second copy of Quantum Wake closes itself.** Starting the app while it
   was already running used to leave the second copy up without a dashboard
@@ -394,7 +394,18 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   game's mix for it is shown, share and chance per mineral with the refined
   price a SCU and a rough worth of a SCU of the mix; per rock is not given,
   because nothing in the files turns the HUD's kilograms into SCU, and it
-  says so. `docs/mining.md` has the whole model and the dump.
+  says so. Under the calculator, every head, module and gadget the game has
+  with its figures and UEX's cheapest terminal and where; the deposit mix
+  also shows the raw-ore price and the best refinery station bonus where
+  those feeds are on, and values a SCU of the mix at refined prices (before
+  the refinery's yield, which is in no file or feed) and raw.
+  `docs/mining.md` has the whole model and the dump.
+
+- **The refinery figure on the Mining page is a bonus, not a yield.** UEX's
+  refinery feed reports a station's percentage points on the method's yield
+  — +9 at MIC-L5 for copper, −5 at Nyx Gateway for iron — and the deposit
+  table had shown it as "Yield 9%", which read as nine percent of the ore
+  coming back. It is now *Bonus*, signed.
 
 ### 0.13.33
 

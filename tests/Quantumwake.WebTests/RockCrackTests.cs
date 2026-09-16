@@ -12,17 +12,19 @@ public class RockCrackTests
          "constants":{"powerCapacityPerMass":10,"decayPerMass":0.2,"optimalWindowSize":0.1,"optimalWindowMaxSize":0.5},
          "lasers":[
            {"class":"Mining_Laser_GRIN_Arbor_S1","name":"Arbor MH1 Mining Laser","size":1,"power":2340,"slots":1,"modifiers":{"instability":-35,"windowSize":40,"resistance":25}},
-           {"class":"Mining_Laser_THCN_Helix_S1","name":"Helix I Mining Laser","size":1,"power":3900,"slots":2,"modifiers":{"windowSize":-40,"resistance":-30}},
+           {"class":"Mining_Laser_THCN_Helix_S1","name":"Helix I Mining Laser","size":1,"power":3900,"extractionPower":1850,"filterModifier":30,"throttleMinimum":0.2,"slots":2,"modifiers":{"windowSize":-40,"resistance":-30},
+            "market":{"price":55100,"shops":[{"terminal":"Tammany and Sons","place":"Lorville","system":"Stanton","price":55100},{"terminal":"Dumper's Area 18","place":"Area18","system":"Stanton","price":58000}]}},
            {"class":"Mining_Laser_SHIN_Klein_S1","name":"Klein-S1 Mining Laser","size":1,"power":3120,"slots":0,"modifiers":{"resistance":-45}},
            {"class":"Mining_Laser_GRIN_Arbor_S2","name":"Arbor MH2 Mining Laser","size":2,"power":2900,"slots":2,"modifiers":{}}],
-         "modules":[{"class":"Mining_Modules_Active_Surge","name":"Surge Module","active":true,"lifetime":15,"charges":7,"powerMultiplier":1.5,"modifiers":{"resistance":-15.5,"instability":10}}],
-         "gadgets":[{"class":"Mining_Gadget_SHIN_Sabir","name":"Sabir","modifiers":{"resistance":-50,"windowSize":50,"instability":15}}],
+         "modules":[{"class":"Mining_Modules_Active_Surge","name":"Surge Module","active":true,"lifetime":15,"charges":7,"powerMultiplier":1.5,"extractionMultiplier":1,"modifiers":{"resistance":-15.5,"instability":10},"market":{"price":1400,"shops":[]}}],
+         "gadgets":[{"class":"Mining_Gadget_SHIN_Sabir","name":"Sabir","modifiers":{"resistance":-50,"windowSize":50,"instability":15},"market":{"price":null,"shops":[]}}],
+         "itemPricesKnown":true,
          "minerals":[{"class":"Quantainium_Raw","name":"Quantainium (Raw)","resistance":0.95,"instability":1000,"windowMidpoint":0.5,"windowRandomness":0.2,"explosionMultiplier":260},
                      {"class":"Copper_Ore","name":"Copper (Ore)","resistance":-0.7,"instability":50,"windowMidpoint":0.6,"windowRandomness":0.15,"explosionMultiplier":-20}],
          "compositions":[
            {"class":"Asteroid_PType_Copper","name":"Asteroid (P-Type)","minimumDistinctElements":3,
-            "parts":[{"element":"Copper_Ore","name":"Copper (Ore)","minPercent":30,"maxPercent":70,"probability":1,"sellPerScu":4200},
-                     {"element":"Quantainium_Raw","name":"Quantainium (Raw)","minPercent":20,"maxPercent":50,"probability":0.02,"sellPerScu":170000}]},
+            "parts":[{"element":"Copper_Ore","name":"Copper (Ore)","minPercent":30,"maxPercent":70,"probability":1,"sellPerScu":4200,"rawPerScu":1200,"yield":9,"yieldAt":"Refinement Processing - MIC-L5"},
+                     {"element":"Quantainium_Raw","name":"Quantainium (Raw)","minPercent":20,"maxPercent":50,"probability":0.02,"sellPerScu":170000,"rawPerScu":null,"yield":null,"yieldAt":null}]},
            {"class":"Asteroid_PType_Tin","name":"Asteroid (P-Type)","minimumDistinctElements":3,"parts":[{"element":"Copper_Ore","name":"Copper (Ore)","minPercent":10,"maxPercent":20,"probability":0.5,"sellPerScu":4200}]}],
          "pricesKnown":true,
          "ships":[
@@ -138,8 +140,15 @@ public class RockCrackTests
 
         var note = page.NodeText("#crack-mix-note");
         Assert.Contains("at least 3 minerals a rock", note);
-        // 0.5 × 1 × 4,200 + 0.35 × 0.02 × 170,000 = 2,100 + 1,190 = 3,290.
-        Assert.Contains("Roughly 3,290 aUEC a SCU", note);
+        // Refined: 0.5 × 1 × 4,200 + 0.35 × 0.02 × 170,000 = 2,100 + 1,190 = 3,290, before the
+        // refinery's yield, which no file or feed carries; raw: 0.5 × 1 × 1,200 = 600, the
+        // quantainium having no raw price. The station's +9% is a bonus on the yield and is
+        // shown signed as one, never multiplied in as if it were the yield.
+        Assert.Contains("Roughly 3,290 aUEC a SCU of the mix at refined prices, before the refinery's yield", note);
+        Assert.Contains("600 aUEC sold raw", note);
+        Assert.Contains("1,200", mix);
+        Assert.Contains("+9%", mix);
+        Assert.DoesNotContain("2,870", note);
         Assert.Contains("Per rock is not given", note);
 
         // The likeliest mineral is picked for the notes.
@@ -181,6 +190,37 @@ public class RockCrackTests
         var verdict = page.NodeText("#crack-verdict");
         Assert.Contains("Quantainium (Raw): element resistance 0.95, instability 1000", verdict);
         Assert.Contains("an overcharge here is the rock gone", verdict);
+    }
+
+    /// <summary>Every head, module and gadget with the game's figures and UEX's cheapest terminal - a blank price is no terminal, not free.</summary>
+    [Fact]
+    public void The_fittings_tables_carry_the_figures_and_the_price_and_where()
+    {
+        var page = Opened();
+
+        var heads = page.NodeText("#crack-heads-table tbody");
+        Assert.Contains("Helix I Mining Laser", heads);
+        Assert.Contains("3,900", heads);
+        Assert.Contains("1,850", heads);
+        Assert.Contains("−30% resistance, −40% window", heads);
+        Assert.Contains("55,100 aUEC", heads);
+        Assert.Contains("Tammany and Sons, Lorville +1", heads);
+
+        var modules = page.NodeText("#crack-modules-table tbody");
+        Assert.Contains("Surge Module", modules);
+        Assert.Contains("active", modules);
+        Assert.Contains("×1.5", modules);
+        Assert.Contains("15s × 7", modules);
+        Assert.Contains("1,400 aUEC", modules);
+        Assert.Contains("no terminal recorded", modules);
+
+        var gadgets = page.NodeText("#crack-gadgets-table tbody");
+        Assert.Contains("Sabir", gadgets);
+        Assert.Contains("−50% resistance", gadgets);
+        Assert.Contains("—", gadgets);
+
+        // The matrix carries the head's price too.
+        Assert.Contains("55,100 aUEC", page.NodeText("#crack-matrix tbody"));
     }
 
     [Fact]

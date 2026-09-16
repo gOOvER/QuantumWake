@@ -122,6 +122,35 @@ carries a density to get from one to the other. scminer's "Is It Worth
 Mining?" takes the extracted cSCU as input for the same reason. The
 extraction beam's power is read and unused until that gap is closed.
 
+## Prices and the refinery, joined
+
+Every head, module and gadget on the page carries UEX's cheapest terminal
+and where, the way the Garage's bench prices a part: the game's own id for
+the class (`GameCommodities.ItemUuid`) into the UEX item feed. On this
+install a Helix I is 55,100 aUEC at Tammany and Sons, a Surge 1,400, a
+Focus 3,800, a Sabir 13,125; a module the feed has no terminal for shows a
+blank, which is "no terminal recorded" and not free. The deposit mix
+carries the raw-ore price and the best refinery *station bonus* from the two
+optional UEX feeds the deposit table already joins - the feeds list ore under
+the element's own name, "Copper (Ore)", "Laranite (Raw)" - and a SCU of the
+mix is valued both ways, at refined prices before the refinery's yield, and
+raw, each called rough.
+
+**The UEX "yield" is a bonus, not a yield.** `refineries_yields.value` is
++9 for copper at MIC-L5 and -5 for iron at Nyx Gateway: a station's
+percentage points on the method's own yield. The Mining page's deposit table
+had shown it as "Yield 9%" since the feed arrived, which reads as nine
+percent of the ore coming back; 0.14.2 shows it signed as *Bonus* in both
+tables and never multiplies it in as a yield.
+
+**Refining itself is not in the files.** `RefiningProcess` has nine records
+and each is two enums and a name - Slow/Normal/Fast × Careful/Normal/
+Wasteful - with no yield, cost or time on any of them; those are the
+server's. The community tables (and UEX's yields feed) are the only source,
+which is why the yield column reads from the feed and the app has no
+refinery calculator of its own beyond the mining log's "waiting on a
+refinery" and the yields it already shows.
+
 ## Not read yet
 
 - The scan HUD. It prints the four inputs - mass, resistance, instability,

@@ -1007,7 +1007,7 @@ public static class ServerHost
         // head, with how many and what size. Nothing here is from the logs,
         // which record no mining; it is all read from the game files, and the
         // page says so. Ready is false until the install has been read.
-        app.MapGet("/api/mining/model", (LogLibrary lib, UexData uex) =>
+        app.MapGet("/api/mining/model", (LogLibrary lib, UexData uex, UexFeeds feeds) =>
         {
             var mining = lib.GameCommodities.Mining;
             var flown = lib.Stats().Ships.Select(s => s.ClassName).Where(c => c is not null).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -1022,6 +1022,27 @@ public static class ServerHost
             decimal? SellPerScu(string elementClass) =>
                 minerals.TryGetValue(elementClass, out var m) && uex.Best(Refined(m.Name))?.BestSell is { } best && best > 0 ? best : null;
 
+            // The raw price and the best refinery yield, joined the way the
+            // deposit table joins them: raw ore is listed as "Quartz (Raw)",
+            // yields as "Quartz (Ore)" or the bare name. Both are optional feeds
+            // and come out null when the pilot has not switched them on.
+            var rawPrices = feeds.RawOrePrices
+                .GroupBy(r => r.Commodity, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.MaxBy(r => r.Sell)!, StringComparer.OrdinalIgnoreCase);
+            var yields = feeds.RefineryYields
+                .GroupBy(r => r.Commodity, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.MaxBy(r => r.Yield)!, StringComparer.OrdinalIgnoreCase);
+            // The feeds list ore under the element's own name - "Copper (Ore)",
+            // "Laranite (Raw)" - so that is tried first, the decorated forms after.
+            decimal? RawPerScu(string elementClass) =>
+                minerals.TryGetValue(elementClass, out var m)
+                    && (rawPrices.GetValueOrDefault(m.Name) ?? rawPrices.GetValueOrDefault($"{Refined(m.Name)} (Raw)") ?? rawPrices.GetValueOrDefault(Refined(m.Name))) is { } row && row.Sell > 0
+                    ? row.Sell : null;
+            UexRefinery? BestYield(string elementClass) =>
+                minerals.TryGetValue(elementClass, out var m)
+                    ? yields.GetValueOrDefault(m.Name) ?? yields.GetValueOrDefault($"{Refined(m.Name)} (Ore)") ?? yields.GetValueOrDefault(Refined(m.Name))
+                    : null;
+
             // Ship deposits only: every element in the mix is a ship mineral.
             var compositions = mining.Compositions
                 .Where(c => c.Parts.All(pt => minerals.TryGetValue(pt.Element, out var m) && m.Method == "Ship"))
@@ -1032,10 +1053,36 @@ public static class ServerHost
                     {
                         pt.Element, name = minerals[pt.Element].Name, pt.MinPercent, pt.MaxPercent, pt.Probability,
                         sellPerScu = SellPerScu(pt.Element),
+                        rawPerScu = RawPerScu(pt.Element),
+                        yield = BestYield(pt.Element)?.Yield,
+                        yieldAt = BestYield(pt.Element)?.Terminal,
                     }).ToList(),
                 })
                 .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ThenBy(c => c.Class, StringComparer.OrdinalIgnoreCase)
                 .ToList();
+
+            // What each head, module and gadget costs and where, the way the
+            // Garage's bench prices a part: UEX's item prices by the game's own
+            // id for the class. Null price is "no terminal recorded", not free.
+            object Priced(string cls)
+            {
+                var uuid = lib.GameCommodities.ItemUuid(cls);
+                return new
+                {
+                    price = uex.ItemPrice(uuid),
+                    shops = uex.ItemMarket(uuid)
+                        .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
+                        .Select(g => g.MinBy(r => r.Buy)!)
+                        .OrderBy(r => r.Buy)
+                        .Take(3)
+                        .Select(r =>
+                        {
+                            var place = lib.Terminals.Resolve(r.Terminal);
+                            return new { terminal = r.Terminal, place = place?.Name, system = place?.System, price = r.Buy };
+                        })
+                        .ToList(),
+                };
+            }
 
             return Results.Ok(new
             {
@@ -1043,12 +1090,14 @@ public static class ServerHost
                 mining.Constants,
                 // Ship heads only: the S0 heads are the ROC's and the hand tool's,
                 // and the MPUV arm reuses the Arbor's name for a weaker beam.
-                lasers = mining.Lasers.Where(l => l.Size >= 1 && !l.Class.Contains("MPUV", StringComparison.OrdinalIgnoreCase)),
-                mining.Modules,
-                mining.Gadgets,
+                lasers = mining.Lasers.Where(l => l.Size >= 1 && !l.Class.Contains("MPUV", StringComparison.OrdinalIgnoreCase))
+                    .Select(l => new { l.Class, l.Name, l.Size, l.Power, l.ExtractionPower, l.FilterModifier, l.ThrottleMinimum, l.Modifiers, l.Manufacturer, l.Slots, market = Priced(l.Class) }),
+                modules = mining.Modules.Select(m => new { m.Class, m.Name, m.Active, m.Lifetime, m.Charges, m.PowerMultiplier, m.ExtractionMultiplier, m.FilterModifier, m.Modifiers, m.Manufacturer, market = Priced(m.Class) }),
+                gadgets = mining.Gadgets.Select(g => new { g.Class, g.Name, g.Modifiers, g.Manufacturer, market = Priced(g.Class) }),
                 minerals = mining.Minerals.Where(m => m.Method == "Ship"),
                 compositions,
                 pricesKnown = compositions.Any(c => c.parts.Any(pt => pt.sellPerScu is not null)),
+                itemPricesKnown = uex.IsEnabled,
                 // Ship heads only, as above: the ROC and the ATLS mine under the
                 // ground-vehicle constants, which this does not model.
                 ships = MiningShips(lib.Community).Where(s => s.Heads.Any(h => h.Size >= 1))

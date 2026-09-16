@@ -1752,6 +1752,8 @@
                 <th class="num" title="The share of the rock this mineral takes when it is present, as the game's preset has it">Share</th>
                 <th class="num" title="How likely the preset is to include it at all">Chance</th>
                 <th class="num" title="UEX's best sell for a SCU, refined - as the places table values rock">Refined /SCU</th>
+                <th class="num" title="What the unrefined ore fetches a SCU, from UEX's raw-ore feed">Raw /SCU</th>
+                <th class="num" title="The best refinery station bonus UEX reports for this ore, on the method's own yield, and where">Bonus</th>
                 <th class="num" title="The rock's resistance and instability figures for this mineral, from the game's element table">Element</th>
               </tr>
             </thead>
@@ -1770,12 +1772,59 @@
               <th class="num" title="Delivered over what the rock needs">Ratio</th>
               <th class="num" title="The heaviest rock this head breaks at this resistance">Up to</th>
               <th>Verdict</th>
+              <th class="num" title="UEX's cheapest terminal for the head">Price</th>
             </tr>
           </thead>
           <tbody></tbody>
         </table>
       </div>
       <p class="muted crack-note" id="crack-matrix-note"></p>
+
+      <details class="crack-fittings" id="crack-fittings">
+        <summary>Every head, module and gadget the game has, with what it costs</summary>
+        <p class="muted crack-note">
+          The game's own figures for each, from your install; the price is UEX's cheapest terminal for the item
+          and where, as the Garage's bench prices a part. A blank price is no terminal recorded, not free.
+        </p>
+        <h4>Heads</h4>
+        <div class="table-wrap">
+          <table id="crack-heads-table">
+            <thead><tr>
+              <th>Head</th><th class="num">Size</th>
+              <th class="num" title="The fracture beam's energy a second">Power</th>
+              <th class="num" title="The extraction beam's">Extract</th>
+              <th class="num" title="Module slots on the head">Slots</th>
+              <th class="num" title="Waste the head's own filter removes">Filter</th>
+              <th class="num" title="The lowest the beam throttles, as a share of full power">Min</th>
+              <th>Modifiers</th>
+              <th class="num">Price</th><th>Cheapest at</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <h4>Modules</h4>
+        <div class="table-wrap">
+          <table id="crack-modules-table">
+            <thead><tr>
+              <th>Module</th><th>Kind</th>
+              <th class="num" title="On the fracture beam's power">Power</th>
+              <th class="num" title="On the extraction beam's">Extract</th>
+              <th>Modifiers</th>
+              <th class="num" title="Filter the module adds">Filter</th>
+              <th class="num" title="An active's seconds per charge, and charges">Charges</th>
+              <th class="num">Price</th><th>Cheapest at</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <h4>Gadgets</h4>
+        <div class="table-wrap">
+          <table id="crack-gadgets-table">
+            <thead><tr><th>Gadget</th><th>Modifiers</th><th class="num">Price</th><th>Cheapest at</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </details>
     </div>
 
     <h3 class="spaced">Where to go</h3>
@@ -1868,7 +1917,7 @@
             <th class="num" title="What a SCU of this rock is worth once sold">Worth</th>
             <th class="num">Best sell</th>
             <th class="num" title="What the unrefined rock fetches">Raw</th>
-            <th class="num" title="Best refinery yield for this ore">Yield</th>
+            <th class="num" title="Best refinery station bonus for this ore, on the method's own yield (UEX)">Bonus</th>
           </tr>
         </thead>
         <tbody></tbody>

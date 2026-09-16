@@ -14,7 +14,13 @@ public sealed record UexRental(string Vehicle, string Terminal, decimal Price);
 /// <summary>A fuel price at one terminal.</summary>
 public sealed record UexFuel(string Fuel, string Terminal, decimal Price);
 
-/// <summary>What a refinery yields for one ore, as a percentage the community reports.</summary>
+/// <summary>
+/// A refinery station's yield bonus for one ore, in percentage points the
+/// community reports: <c>+9</c> at MIC-L5 for copper, <c>-5</c> at Nyx Gateway
+/// for iron. A bonus on the method's own yield, not the yield - the method's
+/// yield is the server's and is in no file or feed this app reads. It was
+/// shown as "yield 9%" until 0.14.2, which read as nine percent of the ore.
+/// </summary>
 public sealed record UexRefinery(string Commodity, string Terminal, string? System, double Yield, double Capacity);
 
 /// <summary>What raw, unrefined ore fetches at one terminal.</summary>

@@ -4612,7 +4612,71 @@ async function loadCrackModel() {
 
   renderCrackHeads();
   renderCrackDeposit();
+  renderCrackFittings();
   await assessCrack();
+}
+
+/** "55,100 aUEC" or a dash: UEX's cheapest terminal for the item, or none recorded. */
+function crackPrice(market) {
+  return market?.price ? `${fmtInt(market.price)} aUEC` : '—';
+}
+
+function crackWhere(market) {
+  const best = market?.shops?.[0];
+  if (!best) return crackModel?.itemPricesKnown ? 'no terminal recorded' : 'prices need UEX (Settings)';
+  return `${best.terminal}${best.place && best.place !== best.terminal ? `, ${best.place}` : ''}${market.shops.length > 1 ? ` +${market.shops.length - 1}` : ''}`;
+}
+
+/**
+ * Every head, module and gadget with the game's figures and UEX's price:
+ * what to buy, before the calculator says what it would do on a rock.
+ */
+function renderCrackFittings() {
+  if (!crackModel) return;
+  const heads = $('#crack-heads-table tbody');
+  if (!heads) return;
+  heads.textContent = '';
+  for (const l of [...crackModel.lasers].sort((a, b) => a.size - b.size || b.power - a.power)) {
+    const tr = el('tr');
+    tr.append(el('td', null, l.name));
+    tr.append(el('td', 'num', `S${l.size}`));
+    tr.append(el('td', 'num', fmtInt(l.power)));
+    tr.append(el('td', 'num', fmtInt(l.extractionPower)));
+    tr.append(el('td', 'num', String(l.slots)));
+    tr.append(el('td', 'num', `${l.filterModifier}%`));
+    tr.append(el('td', 'num', `${Math.round(l.throttleMinimum * 100)}%`));
+    tr.append(el('td', null, describeModifiers(l.modifiers) || '—'));
+    tr.append(el('td', 'num', crackPrice(l.market)));
+    tr.append(el('td', 'muted', crackWhere(l.market)));
+    heads.append(tr);
+  }
+
+  const modules = $('#crack-modules-table tbody');
+  modules.textContent = '';
+  for (const m of crackModel.modules) {
+    const tr = el('tr');
+    tr.append(el('td', null, m.name));
+    tr.append(el('td', null, m.active ? 'active' : 'passive'));
+    tr.append(el('td', 'num', `×${m.powerMultiplier}`));
+    tr.append(el('td', 'num', `×${m.extractionMultiplier}`));
+    tr.append(el('td', null, describeModifiers(m.modifiers) || '—'));
+    tr.append(el('td', 'num', m.filterModifier ? `+${m.filterModifier}%` : '—'));
+    tr.append(el('td', 'num', m.active ? `${m.lifetime}s × ${m.charges}` : '—'));
+    tr.append(el('td', 'num', crackPrice(m.market)));
+    tr.append(el('td', 'muted', crackWhere(m.market)));
+    modules.append(tr);
+  }
+
+  const gadgets = $('#crack-gadgets-table tbody');
+  gadgets.textContent = '';
+  for (const g of crackModel.gadgets) {
+    const tr = el('tr');
+    tr.append(el('td', null, g.name));
+    tr.append(el('td', null, describeModifiers(g.modifiers) || '—'));
+    tr.append(el('td', 'num', crackPrice(g.market)));
+    tr.append(el('td', 'muted', crackWhere(g.market)));
+    gadgets.append(tr);
+  }
 }
 
 /**
@@ -4638,20 +4702,33 @@ function renderCrackDeposit() {
     tr.append(el('td', 'num', `${fmtInt(pt.minPercent)}–${fmtInt(pt.maxPercent)}%`));
     tr.append(el('td', 'num', `${Math.round(pt.probability * 100)}%`));
     tr.append(el('td', 'num', pt.sellPerScu ? fmtInt(pt.sellPerScu) : '—'));
+    tr.append(el('td', 'num', pt.rawPerScu ? fmtInt(pt.rawPerScu) : '—'));
+    const yieldCell = el('td', 'num', pt.yield ? `${pt.yield > 0 ? '+' : ''}${Math.round(pt.yield)}%` : '—');
+    if (pt.yieldAt) yieldCell.title = `Best station bonus on the method's yield, at ${pt.yieldAt}`;
+    tr.append(yieldCell);
     tr.append(el('td', 'num', mineral ? `res ${mineral.resistance} · inst ${fmtInt(mineral.instability)}` : '—'));
     body.append(tr);
   }
 
-  // A rough worth of a SCU of the mix: each mineral's middle share, times
-  // its chance, times the refined price. Rough because the shares of the
-  // minerals present are normalised by the game and are not here.
-  const priced = parts.filter((pt) => pt.sellPerScu);
-  const rough = priced.reduce((sum, pt) => sum + ((pt.minPercent + pt.maxPercent) / 200) * pt.probability * Number(pt.sellPerScu), 0);
+  // A rough worth of a SCU of the mix, each way it can be sold: refined, at
+  // the refined price before the refinery's own yield - the method's yield
+  // is the server's and in no file or feed, only a station's bonus on it -
+  // or raw. Each mineral's middle share, times its chance, times the price.
+  // Rough because the shares of the minerals present are normalised by the
+  // game and are not here, and because the price is the best on offer.
+  const weight = (pt) => ((pt.minPercent + pt.maxPercent) / 200) * pt.probability;
+  const refinedParts = parts.filter((pt) => pt.sellPerScu);
+  const refined = refinedParts.reduce((sum, pt) => sum + weight(pt) * Number(pt.sellPerScu), 0);
+  const rawParts = parts.filter((pt) => pt.rawPerScu);
+  const raw = rawParts.reduce((sum, pt) => sum + weight(pt) * Number(pt.rawPerScu), 0);
+  const worth = [];
+  if (refinedParts.length) worth.push(`Roughly ${fmtInt(refined)} aUEC a SCU of the mix at refined prices, before the refinery's yield`);
+  if (rawParts.length) worth.push(`${worth.length ? '' : 'Roughly '}${fmtInt(raw)} aUEC sold raw`);
   $('#crack-mix-note').textContent = `${chosen.name}: at least ${chosen.minimumDistinctElements} mineral${chosen.minimumDistinctElements === 1 ? '' : 's'} a rock. `
-    + (priced.length
-      ? `Roughly ${fmtInt(rough)} aUEC a SCU of the mix at refined prices - middle share × chance × UEX's best sell, ${priced.length} of ${parts.length} minerals priced. `
+    + (worth.length
+      ? `${worth.join(', ')} - middle share × chance × price, ${refinedParts.length} of ${parts.length} minerals priced. `
       : 'No UEX prices for these minerals (Settings). ')
-    + 'Per rock is not given: the HUD\'s mass is in kilograms and nothing read says what a kilogram of rock is in SCU.';
+    + 'Per rock is not given: the HUD’s mass is in kilograms and nothing read says what a kilogram of rock is in SCU.';
 
   // The likeliest mineral is the one the notes speak to, unless the pilot picked one.
   const mineral = $('#crack-mineral');
@@ -4808,6 +4885,7 @@ async function assessCrack() {
     const verdict = el('td', null, rl);
     verdict.classList.add(`crack-${rt}`);
     tr.append(verdict);
+    tr.append(el('td', 'num muted', crackPrice(crackModel.lasers.find((l) => l.class === r.laser)?.market)));
     body.append(tr);
   }
   const heads = request.heads.length;
@@ -5044,9 +5122,12 @@ function renderMiningRef() {
     if (spawn.rawTerminal) raw.title = `at ${spawn.rawTerminal}`;
     tr.append(raw);
 
+    // A station's bonus on the method's yield, signed - not the yield itself,
+    // which is the server's and in no feed. Read unsigned it looked like
+    // nine percent of the ore coming back.
     const yieldCell = el('td', spawn.refineryYield ? 'num' : 'num muted',
-      spawn.refineryYield ? `${spawn.refineryYield.toFixed(0)}%` : '—');
-    if (spawn.refineryTerminal) yieldCell.title = `best at ${spawn.refineryTerminal}`;
+      spawn.refineryYield ? `${spawn.refineryYield > 0 ? '+' : ''}${spawn.refineryYield.toFixed(0)}%` : '—');
+    if (spawn.refineryTerminal) yieldCell.title = `best station bonus, at ${spawn.refineryTerminal}`;
     tr.append(yieldCell);
 
     body.append(tr);

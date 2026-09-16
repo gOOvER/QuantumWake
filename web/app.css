@@ -4949,3 +4949,6 @@ body.overlay .ship-picture { display: none; }
 .crack-note { font-size: 11px; margin: 4px 0 0; line-height: 1.5; }
 .crack-deposit { margin-top: 4px; }
 .crack-noslots { font-size: 10.5px; }
+.crack-fittings { margin-top: 6px; }
+.crack-fittings summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+.crack-fittings h4 { margin: 12px 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
