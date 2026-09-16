@@ -15643,6 +15643,56 @@ function loadoutInventorySlot(slot) {
   return card;
 }
 
+/* A readiness strip is a briefing on the same observed kit as the cards, not
+   a live-inventory verdict. Keep it outside the search result so looking for
+   one attachment does not make the rest of the recorded kit disappear. */
+function loadoutReadiness(slots, completeSighting) {
+  const strip = el('section', 'loadout-readiness');
+  strip.setAttribute('aria-label', 'Observed kit readiness');
+  const zones = [
+    ['head', 'Head'], ['core', 'Core'], ['base', 'Base'],
+    ['back', 'Pack'], ['arms', 'Arms'], ['legs', 'Legs'],
+  ];
+  const observed = new Set(slots.map(loadoutPlacement));
+  const observedZones = zones.filter(([id]) => observed.has(id));
+  const unseenZones = zones.filter(([id]) => !observed.has(id)).map(([, label]) => label);
+  const weaponItems = slots
+    .filter((slot) => /weapon/i.test(slot.category || ''))
+    .flatMap((slot) => slot.items || []);
+  const consumableSlots = slots
+    .filter((slot) => /medical|throwable/i.test(slot.category || ''));
+  const itemCount = (items) => items.reduce((total, item) => total + (Number(item.count) || 1), 0);
+  const consumables = consumableSlots.map((slot) =>
+    `${itemCount(slot.items || [])} ${slot.label || slot.category}`.toLowerCase());
+  const latestSlotSighting = slots.map((slot) => slot.currentSeen).filter(Boolean).sort().at(-1);
+  const sighting = completeSighting || latestSlotSighting;
+
+  const add = (label, value, note, state = '') => {
+    const card = el('div', `loadout-readiness-card ${state}`.trim());
+    card.append(el('div', 'loadout-readiness-label', label));
+    card.append(el('strong', null, value));
+    card.append(el('span', null, note));
+    strip.append(card);
+  };
+
+  add('Coverage', `${observedZones.length}/6 zones observed`,
+    unseenZones.length ? `Not observed: ${unseenZones.join(' · ')}` : 'Every body zone was observed',
+    unseenZones.length ? 'partial' : 'complete');
+  add('Weapons', weaponItems.length
+    ? `${weaponItems.length} weapon${weaponItems.length === 1 ? '' : 's'} observed`
+    : 'No weapon observed', weaponItems.length
+    ? weaponItems.slice(0, 2).map(loadoutItemName).join(' · ')
+    : 'The log has no weapon attachment for this kit');
+  add('Consumables', consumables.length
+    ? `${itemCount(consumableSlots.flatMap((slot) => slot.items || []))} carried`
+    : 'No consumables observed', consumables.length
+    ? consumables.join(' · ')
+    : 'The log has no medical or throwable attachment for this kit');
+  add('Sighting', sighting ? `Observed ${relative(sighting)}` : 'No sighting time recorded',
+    sighting ? 'Latest complete kit when available' : 'Individual cards may still carry a time');
+  return strip;
+}
+
 function renderLoadout(stats) {
   libraryStats = stats;
 
@@ -15679,6 +15729,7 @@ function renderLoadout(stats) {
   screen.append(el('p', 'loadout-overview',
     'Wearable kit sits around the pilot. Stowed weapons, supplies and tools sit in the Field Kit. '
     + 'Everything here is the latest equipment the log observed, not a live game inventory.'));
+  screen.append(loadoutReadiness(stats.loadout, stats.loadoutAsOf));
 
   const sheet = el('div', 'loadout-sheet');
   const avatarRig = el('div', 'loadout-avatar-rig');

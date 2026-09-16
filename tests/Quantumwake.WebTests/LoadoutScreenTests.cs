@@ -27,6 +27,7 @@ public sealed class LoadoutScreenTests
         Assert.Equal(1, page.Count("__dom.node('#loadout-grid').byClass('loadout-character').length"));
         Assert.Equal(1, page.Count("__dom.node('#loadout-grid').byClass('loadout-figure').length"));
         Assert.Equal(1, page.Count("__dom.node('#loadout-grid').byClass('loadout-profile-light').length"));
+        Assert.Equal(1, page.Count("__dom.node('#loadout-grid').byClass('loadout-readiness').length"));
         Assert.Equal(4, page.Count("__dom.node('#loadout-grid').byClass('loadout-slot').length"));
         Assert.Equal(4, page.Count("__dom.node('#loadout-grid').byClass('loadout-item-inspect').length"));
         Assert.Contains("Right hand", page.NodeText("#loadout-grid"));
@@ -35,6 +36,10 @@ public sealed class LoadoutScreenTests
         Assert.Contains("RSI · Armor / Light · S2 · Grade C", page.NodeText("#loadout-grid"));
         Assert.Contains("×2", page.NodeText("#loadout-grid"));
         Assert.Contains("2 stowed slots", page.NodeText("#loadout-grid"));
+        Assert.Contains("2/6 zones observed", page.NodeText("#loadout-grid"));
+        Assert.Contains("1 weapon observed", page.NodeText("#loadout-grid"));
+        Assert.Contains("2 carried", page.NodeText("#loadout-grid"));
+        Assert.Contains("Not observed: Base · Pack · Arms · Legs", page.NodeText("#loadout-grid"));
     }
 
     [Fact]

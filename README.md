@@ -365,7 +365,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.7
+### 0.14.8
+
+- **Read a kit's readiness before inspecting its parts.** The Armoury now
+  summarizes the last observed kit's body-zone coverage, weapon and
+  consumable attachments, and sighting age above the pilot. Missing entries
+  are named as not observed rather than shown as live zeroes; searching a card
+  does not alter the kit-wide briefing.
 
 - **The Armoury is clearer and more tactile.** Equipped gear now frames a
   brighter pilot readout, shows exactly how many body zones the log observed,
