@@ -319,6 +319,28 @@ public class UexFeedsTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// The refining methods feed is UEX's three-point ratings and nothing
+    /// else: nine names, each with yield, cost and speed 1 to 3. A method
+    /// without a name is dropped rather than shown as a row of pips.
+    /// </summary>
+    [Fact]
+    public async Task Refining_methods_keep_their_three_ratings_and_drop_the_nameless()
+    {
+        var feeds = NewFeeds();
+        Assert.Empty(feeds.RefineryMethods);
+
+        var count = await feeds.EnableAsync(UexFeeds.Methods, Serving(
+            "{\"data\":[{\"name\":\"Dinyx Solventation\",\"code\":\"DIN\",\"rating_yield\":3,\"rating_cost\":1,\"rating_speed\":1},"
+            + "{\"name\":\"Cormack\",\"code\":\"COR\",\"rating_yield\":1,\"rating_cost\":2,\"rating_speed\":3},"
+            + "{\"name\":\"\",\"code\":\"XXX\",\"rating_yield\":2,\"rating_cost\":2,\"rating_speed\":2}]}"));
+
+        Assert.Equal(2, count);
+        var dinyx = feeds.RefineryMethods.Single(m => m.Code == "DIN");
+        Assert.Equal(("Dinyx Solventation", 3, 1, 1), (dinyx.Name, dinyx.YieldRating, dinyx.CostRating, dinyx.SpeedRating));
+        Assert.Contains(UexFeeds.All, f => f.Key == UexFeeds.Methods);
+    }
+
     public void Dispose()
     {
         GC.SuppressFinalize(this);

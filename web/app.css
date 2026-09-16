@@ -5114,3 +5114,5 @@ body.overlay .ship-picture { display: none; }
 .garage-cargo-ships { margin: 0; padding-left: 18px; font-size: 12.5px; }
 .garage-cargo-ships li.fits a { color: var(--green); }
 .garage-cargo-ships li.no a { color: var(--amber); }
+.mining-waiting .mining-estimate { flex: 0 0 100%; margin-left: 0; }
+.mining-waiting .time { margin-left: auto; }

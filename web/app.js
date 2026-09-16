@@ -269,6 +269,7 @@ function showView(name) {
     loadLikelyMined().catch(() => {});
     loadMiningLog().catch(() => {});
     loadCrackModel().catch(() => {});
+    loadSalvage().catch(() => {});
     // A rock handed over from the Log opens on the calculator; otherwise the
     // page opens where it was left.
     showMiningPane(crackFromScan ? 'crack' : miningPane);
@@ -4319,6 +4320,33 @@ const MINING_STAGE = {
   Sold: ['Sold', null],
 };
 
+/**
+ * The nine refining methods as UEX rates them - the game's own three-point
+ * pips for yield, cost and speed - so a run can be read against the method
+ * it went in under. The percentages behind the pips are the server's and
+ * are in no file or feed this app reads, which the note says.
+ */
+function renderMiningMethods() {
+  const box = $('#mining-methods');
+  const body = $('#mining-methods-table tbody');
+  if (!box || !body) return;
+  const methods = crackModel?.methods || [];
+  box.hidden = !crackModel?.methodsKnown || methods.length === 0;
+  if (box.hidden) return;
+  body.textContent = '';
+  const pips = (n) => '●'.repeat(Math.max(0, Math.min(3, n))) + '○'.repeat(3 - Math.max(0, Math.min(3, n)));
+  for (const m of [...methods].sort((a, b) => b.yieldRating - a.yieldRating || a.costRating - b.costRating || a.name.localeCompare(b.name))) {
+    const tr = el('tr');
+    tr.append(el('td', null, m.name));
+    tr.append(el('td', 'muted', m.code));
+    tr.append(el('td', 'num', pips(m.yieldRating)));
+    tr.append(el('td', 'num', pips(m.costRating)));
+    tr.append(el('td', 'num', pips(m.speedRating)));
+    body.append(tr);
+  }
+  $('#mining-methods-note').textContent = 'UEX’s ratings, which are the game’s own pips: three is the most yield, the dearest, the fastest. The percentages behind them are the server’s - the install names the nine methods and nothing more, and no feed carries them - so a run’s estimate above is before the method.';
+}
+
 async function loadMiningPending() {
   const panel = $('#mining-pending');
   if (!panel) return;
@@ -4341,12 +4369,28 @@ async function loadMiningPending() {
 
     // The two states read differently on purpose: one is waiting, the other is
     // the app pointing out that your own estimate has passed.
-    row.append(el('span', run.stage === 'Ready' ? 'want' : 'muted',
+    row.append(el('span', run.stage === 'Ready' ? 'want time' : 'muted time',
       run.refinery.expectedAt
         ? (run.stage === 'Ready'
           ? `you expected it by ${dateOf(run.refinery.expectedAt)}`
           : `due ${dateOf(run.refinery.expectedAt)}`)
         : 'no time given'));
+
+    // What it might come back as - a ceiling, and said as one: the SCU that
+    // went in at UEX's best refined price, the station's bonus on top where
+    // the yields feed reports one, before the method's own yield and the
+    // refinery's charge, neither of which is published anywhere.
+    const e = run.estimate;
+    if (e) {
+      const method = run.method
+        ? ` under ${run.method.name} (yield ${run.method.yieldRating}/3, cost ${run.method.costRating}/3, speed ${run.method.speedRating}/3)`
+        : (run.refinery.method ? ` under ${run.refinery.method}` : '');
+      const bonus = e.bonusPercent != null
+        ? `, ${e.bonusPercent >= 0 ? '+' : ''}${e.bonusPercent} % station bonus at ${e.bonusAt} makes ${fmtInt(e.withBonus)}`
+        : e.bonusKnown ? ', no station bonus reported for this ore here' : '';
+      row.append(el('span', 'muted small mining-estimate',
+        `≤ ${fmtInt(e.gross)} aUEC at ${fmtInt(e.perScu)}/SCU refined${e.sellAt ? ` (${e.sellAt})` : ''}${bonus}${method} — before the method’s own yield and the fee, which nobody publishes`));
+    }
 
     list.append(row);
   }
@@ -4543,6 +4587,98 @@ $('#mining-log-form')?.addEventListener('submit', async (e) => {
   await loadMiningLog().catch(() => {});
 });
 
+/* ---------- salvage: the equipment and the rules, not the wreck ---------- */
+
+let salvageModel = null;
+
+/**
+ * The salvage pane: each salvage hull's controller, the scraper modules and
+ * heads, priced by UEX. What a hull is worth scraped is not here and the
+ * brief says why; nothing on this pane is derived from a wreck.
+ */
+async function loadSalvage() {
+  const unready = $('#salvage-unready');
+  if (!$('#mining-pane-salvage')) return;
+  try {
+    salvageModel = await getJson('/api/salvage/model');
+  } catch {
+    salvageModel = null;
+  }
+  const tables = ['#salvage-ships', '#salvage-modules', '#salvage-heads'].map((id) => $(id));
+  if (!salvageModel?.ready) {
+    if (unready) {
+      unready.hidden = false;
+      unready.textContent = gameDataExcuse() || 'The install has not been read yet - Settings says when the game data is ready.';
+    }
+    for (const t of tables) if (t) t.hidden = true;
+    return;
+  }
+  if (unready) unready.hidden = true;
+  for (const t of tables) if (t) t.hidden = false;
+
+  const price = (market) => market?.price ? `${fmtInt(market.price)} aUEC` : '—';
+  const where = (market) => {
+    const best = market?.shops?.[0];
+    if (!best) return salvageModel.itemPricesKnown ? 'no terminal recorded' : 'prices need UEX (Settings)';
+    const place = best.place && !best.terminal.toLowerCase().includes(best.place.toLowerCase()) ? `, ${best.place}` : '';
+    return `${best.terminal}${place}${market.shops.length > 1 ? ` +${market.shops.length - 1}` : ''}`;
+  };
+
+  const ships = $('#salvage-ships tbody');
+  ships.textContent = '';
+  for (const s of salvageModel.ships || []) {
+    const tr = el('tr');
+    const name = el('td', null, s.name);
+    if (s.flown) name.append(el('span', 'chip count', ' flown'));
+    tr.append(name);
+    tr.append(el('td', 'num', String(s.heads)));
+    tr.append(el('td', null, s.scrapesTo || '—'));
+    tr.append(el('td', 'num', s.scuPerCubicMetre > 0 ? `${s.scuPerCubicMetre} SCU/m³ of ${s.disintegratesTo}` : '—'));
+    tr.append(el('td', 'num', s.hold > 0 ? `${fmt1(s.hold)} SCU` : (salvageModel.holdsKnown ? '—' : 'needs the dataset')));
+    tr.append(el('td', 'num', s.fullHoldOfScrape ? `${fmtInt(s.fullHoldOfScrape)} aUEC` : '—'));
+    const cm = el('td', 'num', s.fullHoldOfPieces ? `${fmtInt(s.fullHoldOfPieces)} aUEC` : '—');
+    if (s.pieces && s.disintegratesTo && s.pieces.commodity !== s.disintegratesTo) cm.title = `UEX prices ${s.disintegratesTo} as ${s.pieces.commodity}`;
+    tr.append(cm);
+    ships.append(tr);
+  }
+  const first = (salvageModel.ships || []).find((s) => s.scrape);
+  const firstCm = (salvageModel.ships || []).find((s) => s.pieces);
+  $('#salvage-ships-note').textContent = [
+    first ? `RMC at UEX's best sell: ${fmtInt(first.scrape.perScu)} aUEC a SCU at ${first.scrape.at}.` : (salvageModel.itemPricesKnown ? 'UEX has no price for RMC.' : 'Prices need UEX, in Settings.'),
+    firstCm ? `Construction material: ${fmtInt(firstCm.pieces.perScu)} a SCU at ${firstCm.pieces.at}; the game's Construction Salvage, Rubble and Pieces are sold as that one commodity.` : '',
+    'A full hold is a ceiling on a trip, before the fuel and before the finding.',
+  ].filter(Boolean).join(' ');
+
+  const modules = $('#salvage-modules tbody');
+  modules.textContent = '';
+  for (const m of [...(salvageModel.modules || [])].sort((a, b) => b.radius - a.radius)) {
+    const tr = el('tr');
+    const name = el('td', null, m.name);
+    if (m.manufacturer) name.append(el('div', 'armoury-kind', m.manufacturer));
+    tr.append(name);
+    tr.append(el('td', 'num', String(m.speed)));
+    tr.append(el('td', 'num', `${m.radius} m`));
+    tr.append(el('td', 'num', `${Math.round(m.efficiency * 100)}%`));
+    tr.append(el('td', 'num', price(m.market)));
+    tr.append(el('td', 'muted', where(m.market)));
+    modules.append(tr);
+  }
+
+  const heads = $('#salvage-heads tbody');
+  heads.textContent = '';
+  for (const h of salvageModel.heads || []) {
+    const tr = el('tr');
+    tr.append(el('td', null, h.name));
+    tr.append(el('td', 'num', String(h.slots)));
+    tr.append(el('td', 'num', price(h.market)));
+    tr.append(el('td', 'muted', where(h.market)));
+    heads.append(tr);
+  }
+
+  const k = salvageModel.constants;
+  $('#salvage-note').textContent = `${k ? `The game's rule: a beam takes ${Math.round(k.hullThicknessMetres * 1000)} mm of hull, with a material factor of ${k.ammoToMaterialFactor}. ` : ''}${salvageModel.perHull}`;
+}
+
 /* ---------- the Mining page's three panes ---------- */
 
 /**
@@ -4550,7 +4686,7 @@ $('#mining-log-form')?.addEventListener('submit', async (e) => {
  * into one long page. The pane is remembered in this browser, and the
  * deposit filters in the header belong to the first alone.
  */
-const MINING_PANES = ['go', 'crack', 'runs'];
+const MINING_PANES = ['go', 'crack', 'runs', 'salvage'];
 let miningPane = 'go';
 try {
   const kept = localStorage.getItem('qw-mining-pane');
@@ -4562,7 +4698,7 @@ function showMiningPane(name) {
   miningPane = name;
   try { localStorage.setItem('qw-mining-pane', name); } catch { /* as above */ }
 
-  for (const id of ['#mining-pane-go', '#mining-pane-crack', '#mining-pane-runs']) {
+  for (const id of ['#mining-pane-go', '#mining-pane-crack', '#mining-pane-runs', '#mining-pane-salvage']) {
     const pane = $(id);
     if (pane) pane.classList.toggle('active', id === `#mining-pane-${name}`);
   }
@@ -4682,6 +4818,7 @@ async function loadCrackModel() {
   }
 
   renderCrackHeads();
+  renderMiningMethods();
   renderCrackDeposit();
   renderCrackFittings();
   if (crackFromScan) { fillCrackFromScan(crackFromScan); crackFromScan = null; renderCrackDeposit(); }

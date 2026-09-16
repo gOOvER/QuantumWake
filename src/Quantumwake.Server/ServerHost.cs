@@ -1113,6 +1113,10 @@ public static class ServerHost
                 compositions,
                 pricesKnown = compositions.Any(c => c.parts.Any(pt => pt.sellPerScu is not null)),
                 itemPricesKnown = uex.IsEnabled,
+                // UEX's ratings of the nine methods, 1 to 3, when that feed is on; the
+                // percentages behind them are the server's and in no file or feed.
+                methods = feeds.RefineryMethods,
+                methodsKnown = feeds.IsEnabled(UexFeeds.Methods),
                 // Ship heads only, as above: the ROC and the ATLS mine under the
                 // ground-vehicle constants, which this does not model.
                 ships = MiningShips(lib.Community).Where(s => s.Heads.Any(h => h.Size >= 1))
@@ -1128,6 +1132,78 @@ public static class ServerHost
         // A rock as scanned against a fit: the verdict, and the same rock on
         // every head of that size so the pilot sees what a different head
         // would do without refitting.
+        // Salvage as the install has it - the scraper modules with their
+        // speed, radius and efficiency, the heads, each salvage hull's
+        // controller - priced by UEX, with what a full hold of what each hull
+        // makes fetches at UEX's best sell. Not what a hull is worth scraped:
+        // that needs its surface area and volume, which are geometry the
+        // DataCore does not hold, and the response says so in words.
+        app.MapGet("/api/salvage/model", (LogLibrary lib, UexData uex) =>
+        {
+            var salvage = lib.GameCommodities.Salvage;
+            var terminals = lib.Terminals;
+            var flown = lib.Stats().Ships.Select(s => s.ClassName).Where(c => c is not null).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            object Market(string cls)
+            {
+                var uuid = lib.GameCommodities.ItemUuid(cls);
+                return new
+                {
+                    price = uex.ItemPrice(uuid),
+                    shops = uex.ItemMarket(uuid)
+                        .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
+                        .Select(g => g.MinBy(r => r.Buy)!)
+                        .OrderBy(r => r.Buy)
+                        .Take(3)
+                        .Select(r => { var place = terminals.Resolve(r.Terminal); return new { terminal = r.Terminal, place = place?.Name, system = place?.System, price = r.Buy }; })
+                        .ToList(),
+                };
+            }
+
+            // UEX prices what the kiosk takes: the game's three construction
+            // resources are sold as Construction Materials, and says so.
+            static string Sold(string? resource) =>
+                resource is not null && resource.StartsWith("Construction", StringComparison.OrdinalIgnoreCase) ? "Construction Materials" : resource ?? "";
+            (string Commodity, decimal PerScu, string? At)? Price(string? resource)
+            {
+                var name = Sold(resource);
+                var best = name.Length > 0 ? uex.Best(name) : null;
+                return best is null || best.BestSell <= 0 ? null : (name, best.BestSell, best.BestSellTerminal);
+            }
+
+            var ships = salvage.Ships.Select(s =>
+            {
+                var hull = lib.Community.GarageShip(s.Ship);
+                var hold = hull?.CargoScu ?? 0;
+                var scrape = Price(s.ScrapesTo);
+                var pieces = Price(s.DisintegratesTo);
+                return new
+                {
+                    s.Ship, name = hull?.Name ?? lib.GameCommodities.Vehicle(s.Ship)?.Name ?? s.Ship.Replace('_', ' '),
+                    s.ScrapesTo, s.ScuPerCubicMetre, s.DisintegratesTo, s.Heads, s.BoxSecondsPerScu,
+                    hold, flown = flown.Contains(s.Ship),
+                    scrape = scrape is { } sc ? new { commodity = sc.Commodity, perScu = sc.PerScu, at = sc.At } : null,
+                    pieces = pieces is { } pc ? new { commodity = pc.Commodity, perScu = pc.PerScu, at = pc.At } : null,
+                    // A full hold of what the hull makes, at UEX's best sell: a
+                    // ceiling on a trip, before the fuel and before the finding.
+                    fullHoldOfScrape = scrape is { } s1 && hold > 0 ? (decimal)hold * s1.PerScu : (decimal?)null,
+                    fullHoldOfPieces = pieces is { } p1 && hold > 0 ? (decimal)hold * p1.PerScu : (decimal?)null,
+                };
+            }).OrderByDescending(s => s.flown).ThenBy(s => s.hold).ToList();
+
+            return Results.Ok(new
+            {
+                ready = salvage.Modules.Count > 0,
+                salvage.Constants,
+                modules = salvage.Modules.Select(m => new { m.Class, m.Name, m.Speed, m.Radius, m.Efficiency, m.Manufacturer, market = Market(m.Class) }),
+                heads = salvage.Heads.Select(h => new { h.Class, h.Name, h.Slots, h.Manufacturer, market = Market(h.Class) }),
+                ships,
+                itemPricesKnown = uex.IsEnabled,
+                holdsKnown = lib.Community.HasGarage,
+                perHull = "What a given hull is worth scraped is not in the game files: the rule is there and the hull's area and volume it would apply to are not, nor in UEX, nor in the logs.",
+            });
+        });
+
         app.MapPost("/api/mining/crack", (MiningCrackRequest request, LogLibrary lib) =>
         {
             var mining = lib.GameCommodities.Mining;
@@ -1436,20 +1512,34 @@ public static class ServerHost
                 : Results.BadRequest(new { problem = "That haul has not been collected yet." }));
 
         // What is owed to you right now, soonest first.
-        app.MapGet("/api/mining/pending", (MiningLogStore runs) =>
-            runs.Pending(DateTimeOffset.UtcNow).Select(run => new
+        // What a run waiting on a refinery might come back as, in aUEC: the
+        // SCU that went in at UEX's best refined price, then the station's
+        // bonus on top when the yields feed reports one for that ore there.
+        // Before the method's own yield, which nobody publishes - the feed
+        // rates a method 1 to 3 and the install names it and no more - and
+        // before whatever the refinery charged, so it is called a ceiling.
+        app.MapGet("/api/mining/pending", (MiningLogStore runs, UexData uex, UexFeeds feeds) =>
+            runs.Pending(DateTimeOffset.UtcNow).Select(run =>
             {
-                run.Id,
-                run.Place,
-                run.Resource,
-                run.Scu,
-                Stage = run.StageAt(DateTimeOffset.UtcNow),
-                run.Refinery,
+                var method = run.Refinery?.Method is { Length: > 0 } m
+                    ? feeds.RefineryMethods.FirstOrDefault(x => x.Name.Contains(m, StringComparison.OrdinalIgnoreCase) || m.Contains(x.Name, StringComparison.OrdinalIgnoreCase) || x.Code.Equals(m.Trim(), StringComparison.OrdinalIgnoreCase))
+                    : null;
+                return new
+                {
+                    run.Id,
+                    run.Place,
+                    run.Resource,
+                    run.Scu,
+                    Stage = run.StageAt(DateTimeOffset.UtcNow),
+                    run.Refinery,
+                    Estimate = RefineryEstimate(run, uex, feeds),
+                    Method = method,
 
-                // Said rather than computed on the page, so one build cannot
-                // word this differently from another.
-                Caveat = "The game keeps the refinery timer and logs nothing about it, "
-                    + "so this is the time you told us to expect.",
+                    // Said rather than computed on the page, so one build cannot
+                    // word this differently from another.
+                    Caveat = "The game keeps the refinery timer and logs nothing about it, "
+                        + "so this is the time you told us to expect.",
+                };
             }));
 
         app.MapDelete("/api/mining/log/{id}", (MiningLogStore runs, TombstoneStore deleted, string id) =>
@@ -4475,6 +4565,48 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
     /// <summary>The crates the install sizes, or the table read from it on 2026-09-16 until the install is in.</summary>
     static IReadOnlyList<CargoCrate> Crates(LogLibrary lib) =>
         lib.GameCommodities.Crates.Count > 0 ? lib.GameCommodities.Crates : CargoFit.StandardCrates;
+
+    /// <summary>
+    /// A ceiling on what a refinery run comes back as: the SCU that went in at
+    /// UEX's best refined sell, and the station's bonus on top where the
+    /// yields feed reports one for that ore at that refinery. Null when UEX
+    /// has no price for the ore. The station is matched to the feed's
+    /// terminal loosely, one name containing the other, and not at all
+    /// otherwise - a bonus at the wrong station is worse than none.
+    /// </summary>
+    /// <summary>"Copper (Ore)", "Quantainium (Raw)", "Ore Iron" - the refined commodity's name, which is what UEX prices.</summary>
+    static string RefinedName(string name) => name
+        .Replace(" (Raw)", "", StringComparison.OrdinalIgnoreCase).Replace("Raw ", "", StringComparison.OrdinalIgnoreCase)
+        .Replace(" (Ore)", "", StringComparison.OrdinalIgnoreCase).Replace("Ore ", "", StringComparison.OrdinalIgnoreCase).Trim();
+
+    static object? RefineryEstimate(MiningRun run, UexData uex, UexFeeds feeds)
+    {
+        if (run.Scu <= 0 || string.IsNullOrWhiteSpace(run.Resource)) return null;
+        var refined = RefinedName(run.Resource);
+        var best = uex.Best(refined);
+        if (best is null || best.BestSell <= 0) return null;
+
+        var place = run.Refinery?.Place ?? "";
+        var bonus = place.Length >= 4
+            ? feeds.RefineryYields
+                .Where(y => RefinedName(y.Commodity).Equals(refined, StringComparison.OrdinalIgnoreCase)
+                    && (y.Terminal.Contains(place, StringComparison.OrdinalIgnoreCase) || place.Contains(y.Terminal, StringComparison.OrdinalIgnoreCase)))
+                .OrderByDescending(y => y.Yield)
+                .FirstOrDefault()
+            : null;
+
+        var gross = (decimal)run.Scu * best.BestSell;
+        return new
+        {
+            perScu = best.BestSell,
+            sellAt = best.BestSellTerminal,
+            gross,
+            bonusPercent = bonus?.Yield,
+            bonusAt = bonus?.Terminal,
+            withBonus = bonus is not null ? gross * (1 + (decimal)bonus.Yield / 100) : (decimal?)null,
+            bonusKnown = feeds.IsEnabled(UexFeeds.Refineries),
+        };
+    }
 
     /// <summary>
     /// The hulls that carry a mining head, from the community dataset's

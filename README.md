@@ -365,7 +365,31 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.9
+### 0.14.10
+
+- **Dinyx or Cormack, at which station.** A new optional UEX feed,
+  *Refining methods* (Settings, ~2 KB): the nine methods with the game's own
+  three-point ratings for yield, cost and speed, as a table on the Mining
+  page's *Your runs* pane. A run waiting at a refinery now carries a ceiling
+  on what it comes back as — the SCU that went in at UEX's best refined
+  price, the station's bonus on top where UEX reports one for that ore
+  there (40 SCU of copper at 4,200 is 168,000; +9 % at MIC-L5 makes
+  183,120) — and names the method it went in under with its ratings. It is
+  called a ceiling because it is before the method's own yield and the
+  refinery's fee, and neither is published anywhere: the install names the
+  methods and no more, and UEX rates them 1 to 3.
+
+- **Salvage, as far as the files go.** A fourth pane on the Mining page.
+  Every salvage hull's controller — what its beam scrapes to, what its
+  disintegration makes and at what rate per cubic metre, how many heads it
+  runs — with its hold and what a full hold of RMC or construction material
+  fetches at UEX's best sell, called the ceiling on a trip that it is; every
+  scraper module's speed, radius and efficiency, priced; the heads and their
+  slots. **What a given hull is worth scraped is not shown, because it is
+  not in the game files**: the rule is there (a beam takes 9 mm of hull) and
+  the hull's area and volume it would apply to are geometry the data core
+  does not hold, nor UEX, nor the logs. `docs/salvage.md` records the probe
+  so it is not repeated. (`--salvage` in the CLI prints the same tables.)
 
 - **Does 4 × 32 + 2 × 16 fit in the Hermes?** A cargo-fit panel on the
   Garage page. Type how many crates of each size, and it says whether the

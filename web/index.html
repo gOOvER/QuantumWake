@@ -1702,6 +1702,7 @@
       <button type="button" data-pane="go" class="active"><span>01</span> Where to go</button>
       <button type="button" data-pane="crack"><span>02</span> Can it be cracked?</button>
       <button type="button" data-pane="runs"><span>03</span> Your runs</button>
+      <button type="button" data-pane="salvage"><span>04</span> Salvage</button>
     </nav>
 
     <div class="mining-pane active" id="mining-pane-go">
@@ -1957,6 +1958,88 @@
       </table>
     </div>
     <p class="muted caption" id="mining-log-note"></p>
+
+    <!-- The nine refining methods as UEX rates them: the game's own
+         three-point scale for yield, cost and speed, and nothing behind it -
+         the percentages are the server's. Shown so a run can be read against
+         the method it went in under; hidden until the feed is on. -->
+    <div id="mining-methods" hidden>
+      <h4 class="spaced">Refining methods</h4>
+      <p class="muted caption" id="mining-methods-note"></p>
+      <div class="table-wrap">
+        <table id="mining-methods-table">
+          <thead><tr>
+            <th>Method</th><th>Code</th>
+            <th class="num" title="UEX's rating, 1 to 3 - the game's own pips">Yield</th>
+            <th class="num" title="1 is cheapest, 3 dearest">Cost</th>
+            <th class="num" title="3 is fastest">Speed</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    </div>
+
+    <!-- Salvage as the install has it: the modules, the heads, each salvage
+         hull's controller, priced by UEX. Not what a hull is worth scraped -
+         the geometry that needs is not in the files - and the pane says so
+         first rather than leaving a column of blanks to say it. -->
+    <div class="mining-pane" id="mining-pane-salvage">
+      <div class="mining-brief">
+        <span class="mining-brief-mark" aria-hidden="true"></span>
+        <p class="muted caption" id="salvage-brief">
+          What the game files say about salvage: every scraper module's speed,
+          radius and efficiency, the heads and their slots, and what each
+          salvage hull makes &mdash; what its beam scrapes to, what its
+          disintegration makes and at what rate per cubic metre &mdash; with
+          UEX's price for each and what a full hold of it fetches.
+          <b>What a given hull is worth scraped is not here</b>: the rule is in
+          the files, the hull's area and volume are not, nor in UEX, nor in
+          the logs. A full hold is a ceiling on a trip, not a promise about a
+          wreck.
+        </p>
+      </div>
+      <p class="muted" id="salvage-unready" hidden></p>
+
+      <h4 class="spaced">Salvage hulls</h4>
+      <div class="table-wrap">
+        <table id="salvage-ships">
+          <thead><tr>
+            <th>Hull</th>
+            <th class="num" title="Salvage heads the hull runs, from its controller">Heads</th>
+            <th title="What the hull-scraping beam produces">Scrapes to</th>
+            <th class="num" title="SCU of the disintegration resource per cubic metre of hull taken apart">Disintegrates</th>
+            <th class="num" title="The hull's cargo capacity, from the community dataset">Hold</th>
+            <th class="num" title="A full hold of RMC at UEX's best sell - a ceiling on a trip">Full hold, RMC</th>
+            <th class="num" title="A full hold of construction material at UEX's best sell">Full hold, CM</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted small" id="salvage-ships-note"></p>
+
+      <h4 class="spaced">Scraper modules</h4>
+      <div class="table-wrap">
+        <table id="salvage-modules">
+          <thead><tr>
+            <th>Module</th>
+            <th class="num" title="Extraction speed, the file's own unit">Speed</th>
+            <th class="num" title="The beam's radius on the hull">Radius</th>
+            <th class="num" title="Share of what is scraped that reaches the hold">Efficiency</th>
+            <th class="num">Price</th><th>Cheapest at</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <h4 class="spaced">Heads</h4>
+      <div class="table-wrap">
+        <table id="salvage-heads">
+          <thead><tr><th>Head</th><th class="num">Module slots</th><th class="num">Price</th><th>Cheapest at</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted small" id="salvage-note"></p>
     </div>
 
   </section>

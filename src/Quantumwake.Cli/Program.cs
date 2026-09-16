@@ -135,6 +135,33 @@ if (args.Contains("--mining"))
 // community digest places them, the check that the grids sum to the dump's
 // own capacity, and the question that started it. The table behind
 // docs/cargo-fit.md; run it again after a patch or a dataset refresh.
+// Salvage as the install has it: the constants, every scraper module and
+// head, and each hull's controller - what it scrapes to, what it
+// disintegrates to and how fast. What is NOT here, and why, is in
+// docs/salvage.md: a hull's own yield needs its surface area and volume,
+// which are geometry the DataCore does not hold.
+if (args.Contains("--salvage", StringComparer.OrdinalIgnoreCase))
+{
+    var cache = Path.Combine(Path.GetDirectoryName(SessionStore.DatabasePathFor(install.RootPath))!, "commodities.json");
+    var salvage = GameCommodities.Load(install.RootPath, cache).Salvage;
+
+    Console.WriteLine(salvage.Constants is { } k
+        ? $"constants: hull thickness {k.HullThicknessMetres * 1000:0.#} mm, ammo-to-material factor {k.AmmoToMaterialFactor}"
+        : "constants: none read");
+
+    Console.WriteLine($"\n{salvage.Heads.Count} heads");
+    foreach (var h in salvage.Heads) Console.WriteLine($"  {h.Name,-28} {h.Slots} module slots  {h.Manufacturer}  [{h.Class}]");
+
+    Console.WriteLine($"\n{salvage.Modules.Count} scraper modules");
+    foreach (var m in salvage.Modules) Console.WriteLine($"  {m.Name,-28} speed {m.Speed,5:0.###}  radius {m.Radius,4:0.##} m  efficiency {m.Efficiency:P0}  {m.Manufacturer}  [{m.Class}]");
+
+    Console.WriteLine($"\n{salvage.Ships.Count} salvage hulls");
+    foreach (var s in salvage.Ships)
+        Console.WriteLine($"  {s.Ship,-24} scrapes to {s.ScrapesTo ?? "-",-6} disintegrates {s.ScuPerCubicMetre:0.#####} SCU/m³ of {s.DisintegratesTo ?? "-",-28} heads {s.Heads}  {s.BoxSecondsPerScu:0.#} s/SCU to box");
+
+    return 0;
+}
+
 if (args.Contains("--cargo", StringComparer.OrdinalIgnoreCase))
 {
     var cache = Path.Combine(Path.GetDirectoryName(SessionStore.DatabasePathFor(install.RootPath))!, "commodities.json");
