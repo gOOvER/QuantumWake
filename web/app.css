@@ -1923,12 +1923,23 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
    familiar inventory-screen centre without implying that we can inspect a
    live avatar; each attachment still has its own observable card beside it. */
 .loadout-character {
+  position: relative;
   border: 1px solid var(--rule-hot);
   background:
-    linear-gradient(90deg, rgba(53, 200, 240, .035), transparent 22%, transparent 78%, rgba(53, 200, 240, .035)),
+    linear-gradient(90deg, rgba(53, 200, 240, .07), transparent 22%, transparent 78%, rgba(53, 200, 240, .07)),
     linear-gradient(160deg, var(--panel), var(--deep));
   clip-path: var(--chamfer);
   overflow: hidden;
+}
+.loadout-character::before {
+  content: "PERSONAL ARMOURY";
+  position: absolute;
+  right: 16px;
+  top: 54px;
+  color: rgba(127, 228, 255, .13);
+  font: 700 23px var(--display);
+  letter-spacing: .18em;
+  pointer-events: none;
 }
 .loadout-character-head {
   display: flex;
@@ -1937,7 +1948,7 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   gap: 16px;
   padding: 11px 16px 10px;
   border-bottom: 1px solid var(--rule);
-  background: rgba(4, 10, 17, .45);
+  background: linear-gradient(90deg, rgba(6, 18, 29, .9), rgba(4, 10, 17, .45));
 }
 .loadout-character-head p { margin: 0; font-family: var(--mono); font-size: 10.5px; }
 .loadout-eyebrow {
@@ -1955,7 +1966,7 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   font-size: 12px;
   line-height: 1.55;
   border-bottom: 1px solid var(--rule);
-  background: rgba(4, 10, 17, .22);
+  background: linear-gradient(90deg, rgba(4, 10, 17, .7), transparent);
 }
 .loadout-sheet {
   display: grid;
@@ -1969,7 +1980,7 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   grid-template-columns: 132px minmax(290px, 1fr) 132px;
   gap: 0;
   min-width: 0;
-  padding: 17px;
+  padding: 19px 17px 17px;
   border-right: 1px solid var(--rule);
 }
 .loadout-equipment {
@@ -2025,8 +2036,9 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
      interactive markers need an escape path for the hover readout. */
   clip-path: none;
   background:
-    linear-gradient(145deg, rgba(53, 200, 240, .09), rgba(5, 13, 22, .86) 58%),
+    linear-gradient(145deg, rgba(53, 200, 240, .14), rgba(5, 13, 22, .86) 58%),
     rgba(5, 13, 22, .7);
+  box-shadow: inset 2px 0 0 rgba(53, 200, 240, .13);
 }
 .loadout-equipment-left .loadout-equip-slot {
   flex-direction: row-reverse;
@@ -2038,6 +2050,8 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   text-align: left;
   border-left-color: var(--cyan-deep);
 }
+.loadout-equip-head .slot-icon { color: var(--cyan-hot); }
+.loadout-equip-core .slot-icon { color: var(--cyan-hot); }
 .loadout-equip-slot::after {
   content: "";
   position: absolute;
@@ -2127,8 +2141,9 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   min-height: 492px;
   border-inline: 1px solid rgba(53, 200, 240, .16);
   background:
-    linear-gradient(90deg, transparent 49.6%, rgba(53, 200, 240, .10) 50%, transparent 50.4%),
-    repeating-linear-gradient(0deg, transparent 0 28px, rgba(53, 200, 240, .045) 28px 29px);
+    radial-gradient(ellipse 55% 48% at 50% 47%, rgba(53, 200, 240, .13), transparent 72%),
+    linear-gradient(90deg, transparent 49.6%, rgba(53, 200, 240, .16) 50%, transparent 50.4%),
+    repeating-linear-gradient(0deg, transparent 0 28px, rgba(53, 200, 240, .055) 28px 29px);
 }
 .loadout-figure::before,
 .loadout-figure::after {
@@ -2151,6 +2166,16 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   font-size: 9px;
   letter-spacing: .16em;
 }
+.loadout-figure-status {
+  position: absolute;
+  top: 47px;
+  padding: 3px 7px;
+  border-block: 1px solid rgba(53, 200, 240, .24);
+  color: var(--dim);
+  font: 8px var(--mono);
+  letter-spacing: .13em;
+}
+.loadout-figure-status b { color: var(--cyan-hot); font-size: 10px; }
 .loadout-pilot-frame {
   position: relative;
   display: grid;
@@ -2164,7 +2189,7 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   width: 100%;
   height: 100%;
   object-fit: contain;
-  filter: saturate(.86) contrast(1.05) drop-shadow(0 0 14px rgba(48, 205, 244, .16));
+  filter: saturate(.92) contrast(1.08) drop-shadow(0 0 18px rgba(48, 205, 244, .24));
 }
 /* The scan brackets are deliberately only an overlay: the art is an original
    display asset, while these still say which broad body regions the log saw. */
@@ -2224,7 +2249,7 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   z-index: 3;
   min-width: 0;
   padding: 17px;
-  background: rgba(3, 8, 14, .34);
+  background: linear-gradient(160deg, rgba(13, 21, 29, .75), rgba(3, 8, 14, .34));
 }
 .loadout-field-head {
   display: flex;
@@ -2234,6 +2259,8 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   padding: 0 0 10px;
   border-bottom: 1px solid var(--rule);
 }
+.loadout-field-head .loadout-eyebrow { color: var(--amber); }
+.loadout-field-head .group-meta { color: var(--muted); }
 .loadout-inventory-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2246,12 +2273,18 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   min-height: 108px;
   align-content: start;
   gap: 8px;
-  padding: 9px;
+  padding: 10px 9px 9px;
+  border-top-color: rgba(255, 171, 61, .38);
+  background: linear-gradient(155deg, rgba(255, 171, 61, .075), rgba(5, 13, 22, .78) 45%);
   /* Field-kit cards also carry a hover panel, so do not clip it to the tile. */
   clip-path: none;
 }
 .loadout-inventory-slot:hover,
-.loadout-inventory-slot:focus-visible { z-index: 5; }
+.loadout-inventory-slot:focus-visible {
+  z-index: 5;
+  border-color: var(--amber);
+  box-shadow: 0 0 0 1px rgba(255, 171, 61, .2), 0 0 16px rgba(255, 171, 61, .1);
+}
 .loadout-inventory-slot .loadout-item-inspect {
   top: calc(100% + 7px);
   width: min(218px, calc(100vw - 34px));
@@ -2278,6 +2311,7 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
 }
 
 @media (max-width: 680px) {
+  .loadout-character::before { display: none; }
   .loadout-character-head { align-items: flex-start; flex-direction: column; gap: 4px; }
   .loadout-avatar-rig { grid-template-columns: 1fr 1fr; gap: 7px; padding: 10px; }
   .loadout-figure { grid-column: 1 / -1; grid-row: 1; min-height: 280px; border-block: 1px solid rgba(53, 200, 240, .16); }
@@ -2308,6 +2342,7 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
 }
 
 body.overlay .loadout-character { border: 0; background: transparent; clip-path: none; }
+body.overlay .loadout-character::before { display: none; }
 body.overlay .loadout-character-head,
 body.overlay .loadout-figure,
 body.overlay .loadout-field-head,

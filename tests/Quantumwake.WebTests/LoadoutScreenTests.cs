@@ -34,6 +34,7 @@ public sealed class LoadoutScreenTests
         Assert.Contains("Odyssey Core", page.NodeText("#loadout-grid"));
         Assert.Contains("RSI · Armor / Light · S2 · Grade C", page.NodeText("#loadout-grid"));
         Assert.Contains("×2", page.NodeText("#loadout-grid"));
+        Assert.Contains("2 stowed slots", page.NodeText("#loadout-grid"));
     }
 
     [Fact]

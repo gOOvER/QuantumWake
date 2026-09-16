@@ -365,7 +365,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.6
+### 0.14.7
+
+- **The Armoury is clearer and more tactile.** Equipped gear now frames a
+  brighter pilot readout, shows exactly how many body zones the log observed,
+  and keeps its details one inspect away. Stowed weapons and supplies form a
+  visibly separate amber field-kit panel with its own slot count. The page is
+  still an observed loadout rather than a claim about live game inventory.
 
 - **Mining is easier to work from at a glance.** The page now separates its
   prospecting, rock-fit and personal-log workspaces with a stronger operations

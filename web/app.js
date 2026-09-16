@@ -15531,6 +15531,8 @@ function loadoutArmorProfile(equipped) {
 function loadoutFigure(equipped) {
   const observed = new Set(equipped.map(loadoutPlacement));
   const profile = loadoutArmorProfile(equipped);
+  const observedZones = ['head', 'core', 'base', 'back', 'arms', 'legs']
+    .filter((part) => observed.has(part));
   const observedParts = ['head', 'core', 'base', 'back', 'arms', 'legs']
     .filter((part) => observed.has(part))
     .map((part) => `loadout-has-${part}`)
@@ -15538,6 +15540,7 @@ function loadoutFigure(equipped) {
   const figure = el('div', `loadout-figure loadout-profile-${profile.id} ${observedParts}`);
   figure.innerHTML = `
     <div class="loadout-figure-tag">${profile.label.toUpperCase()} ARMOUR PROFILE</div>
+    <div class="loadout-figure-status"><b>${observedZones.length}/6</b> BODY ZONES OBSERVED</div>
     <div class="loadout-pilot-frame">
       <img class="loadout-pilot-art" src="${profile.art}" alt="" />
       <span class="loadout-pilot-zone loadout-pilot-zone-head"></span>
@@ -15547,7 +15550,7 @@ function loadoutFigure(equipped) {
       <span class="loadout-pilot-zone loadout-pilot-zone-arms"></span>
       <span class="loadout-pilot-zone loadout-pilot-zone-legs"></span>
     </div>
-    <div class="loadout-figure-key"><span>HEAD</span><span>CORE</span><span>BASE</span><span>PACK</span><span>INSPECT MARKERS</span></div>`;
+    <div class="loadout-figure-key"><span>HEAD</span><span>CORE</span><span>BASE</span><span>PACK</span><span>OBSERVED ZONES LIT</span></div>`;
   return figure;
 }
 
@@ -15684,7 +15687,8 @@ function renderLoadout(stats) {
   const field = el('aside', 'loadout-field-kit');
   const fieldHead = el('div', 'loadout-field-head');
   fieldHead.append(el('div', 'loadout-eyebrow', 'Field kit'));
-  fieldHead.append(el('span', 'group-meta', 'stowed & supplies'));
+  const stowedCount = slots.filter((slot) => !loadoutPlacement(slot)).length;
+  fieldHead.append(el('span', 'group-meta', `${stowedCount} stowed slot${stowedCount === 1 ? '' : 's'}`));
   field.append(fieldHead);
   const inventory = el('div', 'loadout-inventory-grid');
 
