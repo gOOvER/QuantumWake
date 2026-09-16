@@ -365,7 +365,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.2
+### 0.14.3
 
 - **A second copy of Quantum Wake closes itself.** Starting the app while it
   was already running used to leave the second copy up without a dashboard
@@ -400,6 +400,22 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   those feeds are on, and values a SCU of the mix at refined prices (before
   the refinery's yield, which is in no file or feed) and raw.
   `docs/mining.md` has the whole model and the dump.
+
+- **A scanned rock reads from a screenshot.** Screenshot the mining HUD's
+  scan-results panel with a rock selected and the Log tab reads it — the
+  primary mineral, mass, resistance, instability, the game's own SCU figure
+  for the rock, and each mineral's share and quality — and offers *Can it be
+  cracked?*, which opens the calculator with the rock in the form; the
+  Mining page's *Use the last scanned rock* does the same. Written from the
+  one public frame available (the wiki's 4.7 panel); the first scan you
+  take is what the reader gets checked against. Instability is left as
+  typed: the panel prints a figure and the rule wants a percentage, and
+  nothing measured says they are the same scale.
+
+- **The Fleet Manager reads the Ironclad.** The row glyph in the terminal's
+  margin came back as a letter — "V Drake Ironclad" — and with two Ironclads
+  in the game's list the row named neither. A one-letter first word is
+  dropped, and a name the row carries whole is the ship.
 
 - **The refinery figure on the Mining page is a bonus, not a yield.** UEX's
   refinery feed reports a station's percentage points on the method's yield

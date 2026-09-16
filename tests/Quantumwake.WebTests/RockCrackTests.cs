@@ -223,6 +223,51 @@ public class RockCrackTests
         Assert.Contains("55,100 aUEC", page.NodeText("#crack-matrix tbody"));
     }
 
+    /// <summary>
+    /// A scan-results screenshot the Log tab read fills the form - mass,
+    /// resistance, the primary mineral - each only where the engine read it,
+    /// and instability is left alone because the panel's figure and the
+    /// rule's percentage are not known to be one scale. The Log entry says
+    /// the rock and offers the calculator.
+    /// </summary>
+    [Fact]
+    public void The_last_scanned_rock_fills_the_form_where_it_read()
+    {
+        var page = Opened();
+        page.Serve("/api/screen/readings?take=50", """
+            {"readings":[
+               {"shot":"ScreenShot-2026-09-16_01-10-00-AAA.jpg","shotAt":"2026-09-16T05:10:00Z","kind":"Mining","summary":"a rock scanned: Quantainium (Raw), 6,295 kg, 12% resistance, 21.07 SCU","checks":[],"lines":[],"tookMs":150,
+                "mining":{"primaryRead":"QUANTAINIUM (RAW)","primary":"Quantainium (Raw)","massKg":6295,"resistancePercent":12,"instability":1.75,"scu":21.07,"difficulty":"HARD",
+                          "parts":[{"read":"QUANTAINIUM (RAW)","mineral":"Quantainium (Raw)","percent":31.2,"quality":812},{"read":"WERT MATERIALS","mineral":"Inert materials","percent":68.8,"quality":0}]}},
+               {"shot":"older.jpg","shotAt":"2026-09-10T05:10:00Z","kind":"Mining","summary":"older","checks":[],"lines":[],"tookMs":150,
+                "mining":{"primaryRead":"IRON","primary":null,"massKg":100,"resistancePercent":null,"instability":null,"scu":null,"difficulty":null,"parts":[]}}],
+             "clipboard":[],"total":2,"pastes":0}
+            """);
+        page.Do("__dom.node('#crack-instability').value = '15'; await useLastScan();");
+
+        Assert.Equal("6295", page.Text("__dom.node('#crack-mass').value"));
+        Assert.Equal("12", page.Text("__dom.node('#crack-resistance').value"));
+        Assert.Equal("15", page.Text("__dom.node('#crack-instability').value"));
+        Assert.Equal("Quantainium_Raw", page.Text("__dom.node('#crack-mineral').value"));
+        var note = page.NodeText("#crack-scan-note");
+        Assert.Contains("21.07 SCU by the game's own count", note);
+        Assert.Contains("Instability is left as typed", note);
+        Assert.Contains("\"massKg\":6295", page.BodyOf("/api/mining/crack"));
+
+        // The Log tab's entry for the same reading.
+        page.Do("""
+            const box = __dom.node('#t'); box.replaceChildren();
+            renderSighting(box, {"kind":"Mining","shot":"x.jpg","shotAt":"2026-09-16T05:10:00Z","checks":[],
+              "mining":{"primary":"Quantainium (Raw)","massKg":6295,"resistancePercent":12,"instability":1.75,"scu":21.07,"difficulty":"HARD",
+                        "parts":[{"read":"Q","mineral":"Quantainium (Raw)","percent":31.2,"quality":812}]}}, true);
+            """);
+        var entry = page.NodeText("#t");
+        Assert.Contains("a rock scanned: Quantainium (Raw)", entry);
+        Assert.Contains("6,295 kg · 12% resistance · instability 1.75 · 21.07 SCU · hard", entry);
+        Assert.Contains("31.2% · quality 812", entry);
+        Assert.Contains("Can it be cracked?", entry);
+    }
+
     [Fact]
     public void Before_the_install_is_read_it_says_so_instead_of_showing_a_form()
     {

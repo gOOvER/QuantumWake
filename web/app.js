@@ -4552,6 +4552,37 @@ $('#mining-log-form')?.addEventListener('submit', async (e) => {
  */
 let crackModel = null;
 
+/** A scanned rock handed over from the Log tab, taken up once the model is in. */
+let crackFromScan = null;
+
+/**
+ * The form filled from a scan-results reading: mass, resistance, the
+ * primary mineral, and the deposit when one preset's likeliest mineral is
+ * the rock's. Instability is left alone - the panel prints it as a figure
+ * like 1.75 and the community rule takes a percentage, and the two are not
+ * known to be the same scale; the note says so. Each figure lands only
+ * where the engine read it.
+ */
+function fillCrackFromScan(scan) {
+  if (!scan || !crackModel) return;
+  if (scan.massKg != null) $('#crack-mass').value = String(Math.round(scan.massKg));
+  if (scan.resistancePercent != null) $('#crack-resistance').value = String(Math.round(scan.resistancePercent));
+
+  const primary = scan.primary || scan.parts?.find((p) => p.mineral && p.mineral !== 'Inert materials')?.mineral;
+  const mineral = primary ? crackModel.minerals.find((m) => m.name.toLowerCase() === primary.toLowerCase()) : null;
+  if (mineral) $('#crack-mineral').value = mineral.class;
+
+  const say = $('#crack-scan-note');
+  if (say) {
+    const missing = [scan.massKg == null ? 'mass' : null, scan.resistancePercent == null ? 'resistance' : null].filter(Boolean);
+    say.hidden = false;
+    say.textContent = `From the scan read on the Log tab: ${scan.primary || scan.primaryRead || 'a rock'}`
+      + (scan.scu != null ? `, ${scan.scu} SCU by the game's own count` : '')
+      + `. ${missing.length ? `The panel's ${missing.join(' and ')} did not read and the field is as it was. ` : ''}`
+      + `Instability is left as typed: the panel prints ${scan.instability ?? 'a figure'} and the rule wants a percentage, and nothing measured says they are the same scale.`;
+  }
+}
+
 async function loadCrackModel() {
   const box = $('#crack');
   const unready = $('#crack-unready');
@@ -4613,8 +4644,30 @@ async function loadCrackModel() {
   renderCrackHeads();
   renderCrackDeposit();
   renderCrackFittings();
+  if (crackFromScan) { fillCrackFromScan(crackFromScan); crackFromScan = null; renderCrackDeposit(); }
   await assessCrack();
 }
+
+/** The newest rock scan on the Log, into the form. */
+async function useLastScan() {
+  let got;
+  try {
+    got = await getJson('/api/screen/readings?take=50');
+  } catch {
+    return;
+  }
+  const scan = (got.readings || []).filter((s) => s.mining && !s.dismissed).sort((a, b) => new Date(b.shotAt) - new Date(a.shotAt))[0];
+  const say = $('#crack-scan-note');
+  if (!scan) {
+    if (say) { say.hidden = false; say.textContent = 'No rock scan has been read yet. Screenshot the scan-results panel with a rock selected; with Watch screenshots on (Log tab) it is read as it lands.'; }
+    return;
+  }
+  fillCrackFromScan(scan.mining);
+  renderCrackDeposit();
+  await assessCrack();
+}
+
+$('#crack-use-scan')?.addEventListener('click', () => useLastScan().catch(() => {}));
 
 /** "55,100 aUEC" or a dash: UEX's cheapest terminal for the item, or none recorded. */
 function crackPrice(market) {
@@ -5532,6 +5585,7 @@ const SCREEN_KINDS = {
   Fleet: 'fleet',
   Reputation: 'reputation',
   Kiosk: 'kiosk',
+  Mining: 'rock scan',
   MobiGlas: 'mobiGlas',
   Unknown: 'unread',
 };
@@ -5673,6 +5727,38 @@ function renderSighting(box, s, { full = true } = {}) {
       box.append(el('div', 'muted', `Balance on screen: ${Number(k.balance).toLocaleString()} aUEC, printed in full.`));
     else if (k.balanceRead)
       box.append(el('div', 'muted', `Balance on screen: ${k.balanceRead}, abbreviated — no figure is taken from it.`));
+  }
+
+  // A scanned rock: the panel's figures, each said only where it read, and a
+  // way to the calculator with them already in the form.
+  if (s.mining) {
+    const m = s.mining;
+    box.append(el('div', 'strong', `a rock scanned: ${m.primary || m.primaryRead || 'mineral unread'}`));
+    const facts = [
+      m.massKg != null ? `${Number(m.massKg).toLocaleString()} kg` : 'mass did not read',
+      m.resistancePercent != null ? `${m.resistancePercent}% resistance` : 'resistance did not read',
+      m.instability != null ? `instability ${m.instability}` : 'instability did not read',
+      m.scu != null ? `${m.scu} SCU` : null,
+      m.difficulty ? m.difficulty.toLowerCase() : null,
+    ].filter(Boolean);
+    box.append(el('div', 'muted', facts.join(' · ')));
+
+    if (full && (m.parts || []).length) {
+      const list = el('ul', 'feed screen-fittings');
+      for (const part of m.parts) {
+        const li = el('li');
+        li.append(el('span', 'what', part.mineral || `read as “${part.read}”`));
+        li.append(el('span', 'd', ` · ${part.percent ? `${part.percent}%` : 'share did not read'}${part.quality != null ? ` · quality ${part.quality}` : ''}`));
+        list.append(li);
+      }
+      box.append(list);
+    }
+
+    const go = el('button', 'ghost tiny', 'Can it be cracked?');
+    go.type = 'button';
+    go.title = 'Open the Mining page with this rock in the calculator';
+    go.addEventListener('click', () => { crackFromScan = m; showView('mining'); });
+    box.append(go);
   }
 
   if (s.contracts) {

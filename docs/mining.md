@@ -151,13 +151,38 @@ which is why the yield column reads from the feed and the app has no
 refinery calculator of its own beyond the mining log's "waiting on a
 refinery" and the yields it already shows.
 
-## Not read yet
+## The scan panel, read
 
-- The scan HUD. It prints the four inputs - mass, resistance, instability,
-  and the composition with percentages - and a `Mining` frame kind for the
-  screen reader would fill the form from a screenshot. Every reader so far
-  was written from a frame already in the log, and there is no mining frame
-  on this install: the first one a pilot takes is what it gets written from.
+No frame from this install exists - the logs record no mining and the
+folder holds no scan - so the reader was written from the one public frame
+found: the Star Citizen Wiki's `Mining-4.7-scan-result.png`, a 227 × 310
+crop of the panel in Alpha 4.7, run through the app's own engine on
+2026-09-15. The panel prints, top to bottom: SCAN RESULTS; the primary
+mineral; MASS: 6295; RESISTANCE: 0%; INSTABILITY: 1.75; a difficulty bar
+(EASY); COMPOSITION with **21.07 SCU** on the row; then a row per mineral -
+share, name, quality - with INERT MATERIALS last at quality 0. At that size
+the engine read every label and lost the mass figure, misread two shares
+(5.96% as "s.gs%", 40.47% as "4147%") and one name ("ÄLUMNUX"); a screenshot
+at the game's resolution is four times the height. `ScreenFrame.Mining.cs`
+files the frame as `ScreenKind.Mining` on the title plus both figure labels
+(the fracture HUD prints resistance and instability too, without the title),
+lands each figure only where it read, and names a mineral only when one
+commodity is within two letters. The fixture in `ScreenMiningTests` is the
+engine's output verbatim, misreadings kept.
+
+Two things the panel settles that nothing else did. **The SCU figure** is the
+game's own conversion of this rock to cargo - 6,295 kg to 21.07 SCU here -
+which the calculator could not compute; the form says "by the game's own
+count" when it has one. And **instability is printed as a figure**, 1.75,
+not a percentage; the community rule takes a percentage, and nothing measured
+says the two are one scale, so a scan fills mass, resistance and the mineral
+and leaves instability as typed, and says so.
+
+The Log tab lists a scan with its figures and offers *Can it be cracked?*,
+which opens the Mining page with the rock in the form; the page's *Use the
+last scanned rock* does the same from the newest scan read. **The first scan
+frame a pilot on this install takes replaces the wiki crop as the fixture**;
+the reader is expected to move.
 
 ## The dump
 

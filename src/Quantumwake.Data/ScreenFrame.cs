@@ -40,6 +40,9 @@ public enum ScreenKind
 
     /// <summary>A commodity kiosk: what the shop stocks, and at what price.</summary>
     Kiosk,
+
+    /// <summary>The mining HUD's scan results: a rock's mass, resistance, instability and mix.</summary>
+    Mining,
 }
 
 /// <summary>One port on the loadout screen and what the frame says is in it.</summary>
@@ -132,7 +135,8 @@ public sealed record ScreenFrame(
     ContractsReading? Contracts = null,
     FleetReading? Fleet = null,
     ReputationReading? Reputation = null,
-    KioskReading? Kiosk = null);
+    KioskReading? Kiosk = null,
+    MiningScanReading? Mining = null);
 
 /// <summary>
 /// Sorts a frame into the screen it is and reads what that screen carries.
@@ -245,6 +249,11 @@ public static partial class ScreenFrames
             return new ScreenFrame(ScreenKind.Kiosk, texts, null, null, null,
                 kiosk.Balance is { } balance ? new WalletReading(balance, null) : wallet, Kiosk: kiosk);
         }
+
+        // The scan panel has no app bar and names no item the tooltip matcher
+        // would take; it is its own three labels.
+        if (ReadMiningScan(all, commodityNames ?? []) is { } scan)
+            return new ScreenFrame(ScreenKind.Mining, texts, null, null, null, wallet, Mining: scan);
 
         if (hasTooltip)
             return new ScreenFrame(ScreenKind.Tooltip, texts, tooltip, null, null, wallet);

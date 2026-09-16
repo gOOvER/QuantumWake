@@ -217,6 +217,33 @@ public class ScreenAppTests
         Assert.Equal("Stored", pisces.State);
     }
 
+    /// <summary>
+    /// The Fleet Manager's row glyph reads as a letter - "V Drake Ironclad" on
+    /// the frame of 2026-09-15 - and the two Ironclads share every word the
+    /// read has, so the row came out as "looks like" two ships and named
+    /// neither. A one-letter first word is dropped, and a name the read holds
+    /// whole is the ship; the longer of two it holds is the one it said.
+    /// </summary>
+    [Theory]
+    [InlineData("V Drake Ironclad", "Drake Ironclad")]
+    [InlineData("v Drake Ironclad Assault", "Drake Ironclad Assault")]
+    [InlineData("Drake Ironclad Deliverable", "Drake Ironclad")]
+    [InlineData("Drake Corsair", "Drake Corsair")]
+    public void A_stray_glyph_before_a_ship_name_does_not_stop_it_reading(string read, string ship)
+    {
+        string[] ships = ["Drake Corsair", "Drake Ironclad", "Drake Ironclad Assault", "Argo ATLS", "Argo ATLS GEO"];
+        var lines = ScreenAppFixtures.FleetManager
+            .Select(l => l.Text == "Drake Corsair" ? l with { Text = read } : l)
+            .ToArray();
+
+        var frame = ScreenFrames.Read(lines, Catalogue, ships);
+
+        Assert.Equal(ScreenKind.Fleet, frame.Kind);
+        var row = frame.Fleet!.Ships.Single(r => r.Read == read);
+        Assert.Equal(ship, row.Ship);
+        Assert.Empty(row.LooksLike);
+    }
+
     [Fact]
     public void A_ship_the_logs_never_saw_flown_is_new_rather_than_a_contradiction()
     {
