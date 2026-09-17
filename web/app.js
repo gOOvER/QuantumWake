@@ -7982,7 +7982,45 @@ const FILE_STATES = {
   changed: ['grown', 'Has changed since it was read; the next scan re-reads it'],
   unread: ['not read', 'In the folder but never scanned'],
   gone: ['gone', 'The game has deleted this backup; its session is kept from the last read'],
+  parsing: ['parsing…', 'Being read right now'],
 };
+
+/** The scan in progress, as the bar last polled it; null between scans. */
+let scanNow = null;
+
+/** The runs as last fetched, kept so a poll can redraw the table with the live row on top. */
+let scanRunsSeen = [];
+
+function paintFileState(cell, state) {
+  const [label, why] = FILE_STATES[state] || [state, ''];
+  cell.className = `scan-state ${state}`;
+  cell.textContent = label;
+  cell.title = why;
+}
+
+/**
+ * One poll of a scan, on the file table.
+ *
+ * The rows are not re-fetched mid-scan: sessions land in batches of 25, so
+ * the store would describe a pass half committed. The table keeps what it
+ * last read and only the row being parsed changes, back to its resting
+ * state once the scan has moved on; the finish reloads everything.
+ */
+function paintScanFiles(status) {
+  scanNow = status && status.running ? status : null;
+
+  const body = $('#scan-files-table tbody');
+  if (!body) return;
+
+  for (const tr of body.children || []) {
+    const cell = tr.querySelector?.('.scan-state');
+    if (!cell || !tr.dataset) continue;
+    const parsing = !!scanNow && tr.dataset.file === scanNow.file;
+    paintFileState(cell, parsing ? 'parsing' : tr.dataset.state);
+  }
+
+  renderScanRuns(scanRunsSeen);
+}
 
 async function loadScanHistory() {
   const table = $('#scan-files-table tbody');
@@ -8031,9 +8069,11 @@ function renderScanFiles(history) {
     name.title = file.path;
     tr.append(name);
 
-    const [label, why] = FILE_STATES[file.state] || [file.state, ''];
-    const state = el('td', `scan-state ${file.state}`, label);
-    state.title = why;
+    // Remembered on the row so a poll can mark it parsing and put it back.
+    tr.dataset.file = file.name;
+    tr.dataset.state = file.state;
+    const state = el('td');
+    paintFileState(state, scanNow && scanNow.file === file.name ? 'parsing' : file.state);
     tr.append(state);
 
     tr.append(el('td', 'num', megabytes(file.bytes)));
@@ -8058,15 +8098,31 @@ function renderScanFiles(history) {
 }
 
 function renderScanRuns(runs) {
+  scanRunsSeen = runs;
   const body = $('#scan-runs-table tbody');
   body.textContent = '';
 
   const latest = runs[0];
-  $('#scan-runs-summary').textContent = latest
-    ? `last ${relative(latest.finishedAt)} · ${latest.parsed} of ${latest.files} read`
-    : '';
+  $('#scan-runs-summary').textContent = scanNow
+    ? `running · ${scanNow.done} of ${scanNow.total} checked · ${scanNow.parsed} read so far`
+    : latest
+      ? `last ${relative(latest.finishedAt)} · ${latest.parsed} of ${latest.files} read`
+      : '';
 
-  if (!runs.length) {
+  // The pass under way sits above the ones that finished, with the file it
+  // is on: the same facts the bar at the top shows, kept beside the history
+  // they are about to join.
+  if (scanNow) {
+    const tr = el('tr', 'running');
+    tr.append(el('td', null, 'now'));
+    tr.append(el('td', 'num', String(scanNow.total)));
+    tr.append(el('td', 'num', String(scanNow.parsed)));
+    tr.append(el('td', 'num', `${scanNow.elapsedSeconds}s`));
+    tr.append(el('td', 'scan-state parsing', `parsing ${scanNow.done} / ${scanNow.total}${scanNow.file ? ` · ${scanNow.file}` : ''}`));
+    body.append(tr);
+  }
+
+  if (!runs.length && !scanNow) {
     const td = el('td', 'muted', 'No scan recorded yet. Scans are kept from 0.14.10 on; the first one lands on the next start.');
     td.colSpan = 5;
     const tr = el('tr');
@@ -21540,6 +21596,14 @@ async function watchScan() {
 
     const finished = paintScan(status, sawRunning);
     sawRunning = status.running;
+
+    // The file table follows the same poll while it is on screen, so the row
+    // being parsed says so rather than the bar alone. The status is kept
+    // either way, so opening the pane mid-scan draws the pass already under way.
+    const wasScanning = scanNow !== null;
+    scanNow = status.running ? status : null;
+    if ((status.running || wasScanning) && $('#view-log')?.classList.contains('active') && logPane === 'files')
+      paintScanFiles(status);
 
     if (finished) {
       // The bar holds on "complete" long enough to be read, then goes.

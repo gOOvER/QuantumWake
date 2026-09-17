@@ -4293,6 +4293,8 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 .scan-state.changed { color: var(--amber); }
 .scan-state.unread { color: var(--red); }
 .scan-state.gone { color: var(--muted); }
+.scan-state.parsing { color: var(--cyan); }
+#scan-runs-table tr.running td { color: var(--cyan); }
 #scan-files-table tr.gone td { color: var(--muted); }
 #scan-files-table tr.gone .scan-file { text-decoration: line-through; text-decoration-color: var(--muted); }
 .scan-forced { color: var(--amber); }

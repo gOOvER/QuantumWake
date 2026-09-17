@@ -130,6 +130,57 @@ public class ScanHistoryPageTests
     }
 
     /// <summary>
+    /// While a scan runs, the row it is on says so in its state, and the
+    /// scans table carries the pass under way above the ones that finished.
+    /// Once it has moved on the row goes back to what the store said.
+    /// </summary>
+    [Fact]
+    public void The_file_being_parsed_says_so_and_goes_back_when_the_scan_moves_on()
+    {
+        var page = Loaded(TwoFilesOneGone);
+
+        page.Do("paintScanFiles({running:true, done:2, total:3, parsed:1, file:'Game.log', percent:66, elapsedSeconds:4});");
+
+        var rows = page.Text("__dom.node('#scan-files-table tbody').children.map(tr => tr.dataset.file + '=' + tr.querySelector('.scan-state').textContent).join('|')");
+        Assert.Contains("Game.log=parsing…", rows);
+        Assert.Contains("Game Backup 2026-09-16.log=read", rows);
+
+        var runs = page.NodeText("#scan-runs-table tbody");
+        Assert.Contains("now", runs);
+        Assert.Contains("parsing 2 / 3 · Game.log", runs);
+        Assert.Contains("full re-read", runs);
+        Assert.Contains("running · 2 of 3 checked · 1 read so far", page.NodeText("#scan-runs-summary"));
+
+        page.Do("paintScanFiles({running:true, done:3, total:3, parsed:1, file:'Game Backup 2026-09-16.log', percent:100, elapsedSeconds:5});");
+        rows = page.Text("__dom.node('#scan-files-table tbody').children.map(tr => tr.dataset.file + '=' + tr.querySelector('.scan-state').textContent).join('|')");
+        Assert.Contains("Game.log=grown", rows);
+        Assert.Contains("Game Backup 2026-09-16.log=parsing…", rows);
+
+        page.Do("paintScanFiles({running:false, done:3, total:3, parsed:1, file:null, percent:100, elapsedSeconds:5});");
+        rows = page.Text("__dom.node('#scan-files-table tbody').children.map(tr => tr.dataset.file + '=' + tr.querySelector('.scan-state').textContent).join('|')");
+        Assert.DoesNotContain("parsing", rows);
+        Assert.DoesNotContain("now", page.Text("__dom.node('#scan-runs-table tbody').children.map(tr => tr.className).join('|')"));
+        Assert.Contains("1 of 3 read", page.NodeText("#scan-runs-summary"));
+    }
+
+    /// <summary>
+    /// Opening the pane in the middle of a scan draws the pass already under
+    /// way: the poll keeps the status whether or not the table is on screen.
+    /// </summary>
+    [Fact]
+    public void Opening_the_pane_mid_scan_shows_the_row_being_parsed()
+    {
+        var page = new Page();
+        page.Serve("/api/scan/history", TwoFilesOneGone);
+        page.Do("scanNow = {running:true, done:1, total:3, parsed:0, file:'Game.log', percent:33, elapsedSeconds:1}; await loadScanHistory();");
+
+        Assert.Contains("parsing…", page.NodeText("#scan-files-table tbody"));
+        Assert.Contains("now", page.NodeText("#scan-runs-table tbody"));
+
+        page.Do("scanNow = null;");
+    }
+
+    /// <summary>
     /// Scan now is the routine pass, not the full re-read Settings offers: it
     /// must not send <c>force</c>, or a click costs half a minute and 400 MB.
     /// </summary>

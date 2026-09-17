@@ -365,7 +365,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.10
+### 0.14.11
 
 - **The Log page shows which game logs were read.** A new *Game logs* tab
   lists every `Game.log` the install has — the live one and each rotated
@@ -378,7 +378,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   Scans are recorded from this version on, so the first one appears on the
   next start; logs read by an earlier build say so instead of showing a
   date. A *Scan now* button runs the routine pass without the full re-read
-  Settings offers.
+  Settings offers. While a scan runs, the row it is on reads *parsing…* and
+  the pass under way sits at the top of the scans table with its count and
+  the file it has reached, so a cold re-read can be watched file by file.
 
 - **Read a kit's readiness before inspecting its parts.** The Armoury now
   summarizes the last observed kit's body-zone coverage, weapon and
