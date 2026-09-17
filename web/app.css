@@ -5203,6 +5203,11 @@ body.overlay .ship-picture { display: none; }
 #armoury-pane-attachments h3.spaced { margin-top: 18px; }
 #armoury-pane-attachments h3.spaced .muted { font-weight: normal; font-size: 12px; }
 td.armoury-gain { color: var(--green); }
+/* A dotted underline says there is more on hover: the other terminals, without a click. */
+td.armoury-more { text-decoration: underline dotted var(--dim); text-underline-offset: 3px; cursor: help; }
+.armoury-facts { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; margin: 0 0 8px; font-size: 12.5px; }
+.armoury-facts dt { color: var(--muted); }
+.armoury-facts dd { margin: 0; }
 td.armoury-cost { color: var(--amber); }
 /* width 0 with min-width 100%: fills the cell without widening the table past its own columns. */
 .armoury-detail { padding: 12px 14px; width: 0; min-width: 100%; box-sizing: border-box; white-space: normal; }

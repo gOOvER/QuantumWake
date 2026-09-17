@@ -266,7 +266,7 @@ public class ArmouryPageTests
         "melee":[
           {"class":"ksar_melee_01","uuid":"aaaa","name":"Sawtooth Combat Knife","manufacturer":"Kastak Arms","mass":1,
            "slash":{"physical":30,"total":30,"dominant":"physical"},"stab":{"physical":30,"total":30,"dominant":"physical"},"impulse":20,"config":"KnifeMeleeCombat",
-           "market":{"price":220,"shops":[{"terminal":"Guns Rod's Fuel","place":"Rod's Fuel & Supplies","system":"Pyro","price":220}]},
+           "market":{"price":220,"shops":[{"terminal":"Guns Rod's Fuel","place":"Rod's Fuel & Supplies","system":"Pyro","price":220},{"terminal":"Live Fire ARC-L1","place":"ARC-L1","system":"Stanton","price":4200}]},
            "finishes":[{"class":"ksar_melee_01_brown01","uuid":"bbbb","name":"Sawtooth \"Sirocco\" Combat Knife","market":{"price":null,"shops":[]}}]},
           {"class":"banu_melee_03","uuid":"cccc","name":"Sizi Knife","manufacturer":"Banu","mass":1,
            "slash":{"physical":30,"total":30,"dominant":"physical"},"stab":{"physical":30,"total":30,"dominant":"physical"},"impulse":20,"config":"KnifeMeleeCombat",
@@ -419,16 +419,71 @@ public class ArmouryPageTests
     }
 
     [Fact]
-    public void A_knife_opens_to_its_finishes_with_their_prices()
+    public void A_knife_opens_to_its_figures_its_picture_every_terminal_and_its_finishes()
     {
         var page = KitOpened("knives");
 
         page.Do("__dom.node('#armoury-knives tbody').children[0].click();");
-        var detail = page.Text("__dom.node('#armoury-knives tbody').children[1].textContent");
+        var row = "__dom.node('#armoury-knives tbody').children[1]";
+        var detail = page.Text($"{row}.textContent");
 
+        Assert.Contains("30 ballistic", detail);
+        Assert.Contains("KnifeMeleeCombat", detail);
+        Assert.Contains("Sold at (2)", detail);
+        Assert.Contains("Guns Rod's Fuel", detail);
+        Assert.Contains("Live Fire ARC-L1", detail);
         Assert.Contains("Finishes (1)", detail);
         Assert.Contains("Sirocco", detail);
         Assert.Contains("no terminal recorded", detail);
+        Assert.Equal("/api/armoury/picture/aaaa", page.Text($"{row}.querySelectorAll('.armoury-picture')[0].querySelectorAll('img')[0].src"));
+
+        // A finish's chip swaps the picture to that finish, as a gun's does.
+        page.Do($"{row}.querySelectorAll('.armoury-finish')[0].click();");
+        Assert.Equal("/api/armoury/picture/bbbb", page.Text($"{row}.querySelectorAll('.armoury-picture')[0].querySelectorAll('img')[0].src"));
+    }
+
+    [Fact]
+    public void A_grenade_and_an_attachment_open_the_same_way()
+    {
+        var page = KitOpened("grenades");
+        page.Do("__dom.node('#armoury-grenades tbody').children[0].click();");
+        var grenade = page.Text("__dom.node('#armoury-grenades tbody').children[1].textContent");
+        Assert.Contains("a 5 s fuse", grenade);
+        Assert.Contains("120 ballistic, full to 4 m, none past 5.5 m", grenade);
+        Assert.Contains("Sold at (1)", grenade);
+
+        page.Do("showArmouryPane('attachments'); __dom.node('#armoury-barrels tbody').children[0].click();");
+        var barrel = page.Text("__dom.node('#armoury-barrels tbody').children[1].textContent");
+        Assert.Contains("Barrel, size 1", barrel);
+        Assert.Contains("×0.92 damage", barrel);
+        Assert.Contains("Sold at (1)", barrel);
+        Assert.Contains("Scorched", barrel);
+    }
+
+    /// <summary>The row shows one terminal; the rest are a hover away, not a click.</summary>
+    [Fact]
+    public void The_other_terminals_are_on_the_cheapest_cell_as_a_hover()
+    {
+        var page = KitOpened("knives");
+        var cell = "__dom.node('#armoury-knives tbody').children[0].children[7]";
+
+        Assert.Contains("Guns Rod's Fuel", page.Text($"{cell}.textContent"));
+        Assert.Contains("Also at Live Fire ARC-L1 · 4,200 aUEC", page.Text($"{cell}.title"));
+        Assert.True(page.Truth($"{cell}.classList.contains('armoury-more')"));
+
+        // One terminal only: nothing to hover for, and no underline promising it.
+        var lone = "__dom.node('#armoury-knives tbody').children[1].children[7]";
+        Assert.False(page.Truth($"{lone}.classList.contains('armoury-more')"));
+    }
+
+    [Fact]
+    public void Without_uex_the_opened_row_says_terminals_need_it()
+    {
+        var page = new Page();
+        page.Serve("/api/armoury", WithKit(Model).Replace("\"itemPricesKnown\":true", "\"itemPricesKnown\":false"));
+        page.Do("await loadArmoury(); showArmouryPane('knives'); __dom.node('#armoury-knives tbody').children[1].click();");
+
+        Assert.Contains("need UEX", page.Text("__dom.node('#armoury-knives tbody').children[2].textContent"));
     }
 
     [Fact]

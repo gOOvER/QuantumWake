@@ -5610,23 +5610,123 @@ function armouryEffectWords(e) {
   return words;
 }
 
-/** The finishes of one item, with their prices, under the row that was clicked. */
-function armouryFinishRows(item, noun) {
+/**
+ * The "cheapest at" cell, with the rest of the terminals on hover: the row
+ * has room for one, and "where else" should not cost a click.
+ */
+function armouryWhereCell(market) {
+  const td = el('td', 'muted', armouryWhere(market));
+  const others = (market?.shops || []).slice(1);
+  if (others.length) {
+    td.title = `Also at ${others.map((s) => `${s.terminal}${s.place && !s.terminal.toLowerCase().includes(s.place.toLowerCase()) ? `, ${s.place}` : ''} · ${fmtInt(s.price)} aUEC`).join('\n')}`;
+    td.classList.add('armoury-more');
+  }
+  return td;
+}
+
+/** Every terminal UEX records for the item, cheapest first, or why there are none. */
+function armouryShopTable(market) {
+  const wrap = el('div');
+  wrap.append(el('h4', null, `Sold at${market?.shops?.length ? ` (${market.shops.length})` : ''}`));
+  if (!market?.shops?.length) {
+    wrap.append(el('p', 'muted small', armouryModel?.itemPricesKnown ? 'UEX records no terminal selling this.' : 'Prices and terminals need UEX, in Settings.'));
+    return wrap;
+  }
+  const table = el('table');
+  const head = el('thead');
+  const hr = el('tr');
+  for (const [label, cls] of [['Terminal', null], ['Place', null], ['System', null], ['Price', 'num']]) hr.append(el('th', cls, label));
+  head.append(hr);
+  table.append(head);
+  const body = el('tbody');
+  for (const s of market.shops) {
+    const tr = el('tr');
+    tr.append(el('td', null, s.terminal));
+    tr.append(el('td', null, s.place || '—'));
+    tr.append(el('td', 'muted', s.system || '—'));
+    tr.append(el('td', 'num', `${fmtInt(s.price)} aUEC`));
+    body.append(tr);
+  }
+  table.append(body);
+  wrap.append(table);
+  wrap.append(el('p', 'muted small', 'UEX\'s price at each terminal, cheapest first; across the item\'s finishes where UEX files them under the same name.'));
+  return wrap;
+}
+
+/**
+ * One knife, grenade or attachment opened under its row: the wiki's
+ * picture, every figure the files give it, every terminal that sells it,
+ * and its finishes - a click on a finish swaps the picture, as a gun's does.
+ */
+function armouryKitDetail(item, noun, facts) {
   const inner = el('div', 'armoury-detail');
   inner.append(el('div', 'panel-title', item.name));
+  inner.append(el('div', 'panel-sub', [item.family, item.kind, item.manufacturer || 'maker unnamed', item.class].filter(Boolean).join(' · ')));
+  let picture = armouryPicture(item.uuid, item.name);
+  inner.append(picture);
+
+  inner.append(el('h4', null, 'From the files'));
+  const list = el('dl', 'armoury-facts');
+  for (const [label, value] of facts) {
+    if (value == null || value === '') continue;
+    list.append(el('dt', null, label));
+    const dd = el('dd');
+    if (Array.isArray(value)) for (const node of value) dd.append(node);
+    else dd.textContent = String(value);
+    list.append(dd);
+  }
+  inner.append(list);
+
+  inner.append(armouryShopTable(item.market));
+
   inner.append(el('h4', null, `Finishes${item.finishes?.length ? ` (${item.finishes.length})` : ''}`));
   if (!item.finishes?.length) inner.append(el('p', 'muted small', `The plain ${noun} only.`));
   else {
-    const list = el('div', 'armoury-finishes');
+    const chips = el('div', 'armoury-finishes');
     for (const f of item.finishes) {
-      const chip = el('span', 'armoury-finish', f.name);
+      const chip = el('span', 'armoury-finish clickable', f.name);
+      chip.title = 'Show this finish';
+      chip.addEventListener('click', () => { picture = armouryShowPicture(picture, f.uuid, f.name); });
       chip.append(el('span', 'muted', f.market?.price ? `${fmtInt(f.market.price)} aUEC · ${armouryWhere(f.market)}` : 'no terminal recorded'));
-      list.append(chip);
+      chips.append(chip);
     }
-    inner.append(list);
+    inner.append(chips);
     inner.append(el('p', 'muted small', `A finish is the same ${noun} in another colour: same figures, its own price.`));
   }
   return inner;
+}
+
+function armouryAttachmentDetail(a) {
+  const e = a.effect || {};
+  // The zoom and the zeroing have lines of their own above the chips.
+  const words = armouryEffectWords({ ...e, zoom: 0, secondZoom: 0, zeroingMax: 0 });
+  return armouryKitDetail(a, a.kind === 'Sight' ? 'sight' : a.kind === 'Barrel' ? 'barrel' : 'piece', [
+    ['Slot', `${a.kind}, size ${a.size}`],
+    ['Zoom', e.zoom > 1 ? `×${e.zoom}${e.secondZoom > 0 ? `, second setting ×${e.secondZoom}` : ''}` : e.zoom === 1 ? 'none: a 1x sight' : null],
+    ['Zeroes to', e.zeroingMax > 0 ? `${fmtInt(e.zeroingMax)} m, in steps of ${fmtInt(e.zeroingStep)}` : null],
+    ['Does', words.length ? words : 'nothing the files put a number on'],
+    ['Mass', a.mass ? `${a.mass} kg` : null],
+  ]);
+}
+
+function armouryGrenadeDetail(g) {
+  return armouryKitDetail(g, 'grenade', [
+    ['Sets off', g.trigger === 'timer' ? `a ${g.fuseSeconds} s fuse` : g.trigger === 'impact' ? 'on impact' : null],
+    ['Blast', g.blast ? `${armouryHit(g.blast.damage)}, full to ${g.blast.radius} m, none past ${g.blast.outerRadius} m` : 'none'],
+    ['Pressure', g.pressure > 0 ? `${fmtInt(g.pressure)}, the game\'s own unit for what it throws` : null],
+    ['Leaves', g.hazard ? `${armouryHit(g.hazard.perHit)} every ${g.hazard.periodSeconds} s within ${g.hazard.radius} m, for as long as it lasts - the files put no number on that` : 'nothing'],
+    ['Mass', g.mass ? `${g.mass} kg` : null],
+  ]);
+}
+
+function armouryKnifeDetail(k) {
+  return armouryKitDetail(k, 'knife', [
+    ['Slash', armouryHit(k.slash)],
+    ['Stab', armouryHit(k.stab)],
+    ['Impulse', k.impulse ? `${k.impulse}, the game\'s own unit for the push a hit gives` : null],
+    ['Read from', `${k.config}, the melee table the knife points at`],
+    ['Mass', k.mass ? `${k.mass} kg` : null],
+  ]);
 }
 
 let armouryOpenKit = null;
@@ -5643,7 +5743,7 @@ function renderArmouryKit() {
   const matches = (text) => !q || text.toLowerCase().includes(q);
   const priceCells = (tr, market) => {
     tr.append(el('td', 'num', armouryPrice(market)));
-    tr.append(el('td', 'muted', armouryWhere(market)));
+    tr.append(armouryWhereCell(market));
   };
   const open = (tr, key, detail, columns) => {
     tr.dataset.class = key;
@@ -5663,7 +5763,7 @@ function renderArmouryKit() {
   };
 
   renderArmouryAttachments(q, matches, priceCells, open, named, chips);
-  renderArmouryGrenades(matches, priceCells, named);
+  renderArmouryGrenades(matches, priceCells, open, named);
   renderArmouryKnives(matches, priceCells, open, named);
 }
 
@@ -5705,7 +5805,7 @@ function renderArmouryAttachments(q, matches, priceCells, open, named, chips) {
       tr.append(chips(el('td'), armouryEffectWords({ ...e, zoom: 0, secondZoom: 0, zeroingMax: 0, zoomTime: 1 }), '—'));
       tr.append(el('td', 'num', a.finishes?.length ? String(a.finishes.length) : '—'));
       priceCells(tr, a.market);
-      const expansion = open(tr, `a:${a.class}`, () => armouryFinishRows(a, 'sight'), 9);
+      const expansion = open(tr, `a:${a.class}`, () => armouryAttachmentDetail(a), 9);
       sBody.append(tr);
       if (expansion) sBody.append(expansion);
     }
@@ -5728,7 +5828,7 @@ function renderArmouryAttachments(q, matches, priceCells, open, named, chips) {
       tr.append(chips(el('td'), armouryEffectWords(a.effect), 'nothing the files put a number on'));
       tr.append(el('td', 'num', a.finishes?.length ? String(a.finishes.length) : '—'));
       priceCells(tr, a.market);
-      const expansion = open(tr, `a:${a.class}`, () => armouryFinishRows(a, noun), 7);
+      const expansion = open(tr, `a:${a.class}`, () => armouryAttachmentDetail(a), 7);
       body.append(tr);
       if (expansion) body.append(expansion);
     }
@@ -5744,7 +5844,7 @@ function armouryEmptyRow(text, columns) {
 }
 
 /** Grenades: what sets it off, what it does, what it leaves. */
-function renderArmouryGrenades(matches, priceCells, named) {
+function renderArmouryGrenades(matches, priceCells, open, named) {
   const body = $('#armoury-grenades tbody');
   if (!body) return;
   body.textContent = '';
@@ -5763,7 +5863,9 @@ function renderArmouryGrenades(matches, priceCells, named) {
       : 'nothing'));
     tr.append(el('td', 'num', g.mass ? String(g.mass) : '—'));
     priceCells(tr, g.market);
+    const expansion = open(tr, `g:${g.class}`, () => armouryGrenadeDetail(g), 9);
     body.append(tr);
+    if (expansion) body.append(expansion);
   }
 }
 
@@ -5793,7 +5895,7 @@ function renderArmouryKnives(matches, priceCells, open, named) {
     tr.append(el('td', 'num', k.mass ? String(k.mass) : '—'));
     tr.append(el('td', 'num', k.finishes?.length ? String(k.finishes.length) : '—'));
     priceCells(tr, k.market);
-    const expansion = open(tr, `k:${k.class}`, () => armouryFinishRows(k, 'knife'), 8);
+    const expansion = open(tr, `k:${k.class}`, () => armouryKnifeDetail(k), 8);
     body.append(tr);
     if (expansion) body.append(expansion);
   }
@@ -6025,6 +6127,8 @@ function renderArmouryGunDetail(w) {
   else notes.push('The files give this magazine no round count.');
   notes.push(`${Math.round(w.mass * 100) / 100} kg.`);
   inner.append(el('p', 'muted small', notes.join(' ')));
+
+  inner.append(armouryShopTable(w.market));
 
   inner.append(el('h4', null, `Finishes${w.finishes?.length ? ` (${w.finishes.length})` : ''}`));
   if (!w.finishes?.length) inner.append(el('p', 'muted small', 'The plain gun only.'));

@@ -1262,6 +1262,10 @@ public static class ServerHost
 
             // UEX's cheapest terminal for a class, the way the Mining page
             // prices a head. Null is "no terminal recorded", not free.
+            // Three terminals is what a row needs; an opened row lists every
+            // one, since "where else" is the question a detail is for. Armour
+            // stays at three: 2,349 pieces each carrying every terminal would
+            // be most of the payload for a list nobody opens piece by piece.
             (decimal? Price, List<object> Shops) Priced(string cls)
             {
                 var uuid = lib.GameCommodities.ItemUuid(cls);
@@ -1279,6 +1283,25 @@ public static class ServerHost
             }
             object Market(string cls) { var (price, shops) = Priced(cls); return new { price, shops }; }
 
+            // Every terminal selling any class the game gives this name - the
+            // plain item and the finishes UEX files under the same name -
+            // one row per terminal at its cheapest, cheapest first.
+            object EveryShop(IEnumerable<string> classes)
+            {
+                var best = classes
+                    .SelectMany(cls => uex.ItemMarket(lib.GameCommodities.ItemUuid(cls)))
+                    .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => g.MinBy(r => r.Buy)!)
+                    .OrderBy(r => r.Buy)
+                    .ToList();
+                var rows = best.Select(r =>
+                {
+                    var place = terminals.Resolve(r.Terminal);
+                    return (object)new { terminal = r.Terminal, place = place?.Name, system = place?.System, price = r.Buy };
+                }).ToList();
+                return new { price = best.Count > 0 ? (decimal?)best[0].Buy : null, shops = rows };
+            }
+
             // UEX files a gun under whichever of its classes it met first - its
             // P4-AR is behr_rifle_ballistic_01_contestedzonereward, not the
             // plain class - so the plain gun's price is the cheapest across
@@ -1286,12 +1309,8 @@ public static class ServerHost
             var finishesOf = armoury.Weapons.Where(w => w.BaseClass is not null)
                 .GroupBy(w => w.BaseClass!, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
-            object WeaponMarket(PersonalWeapon w)
-            {
-                var same = new[] { w }.Concat(finishesOf.GetValueOrDefault(w.Class) ?? []).Where(x => x.Name == w.Name).ToList();
-                var priced = same.Select(x => (x, Priced(x.Class))).Where(p => p.Item2.Price is not null).OrderBy(p => p.Item2.Price).FirstOrDefault();
-                return priced == default ? new { price = (decimal?)null, shops = new List<object>() } : new { price = priced.Item2.Price, shops = priced.Item2.Shops };
-            }
+            object WeaponMarket(PersonalWeapon w) =>
+                EveryShop(new[] { w }.Concat(finishesOf.GetValueOrDefault(w.Class) ?? []).Where(x => x.Name == w.Name).Select(x => x.Class));
 
             var weapons = armoury.Weapons.Where(w => w.BaseClass is null).Select(w => new
             {
@@ -1345,9 +1364,7 @@ public static class ServerHost
             (object Market, List<object> Finishes) Family<T>(string cls, string name, IEnumerable<T> all, Func<T, string> classOf, Func<T, string> nameOf, Func<T, string?> baseOf)
             {
                 var finishes = all.Where(x => baseOf(x) == cls).OrderBy(nameOf, StringComparer.OrdinalIgnoreCase).ToList();
-                var priced = new[] { (cls, name) }.Concat(finishes.Select(f => (classOf(f), nameOf(f)))).Where(x => x.Item2 == name)
-                    .Select(x => Priced(x.Item1)).Where(p => p.Price is not null).OrderBy(p => p.Price).FirstOrDefault();
-                object market = priced == default ? new { price = (decimal?)null, shops = new List<object>() } : new { price = priced.Price, shops = priced.Shops };
+                var market = EveryShop(new[] { cls }.Concat(finishes.Where(f => nameOf(f) == name).Select(classOf)));
                 return (market, finishes.Select(f => (object)new { @class = classOf(f), uuid = lib.GameCommodities.ItemUuid(classOf(f)), name = nameOf(f), market = Market(classOf(f)) }).ToList());
             }
 

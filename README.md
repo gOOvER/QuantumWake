@@ -365,7 +365,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.15
+### 0.14.16
 
 - **Knives, grenades and attachments, each on its own Armoury tab.** The three
   the Armoury said it did not read yet, read from the install. Attachments
@@ -381,7 +381,10 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   sells is the same knife in the files** — 30 physical a slash or a stab —
   and the tab says so once above the list rather than printing 30 down a
   column. Each has its finishes and UEX's cheapest price; the game-data
-  cache is re-read once on first start.
+  cache is re-read once on first start. Hover the *Cheapest at* cell for
+  the other terminals, or click the row for the wiki's picture, every
+  figure the files give it, and every terminal UEX records selling it —
+  guns get the full terminal list in their opened row too.
 
 - **Mining names the job in front of you.** Its header now changes with the
   active workspace: *Prospecting*, *Mining fit* or *Haul & refinery*. The
