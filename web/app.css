@@ -3999,12 +3999,16 @@ body.overlay .toast {
 #kit-prepare-table td:last-child { width: 120px; }
 
 /* ---------- refining a haul ---------- */
+#mining-pending-list { display: grid; gap: 7px; }
 .mining-waiting {
-  display: flex;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, auto) minmax(150px, auto);
+  gap: 5px 16px;
   align-items: baseline;
-  padding: 5px 0;
-  border-bottom: 1px solid var(--rule);
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--cyan-deep);
+  background: linear-gradient(105deg, rgba(12, 31, 45, .54), rgba(5, 12, 19, .66));
   font-size: 12px;
 }
 
@@ -4013,8 +4017,9 @@ body.overlay .toast {
 /* The time sits right whichever state it is in. Hanging the alignment off the
    amber class put waiting hauls and overdue ones in different columns, which
    read as two kinds of row rather than one list. */
-.mining-waiting > :last-child { margin-left: auto; }
+.mining-waiting .mining-waiting-time { text-align: right; }
 .mining-waiting .want { color: var(--amber); }
+.mining-waiting-detail { grid-column: 1 / -1; color: var(--dim); font: 10px var(--mono); }
 
 /* A haul the app believes is due back. Amber because it is the app noticing
    your own estimate has passed, not the game telling it anything. */
@@ -4022,6 +4027,9 @@ body.overlay .toast {
 
 .mining-stage-form td { background: var(--panel-2); }
 .mining-stage-form .mining-form { padding: 6px 0; }
+.mining-stage-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.mining-stage-field > span { color: var(--dim); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; }
+.mining-stage-field .search { width: 100%; min-width: 0; }
 
 /* ---------- why this number ----------
  *
@@ -4984,6 +4992,26 @@ body.overlay .ship-picture { display: none; }
 .mining-brief { display: grid; grid-template-columns: 3px minmax(0, 1fr); gap: 12px; margin: 0 0 20px; padding: 12px 14px; border: 1px solid var(--rule); background: rgba(7, 12, 20, .62); }
 .mining-brief-mark { background: linear-gradient(var(--cyan), var(--cyan-deep)); box-shadow: 0 0 14px rgba(53, 200, 240, .35); }
 .mining-brief .caption { margin: 0; max-width: 122ch; line-height: 1.55; }
+.mining-salvage-brief {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  margin: 0 0 20px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 171, 61, .45);
+  border-left: 3px solid var(--amber);
+  background: linear-gradient(100deg, rgba(255, 171, 61, .09), rgba(7, 12, 20, .64));
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.mining-salvage-brief b { display: block; color: var(--text); margin-bottom: 2px; }
+.mining-salvage-mark { color: var(--amber); font: 9px var(--mono); letter-spacing: .16em; }
+.salvage-table th:nth-child(3), .salvage-table td:nth-child(3),
+.salvage-table th:nth-child(4), .salvage-table td:nth-child(4),
+.salvage-table th:nth-child(12), .salvage-table td:nth-child(12),
+.salvage-table th:nth-child(13), .salvage-table td:nth-child(13) { display: none; }
 .mining-section-head { display: flex; justify-content: space-between; gap: 16px; align-items: end; margin: 22px 0 8px; padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
 .mining-section-head h3 { margin: 3px 0 0; color: var(--text); }
 .mining-section-note { max-width: 34ch; color: var(--dim); font-size: 10.5px; line-height: 1.35; text-align: right; }
@@ -5002,6 +5030,14 @@ body.overlay .ship-picture { display: none; }
 .crack-rock .unit { position: absolute; right: 8px; bottom: 6px; font-size: 10px; color: var(--muted); pointer-events: none; }
 .crack-rock label:has(.unit) { position: relative; }
 .crack-heads { display: grid; gap: 7px; }
+.crack-fit-summary {
+  padding: 7px 10px;
+  border: 1px solid rgba(53, 200, 240, .22);
+  background: rgba(53, 200, 240, .045);
+  color: var(--cyan-hot);
+  font: 10px var(--mono);
+  letter-spacing: .08em;
+}
 .crack-head { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; padding: 9px 10px; border: 1px solid var(--rule); background: rgba(0, 0, 0, .22); }
 .crack-head-label { font-family: var(--mono); font-size: 10.5px; color: var(--cyan); min-width: 9ch; }
 .crack-head .crack-laser { flex: 1 1 26ch; min-width: 0; }
@@ -5038,6 +5074,8 @@ body.overlay .ship-picture { display: none; }
 .mining-pane.active { display: block; }
 @keyframes mining-pane-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @media (max-width: 850px) {
+  .mining-waiting { grid-template-columns: minmax(0, 1fr) auto; }
+  .mining-waiting .mining-waiting-time { grid-column: 1 / -1; text-align: left; }
   .mining-view > .section-bar { align-items: start; }
   .mining-view > .section-bar::after { display: none; }
   .mining-view .controls { width: 100%; flex-wrap: wrap; }
@@ -5053,6 +5091,9 @@ body.overlay .ship-picture { display: none; }
   .crack-rock { grid-template-columns: 1fr; }
   .mining-form { grid-template-columns: 1fr; }
   .mining-form button { grid-column: auto; }
+  .mining-waiting { grid-template-columns: 1fr; gap: 4px; }
+  .mining-waiting .mining-waiting-time { grid-column: auto; }
+  .mining-salvage-brief { grid-template-columns: 1fr; gap: 5px; }
 }
 .ship-card.unflown { opacity: .92; }
 .ship-card.unflown .ship-name::after { content: " · never flown"; font-size: 10px; color: var(--muted); font-weight: 400; }

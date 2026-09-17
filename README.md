@@ -365,7 +365,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.6
+### 0.14.7
+
+- **Salvage, fit and refinery work now read as distinct operations.** Salvage
+  no longer inherits the mining-only per-rock ranking; it names the location
+  evidence the game actually has. The crack calculator shows how many heads
+  and module slots its verdict uses, while refinery jobs have labeled handoff
+  fields and a clearer waiting queue. Cargo trading remains an evidence-led
+  history rather than a guessed hold or route.
 
 - **Mining is easier to work from at a glance.** The page now separates its
   prospecting, rock-fit and personal-log workspaces with a stronger operations
