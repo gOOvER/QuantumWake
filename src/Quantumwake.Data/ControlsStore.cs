@@ -62,12 +62,28 @@ public sealed class ControlsStore
         }
         if (bytes.Length == 0) return null;
 
+        return Keep(bytes, writtenAt, againstLatestOnly: true);
+    }
+
+    /// <summary>
+    /// Keeps bytes as a version - the profile read from disk, or a file the
+    /// pilot brought back.
+    /// </summary>
+    /// <param name="againstLatestOnly">
+    /// The watch compares with the latest copy only, so that going back to
+    /// an older version is kept again and the list stays a history of what
+    /// the game had. A file brought back compares with every copy, so the
+    /// same file added twice is one entry.
+    /// </param>
+    public (ControlsBackup Backup, bool Taken) Keep(byte[] bytes, DateTimeOffset writtenAt, bool againstLatestOnly = false)
+    {
         var hash = Convert.ToHexString(SHA256.HashData(bytes))[..8].ToLowerInvariant();
 
         lock (_gate)
         {
-            var latest = Backups().FirstOrDefault();
-            if (latest is not null && latest.Hash == hash) return (latest, false);
+            var kept = Backups();
+            var same = againstLatestOnly ? kept.FirstOrDefault() : kept.FirstOrDefault(b => b.Hash == hash);
+            if (same is not null && same.Hash == hash) return (same, false);
 
             var takenAt = DateTimeOffset.UtcNow;
             var id = $"{takenAt:yyyyMMdd-HHmmss-fff}-{hash}";

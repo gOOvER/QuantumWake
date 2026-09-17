@@ -116,6 +116,69 @@ public static class ControlsEndpoints
                 : Results.Ok(new { kept.Value.Backup, kept.Value.Taken });
         });
 
+        // A kept version, or the live file, as a file to keep anywhere.
+        app.MapGet("/api/controls/backups/{id}/file", (string id, ControlsStore store) =>
+        {
+            var bytes = id == "live"
+                ? install is not null && File.Exists(ControlsWatchService.ProfilePath(install)) ? File.ReadAllBytes(ControlsWatchService.ProfilePath(install)) : null
+                : store.Read(id);
+            if (bytes is null) return Results.NotFound();
+            var name = id == "live" ? $"actionmaps-{DateTime.Now:yyyyMMdd-HHmm}.xml" : $"actionmaps-{id}.xml";
+            return Results.File(bytes, "application/xml", name);
+        });
+
+        // A file the pilot brings back - one downloaded from here, the game's
+        // own actionmaps.xml from another machine, or an export from the
+        // mappings folder - kept as a version once it reads as a profile.
+        app.MapPost("/api/controls/backups/import", async (HttpContext ctx, ControlsStore store) =>
+        {
+            using var buffer = new MemoryStream();
+            await ctx.Request.Body.CopyToAsync(buffer, ctx.RequestAborted);
+            var bytes = buffer.ToArray();
+            if (bytes.Length == 0) return Results.BadRequest(new { message = "The file is empty." });
+            if (bytes.Length > 4 * 1024 * 1024) return Results.BadRequest(new { message = "That is not a keybinding profile: far too large." });
+            ControlProfile profile;
+            try { profile = ControlProfile.Parse(bytes); }
+            catch (Exception e) when (e is InvalidDataException or System.Xml.XmlException) { return Results.BadRequest(new { message = $"That file does not read as a keybinding profile: {e.Message}" }); }
+            if (profile.Bindings.Count == 0 && profile.Devices.Count == 0)
+                return Results.BadRequest(new { message = "That file reads as XML but binds nothing and names no device." });
+            var writtenAt = DateTimeOffset.TryParse(ctx.Request.Headers["X-File-Modified"], out var at) ? at : DateTimeOffset.UtcNow;
+            var kept = store.Keep(bytes, writtenAt);
+            return Results.Ok(new { kept.Backup, kept.Taken, bindings = profile.Bindings.Count, devices = profile.Devices.Count });
+        });
+
+        // The restore: the kept version written over the game's own profile.
+        // Only with the game closed - it reads the file at start and rewrites
+        // it while running, so a restore under a running game is lost or
+        // half-merged - and only after the file as it is now has been kept,
+        // so the restore is itself undoable.
+        app.MapPost("/api/controls/restore", (RestoreRequest body, ControlsStore store) =>
+        {
+            if (install is null) return Results.NotFound(new { message = "No install." });
+            if (System.Diagnostics.Process.GetProcessesByName("StarCitizen").Length > 0)
+                return Results.Conflict(new { message = "Star Citizen is running. It reads the profile at start and rewrites it in play, so close the game first - or export this version and import it from the keybinding screen instead." });
+            if (string.IsNullOrWhiteSpace(body.Source) || store.Read(body.Source) is not { } bytes)
+                return Results.NotFound(new { message = "No such version." });
+
+            XDocument live;
+            try { live = ControlsExport.ToLive(Quantumwake.Core.GameData.CryXml.Parse(bytes)); }
+            catch (Exception e) when (e is InvalidDataException or System.Xml.XmlException) { return Results.Problem(e.Message); }
+
+            var path = ControlsWatchService.ProfilePath(install);
+            var before = store.Snapshot(path);
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllText(path, live.ToString(), new UTF8Encoding(false));
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return Results.Problem(title: "The profile could not be written.", detail: e.Message, statusCode: 500);
+            }
+            var after = store.Snapshot(path);
+            return Results.Ok(new { restored = body.Source, path, keptBefore = before?.Backup.Id, now = after?.Backup.Id });
+        });
+
         // One kept version, read against the catalogue like the live one.
         app.MapGet("/api/controls/backups/{id}", (string id, LogLibrary lib, ControlsStore store, JoystickTemplates templates) =>
         {
@@ -290,6 +353,7 @@ public static class ControlsEndpoints
     }
 
     public sealed record ExportRequest(string? Source, string? Name, Dictionary<string, int>? Retarget, bool Install = false);
+    public sealed record RestoreRequest(string? Source);
     public sealed record FolderRequest(string? Folder);
     public sealed record AssignRequest(string? Guid, string? Key);
 }

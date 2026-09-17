@@ -252,6 +252,40 @@ public class ControlsPageTests
     }
 
     /// <summary>
+    /// Every version has its way out and its way back: a download link, an
+    /// export, and a restore that asks first and reports the server's refusal
+    /// in its own words when the game is running.
+    /// </summary>
+    [Fact]
+    public void A_version_can_be_downloaded_exported_or_restored_and_a_running_game_refuses_the_restore()
+    {
+        var page = new Page();
+        page.Serve("/api/controls", Model);
+        page.Serve("/api/controls/backups", """
+            [{"id":"20260916-235612-417-a1b2c3d4","takenAt":"2026-09-16T23:56:12Z","writtenAt":"2026-09-16T23:56:10Z","bytes":17823,"hash":"a1b2c3d4"}]
+            """);
+        page.Fail("/api/controls/restore", 409, """{"message":"Star Citizen is running. Close the game first."}""");
+        page.Do("showControlsPane('backups'); await loadControls(); await loadControlsBackups(); globalThis.confirm = () => true;");
+
+        var row = "__dom.node('#controls-backups tbody').children[0]";
+        Assert.Contains("Restore", page.Text($"{row}.textContent"));
+        Assert.Contains("Export", page.Text($"{row}.textContent"));
+        Assert.Equal("/api/controls/backups/20260916-235612-417-a1b2c3d4/file", page.Text($"{row}.querySelectorAll('a')[0].href"));
+
+        page.Do($"await controlsRestore(controlsBackups[0], {row}.querySelectorAll('button')[0]);");
+        Assert.Contains("POST /api/controls/restore", page.Fetched());
+        Assert.Contains("Star Citizen is running", page.NodeText("#controls-backups-note"));
+    }
+
+    [Fact]
+    public void A_restore_the_pilot_declines_sends_nothing()
+    {
+        var page = Opened("backups");
+        page.Do("controlsBackups = [{id:'x', writtenAt:'2026-09-16T23:56:10Z', takenAt:'2026-09-16T23:56:12Z', bytes:1, hash:'x'}]; globalThis.confirm = () => false; await controlsRestore(controlsBackups[0], __dom.node('#controls-keep'));");
+        Assert.DoesNotContain("POST /api/controls/restore", page.Fetched());
+    }
+
+    /// <summary>
     /// The export asks for the sticks as they are now; a stick left where it
     /// was sends nothing, and the game's folder is written only on the
     /// second, explicit press.

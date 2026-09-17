@@ -104,6 +104,50 @@ public sealed class ControlsStoreTests : IDisposable
         Assert.Empty(ControlsDiff.Between(older, older));
     }
 
+    /// <summary>
+    /// A file brought back is kept once however often it is added, while
+    /// the watch keeps an older version again when the game goes back to
+    /// it - the list is a history of what the game had.
+    /// </summary>
+    [Fact]
+    public void A_file_brought_back_is_kept_once_and_the_watch_keeps_history()
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(Live);
+        var first = _store.Keep(bytes, DateTimeOffset.UtcNow);
+        Assert.True(first.Taken);
+        Assert.False(_store.Keep(bytes, DateTimeOffset.UtcNow).Taken);
+
+        var other = System.Text.Encoding.UTF8.GetBytes(Live.Replace("js2_button7", "js2_button8"));
+        Assert.True(_store.Keep(other, DateTimeOffset.UtcNow).Taken);
+        // The same content as an older version, added as a file: not again.
+        Assert.False(_store.Keep(bytes, DateTimeOffset.UtcNow).Taken);
+        // But seen on disk by the watch, it is the game going back: kept again.
+        Assert.True(_store.Keep(bytes, DateTimeOffset.UtcNow, againstLatestOnly: true).Taken);
+        Assert.Equal(3, _store.Backups().Count);
+    }
+
+    /// <summary>
+    /// An export from the mappings folder, restored, has to become the live
+    /// frame the game reads at start; a copy of the live file already is.
+    /// </summary>
+    [Fact]
+    public void An_export_is_reframed_as_the_live_profile_and_a_live_copy_is_left_alone()
+    {
+        var export = ControlsExport.Build(XDocument.Parse(Live), "nick");
+        var live = ControlsExport.ToLive(export);
+
+        Assert.Equal("ActionMaps", live.Root!.Name.LocalName);
+        var profile = live.Root.Element("ActionProfiles")!;
+        Assert.Equal("default", (string?)profile.Attribute("profileName"));
+        Assert.Equal("2", (string?)profile.Attribute("rebindVersion"));
+        Assert.Null(profile.Element("CustomisationUIHeader"));
+        Assert.Equal(2, profile.Elements("actionmap").Count());
+        Assert.Equal(4, ControlProfile.Parse(live).Bindings.Count);
+
+        var already = ControlsExport.ToLive(XDocument.Parse(Live));
+        Assert.Equal(XDocument.Parse(Live).ToString(), already.ToString());
+    }
+
     [Fact]
     public void The_export_is_the_live_profile_in_the_games_import_frame()
     {

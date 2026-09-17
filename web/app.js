@@ -9538,15 +9538,79 @@ function renderControlsBackups() {
       since.append(link);
     }
     tr.append(since);
-    const act = el('td');
-    const restore = el('button', 'ghost small', 'Export this');
+    const act = el('td', 'controls-backup-actions');
+    const restore = el('button', 'ghost small', 'Restore');
     restore.type = 'button';
-    restore.title = 'Write this version as a file the game can import';
-    restore.addEventListener('click', () => { controlsExportSource = b.id; renderControlsExport(); });
+    restore.title = 'Write this version back over the game\'s profile - with the game closed';
+    restore.addEventListener('click', () => controlsRestore(b, restore));
     act.append(restore);
+    const export_ = el('button', 'ghost small', 'Export');
+    export_.type = 'button';
+    export_.title = 'Write this version as a file the game imports, with the sticks retargeted if they moved';
+    export_.addEventListener('click', () => { controlsExportSource = b.id; renderControlsExport(); });
+    act.append(export_);
+    const download = el('a', 'ghost small', 'Download');
+    download.href = `/api/controls/backups/${encodeURIComponent(b.id)}/file`;
+    download.setAttribute('download', `actionmaps-${b.id}.xml`);
+    download.title = 'This version as a file, to keep anywhere';
+    act.append(download);
     tr.append(act);
     body.append(tr);
   });
+}
+
+/**
+ * The restore itself. The server refuses while the game runs and says
+ * why; the page repeats it and points at the export, which works with
+ * the game open. A confirm first: this is the one button on the page
+ * that writes over something the game owns.
+ */
+async function controlsRestore(backup, button) {
+  const note = $('#controls-backups-note');
+  const when = `${dateOf(backup.writtenAt)} ${shortTimeOf(backup.writtenAt)}`;
+  if (typeof confirm === 'function' && !confirm(`Write the version of ${when} over the game's keybinding profile? The profile as it is now is kept first.`)) return;
+  button.disabled = true;
+  try {
+    const response = await fetch('/api/controls/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source: backup.id }) });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      note.textContent = result.message || result.title || `The restore failed (${response.status}).`;
+      return;
+    }
+    note.textContent = `Restored the version of ${when}. The game reads it at its next start.${result.keptBefore ? ' The profile as it was is kept above it.' : ''}`;
+    await loadControlsBackups();
+    await loadControls();
+  } catch (err) {
+    note.textContent = `The restore failed: ${err.message}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+$('#controls-import-pick')?.addEventListener('click', () => $('#controls-import-file')?.click());
+
+$('#controls-import-file')?.addEventListener('change', (event) => {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  controlsImportFile(file)
+    .catch((err) => { $('#controls-backups-note').textContent = `That file could not be added: ${err.message}`; })
+    // Cleared so that picking the same file twice still fires a change.
+    .finally(() => { event.target.value = ''; });
+});
+
+async function controlsImportFile(file) {
+  const note = $('#controls-backups-note');
+  const response = await fetch('/api/controls/backups/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/xml', 'X-File-Modified': new Date(file.lastModified || Date.now()).toISOString() },
+    body: file,
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.message || String(response.status));
+  note.textContent = result.taken
+    ? `Added: ${result.bindings} bindings on ${result.devices} devices.`
+    : 'Already kept: that file is one of the versions here.';
+  await loadControlsBackups();
 }
 
 $('#controls-keep')?.addEventListener('click', async (e) => {

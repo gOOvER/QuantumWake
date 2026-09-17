@@ -5320,3 +5320,5 @@ td.armoury-cost { color: var(--amber); }
 .controls-grid-axis { display: flex; gap: 10px; align-items: baseline; padding: 3px 0; border-top: 1px solid var(--rule); font-size: 12px; }
 .controls-grid-axis:first-of-type { border-top: 0; }
 .controls-grid-axis-name { font: 12px var(--mono); color: var(--cyan); min-width: 60px; }
+.controls-backup-actions { white-space: nowrap; }
+.controls-backup-actions .ghost + .ghost { margin-left: 5px; }

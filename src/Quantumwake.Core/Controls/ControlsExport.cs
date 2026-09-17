@@ -83,6 +83,30 @@ public static class ControlsExport
         return new XDocument(new XDeclaration("1.0", "utf-8", null), export);
     }
 
+    /// <summary>
+    /// The live frame for a document: what <c>actionmaps.xml</c> has to look
+    /// like for the game to read it at start. A kept copy of the live file
+    /// is already that; an export brought back from the mappings folder is
+    /// the same profile under the other root, and is re-framed - the header
+    /// dropped, the attributes moved down, the name set back to "default",
+    /// which is the only profile the game reads there.
+    /// </summary>
+    public static XDocument ToLive(XDocument source)
+    {
+        var root = source.Root ?? throw new InvalidDataException("No root element.");
+        if (root.Name.LocalName == "ActionMaps" && root.Element("ActionProfiles") is not null)
+            return new XDocument(source);
+
+        var profile = new XElement("ActionProfiles",
+            new XAttribute("version", (string?)root.Attribute("version") ?? "1"),
+            new XAttribute("optionsVersion", (string?)root.Attribute("optionsVersion") ?? "2"),
+            new XAttribute("rebindVersion", (string?)root.Attribute("rebindVersion") ?? "2"),
+            new XAttribute("profileName", "default"));
+        foreach (var child in root.Elements())
+            if (child.Name.LocalName != "CustomisationUIHeader") profile.Add(new XElement(child));
+        return new XDocument(new XElement("ActionMaps", profile));
+    }
+
     /// <summary>One input string with its joystick instances moved; anything not a joystick is left alone.</summary>
     public static string Retarget(string input, IReadOnlyDictionary<int, int> moved)
     {

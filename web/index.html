@@ -2680,8 +2680,15 @@
         keybinding screen's import and <code>pp_rebindkeys</code> read.</p>
       <div class="controls armoury-filters">
         <button class="ghost" id="controls-keep">Keep a copy now</button>
+        <a class="ghost" id="controls-download-live" href="/api/controls/backups/live/file" download title="The game's profile as it is right now, as a file to keep anywhere">Download the current profile</a>
+        <button class="ghost" id="controls-import-pick" title="A file downloaded from here, another machine's actionmaps.xml, or an export from the game's mappings folder">Add a backup from a file</button>
+        <input type="file" id="controls-import-file" accept=".xml,application/xml,text/xml" hidden>
         <span class="muted small" id="controls-backups-note"></span>
       </div>
+      <p class="muted small"><em>Restore</em> writes a version back over the game's own profile, with the game closed
+        — it reads the profile at start and rewrites it in play, so a restore under a running game would be lost.
+        The profile as it is now is kept first, so a restore can itself be undone. With the game open, export
+        instead and import from the keybinding screen.</p>
       <div class="table-wrap">
         <table id="controls-backups">
           <thead><tr>

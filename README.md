@@ -365,7 +365,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.2
+### 0.15.3
 
 - **A Controls page, under Settings: your sticks and what is bound to
   them.** Read from the game's own keybinding profile — every joystick it
@@ -397,8 +397,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   `js3` and every throttle binding points at the pedals. The export lands
   in Quantum Wake's own folder first; a second, explicit press copies it
   into the game's `controls\mappings` folder, from where Options →
-  Keybindings imports it (or `pp_rebindkeys <name>` at the console). The
-  live profile is never written; that stays the game's.
+  Keybindings imports it (or `pp_rebindkeys <name>` at the console). Any
+  version can be downloaded as a file to keep anywhere, a file can be
+  added back — one downloaded from here, another machine's
+  `actionmaps.xml`, an export from the mappings folder — and *Restore*
+  writes a version straight back over the game's profile: only with the
+  game closed, since it reads the profile at start and rewrites it in
+  play, and only after keeping the profile as it was, so a restore is
+  itself undoable.
 
 ### 0.14.17
 
