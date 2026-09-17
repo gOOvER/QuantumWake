@@ -144,23 +144,82 @@ Windows API) says so instead.
 
 ## What is not
 
-- **A picture of the stick.** The install has none: no image of any
-  joystick anywhere in `Data.p4k` (the UI icon folders were listed for
-  the Armoury work). Maker pictures are copyrighted. What can be drawn is
-  the device from its counts - 19 buttons, 2 axes, a hat - as a labelled
-  grid that lights up, which is honest and enough to answer "which button
-  is 7". A pilot-taught picture is the step after: drop a photo of the
-  stick, click where each button is, stored per product GUID; the same
-  idea as the inventory-tile portfolio.
+- **A picture of the stick from the install.** `Data.p4k` has none (the
+  UI icon folders were listed for the Armoury work). The community has a
+  library, though - next section - so the fallback drawing from counts
+  (19 buttons, 2 axes, a hat, as a labelled grid that lights up) is for a
+  device nobody has drawn yet, not the main case.
 - **Editing bindings in place.** The app can write a layout for import;
   it should not be the game's keybinding screen. The game validates
   conflicts and activation modes on import; a file the app wrote wrong
   fails there, visibly, rather than silently in play.
 - **The game's live instance order**, as above.
 
+## Pictures of sticks: the community library
+
+Checked 2026-09-17 after the first draft said there were none.
+**[Joystick Diagrams](https://github.com/Rexeh/joystick-diagrams)** (Rexeh,
+GPL-2.0, Python) does for DCS, MSFS and Star Citizen roughly what this
+page would do: read the game's bindings, print them on a picture of the
+stick. Its value here is the **template library**: 84 devices on
+[joystick-diagrams.com/templates](https://www.joystick-diagrams.com/templates/)
+- 45 in the repository's `templates/` folder, 39 more shared by users on
+its Discord. Cloned and counted: 48 SVGs in the repo - Thrustmaster
+Warthog stick and throttle, T.16000M (left, right, throttle), Saitek X52
+and X56, VKB Gladiator NXT L/R, Virpil Alpha/Alpha Prime/WarBRD/VFX/MT-50
+stick and throttle and a control panel, CH Fighterstick and Pro Throttle,
+Total Controls MFD and button box, 22 WinWing panels and grips.
+
+**The format is trivial, which is the point.** Each template is a draw.io
+SVG: a photograph of the device embedded as PNG (the Warthog stick's is
+1.5 MB), and over it plain `<text>` elements whose content is a
+placeholder - `Button_1` … `Button_19`, `POV_1_U/D/L/R`, `AXIS_X`. The
+tool's whole rendering step is a regex over those (`\bBUTTON_\d+\b`,
+`\bAXIS_[a-zA-Z]+_?\d?\b`, case-insensitive) replacing each with the
+binding's label. The Warthog templates were checked: stick 19 buttons and
+one hat, throttle 32 buttons and one hat - the same counts
+Windows.Gaming.Input reports for the real devices above, and the same
+numbering the game's `js4_button7` uses. So a browser can do the
+rendering natively: load the SVG, find the text node for `Button_7`,
+write *Eject* into it, and for a live press draw a ring at that node's
+`x`/`y`. Nothing needs Python.
+
+Its Star Citizen plugin
+([joystick-diagrams-star-citizen-plugin](https://github.com/Rexeh/joystick-diagrams-star-citizen-plugin))
+parses the same profile the same way - `<options instance= Product=>`,
+the GUID's last 36 characters, `jsN_buttonM` / `hatM_up` / axis names -
+and labels actions from a hand-written table of ~200 names, since it
+does not read the CryXmlB catalogue. This app would label all 1,106 from
+the game's own strings.
+
+**How to use it without inheriting the licence question.** The code is
+GPL-2.0 and the templates ship under the repository; the photographs
+inside them are of unstated provenance - several look like maker product
+shots. So: not bundled. Fetched at runtime, on the same opt-in switch as
+every other feed (see `feeds-stay-optional`), from the repository's raw
+URLs by device, cached under `community\joystick-templates\`, credited
+on the page with a link to the project - the way the Garage takes a
+cooler's photo from the wiki. And two doors beside it: point the app at
+a Joystick Diagrams install or any folder of its templates (the 39
+Discord ones live nowhere else), and drop any SVG that follows the
+`Button_N` convention, which is also what a pilot would draw over their
+own photo. Matching a device to a template is by product GUID in a small
+table this app keeps (Warthog stick `0402044F` → "Thrustmaster Warthog -
+Joystick.svg"), with the pilot's choice overriding it.
+
+Makers publish sheets too - Virpil's button-mapping worksheets on its
+support site, Thrustmaster's Warthog template - as PDFs for the owner's
+use, which the pilot can bring in through the same door; they are not
+redistributable and the app should not try.
+
+An older alternative, [hotasmap](https://github.com/RudolfCardinal/hotasmap),
+covers the Warthog and MFG Crosswind only.
+
 ## Cost, roughly
 
-A CryXmlB reader in Core (small, testable against the two files); a
+A CryXmlB reader in Core (small, testable against the two files); the
+template fetch and the SVG renderer (a text substitution and a ring at a
+node's coordinates, in the browser); a
 profile reader and a catalogue reader with label resolution; a
 `ControlsStore` for backups; three endpoints; one page with two views and
 a diff; a `RawGameController` service in the tray host with a stub in the
