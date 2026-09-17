@@ -39,4 +39,21 @@ public class MiningPanesTests
 
         Assert.Equal("on", Active(page, "mining-pane-crack"));
     }
+
+    [Fact]
+    public void Salvage_hides_the_mining_only_prospect_ranking()
+    {
+        var page = new Page();
+        page.Serve("/api/reference/resources", """
+            [{"resource":"Wreckage","deposit":null,"minPercent":null,"maxPercent":null,
+              "kind":"salvageable","location":"Daymar","system":"Stanton","group":"Salvage",
+              "groupChance":0.5,"share":0.4,"bestSell":null,"quality":null,"source":"install"}]
+            """);
+
+        page.Do("await loadMiningRef(); __dom.node('#mining-kind').value = 'salvageable'; renderMiningRef();");
+
+        Assert.True(page.Truth("__dom.node('#mining-prospect-board').hidden"));
+        Assert.False(page.Truth("__dom.node('#mining-salvage-brief').hidden"));
+        Assert.True(page.Truth("__dom.node('#mining-table').classList.contains('salvage-table')"));
+    }
 }

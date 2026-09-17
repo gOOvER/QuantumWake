@@ -1699,7 +1699,7 @@
 
     <nav class="subtabs" id="mining-tabs" aria-label="Mining pages">
       <button type="button" data-pane="go" class="active"><span>01</span> Where to go</button>
-      <button type="button" data-pane="crack"><span>02</span> Can it be cracked?</button>
+      <button type="button" data-pane="crack"><span>02</span> Mining fit</button>
       <button type="button" data-pane="runs"><span>03</span> Your runs</button>
     </nav>
 
@@ -1717,6 +1717,13 @@
       which is a different question.
       </p>
     </div>
+    <aside class="mining-salvage-brief" id="mining-salvage-brief" hidden>
+      <span class="mining-salvage-mark" aria-hidden="true">SALVAGE</span>
+      <div><b>Salvage is a location reference, not a rock-ranking problem.</b>
+        The game data does not give salvage sites an ore share, quality floor, respawn timer or refinery route.
+        The catalogue below names the places and spawn groups it does know.</div>
+    </aside>
+    <div id="mining-prospect-board">
     <div class="mining-section-head">
       <div><span class="mining-overline">Prospect board</span><h3>Where to go</h3></div>
       <span class="mining-section-note">Ranked by value per rock</span>
@@ -1748,6 +1755,7 @@
       </table>
     </div>
     <p class="muted caption" id="mining-places-note"></p>
+    </div>
     <div class="mining-section-head mining-section-head-secondary">
       <div><span class="mining-overline">Reference catalogue</span><h3>Every deposit</h3></div>
       <span class="mining-section-note">Filter by resource, kind or system</span>
@@ -1778,7 +1786,7 @@
 
     <div class="mining-pane" id="mining-pane-crack">
     <div class="mining-section-head mining-crack-head">
-      <div><span class="mining-overline">Fit analysis</span><h3>Can it be cracked?</h3></div>
+      <div><span class="mining-overline">Fit analysis</span><h3>Will this fit crack it?</h3></div>
       <span class="mining-section-note">A community-rule estimate</span>
     </div>
     <p class="muted caption mining-explainer" id="crack-caption">
@@ -1821,6 +1829,7 @@
       </div>
       <p class="muted crack-note" id="crack-scan-note" hidden></p>
       <div class="crack-heads" id="crack-heads"></div>
+      <div class="crack-fit-summary" id="crack-fit-summary"></div>
       <div class="crack-verdict" id="crack-verdict"></div>
       <div class="crack-deposit" id="crack-deposit-panel" hidden>
         <div class="table-wrap">

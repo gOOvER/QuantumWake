@@ -28,7 +28,8 @@ public class MiningRefiningPanelTests
 
     private const string Pending = """
         [{"id":"m2","place":"Yela","resource":"Taranite","scu":16,"stage":"Ready",
-          "refinery":{"place":"ArcCorp 141","expectedAt":"2026-09-05T15:00:00+00:00"},
+          "refinery":{"place":"ArcCorp 141","method":"Dinyx Solventation","cost":4800,
+                      "expectedAt":"2026-09-05T15:00:00+00:00"},
           "caveat":"The game keeps the refinery timer and logs nothing about it, so this is the time you told us to expect."}]
         """;
 
@@ -120,6 +121,7 @@ public class MiningRefiningPanelTests
         Assert.False(page.Truth("__dom.node('#mining-pending').hidden"));
         Assert.Contains("the time you told us to expect", page.NodeText("#mining-pending-note"));
         Assert.Contains("you expected it by", page.NodeText("#mining-pending-list"));
+        Assert.Contains("Method · Dinyx Solventation", page.NodeText("#mining-pending-list"));
     }
 
     [Fact]
@@ -146,6 +148,20 @@ public class MiningRefiningPanelTests
 
         Assert.Contains("\"expectedAt\":null", page.BodyOf("/api/mining/log/m1/submit"));
         Assert.Contains("ArcCorp 141", page.BodyOf("/api/mining/log/m1/submit"));
+    }
+
+    [Fact]
+    public void Refinery_handoff_labels_each_value_the_pilot_is_recording()
+    {
+        var page = Logged();
+
+        page.Do(Press("Send to a refinery"));
+
+        var text = page.NodeText("#mining-log tbody");
+        Assert.Contains("Refinery", text);
+        Assert.Contains("Method (optional)", text);
+        Assert.Contains("Job cost (optional)", text);
+        Assert.Contains("Expected ready time (optional)", text);
     }
 
     [Fact]

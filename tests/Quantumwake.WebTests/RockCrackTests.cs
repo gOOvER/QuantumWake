@@ -68,6 +68,7 @@ public class RockCrackTests
         // Only S1 heads are offered on an S1 port, and the Arbor MH1 has one module slot.
         Assert.Equal(3, page.Count($"{heads}[0].querySelectorAll('.crack-laser')[0].options.length"));
         Assert.Equal(1, page.Count($"{heads}[0].querySelectorAll('.crack-module').length"));
+        Assert.Contains("Current fit · 1 head · 0/1 module slot fitted", page.NodeText("#crack-fit-summary"));
 
         Assert.Contains("0.36 W per kilogram", page.NodeText("#crack-rule"));
         Assert.Contains("scminer.rocks", page.NodeText("#crack-rule"));
@@ -165,12 +166,14 @@ public class RockCrackTests
             rows[0].querySelectorAll('.crack-module')[0].value = 'Mining_Modules_Active_Surge';
             __dom.node('#crack-gadget').value = 'Mining_Gadget_SHIN_Sabir';
             __dom.node('#crack-resistance').value = '40';
+            renderCrackFitSummary();
             await assessCrack();
             """);
 
         var heads = "__dom.node('#crack-heads').querySelectorAll('.crack-head')";
         Assert.Equal(3, page.Count($"{heads}.length"));
         Assert.Equal("Mining_Laser_GRIN_Arbor_S2", page.Text($"{heads}[1].querySelectorAll('.crack-laser')[0].value"));
+        Assert.Contains("Current fit · 3 heads · 1/6 module slots fitted", page.NodeText("#crack-fit-summary"));
 
         var body = page.BodyOf("/api/mining/crack");
         Assert.Contains("\"resistance\":40", body);
@@ -265,7 +268,7 @@ public class RockCrackTests
         Assert.Contains("a rock scanned: Quantainium (Raw)", entry);
         Assert.Contains("6,295 kg · 12% resistance · instability 1.75 · 21.07 SCU · hard", entry);
         Assert.Contains("31.2% · quality 812", entry);
-        Assert.Contains("Can it be cracked?", entry);
+        Assert.Contains("Mining fit", entry);
     }
 
     [Fact]

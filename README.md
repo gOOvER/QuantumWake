@@ -365,7 +365,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.8
+### 0.14.9
 
 - **Read a kit's readiness before inspecting its parts.** The Armoury now
   summarizes the last observed kit's body-zone coverage, weapon and
@@ -378,6 +378,17 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   and keeps its details one inspect away. Stowed weapons and supplies form a
   visibly separate amber field-kit panel with its own slot count. The page is
   still an observed loadout rather than a claim about live game inventory.
+
+- **Mining fit is the clearer name for the rock calculator.** The tab says
+  *Mining fit* and its page asks *Will this fit crack it?*, keeping the focus
+  on the ship's heads and modules as well as the rock in front of it.
+
+- **Salvage, fit and refinery work now read as distinct operations.** Salvage
+  no longer inherits the mining-only per-rock ranking; it names the location
+  evidence the game actually has. The crack calculator shows how many heads
+  and module slots its verdict uses, while refinery jobs have labeled handoff
+  fields and a clearer waiting queue. Cargo trading remains an evidence-led
+  history rather than a guessed hold or route.
 
 - **Mining is easier to work from at a glance.** The page now separates its
   prospecting, rock-fit and personal-log workspaces with a stronger operations
@@ -392,9 +403,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   to the other copy's frames, which read as "the MFD settings don't save".
   The second copy now says the first is running, opens it, and closes.
 
-- **The Mining page is three pages.** *Where to go*, *Can it be cracked?* and *Your runs* are tabs under the heading now, one at a time and remembered, with the kind, system and search filters on the first alone; the page had grown into one long scroll.
+- **The Mining page is three pages.** *Where to go*, *Mining fit* and *Your runs* are tabs under the heading now, one at a time and remembered, with the kind, system and search filters on the first alone; the page had grown into one long scroll.
 
-- **Can it be cracked?** A rock calculator on the Mining page. Pick the ship
+- **Mining fit.** A rock calculator on the Mining page. Pick the ship
   — the heads come from its own loadout, the Prospector's one S1, the MOLE's
   three S2, the Golem's Pitman — put the HUD's mass, resistance and
   instability in, choose the lasers, up to three modules a head and a gadget

@@ -4336,16 +4336,22 @@ async function loadMiningPending() {
     const row = el('div', 'mining-waiting');
 
     row.append(el('span', 'name', `${run.scu} SCU ${run.resource}`));
-    row.append(el('span', 'muted', run.refinery.place));
+    row.append(el('span', 'muted', run.refinery.place || 'Refinery not named'));
 
     // The two states read differently on purpose: one is waiting, the other is
     // the app pointing out that your own estimate has passed.
-    row.append(el('span', run.stage === 'Ready' ? 'want' : 'muted',
+    row.append(el('span', `${run.stage === 'Ready' ? 'want' : 'muted'} mining-waiting-time`,
       run.refinery.expectedAt
         ? (run.stage === 'Ready'
           ? `you expected it by ${dateOf(run.refinery.expectedAt)}`
           : `due ${dateOf(run.refinery.expectedAt)}`)
         : 'no time given'));
+
+    const detail = [
+      run.refinery.method ? `Method · ${run.refinery.method}` : null,
+      run.refinery.cost != null ? `Job cost · ${money(run.refinery.cost)}` : null,
+    ].filter(Boolean).join(' · ');
+    if (detail) row.append(el('span', 'mining-waiting-detail', detail));
 
     list.append(row);
   }
@@ -4365,25 +4371,28 @@ function miningStageForm(run) {
   const form = el('div', 'mining-form');
   const inputs = {};
 
-  function field(key, placeholder, type = 'text') {
+  function field(key, label, placeholder, type = 'text') {
+    const wrap = el('label', 'mining-stage-field');
+    wrap.append(el('span', null, label));
     const input = el('input', 'search');
     input.type = type;
     input.placeholder = placeholder;
     if (type === 'number') input.step = 'any';
     inputs[key] = input;
-    form.append(input);
+    wrap.append(input);
+    form.append(wrap);
     return input;
   }
 
   if (run.stage === 'Extracted') {
-    field('place', 'Refinery');
-    field('method', 'Method');
-    field('cost', 'Cost', 'number');
-    field('expectedAt', 'Back by (yyyy-mm-dd hh:mm)');
+    field('place', 'Refinery', 'e.g. ArcCorp 141');
+    field('method', 'Method (optional)', 'e.g. Dinyx Solventation');
+    field('cost', 'Job cost (optional)', 'aUEC', 'number');
+    field('expectedAt', 'Expected ready time (optional)', 'yyyy-mm-dd hh:mm');
   } else if (run.stage === 'Submitted' || run.stage === 'Ready') {
-    field('yield', 'SCU that came back', 'number');
+    field('yield', 'SCU that came back', 'e.g. 24', 'number');
   } else if (run.stage === 'Collected') {
-    field('revenue', 'Sold for', 'number');
+    field('revenue', 'Sold for', 'aUEC', 'number');
   }
 
   const save = el('button', 'ghost', 'Save');
@@ -4845,10 +4854,17 @@ function describeModifiers(m) {
 /** One row per head on the picked ship: its laser, and three module slots. */
 function renderCrackHeads() {
   const host = $('#crack-heads');
-  if (!host || !crackModel) return;
+  if (!host) return;
+  if (!crackModel) {
+    renderCrackFitSummary();
+    return;
+  }
   const ship = crackModel.ships.find((s) => s.class === $('#crack-ship').value);
   host.textContent = '';
-  if (!ship) return;
+  if (!ship) {
+    renderCrackFitSummary();
+    return;
+  }
 
   ship.heads.forEach((head, i) => {
     const row = el('div', 'crack-head');
@@ -4861,11 +4877,34 @@ function renderCrackHeads() {
     }
     if (head.stock && [...laser.options].some((o) => o.value === head.stock)) laser.value = head.stock;
     laser.title = 'The head; the ship\'s own is picked first';
-    laser.addEventListener('change', () => { renderCrackSlots(row); assessCrack().catch(() => {}); });
+    laser.addEventListener('change', () => {
+      renderCrackSlots(row);
+      renderCrackFitSummary();
+      assessCrack().catch(() => {});
+    });
     row.append(laser);
     renderCrackSlots(row);
     host.append(row);
   });
+  renderCrackFitSummary();
+}
+
+/* The selector rows say what is fitted; this one-line summary says whether the
+   calculator is assessing one head or an entire multi-head ship before the
+   verdict turns the same fit into a rock-specific number. */
+function renderCrackFitSummary() {
+  const summary = $('#crack-fit-summary');
+  const rows = [...($('#crack-heads')?.querySelectorAll('.crack-head') || [])];
+  if (!summary) return;
+
+  const lasers = rows.map((row) => crackModel?.lasers.find((laser) =>
+    laser.class === row.querySelector('.crack-laser')?.value)).filter(Boolean);
+  const capacity = lasers.reduce((total, laser) => total + Number(laser.slots || 0), 0);
+  const fitted = rows.reduce((total, row) => total
+    + [...row.querySelectorAll('.crack-module')].filter((module) => module.value).length, 0);
+  summary.textContent = lasers.length
+    ? `Current fit · ${lasers.length} head${lasers.length === 1 ? '' : 's'} · ${fitted}/${capacity} module slot${capacity === 1 ? '' : 's'} fitted`
+    : 'Choose a mining head to inspect its fit.';
 }
 
 /** As many module slots as the head has: the Arbor MH1's one, the Helix II's three. Picks stay where a slot remains. */
@@ -4889,7 +4928,10 @@ function renderCrackSlots(row) {
     }
     if (kept[slot] && crackModel.modules.some((m) => m.class === kept[slot])) module.value = kept[slot];
     module.title = 'A module in this head\'s slot; an active one counts as switched on';
-    module.addEventListener('change', () => assessCrack().catch(() => {}));
+    module.addEventListener('change', () => {
+      renderCrackFitSummary();
+      assessCrack().catch(() => {});
+    });
     row.append(module);
   }
 }
@@ -5091,6 +5133,14 @@ function renderMiningRef() {
   const system = $('#mining-system').value;
   const body = $('#mining-table tbody');
   body.textContent = '';
+
+  // The prospect board has a deliberately mining-specific score: ore share ×
+  // price. Salvage has neither, so keeping the board visible would dress a row
+  // of dashes up as a recommendation.
+  const salvage = kind === 'salvageable';
+  $('#mining-prospect-board').hidden = salvage;
+  $('#mining-salvage-brief').hidden = !salvage;
+  $('#mining-table').classList.toggle('salvage-table', salvage);
 
   // The two sources mean different things by "chance". The download carried a
   // real probability; the game stores a weight whose scale is its own business,
@@ -5793,7 +5843,7 @@ function renderSighting(box, s, { full = true } = {}) {
       box.append(list);
     }
 
-    const go = el('button', 'ghost tiny', 'Can it be cracked?');
+    const go = el('button', 'ghost tiny', 'Mining fit');
     go.type = 'button';
     go.title = 'Open the Mining page with this rock in the calculator';
     go.addEventListener('click', () => { crackFromScan = m; showView('mining'); });
