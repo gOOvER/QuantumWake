@@ -4325,7 +4325,14 @@ async function loadMiningPending() {
   const panel = $('#mining-pending');
   if (!panel) return;
 
-  const waiting = await getJson('/api/mining/pending').catch(() => []);
+  const waiting = await getJson('/api/mining/pending').catch(() => null);
+  miningPendingJobs = waiting;
+  renderMiningWorkspaceHeader();
+
+  if (!waiting) {
+    panel.hidden = true;
+    return;
+  }
 
   panel.hidden = waiting.length === 0;
   if (!waiting.length) return;
@@ -4557,12 +4564,15 @@ $('#mining-log-form')?.addEventListener('submit', async (e) => {
 /* ---------- the Mining page's three panes ---------- */
 
 /**
- * Where to go, can it be cracked, your runs: three questions that had grown
+ * Prospecting, mining fit, haul and refinery: three questions that had grown
  * into one long page. The pane is remembered in this browser, and the
  * deposit filters in the header belong to the first alone.
  */
 const MINING_PANES = ['go', 'crack', 'runs'];
 let miningPane = 'go';
+let miningReferenceMatches = null;
+let miningPendingJobs = null;
+let miningFitStatus = 'Fit data has not been read yet.';
 try {
   const kept = localStorage.getItem('qw-mining-pane');
   if (MINING_PANES.includes(kept)) miningPane = kept;
@@ -4585,6 +4595,48 @@ function showMiningPane(name) {
     const control = $(id);
     if (control) control.hidden = name !== 'go';
   }
+  renderMiningWorkspaceHeader();
+}
+
+/* The header is the page's one stable piece of chrome. Let it name the job the
+   current pane performs and report only a count or fit the pane already owns. */
+function renderMiningWorkspaceHeader() {
+  const heading = $('#mining-workspace-title');
+  const status = $('#mining-workspace-status');
+  const bar = $('#view-mining .section-bar');
+  if (!heading || !status || !bar) return;
+
+  if (miningPane === 'crack') {
+    heading.textContent = 'Mining fit';
+    bar.dataset.workspace = 'MINING FIT';
+    bar.dataset.workspaceIcon = 'fit';
+    status.textContent = miningFitStatus;
+    return;
+  }
+
+  if (miningPane === 'runs') {
+    heading.textContent = 'Haul & refinery';
+    bar.dataset.workspace = 'HAUL // REFINERY';
+    bar.dataset.workspaceIcon = '';
+    if (miningPendingJobs === null) status.textContent = 'Refinery job status is unavailable.';
+    else status.textContent = miningPendingJobs.length
+      ? `${miningPendingJobs.length} refinery job${miningPendingJobs.length === 1 ? '' : 's'} await your update.`
+      : 'No refinery jobs await your update.';
+    return;
+  }
+
+  heading.textContent = 'Prospecting';
+  bar.dataset.workspace = 'PROSPECTING';
+  bar.dataset.workspaceIcon = '';
+  if (miningReferenceMatches === null) {
+    status.textContent = 'Loading reference locations…';
+    return;
+  }
+  const locations = new Set(miningReferenceMatches.map((spawn) => spawn.location).filter(Boolean)).size;
+  const salvage = $('#mining-kind')?.value === 'salvageable';
+  status.textContent = locations
+    ? `${locations} ${salvage ? 'salvage ' : ''}location${locations === 1 ? '' : 's'} ${locations === 1 ? 'matches' : 'match'} current filters.`
+    : 'No locations match current filters.';
 }
 
 for (const button of $('#mining-tabs')?.querySelectorAll('button') || [])
@@ -4646,6 +4698,8 @@ async function loadCrackModel() {
   }
 
   if (!crackModel?.ready) {
+    miningFitStatus = 'Fit data has not been read yet.';
+    renderMiningWorkspaceHeader();
     box.hidden = true;
     if (unready) {
       unready.hidden = false;
@@ -4905,9 +4959,11 @@ function renderCrackFitSummary() {
   const capacity = lasers.reduce((total, laser) => total + Number(laser.slots || 0), 0);
   const fitted = rows.reduce((total, row) => total
     + [...row.querySelectorAll('.crack-module')].filter((module) => module.value).length, 0);
-  summary.textContent = lasers.length
+  miningFitStatus = lasers.length
     ? `Current fit · ${lasers.length} head${lasers.length === 1 ? '' : 's'} · ${fitted}/${capacity} module slot${capacity === 1 ? '' : 's'} fitted`
-    : 'Choose a mining head to inspect its fit.';
+    : crackModel?.ready ? 'Choose a mining head to inspect its fit.' : 'Fit data has not been read yet.';
+  summary.textContent = miningFitStatus;
+  renderMiningWorkspaceHeader();
 }
 
 /** As many module slots as the head has: the Arbor MH1's one, the Helix II's three. Picks stay where a slot remains. */
@@ -5169,6 +5225,8 @@ function renderMiningRef() {
     // what sorting on best sell alone used to say.
     .sort((a, b) => (oreWorth(b) ?? 0) - (oreWorth(a) ?? 0)
       || (b.groupChance * b.share) - (a.groupChance * a.share));
+  miningReferenceMatches = rows;
+  renderMiningWorkspaceHeader();
 
   const counter = $('#mining-count');
   counter.textContent = rows.length > MINING_CAP

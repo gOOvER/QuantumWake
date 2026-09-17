@@ -1744,10 +1744,14 @@
 
   <!-- REFERENCE: mining and salvage spawns -->
   <section id="view-mining" class="view mining-view">
-    <div class="section-bar">
+    <div class="section-bar" data-workspace="PROSPECTING">
       <div class="mining-title">
         <span class="mining-kicker">Resource operations</span>
-        <h2>Mining &amp; salvage</h2>
+        <div class="mining-heading-line">
+          <span class="mining-workspace-icon" id="mining-workspace-icon" aria-hidden="true"></span>
+          <h2 id="mining-workspace-title">Prospecting</h2>
+        </div>
+        <p class="mining-workspace-status" id="mining-workspace-status" aria-live="polite">Loading reference locations…</p>
       </div>
       <div class="controls">
         <select id="mining-kind" class="select" title="Filter by resource kind"></select>
@@ -1760,7 +1764,7 @@
     <nav class="subtabs" id="mining-tabs" aria-label="Mining pages">
       <button type="button" data-pane="go" class="active"><span>01</span> Where to go</button>
       <button type="button" data-pane="crack"><span>02</span> Mining fit</button>
-      <button type="button" data-pane="runs"><span>03</span> Your runs</button>
+      <button type="button" data-pane="runs"><span>03</span> Haul &amp; refinery</button>
     </nav>
 
     <div class="mining-pane active" id="mining-pane-go">

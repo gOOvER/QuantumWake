@@ -365,7 +365,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.11
+### 0.14.12
+
+- **Mining names the job in front of you.** Its header now changes with the
+  active workspace: *Prospecting*, *Mining fit* or *Haul & refinery*. The
+  companion line reports only the current result count, fitted head and slots,
+  or the number of refinery jobs awaiting an update; *Your runs* is now
+  *Haul & refinery*.
 
 - **The Log page shows which game logs were read.** A new *Game logs* tab
   lists every `Game.log` the install has — the live one and each rotated

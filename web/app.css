@@ -5023,7 +5023,11 @@ body.overlay .ship-picture { display: none; }
 .mining-view { --mining-glow: rgba(53, 200, 240, .12); }
 .mining-title { display: grid; gap: 2px; }
 .mining-kicker, .mining-overline { font: 9.5px var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--cyan); }
+.mining-heading-line { display: flex; align-items: center; gap: 8px; }
 .mining-title h2 { font-size: clamp(21px, 2vw, 28px); }
+.mining-workspace-status { margin: 1px 0 0; color: var(--muted); font: 10px var(--mono); letter-spacing: .04em; }
+.mining-workspace-icon { display: none; width: 17px; height: 17px; box-sizing: border-box; border: 1px solid var(--cyan); border-radius: 50%; background: linear-gradient(90deg, transparent 46%, var(--cyan) 46% 54%, transparent 54%), linear-gradient(transparent 46%, var(--cyan) 46% 54%, transparent 54%); box-shadow: 0 0 12px rgba(53, 200, 240, .5); }
+.mining-view > .section-bar[data-workspace-icon="fit"] .mining-workspace-icon { display: block; }
 
 /* A framed operational header gives this reference-heavy page an identity of
    its own without competing with its tables. */
@@ -5041,7 +5045,7 @@ body.overlay .ship-picture { display: none; }
   clip-path: var(--chamfer);
 }
 .mining-view > .section-bar::after {
-  content: "MINING // SALVAGE";
+  content: attr(data-workspace);
   position: absolute;
   right: 18px;
   top: 9px;

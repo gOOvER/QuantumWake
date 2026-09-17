@@ -50,10 +50,28 @@ public class MiningPanesTests
               "groupChance":0.5,"share":0.4,"bestSell":null,"quality":null,"source":"install"}]
             """);
 
-        page.Do("await loadMiningRef(); __dom.node('#mining-kind').value = 'salvageable'; renderMiningRef();");
+        page.Do("showMiningPane('go'); await loadMiningRef(); __dom.node('#mining-kind').value = 'salvageable'; renderMiningRef();");
 
         Assert.True(page.Truth("__dom.node('#mining-prospect-board').hidden"));
         Assert.False(page.Truth("__dom.node('#mining-salvage-brief').hidden"));
         Assert.True(page.Truth("__dom.node('#mining-table').classList.contains('salvage-table')"));
+        Assert.Equal("Prospecting", page.NodeText("#mining-workspace-title"));
+        Assert.Equal("1 salvage location matches current filters.", page.NodeText("#mining-workspace-status"));
+    }
+
+    [Fact]
+    public void The_header_names_the_active_job_and_uses_its_own_status()
+    {
+        var page = new Page();
+
+        page.Do("miningFitStatus = 'Current fit · 1 head · 0/1 module slot fitted'; showMiningPane('crack');");
+        Assert.Equal("Mining fit", page.NodeText("#mining-workspace-title"));
+        Assert.Equal("Current fit · 1 head · 0/1 module slot fitted", page.NodeText("#mining-workspace-status"));
+        Assert.Equal("fit", page.Text("__dom.node('#view-mining .section-bar').dataset.workspaceIcon"));
+
+        page.Do("miningPendingJobs = []; showMiningPane('runs');");
+        Assert.Equal("Haul & refinery", page.NodeText("#mining-workspace-title"));
+        Assert.Equal("No refinery jobs await your update.", page.NodeText("#mining-workspace-status"));
+        Assert.Equal("", page.Text("__dom.node('#view-mining .section-bar').dataset.workspaceIcon"));
     }
 }
