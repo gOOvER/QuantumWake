@@ -365,7 +365,20 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.9
+### 0.14.10
+
+- **The Log page shows which game logs were read.** A new *Game logs* tab
+  lists every `Game.log` the install has — the live one and each rotated
+  backup — with its size, the session it held, and whether the copy on disk
+  is the one Quantum Wake summarised: *read*, *grown* since it was read,
+  never read, or *gone* because the game deleted the backup while the app
+  kept the session. Below it, every scan the app has run: when, how many
+  files, how many actually parsed, and how long it took. When a page looks
+  thin, this is where to check whether the log behind it was read at all.
+  Scans are recorded from this version on, so the first one appears on the
+  next start; logs read by an earlier build say so instead of showing a
+  date. A *Scan now* button runs the routine pass without the full re-read
+  Settings offers.
 
 - **Read a kit's readiness before inspecting its parts.** The Armoury now
   summarizes the last observed kit's body-zone coverage, weapon and

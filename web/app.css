@@ -4281,6 +4281,22 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 @media (max-width: 720px) { .pin-fields { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 720px) { .log-overview { grid-template-columns: 1fr; } }
 
+/* ---- The Log page's second pane: what the scans read. ---- */
+.log-pane { display: none; }
+.log-pane.active { display: block; }
+#log-pane-files .log-history + .log-history { margin-top: 16px; }
+#scan-files-table td, #scan-runs-table td { white-space: nowrap; }
+.scan-file { font-family: var(--mono); font-size: 12px; }
+.scan-live { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px solid var(--cyan); border-radius: 3px; font: 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--cyan); vertical-align: middle; }
+.scan-state { font-family: var(--mono); font-size: 12px; }
+.scan-state.current { color: var(--green); }
+.scan-state.changed { color: var(--amber); }
+.scan-state.unread { color: var(--red); }
+.scan-state.gone { color: var(--muted); }
+#scan-files-table tr.gone td { color: var(--muted); }
+#scan-files-table tr.gone .scan-file { text-decoration: line-through; text-decoration-color: var(--muted); }
+.scan-forced { color: var(--amber); }
+
 /* ---- Points of interest: one card per mark, the note given the room the
    Log aside cannot spare. Two columns when the page is wide enough for the
    note to still be a paragraph, one otherwise. ---- */

@@ -845,14 +845,21 @@
     <div class="section-bar">
       <div>
         <h2>Log</h2>
-        <p class="muted caption">What you have shown Quantum Wake, and the coordinates you chose to keep.</p>
+        <p class="muted caption" id="log-caption">What you have shown Quantum Wake, and the coordinates you chose to keep.</p>
       </div>
       <div class="controls">
         <button class="ghost" id="screen-log-refresh">Refresh</button>
         <button class="ghost" id="screen-log-clear">Clear readings</button>
+        <button class="ghost" id="scan-now" hidden title="Read any log the game has written or grown since the last pass; unchanged backups are skipped">Scan now</button>
       </div>
     </div>
 
+    <nav class="subtabs" id="log-tabs" aria-label="Log pages">
+      <button type="button" data-pane="readings" class="active">Readings</button>
+      <button type="button" data-pane="files">Game logs</button>
+    </nav>
+
+    <div class="log-pane active" id="log-pane-readings">
     <div class="log-overview">
       <div class="log-card">
         <div class="option-head">
@@ -920,6 +927,59 @@
         how to turn that screen into a structured reading. Open the capture and its extracted text together.</p>
       <div id="screen-review-list"></div>
     </section>
+    </div>
+
+    <!-- What the scans have read. Every other page is built from this and
+         none of them says so; when a view looks thin, this is where to check
+         whether the logs behind it were read at all. -->
+    <div class="log-pane" id="log-pane-files">
+      <div class="log-history">
+        <div class="option-head">
+          <h3>Scans</h3>
+          <span class="muted" id="scan-runs-summary"></span>
+        </div>
+        <p class="muted">Each pass over the folder, newest first. <em>Read</em> is how many files were parsed rather
+          than served from the cache: near zero on a normal start, everything on a full re-read from Settings.</p>
+        <table id="scan-runs-table">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th class="num">Files</th>
+              <th class="num">Read</th>
+              <th class="num">Took</th>
+              <th>Kind</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="log-history">
+        <div class="option-head">
+          <h3>Game logs</h3>
+          <span class="muted" id="scan-files-summary"></span>
+        </div>
+        <p class="muted">Every <code>Game.log</code> the install has &mdash; the one the game is writing and the
+          backups it rotated &mdash; and what Quantum Wake made of each. A backup is read once and skipped
+          by fingerprint after that; the live log is re-read whenever it has grown. <em>Gone</em> means
+          the game has since deleted the file and the session it held is kept from the last read.</p>
+        <table id="scan-files-table">
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>State</th>
+              <th class="num">Size</th>
+              <th>Written</th>
+              <th>Session</th>
+              <th class="num">Length</th>
+              <th>Handle</th>
+              <th>Read</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <!-- LOGBOOK -->

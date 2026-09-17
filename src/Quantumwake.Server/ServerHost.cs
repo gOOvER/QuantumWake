@@ -657,6 +657,11 @@ public static class ServerHost
 
         app.MapGet("/api/scan/status", (ScanStatus status) => status.Snapshot());
 
+        // What the scans have read: each log file the install has, whether the
+        // copy on disk is the one summarised, and the runs themselves. The Log
+        // page's answer to "did it actually read my logs, and which ones".
+        app.MapGet("/api/scan/history", (LogLibrary lib) => ScanHistory.Build(install, lib.Store));
+
         app.MapGet("/api/now", (LiveSessionService live) => live.Current);
 
         // The Now page is a briefing, not another report to go hunting through:

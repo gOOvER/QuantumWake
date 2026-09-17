@@ -282,7 +282,10 @@ function showView(name) {
 
   // A log is a live reference, not an Overlay setting. Read it when the pilot
   // opens its tab so pasted locations and screenshots stay together.
-  if (name === 'log') renderScreenPanel().catch(() => {});
+  if (name === 'log') {
+    renderScreenPanel().catch(() => {});
+    showLogPane(logPane);
+  }
 
   // Jobs change from the Crafting page and from play, so re-read on entry too.
   if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
@@ -7916,7 +7919,190 @@ async function renderFleetBerths() {
 }
 
 $('#screen-log-refresh')?.addEventListener('click', () => {
-  renderScreenLog().catch(() => {});
+  (logPane === 'files' ? loadScanHistory() : renderScreenLog()).catch(() => {});
+});
+
+/* ---------- the Log page's two panes ---------- */
+
+/**
+ * Readings is what the pilot showed the app; Game logs is what the app read
+ * on its own. They share a page because both answer "what does Quantum Wake
+ * know, and where from" - but a screenshot log and a file table are different
+ * shapes, so they take turns rather than stacking.
+ */
+const LOG_PANES = ['readings', 'files'];
+let logPane = 'readings';
+try {
+  const kept = localStorage.getItem('qw-log-pane');
+  if (LOG_PANES.includes(kept)) logPane = kept;
+} catch { /* private browsing keeps the default */ }
+
+const LOG_CAPTIONS = {
+  readings: 'What you have shown Quantum Wake, and the coordinates you chose to keep.',
+  files: 'Every log the game has written, and whether Quantum Wake has read it as it stands.',
+};
+
+function showLogPane(name) {
+  if (!LOG_PANES.includes(name)) name = 'readings';
+  logPane = name;
+  try { localStorage.setItem('qw-log-pane', name); } catch { /* as above */ }
+
+  for (const pane of LOG_PANES) $(`#log-pane-${pane}`)?.classList.toggle('active', pane === name);
+  for (const button of $('#log-tabs')?.querySelectorAll('button') || [])
+    button.classList.toggle('active', button.dataset.pane === name);
+
+  // Clearing readings and scanning logs each belong to one pane; the header
+  // shows the button for the pane on screen and not the other one.
+  const clear = $('#screen-log-clear');
+  if (clear) clear.hidden = name !== 'readings';
+  const scan = $('#scan-now');
+  if (scan) scan.hidden = name !== 'files';
+  const caption = $('#log-caption');
+  if (caption) caption.textContent = LOG_CAPTIONS[name];
+
+  if (name === 'files') loadScanHistory().catch(() => {});
+}
+
+for (const button of $('#log-tabs')?.querySelectorAll('button') || [])
+  button.addEventListener('click', () => showLogPane(button.dataset.pane));
+
+/** Megabytes to one place; a log is 2-4 MB and the whole folder ~400. */
+function megabytes(bytes) {
+  if (bytes == null) return '—';
+  const mb = bytes / 1048576;
+  return `${mb.toLocaleString(undefined, { maximumFractionDigits: mb < 10 ? 1 : 0 })} MB`;
+}
+
+/** Date and time in one short cell: "Sep 14, 2026 21:03". */
+const stampOf = (iso) => (iso ? `${dateOf(iso)} ${shortTimeOf(iso)}` : '—');
+
+/** What a file's state means to someone reading the table, not to the scanner. */
+const FILE_STATES = {
+  current: ['read', 'Summarised as it stands on disk'],
+  changed: ['grown', 'Has changed since it was read; the next scan re-reads it'],
+  unread: ['not read', 'In the folder but never scanned'],
+  gone: ['gone', 'The game has deleted this backup; its session is kept from the last read'],
+};
+
+async function loadScanHistory() {
+  const table = $('#scan-files-table tbody');
+  if (!table) return;
+
+  let history;
+  try {
+    history = await getJson('/api/scan/history');
+  } catch {
+    $('#scan-files-summary').textContent = 'could not read the scan history';
+    return;
+  }
+
+  renderScanFiles(history);
+  renderScanRuns(history.runs || []);
+}
+
+function renderScanFiles(history) {
+  const body = $('#scan-files-table tbody');
+  body.textContent = '';
+  const files = history.files || [];
+
+  const read = files.filter((f) => f.state === 'current').length;
+  const gone = files.filter((f) => f.state === 'gone').length;
+  const parts = [`${history.onDisk ?? 0} in the folder`, megabytes(history.bytes || 0), `${read} read as they stand`];
+  if (gone) parts.push(`${gone} gone`);
+  $('#scan-files-summary').textContent = parts.join(' · ');
+
+  if (!files.length) {
+    const td = el('td', 'muted', history.root
+      ? 'No Game.log in this install yet. The game writes one the first time it runs.'
+      : 'No install found, so there is nothing to read. Point the app at one from Settings.');
+    td.colSpan = 8;
+    const tr = el('tr');
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const file of files) {
+    const tr = el('tr', file.state === 'gone' ? 'gone' : file.live ? 'live' : null);
+
+    const name = el('td');
+    name.append(el('span', 'scan-file', file.name));
+    if (file.live) name.append(el('span', 'scan-live', 'live'));
+    name.title = file.path;
+    tr.append(name);
+
+    const [label, why] = FILE_STATES[file.state] || [file.state, ''];
+    const state = el('td', `scan-state ${file.state}`, label);
+    state.title = why;
+    tr.append(state);
+
+    tr.append(el('td', 'num', megabytes(file.bytes)));
+    tr.append(el('td', null, stampOf(file.writtenAt)));
+
+    // The session is the log's own clock; the file's write time is the OS's.
+    // They differ by a rotation and a time zone, and both are shown so a row
+    // can be matched against the Sessions page or against Explorer.
+    tr.append(el('td', null, file.startedAt ? `${dateOf(file.startedAt)} ${shortTimeOf(file.startedAt)} → ${shortTimeOf(file.endedAt)}` : '—'));
+    tr.append(el('td', 'num', file.startedAt
+      ? duration((new Date(file.endedAt) - new Date(file.startedAt)) / 1000)
+      : '—'));
+    tr.append(el('td', null, file.handle || '—'));
+
+    const when = el('td', 'muted', file.scannedAt ? relative(file.scannedAt) : file.sessionId ? 'before 0.14.10' : '—');
+    if (file.scannedAt) when.title = stampOf(file.scannedAt);
+    else if (file.sessionId) when.title = 'Read by a build that did not yet record when';
+    tr.append(when);
+
+    body.append(tr);
+  }
+}
+
+function renderScanRuns(runs) {
+  const body = $('#scan-runs-table tbody');
+  body.textContent = '';
+
+  const latest = runs[0];
+  $('#scan-runs-summary').textContent = latest
+    ? `last ${relative(latest.finishedAt)} · ${latest.parsed} of ${latest.files} read`
+    : '';
+
+  if (!runs.length) {
+    const td = el('td', 'muted', 'No scan recorded yet. Scans are kept from 0.14.10 on; the first one lands on the next start.');
+    td.colSpan = 5;
+    const tr = el('tr');
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const run of runs) {
+    const tr = el('tr');
+    const when = el('td', null, stampOf(run.startedAt));
+    when.title = relative(run.startedAt);
+    tr.append(when);
+    tr.append(el('td', 'num', String(run.files)));
+    tr.append(el('td', 'num', String(run.parsed)));
+    const seconds = Math.max(0, (new Date(run.finishedAt) - new Date(run.startedAt)) / 1000);
+    tr.append(el('td', 'num', seconds < 1 ? '<1s' : `${Math.round(seconds)}s`));
+    tr.append(el('td', run.forced ? 'scan-forced' : 'muted', run.forced ? 'full re-read' : run.parsed ? 'new logs' : 'unchanged'));
+    body.append(tr);
+  }
+}
+
+// A routine pass, not the forced re-read Settings offers: unchanged backups
+// are skipped, so this is seconds, and it is what picks up a log the game
+// rotated while the app was already running.
+$('#scan-now')?.addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  button.disabled = true;
+  try {
+    await getJson2('/api/scan');
+    await loadScanHistory();
+  } catch {
+    $('#scan-files-summary').textContent = 'the scan could not be started';
+  } finally {
+    button.disabled = false;
+  }
 });
 
 /**
@@ -21363,6 +21549,11 @@ async function watchScan() {
       try {
         await loadHistory();
       } catch { /* the retry loop in boot covers this */ }
+
+      // The file table is the one page that is *about* the scan that just
+      // ended, so it does not wait for a click to show what it read.
+      if ($('#view-log')?.classList.contains('active') && logPane === 'files')
+        loadScanHistory().catch(() => {});
     }
 
     // Never returns. The forced rescan on the Settings page re-reads all 400 MB
