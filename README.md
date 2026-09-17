@@ -365,7 +365,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.7
+### 0.14.8
+
+- **Mining fit is the clearer name for the rock calculator.** The tab says
+  *Mining fit* and its page asks *Will this fit crack it?*, keeping the focus
+  on the ship's heads and modules as well as the rock in front of it.
 
 - **Salvage, fit and refinery work now read as distinct operations.** Salvage
   no longer inherits the mining-only per-rock ranking; it names the location
@@ -387,9 +391,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   to the other copy's frames, which read as "the MFD settings don't save".
   The second copy now says the first is running, opens it, and closes.
 
-- **The Mining page is three pages.** *Where to go*, *Can it be cracked?* and *Your runs* are tabs under the heading now, one at a time and remembered, with the kind, system and search filters on the first alone; the page had grown into one long scroll.
+- **The Mining page is three pages.** *Where to go*, *Mining fit* and *Your runs* are tabs under the heading now, one at a time and remembered, with the kind, system and search filters on the first alone; the page had grown into one long scroll.
 
-- **Can it be cracked?** A rock calculator on the Mining page. Pick the ship
+- **Mining fit.** A rock calculator on the Mining page. Pick the ship
   — the heads come from its own loadout, the Prospector's one S1, the MOLE's
   three S2, the Golem's Pitman — put the HUD's mass, resistance and
   instability in, choose the lasers, up to three modules a head and a gadget

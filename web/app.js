@@ -5843,7 +5843,7 @@ function renderSighting(box, s, { full = true } = {}) {
       box.append(list);
     }
 
-    const go = el('button', 'ghost tiny', 'Can it be cracked?');
+    const go = el('button', 'ghost tiny', 'Mining fit');
     go.type = 'button';
     go.title = 'Open the Mining page with this rock in the calculator';
     go.addEventListener('click', () => { crackFromScan = m; showView('mining'); });

@@ -268,7 +268,7 @@ public class RockCrackTests
         Assert.Contains("a rock scanned: Quantainium (Raw)", entry);
         Assert.Contains("6,295 kg · 12% resistance · instability 1.75 · 21.07 SCU · hard", entry);
         Assert.Contains("31.2% · quality 812", entry);
-        Assert.Contains("Can it be cracked?", entry);
+        Assert.Contains("Mining fit", entry);
     }
 
     [Fact]
