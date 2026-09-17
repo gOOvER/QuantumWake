@@ -81,6 +81,6 @@ public class MiningPanesTests
         Assert.Equal("Hulls, scrapers and heads, as far as the game files go.", page.NodeText("#mining-workspace-status"));
 
         page.Do("salvageModel = {ready:true, ships:[{}, {}, {}], modules:[{}]}; renderMiningWorkspaceHeader();");
-        Assert.Equal("3 salvage hulls, 1 scraper modules, from the install.", page.NodeText("#mining-workspace-status"));
+        Assert.Equal("3 salvage hulls, 1 scraper module, from the install.", page.NodeText("#mining-workspace-status"));
     }
 }

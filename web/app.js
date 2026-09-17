@@ -4763,6 +4763,8 @@ function renderMiningWorkspaceHeader() {
     return;
   }
 
+  const count = (n, noun) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+
   // Both lines of work reached the header in the same release: the salvage
   // pane arrived on one and the workspace header on the other, and without
   // this the wrecks page calls itself Prospecting.
@@ -4771,7 +4773,7 @@ function renderMiningWorkspaceHeader() {
     bar.dataset.workspace = 'SALVAGE';
     bar.dataset.workspaceIcon = '';
     status.textContent = salvageModel?.ready
-      ? `${salvageModel.ships?.length ?? 0} salvage hulls, ${salvageModel.modules?.length ?? 0} scraper modules, from the install.`
+      ? `${count(salvageModel.ships?.length ?? 0, 'salvage hull')}, ${count(salvageModel.modules?.length ?? 0, 'scraper module')}, from the install.`
       : 'Hulls, scrapers and heads, as far as the game files go.';
     return;
   }
