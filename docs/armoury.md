@@ -88,13 +88,90 @@ of its classes it met first (its P4-AR is
 `behr_rifle_ballistic_01_contestedzonereward`), so the plain gun's price is
 the cheapest across every class the game names the same.
 
-**What is left out**, by the sub-type the catalogue already carries: knives
-(`Knife`, melee damage on `SMeleeWeaponComponentParams`, not read), grenades
-(`Grenade`, a primeable explosion, not read), the gadgets (multi-tool,
-medical gun, tractor beam, extinguisher - tools, not weapons), and anything
-under `/dev/`, a template, a test rig or a toy. The Animus missile launcher
-is kept with what the files give it: a blast and a magazine that holds zero,
-which the page prints as a dash rather than a number.
+**What is left out** of the gun table, by the sub-type the catalogue already
+carries: the gadgets (multi-tool, medical gun, tractor beam, extinguisher -
+tools, not weapons), and anything under `/dev/`, a template, a test rig or a
+toy. Knives and grenades have their own tab (below). The Animus missile
+launcher is kept with what the files give it: a blast and a magazine that
+holds zero, which the page prints as a dash rather than a number.
+
+## Knives, grenades, attachments
+
+The three the first read left out, on their own Armoury tabs since 0.14.17.
+Read on this install 2026-09-17; `--armoury` prints all three under the guns.
+
+**Every knife is the same knife.** A knife's `SMeleeWeaponComponentParams`
+points at a `MeleeCombatConfig` record, and its `attackCategoryParams` array
+carries one `AttackCategoryParams` per category - `BladeSlash`, `BladeStab` -
+each with an inline `DamageInfo` and an `attackImpulse`. 23 of the 26 named
+knives point at `KnifeMeleeCombat`: 30 physical a slash, 30 a stab, impulse
+20, 1 kg. The other three are the `_gungame` variants of the FSK-8, on
+`KnifeMeleeCombat_GunGame`. So the Sawtooth, the Demon Fang, the VCK-1 and
+the five Banu knives differ in look, maker and price and in nothing the files
+put a number on, and the page says that once above the table rather than
+printing 30 down a column. 13 plain knives, 13 finishes.
+
+**A grenade is a trigger and a behaviour.** `EntityComponentTriggerableDevicesParams`
+carries `triggers`, each a struct that says what sets it off -
+`STriggerableDevicesTriggerTimerParams` with a `duration`,
+`STriggerableDevicesTriggerImpactParams` - with a `behavior` pointer to what
+happens: `STriggerableDevicesBehaviorExplosionParams` holds an inline
+`ExplosionParams` (`damage`, `minRadius`, `maxRadius`, `pressure`), and
+`STriggerableDevicesBehaviorSpawnEntityParams` names an entity to spawn. Two
+grenades on this install:
+
+| Grenade | Sets off | Blast | Leaves |
+| --- | --- | --- | --- |
+| MK-4 Frag | 5 s timer | 120 physical, full to 4 m, none past 5.5 m, pressure 280 | nothing |
+| Scorch Plasma | impact | 2 thermal, pressure 5 - a fuse, not a weapon | `HazardZone_ksar_gren_frag_01`: `HazardComponentParams` doing 10 thermal every 0.4 s within a 4.25 m sphere |
+
+How long the plasma patch burns is in the zone's state machine, not a
+number, and is not shown. The thirteen glowsticks and the Medivac flare are
+filed under `Grenade` too, carry no triggers, and are not listed.
+`SPrimeableComponentParams` on a grenade holds animation states and prime-on
+flags, no time.
+
+**An attachment is a block of multipliers.** Every sight, barrel piece and
+underbarrel piece under `weapon_modifier/` carries
+`SWeaponModifierComponentParams`, whose `modifier.weaponStats` is an
+`SWeaponStats`: `damageMultiplier`, `fireRateMultiplier`,
+`soundRadiusMultiplier`, `heatGenerationMultiplier`, `ammoCostMultiplier`,
+`chargeTimeMultiplier`, `projectileSpeedMultiplier`, `pellets` and
+`burstShots` added, and three inline blocks - `spreadModifier` (the cone at
+rest and firing, the same factor on every piece here), `recoilModifier`
+(a dozen multipliers; the strength and the time are the two shown) and
+`aimModifier` (`zoomScale`, `secondZoomScale`, `zoomTimeScale`). Beside
+the block, `zeroingParams` gives a scope its `maxRange` and
+`rangeIncrement`. 96 pieces, 73 plain: 29 barrels, 35 sights, 9 underbarrel.
+The first read, for checking after a patch:
+
+| Piece | Reads |
+| --- | --- |
+| Tacit Suppressor1 | damage ×0.92, sound ×0.66 (Suppressor2 and 3: sound ×0.4) |
+| Stoic Suppressor1 | spread ×1.2, recoil time ×0.8, sound ×0.66 |
+| Quell Suppressor1 | rate ×0.95, sound ×0.66, heat ×1.1 |
+| Stark Compensator1 | damage ×1.175, rate ×0.8, recoil time ×1.1 |
+| Sion Compensator1 | recoil ×0.7, sound ×1.2 |
+| Escalate Stabilizer1 | damage ×0.9, rate ×1.3, +1 burst shot |
+| Escalate Stabilizer3 | damage ×1.1, ammo ×2, charge time ×0.5 |
+| Torrent Compensator3 | spread ×0.77, recoil ×0.7, sound ×1.2, 3 pellets fewer |
+| Veil Flash Hider | recoil ×0.85 |
+| EE04 (4x Telescopic) | zoom ×4 and ×6, zero to 500 m by 100, aim-down time ×1.25 |
+| HG-2 Jaeger (2x Holographic) | zoom ×2 and ×4, aim-down time ×1.05 |
+| Omarof (16x Telescopic) | zoom ×16, zero to 2,000 m by 200, aim-down time ×0.75 |
+| 250-E Laser Pointer | spread ×0.885 |
+| FieldLite Flashlight | nothing the files put a number on, and the row says so |
+
+Two things the names do not say. A barrel's block writes `zoomScale` 1,
+which means nothing and is not shown; only a sight magnifies. And the file's
+zoom is not always the name's: the TS-25 Basara "(2.5x)" reads `zoomScale`
+2 and `secondZoomScale` 5, the FarSight "(8x)" reads 4 and 8, the Theta Pro
+"(8x)" 6 and 10. The page shows the file.
+
+**Finishes** follow the gun rule with one more condition: a finish extends
+the plain class *and* is named as it, quoted word aside. Without the name,
+`arma_barrel_stab_s1_02` reads as a finish of `arma_barrel_stab_s1` - and it
+is the Escalate beside the Emod, a different barrel with different figures.
 
 ## Armour
 
@@ -185,13 +262,36 @@ app's consent to talk to the network. Probed 2026-09-16: the P4-AR is a
 core a 522×612 render (533 KB). Every finish and every colour has its own
 uuid, so the chips under a row swap the picture to that one.
 
+**Attachments are the exception, and come from the install.** Probed
+2026-09-17 for anything better than the glyph:
+`Data\UI\Textures\PlayerUI\WeaponAttachment\Icons\` holds 40 DXT5 icons at
+512 square, named by class - every plain `arma_barrel_*` (supp, comp, stab,
+flhd, sizes 1-3), the Behring/NV-TAC/Gemini/Klaus & Werner/Kastak/lbco
+sights, four underbarrel pieces and the multi-tool heads - so 35 of the 73
+plain attachments have one and their finishes wear it
+(`WeaponAttachment.Icon`, stamped from the archive listing in the load pass
+by `GameArmoury.StampIcons`). The Vera/Torrent/Stark/Escalate/Quell/Stoic
+variants have no file of their own and get none rather than a neighbour's.
+Decoded and cropped by the ship-icon path, cached under `attachment-icons/`,
+served first by the same endpoint and without the community dataset, since
+it is the pilot's own file. The rest of the archive was looked at so nobody
+looks again: `Visor_HUD\assets\TIF\` has 18 renders under old class names
+(`behr_rifle_ballistic_01`, `behr_frag_grenade_01`; seven guns in all),
+`mobiGlas\assets\TIF\CubbyBlast_items\` 17 hand-named shop adverts, and
+there is no picture of a knife anywhere - the inventory draws its thumbnails
+from the models at run time. Guns, armour, knives and grenades stay the
+wiki's.
+
 ## Storage, API
 
 Read in the same pass as the rest of the game data (`GameArmoury.Read`,
 cached in `commodities.json` under `Armoury`; `CacheVersion` moved).
 `GET /api/armoury` returns the plain guns with their modes and derived
-figures, their finishes with prices, and the armour rows. Nothing stored in
-a session changes: no parser, no `PayloadVersion`.
+figures, their finishes with prices, the armour rows, and since 0.14.17 the
+plain knives (`melee`, with `meleeConfigs` counting the tables they read
+from), grenades (`throwables`) and attachments, each with its finishes and
+the cheapest price across them. Nothing stored in a session changes: no
+parser, no `PayloadVersion`.
 
 The resolver behind "cheapest at" is taken once per request: `LogLibrary.
 Terminals` rebuilds from the atlas on every read, and three thousand pieces
@@ -199,11 +299,9 @@ each asking for it took the first version of this endpoint thirty seconds.
 
 ## Next
 
-- Knives and grenades, from `SMeleeWeaponComponentParams` and the primeable
-  explosion.
-- Attachments: the catalogue has 118 barrels, 57 sights and 12 underbarrel
-  pieces; `SWeaponStats` modifiers on each would let the page show what a
-  suppressor or a scope does to the row.
+- An attachment applied to a gun's row: the multipliers are read, so "the
+  P4-AR with a Tacit" is arithmetic the page could do; it does not yet.
+- How long the plasma patch burns, from the hazard zone's state machine.
 - Kits: a gun or a set from this page into a kit on the Loadout page, and a
   kit's missing pieces onto a shopping list with the destination that sells
   the most of them, as the Garage does for parts.

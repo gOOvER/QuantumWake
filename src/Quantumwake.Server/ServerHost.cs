@@ -1262,6 +1262,10 @@ public static class ServerHost
 
             // UEX's cheapest terminal for a class, the way the Mining page
             // prices a head. Null is "no terminal recorded", not free.
+            // Three terminals is what a row needs; an opened row lists every
+            // one, since "where else" is the question a detail is for. Armour
+            // stays at three: 2,349 pieces each carrying every terminal would
+            // be most of the payload for a list nobody opens piece by piece.
             (decimal? Price, List<object> Shops) Priced(string cls)
             {
                 var uuid = lib.GameCommodities.ItemUuid(cls);
@@ -1279,6 +1283,25 @@ public static class ServerHost
             }
             object Market(string cls) { var (price, shops) = Priced(cls); return new { price, shops }; }
 
+            // Every terminal selling any class the game gives this name - the
+            // plain item and the finishes UEX files under the same name -
+            // one row per terminal at its cheapest, cheapest first.
+            object EveryShop(IEnumerable<string> classes)
+            {
+                var best = classes
+                    .SelectMany(cls => uex.ItemMarket(lib.GameCommodities.ItemUuid(cls)))
+                    .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => g.MinBy(r => r.Buy)!)
+                    .OrderBy(r => r.Buy)
+                    .ToList();
+                var rows = best.Select(r =>
+                {
+                    var place = terminals.Resolve(r.Terminal);
+                    return (object)new { terminal = r.Terminal, place = place?.Name, system = place?.System, price = r.Buy };
+                }).ToList();
+                return new { price = best.Count > 0 ? (decimal?)best[0].Buy : null, shops = rows };
+            }
+
             // UEX files a gun under whichever of its classes it met first - its
             // P4-AR is behr_rifle_ballistic_01_contestedzonereward, not the
             // plain class - so the plain gun's price is the cheapest across
@@ -1286,12 +1309,8 @@ public static class ServerHost
             var finishesOf = armoury.Weapons.Where(w => w.BaseClass is not null)
                 .GroupBy(w => w.BaseClass!, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
-            object WeaponMarket(PersonalWeapon w)
-            {
-                var same = new[] { w }.Concat(finishesOf.GetValueOrDefault(w.Class) ?? []).Where(x => x.Name == w.Name).ToList();
-                var priced = same.Select(x => (x, Priced(x.Class))).Where(p => p.Item2.Price is not null).OrderBy(p => p.Item2.Price).FirstOrDefault();
-                return priced == default ? new { price = (decimal?)null, shops = new List<object>() } : new { price = priced.Item2.Price, shops = priced.Item2.Shops };
-            }
+            object WeaponMarket(PersonalWeapon w) =>
+                EveryShop(new[] { w }.Concat(finishesOf.GetValueOrDefault(w.Class) ?? []).Where(x => x.Name == w.Name).Select(x => x.Class));
 
             var weapons = armoury.Weapons.Where(w => w.BaseClass is null).Select(w => new
             {
@@ -1339,16 +1358,54 @@ public static class ServerHost
                 .OrderBy(r => r.Slot, StringComparer.OrdinalIgnoreCase).ThenBy(r => r.Weight, StringComparer.OrdinalIgnoreCase).ThenBy(r => r.Family, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
+            // Knives, grenades and attachments: the same finish rule as guns,
+            // the plain item priced at the cheapest of its finishes that UEX
+            // files under the same name.
+            (object Market, List<object> Finishes) Family<T>(string cls, string name, IEnumerable<T> all, Func<T, string> classOf, Func<T, string> nameOf, Func<T, string?> baseOf)
+            {
+                var finishes = all.Where(x => baseOf(x) == cls).OrderBy(nameOf, StringComparer.OrdinalIgnoreCase).ToList();
+                var market = EveryShop(new[] { cls }.Concat(finishes.Where(f => nameOf(f) == name).Select(classOf)));
+                return (market, finishes.Select(f => (object)new { @class = classOf(f), uuid = lib.GameCommodities.ItemUuid(classOf(f)), name = nameOf(f), pictured = f is WeaponAttachment { Icon: not null }, market = Market(classOf(f)) }).ToList());
+            }
+
+            var melee = armoury.Melee.Where(k => k.BaseClass is null).Select(k =>
+            {
+                var (market, finishes) = Family(k.Class, k.Name, armoury.Melee, x => x.Class, x => x.Name, x => x.BaseClass);
+                return new { k.Class, uuid = lib.GameCommodities.ItemUuid(k.Class), k.Name, k.Manufacturer, k.Mass, k.Slash, k.Stab, k.Impulse, k.Config, market, finishes };
+            }).ToList();
+
+            var throwables = armoury.Throwables.Where(g => g.BaseClass is null).Select(g =>
+            {
+                var (market, finishes) = Family(g.Class, g.Name, armoury.Throwables, x => x.Class, x => x.Name, x => x.BaseClass);
+                return new { g.Class, uuid = lib.GameCommodities.ItemUuid(g.Class), g.Name, g.Manufacturer, g.Mass, g.Trigger, g.FuseSeconds, g.Blast, g.Pressure, g.Hazard, market, finishes };
+            }).ToList();
+
+            var attachments = armoury.Attachments.Where(a => a.BaseClass is null).Select(a =>
+            {
+                var (market, finishes) = Family(a.Class, a.Name, armoury.Attachments, x => x.Class, x => x.Name, x => x.BaseClass);
+                return new { a.Class, uuid = lib.GameCommodities.ItemUuid(a.Class), a.Name, a.Kind, a.Family, a.Size, a.Manufacturer, a.Mass, a.Effect, unchanged = a.Effect.IsNone, pictured = a.Icon is not null, market, finishes };
+            }).ToList();
+
             return Results.Ok(new
             {
                 ready = armoury.Weapons.Count > 0 || armoury.Armour.Count > 0,
                 weapons,
                 armour,
+                melee,
+                throwables,
+                attachments,
+                // One melee config shared by every knife is the finding the
+                // page states above the table; more than one means it cannot.
+                meleeConfigs = armoury.Melee.Where(k => k.BaseClass is null).Select(k => k.Config).Distinct().Count(),
                 itemPricesKnown = uex.IsEnabled,
                 // Pictures come from the wiki, and the wiki is asked only once the
                 // community dataset is on - the app's consent to talk to the network.
                 picturesKnown = lib.Community.IsEnabled,
-                counts = new { weapons = armoury.Weapons.Count, plain = weapons.Count(), armour = armoury.Armour.Count, sets = armour.Count },
+                counts = new
+                {
+                    weapons = armoury.Weapons.Count, plain = weapons.Count(), armour = armoury.Armour.Count, sets = armour.Count,
+                    melee = armoury.Melee.Count, throwables = armoury.Throwables.Count, attachments = armoury.Attachments.Count,
+                },
             });
         });
 
@@ -1433,11 +1490,23 @@ public static class ServerHost
         // up arbitrary ids, and only once the community dataset is on.
         app.MapGet("/api/armoury/picture/{uuid}", async (string uuid, LogLibrary lib, PartPictures pictures, IHttpClientFactory httpFactory, HttpContext ctx) =>
         {
+            var armoury = lib.GameCommodities.Armoury;
+            bool Is(string cls) => string.Equals(lib.GameCommodities.ItemUuid(cls), uuid, StringComparison.OrdinalIgnoreCase);
+
+            // The install's own picture first: 40 attachments have one, and it
+            // needs no network and no consent. Everything else is the wiki's,
+            // which is asked only once the community dataset is on.
+            if (armoury.Attachments.FirstOrDefault(a => a.Icon is not null && Is(a.Class)) is { Icon: { } icon })
+                return ArchivePicture(icon, "attachment-icons");
+
             if (!lib.Community.IsEnabled) return Results.NotFound();
 
-            var armoury = lib.GameCommodities.Armoury;
-            var name = armoury.Weapons.Select(w => (w.Class, w.Name)).Concat(armoury.Armour.Select(a => (a.Class, a.Name)))
-                .Where(i => string.Equals(lib.GameCommodities.ItemUuid(i.Class), uuid, StringComparison.OrdinalIgnoreCase))
+            var name = armoury.Weapons.Select(w => (w.Class, w.Name))
+                .Concat(armoury.Armour.Select(a => (a.Class, a.Name)))
+                .Concat(armoury.Melee.Select(k => (k.Class, k.Name)))
+                .Concat(armoury.Throwables.Select(g => (g.Class, g.Name)))
+                .Concat(armoury.Attachments.Select(a => (a.Class, a.Name)))
+                .Where(i => Is(i.Class))
                 .Select(i => i.Name)
                 .FirstOrDefault();
             if (name is null) return Results.NotFound();

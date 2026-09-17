@@ -365,7 +365,29 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.13
+### 0.14.17
+
+- **Knives, grenades and attachments, each on its own Armoury tab.** The three
+  the Armoury said it did not read yet, read from the install. Attachments
+  are split by slot — sights, barrels, underbarrel — and
+  shown as what they do to the gun they sit on, as the multipliers the
+  files write — a Tacit suppressor is ×0.92 damage and ×0.66 sound, a Stark
+  compensator ×1.175 damage for ×0.8 rate, a laser pointer ×0.885 spread — with
+  a sight's zoom and its second setting, how far it zeroes and by what step;
+  a flashlight says it changes nothing the files put a number on. Grenades
+  read as what sets them off and what they do: the MK-4 Frag is a 5 s fuse
+  and 120 physical to 4 m, the Scorch Plasma goes on impact and leaves a
+  patch doing 10 thermal every 0.4 s within 4.25 m. **Every knife the game
+  sells is the same knife in the files** — 30 physical a slash or a stab —
+  and the tab says so once above the list rather than printing 30 down a
+  column. Each has its finishes and UEX's cheapest price; the game-data
+  cache is re-read once on first start. Hover the *Cheapest at* cell for
+  the other terminals, or click the row for the wiki's picture, every
+  figure the files give it, and every terminal UEX records selling it —
+  guns get the full terminal list in their opened row too. An attachment's
+  picture is the game's own icon where the install has one (35 of the 73),
+  shown without the community dataset; the rest, and every gun, knife and
+  grenade, stay the wiki's.
 
 - **Mining names the job in front of you.** Its header now changes with the
   active workspace: *Prospecting*, *Mining fit* or *Haul & refinery*. The

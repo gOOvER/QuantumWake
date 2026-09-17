@@ -2373,7 +2373,7 @@
     <div class="section-bar">
       <h2>Armoury</h2>
       <div class="controls">
-        <input type="search" id="armoury-search" class="search" placeholder="Search guns and armour…"
+        <input type="search" id="armoury-search" class="search" placeholder="Search guns, armour, attachments…"
                autocomplete="off" spellcheck="false">
       </div>
     </div>
@@ -2392,6 +2392,9 @@
     <nav class="subtabs" id="armoury-tabs" aria-label="Armoury pages">
       <button type="button" data-pane="guns" class="active">Guns</button>
       <button type="button" data-pane="armour">Armour</button>
+      <button type="button" data-pane="attachments">Attachments</button>
+      <button type="button" data-pane="grenades">Grenades</button>
+      <button type="button" data-pane="knives">Knives</button>
     </nav>
 
     <div class="armoury-pane active" id="armoury-pane-guns">
@@ -2435,8 +2438,111 @@
         mode, every shot held to full charge; a burst's sustained rate counts its
         cooldown. Damage is at the muzzle, before the drop and before armour.
         A launcher's blast is shown in the row's details. Knives, grenades and
-        the gadgets are not read yet.
+        attachments have tabs of their own; the gadgets &mdash; multi-tool, medical
+        gun, tractor beam &mdash; are tools, not weapons, and are not read.
       </p>
+    </div>
+
+    <!-- The three the first Armoury left out, each on its own tab. Attachments
+         are multipliers on the gun they sit on, so they live apart from the
+         gun table rather than pretending to be a row in it, and a sight gets
+         columns of its own because its zoom is what it is for. -->
+    <div class="armoury-pane" id="armoury-pane-attachments">
+      <p class="muted small">
+        What a piece does to the gun it sits on, as the multipliers the files write on it &mdash;
+        <em>×0.66 sound</em> is a shot heard two-thirds as far, <em>×1.2 spread</em> a cone a fifth
+        wider. Green helps, amber costs. A flashlight changes nothing the files put a number on, and says so.
+      </p>
+      <div class="controls armoury-filters">
+        <select id="armoury-kit-size" class="select" title="Slot size">
+          <option value="">Every size</option>
+          <option value="1">Size 1</option>
+          <option value="2">Size 2</option>
+          <option value="3">Size 3</option>
+        </select>
+        <label class="toggle"><input type="checkbox" id="armoury-kit-priced"> Only ones UEX prices</label>
+      </div>
+      <p class="muted small" id="armoury-kit-count"></p>
+
+      <h3 class="spaced">Sights <span class="muted" id="armoury-sights-count"></span></h3>
+      <div class="table-wrap">
+        <table id="armoury-sights">
+          <thead><tr>
+            <th>Sight</th><th class="num">Size</th>
+            <th class="num" title="Magnification, and the second setting where the sight has one">Zoom</th>
+            <th class="num" title="How far out the sight can be set, and by what step">Zeroes to</th>
+            <th class="num" title="On how long aiming down the sight takes; above 1 is slower">Aim time</th>
+            <th title="Anything else the files change">Also</th>
+            <th class="num" title="Colours and editions with these figures">Finishes</th>
+            <th class="num" title="UEX's cheapest terminal">From</th>
+            <th>Cheapest at</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <h3 class="spaced">Barrels <span class="muted" id="armoury-barrels-count"></span></h3>
+      <div class="table-wrap">
+        <table id="armoury-barrels">
+          <thead><tr>
+            <th>Barrel</th><th>Type</th><th class="num">Size</th>
+            <th title="Every figure the files change, as a multiplier on the gun's own">Does</th>
+            <th class="num" title="Colours and editions with these figures">Finishes</th>
+            <th class="num" title="UEX's cheapest terminal">From</th>
+            <th>Cheapest at</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <h3 class="spaced">Underbarrel <span class="muted" id="armoury-underbarrel-count"></span></h3>
+      <div class="table-wrap">
+        <table id="armoury-underbarrel">
+          <thead><tr>
+            <th>Piece</th><th>Type</th><th class="num">Size</th>
+            <th title="Every figure the files change, as a multiplier on the gun's own">Does</th>
+            <th class="num" title="Colours and editions with these figures">Finishes</th>
+            <th class="num" title="UEX's cheapest terminal">From</th>
+            <th>Cheapest at</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="armoury-pane" id="armoury-pane-grenades">
+      <p class="muted small" id="armoury-grenade-note">
+        What sets it off and what it does. A timer grenade's fuse is the duration on its trigger; an
+        impact grenade goes on landing. The blast is the explosion's damage at the centre, full to the
+        inner radius and gone past the outer; what a grenade leaves behind &mdash; a burning patch &mdash; is
+        so much damage every so often within a radius, for as long as it lasts, which the files do not
+        put a number on. Flares and glowsticks are filed as grenades and are not.
+      </p>
+      <div class="table-wrap">
+        <table id="armoury-grenades">
+          <thead><tr>
+            <th>Grenade</th><th>Sets off</th><th>Blast</th><th class="num" title="Full damage to the inner radius, none past the outer">Radius</th>
+            <th class="num" title="The game's own figure for what the blast throws">Pressure</th><th>Leaves</th><th class="num">kg</th>
+            <th class="num" title="UEX's cheapest terminal">From</th><th>Cheapest at</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="armoury-pane" id="armoury-pane-knives">
+      <p class="muted small" id="armoury-knife-note"></p>
+      <div class="table-wrap">
+        <table id="armoury-knives">
+          <thead><tr>
+            <th>Knife</th><th class="num" title="One slash's damage">Slash</th><th class="num" title="One stab's damage">Stab</th>
+            <th class="num" title="The push a hit gives, in the game's own unit">Impulse</th><th class="num">kg</th>
+            <th class="num" title="Colours and editions with these figures">Finishes</th>
+            <th class="num" title="UEX's cheapest terminal across the knife's finishes">From</th><th>Cheapest at</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
 
     <div class="armoury-pane" id="armoury-pane-armour">
