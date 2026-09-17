@@ -97,7 +97,7 @@ holds zero, which the page prints as a dash rather than a number.
 
 ## Knives, grenades, attachments
 
-The three the first read left out, on the Armoury's third tab since 0.14.14.
+The three the first read left out, on their own Armoury tabs since 0.14.15.
 Read on this install 2026-09-17; `--armoury` prints all three under the guns.
 
 **Every knife is the same knife.** A knife's `SMeleeWeaponComponentParams`
@@ -267,7 +267,7 @@ uuid, so the chips under a row swap the picture to that one.
 Read in the same pass as the rest of the game data (`GameArmoury.Read`,
 cached in `commodities.json` under `Armoury`; `CacheVersion` moved).
 `GET /api/armoury` returns the plain guns with their modes and derived
-figures, their finishes with prices, the armour rows, and since 0.14.14 the
+figures, their finishes with prices, the armour rows, and since 0.14.15 the
 plain knives (`melee`, with `meleeConfigs` counting the tables they read
 from), grenades (`throwables`) and attachments, each with its finishes and
 the cheapest price across them. Nothing stored in a session changes: no

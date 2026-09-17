@@ -296,11 +296,11 @@ public class ArmouryPageTests
     /// <summary>The model with the third tab's lists spliced in beside the guns and armour.</summary>
     private static string WithKit(string model) => model.Replace("\"armour\":[", Kit + "\"armour\":[");
 
-    private static Page KitOpened()
+    private static Page KitOpened(string pane = "attachments")
     {
         var page = new Page();
         page.Serve("/api/armoury", WithKit(Model));
-        page.Do("await loadArmoury(); showArmouryPane('kit');");
+        page.Do($"await loadArmoury(); showArmouryPane('{pane}');");
         return page;
     }
 
@@ -308,35 +308,66 @@ public class ArmouryPageTests
         page.Text($"__dom.node('#{id}').classList.contains('active') ? 'on' : 'off'");
 
     [Fact]
-    public void The_third_tab_holds_attachments_grenades_and_knives_and_is_remembered()
+    public void Attachments_grenades_and_knives_each_have_a_tab_and_the_choice_is_remembered()
+    {
+        var page = KitOpened("grenades");
+
+        Assert.Equal("on", Active(page, "armoury-pane-grenades"));
+        Assert.Equal("off", Active(page, "armoury-pane-attachments"));
+        Assert.Equal("off", Active(page, "armoury-pane-guns"));
+        Assert.Equal("grenades", page.Text("localStorage.getItem('qw-armoury-pane')"));
+
+        page.Do("showArmouryPane('knives');");
+        Assert.Equal("on", Active(page, "armoury-pane-knives"));
+        Assert.Equal("off", Active(page, "armoury-pane-grenades"));
+
+        page.Do("showArmouryPane('kit');");
+        Assert.Equal("on", Active(page, "armoury-pane-guns"));
+    }
+
+    /// <summary>
+    /// A sight is for its zoom, so the zoom, the zeroing and the aim time are
+    /// columns; a barrel is what it does, so its figures are chips.
+    /// </summary>
+    [Fact]
+    public void Attachments_are_split_by_slot_with_columns_to_suit_each()
     {
         var page = KitOpened();
 
-        Assert.Equal("on", Active(page, "armoury-pane-kit"));
-        Assert.Equal("off", Active(page, "armoury-pane-guns"));
-        Assert.Equal("kit", page.Text("localStorage.getItem('qw-armoury-pane')"));
+        var sights = page.NodeText("#armoury-sights tbody");
+        Assert.Contains("EE04 (4x Telescopic)", sights);
+        Assert.Contains("×4 / ×6", sights);
+        Assert.Contains("500 m by 100", sights);
+        Assert.Contains("×1.25", sights);
+        Assert.DoesNotContain("Tacit", sights);
 
-        var attachments = page.NodeText("#armoury-attachments tbody");
-        Assert.Contains("Tacit Suppressor1", attachments);
-        Assert.Contains("×0.92 damage", attachments);
-        Assert.Contains("×0.66 sound", attachments);
-        Assert.Contains("EE04 (4x Telescopic)", attachments);
-        Assert.Contains("×4 / ×6 zoom", attachments);
-        Assert.Contains("zero to 500 m by 100", attachments);
-        Assert.Contains("1,200 aUEC", attachments);
+        var barrels = page.NodeText("#armoury-barrels tbody");
+        Assert.Contains("Tacit Suppressor1", barrels);
+        Assert.Contains("Suppressor", barrels);
+        Assert.Contains("×0.92 damage", barrels);
+        Assert.Contains("×0.66 sound", barrels);
+        Assert.Contains("1,200 aUEC", barrels);
+        Assert.DoesNotContain("EE04", barrels);
 
-        var grenades = page.NodeText("#armoury-grenades tbody");
+        var under = page.NodeText("#armoury-underbarrel tbody");
+        Assert.Contains("FieldLite Flashlight", under);
+        Assert.Contains("nothing the files put a number on", under);
+
+        Assert.Contains("· 1", page.NodeText("#armoury-sights-count"));
+        Assert.Contains("3 of 3 attachments", page.NodeText("#armoury-kit-count"));
+    }
+
+    [Fact]
+    public void Grenades_read_as_what_sets_them_off_what_they_do_and_what_they_leave()
+    {
+        var grenades = KitOpened("grenades").NodeText("#armoury-grenades tbody");
+
         Assert.Contains("MK-4 Frag Grenade", grenades);
         Assert.Contains("5 s fuse", grenades);
         Assert.Contains("120 ballistic", grenades);
         Assert.Contains("4–5.5 m", grenades);
         Assert.Contains("impact", grenades);
         Assert.Contains("10 thermal every 0.4 s within 4.25 m", grenades);
-
-        var knives = page.NodeText("#armoury-knives tbody");
-        Assert.Contains("Sawtooth Combat Knife", knives);
-        Assert.Contains("Sizi Knife", knives);
-        Assert.Contains("220 aUEC", knives);
     }
 
     /// <summary>
@@ -346,20 +377,17 @@ public class ArmouryPageTests
     [Fact]
     public void Every_knife_sharing_one_table_is_said_once_above_the_knives()
     {
-        var note = KitOpened().NodeText("#armoury-knife-note");
+        var page = KitOpened("knives");
 
+        var note = page.NodeText("#armoury-knife-note");
         Assert.Contains("one melee table, KnifeMeleeCombat", note);
         Assert.Contains("30 ballistic a slash, 30 ballistic a stab", note);
         Assert.Contains("nothing the files put a number on", note);
-    }
 
-    [Fact]
-    public void A_flashlight_says_it_changes_nothing_rather_than_showing_a_blank()
-    {
-        var row = KitOpened().Text("__dom.node('#armoury-attachments tbody').children[2].textContent");
-
-        Assert.Contains("FieldLite Flashlight", row);
-        Assert.Contains("nothing the files put a number on", row);
+        var knives = page.NodeText("#armoury-knives tbody");
+        Assert.Contains("Sawtooth Combat Knife", knives);
+        Assert.Contains("Sizi Knife", knives);
+        Assert.Contains("220 aUEC", knives);
     }
 
     /// <summary>The sound cut is a gain and the damage cut a cost; the chip colours say which.</summary>
@@ -367,7 +395,7 @@ public class ArmouryPageTests
     public void An_effect_that_helps_and_one_that_costs_are_told_apart()
     {
         var page = KitOpened();
-        var chips = "__dom.node('#armoury-attachments tbody').children[0].querySelectorAll('.armoury-effect')";
+        var chips = "__dom.node('#armoury-barrels tbody').children[0].querySelectorAll('.armoury-effect')";
 
         Assert.Equal(2, page.Count($"{chips}.length"));
         Assert.True(page.Truth($"{chips}[0].classList.contains('cost')"));
@@ -375,16 +403,17 @@ public class ArmouryPageTests
     }
 
     [Fact]
-    public void The_slot_filter_and_the_search_box_narrow_the_attachments()
+    public void The_size_filter_and_the_search_box_narrow_the_attachment_tables()
     {
         var page = KitOpened();
 
-        page.Do("__dom.node('#armoury-kit-slot').value = 'Sight'; renderArmouryKit();");
-        Assert.Equal(1, page.Count("__dom.node('#armoury-attachments tbody').children.length"));
+        page.Do("__dom.node('#armoury-kit-size').value = '2'; renderArmouryKit();");
+        Assert.Equal(1, page.Count("__dom.node('#armoury-sights tbody').children.length"));
+        Assert.Contains("no barrel", page.NodeText("#armoury-barrels tbody"));
         Assert.Contains("1 of 3 attachments", page.NodeText("#armoury-kit-count"));
 
-        page.Do("__dom.node('#armoury-kit-slot').value = ''; __dom.node('#armoury-search').value = 'scorch'; renderArmouryKit();");
-        Assert.Equal(0, page.Count("__dom.node('#armoury-attachments tbody').children.length"));
+        page.Do("__dom.node('#armoury-kit-size').value = ''; __dom.node('#armoury-search').value = 'scorch'; renderArmouryKit();");
+        Assert.Contains("No sight matches", page.NodeText("#armoury-sights tbody"));
         Assert.Contains("Scorch Plasma Grenade", page.NodeText("#armoury-grenades tbody"));
         Assert.DoesNotContain("MK-4", page.NodeText("#armoury-grenades tbody"));
     }
@@ -392,7 +421,7 @@ public class ArmouryPageTests
     [Fact]
     public void A_knife_opens_to_its_finishes_with_their_prices()
     {
-        var page = KitOpened();
+        var page = KitOpened("knives");
 
         page.Do("__dom.node('#armoury-knives tbody').children[0].click();");
         var detail = page.Text("__dom.node('#armoury-knives tbody').children[1].textContent");
@@ -403,11 +432,11 @@ public class ArmouryPageTests
     }
 
     [Fact]
-    public void A_model_from_before_the_third_tab_still_draws_the_first_two()
+    public void A_model_from_before_the_three_tabs_still_draws_the_first_two()
     {
         var page = new Page();
         page.Serve("/api/armoury", Model);
-        page.Do("await loadArmoury(); showArmouryPane('kit');");
+        page.Do("await loadArmoury(); showArmouryPane('knives');");
 
         Assert.Contains("no knife", page.NodeText("#armoury-knife-note"));
         Assert.Contains("no grenade", page.NodeText("#armoury-grenades tbody"));

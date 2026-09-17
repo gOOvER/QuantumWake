@@ -365,11 +365,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.14
+### 0.14.15
 
-- **Knives, grenades and attachments, on their own Armoury tab.** The three
+- **Knives, grenades and attachments, each on its own Armoury tab.** The three
   the Armoury said it did not read yet, read from the install. Attachments
-  are shown as what they do to the gun they sit on, as the multipliers the
+  are split by slot — sights, barrels, underbarrel — and
+  shown as what they do to the gun they sit on, as the multipliers the
   files write — a Tacit suppressor is ×0.92 damage and ×0.66 sound, a Stark
   compensator ×1.175 damage for ×0.8 rate, a laser pointer ×0.885 spread — with
   a sight's zoom and its second setting, how far it zeroes and by what step;
