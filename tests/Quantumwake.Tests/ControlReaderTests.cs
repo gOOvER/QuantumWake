@@ -107,7 +107,7 @@ public class ControlReaderTests
     {
         ["ui_CGSeatGeneral"] = "Seat - General", ["ui_CCSeatGeneral"] = "SEAT", ["ui_CIEject"] = "Eject",
         ["ui_CIEjectDesc"] = "Leave the seat in a hurry", ["ui_CGSpaceFlightMovement"] = "Vehicles - Movement",
-        ["ui_CCSpaceFlight"] = "FLIGHT", ["ui_CIPitch"] = "Pitch", ["ui_CIAfterburner"] = "Afterburner",
+        ["ui_CCSpaceFlight"] = "FLIGHT", ["ui_CIPitch"] = "Pitch", ["ui_CIAfterburner"] = "Afterburner", ["ui_CILightAmp,P"] = "Light amplification",
     };
 
     [Fact]
@@ -325,8 +325,8 @@ public class ControlReaderTests
         Assert.Equal("y", pitch.Joystick);
         Assert.Equal("flight_move_pitch", pitch.OptionGroup);
 
-        // No string for it: the id stands, rather than a blank or the raw @key.
-        Assert.Equal("ui_CILightAmp", catalogue.Find("seat_general", "v_light_amplification_toggle")!.Label);
+        // A string only under its ",P" platform line resolves; none at all leaves the id, not a blank or the raw @key.
+        Assert.Equal("Light amplification", catalogue.Find("seat_general", "v_light_amplification_toggle")!.Label);
         Assert.Equal("mystery", catalogue.ActionMaps[2].Label);
         Assert.Equal("", catalogue.ActionMaps[2].Category);
         Assert.Equal("v_unlabelled", catalogue.Find("mystery", "v_unlabelled")!.Label);

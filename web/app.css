@@ -5258,3 +5258,47 @@ td.armoury-cost { color: var(--amber); }
 .garage-cargo-ships li.no a { color: var(--amber); }
 .mining-waiting .mining-estimate { flex: 0 0 100%; margin-left: 0; }
 .mining-waiting .time { margin-left: auto; }
+
+/* ---- Controls: the sticks, their pictures and their bindings. ---- */
+.controls-pane { display: none; }
+.controls-pane.active { display: block; }
+.controls-pane[hidden], #controls-tabs[hidden] { display: none; }
+.controls-devices { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.controls-stick { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px; min-width: 150px; border: 1px solid var(--rule); background: var(--panel); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.controls-stick:hover { border-color: var(--cyan-deep); }
+.controls-stick.active { border-color: var(--cyan); border-left: 3px solid var(--cyan); }
+.controls-stick-key { font: 11px var(--mono); color: var(--cyan); letter-spacing: .08em; }
+.controls-stick-name { font-size: 13px; }
+.controls-stick-count { font-size: 11px; }
+.controls-device { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.1fr); gap: 16px; align-items: start; }
+.controls-picture { border: 1px solid var(--rule); background: var(--panel); padding: 10px; }
+.controls-picture svg { width: 100%; height: auto; display: block; }
+.controls-picture .controls-slot { font-weight: 600; }
+.controls-picture .controls-slot.bound { fill: #0b2f3f; }
+.controls-picture .controls-slot.empty { fill: #9aa7b2; opacity: .6; }
+.controls-picture .controls-slot.lit { fill: #ff8a00; }
+.controls-bindings { border: 1px solid var(--rule); background: var(--panel); padding: 12px 14px; min-width: 0; }
+.controls-compare { display: flex; align-items: center; gap: 8px; margin: 6px 0 10px; }
+.controls-control { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+.controls-bound { line-height: 1.4; }
+.controls-unbound td { color: var(--muted); }
+.controls-unknown { color: var(--amber); font-size: 11px; }
+.controls-stick-tag { display: inline-block; padding: 0 5px; border: 1px solid var(--rule-hot); border-radius: 3px; font: 10px var(--mono); color: var(--muted); margin-right: 4px; }
+.controls-axes { margin-top: 10px; }
+.controls-axes h4 { margin: 8px 0 2px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.controls-latest { margin-left: 6px; font: 10px var(--mono); color: var(--cyan); letter-spacing: .08em; text-transform: uppercase; }
+.controls-was { color: var(--amber); font-family: var(--mono); font-size: 12px; }
+.controls-now { color: var(--green); font-family: var(--mono); font-size: 12px; }
+.controls-diff, .controls-export { margin-top: 16px; border: 1px solid var(--rule); background: var(--panel); padding: 12px 14px; }
+.controls-retarget { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 6px 14px; margin: 8px 0; }
+.controls-retarget-row, .controls-assign-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; }
+.controls-assign-row { padding: 6px 0; border-top: 1px solid var(--rule); }
+.controls-assign-row:first-child { border-top: 0; }
+.controls-assign-name { color: var(--text); }
+#controls-pane-pictures .option-block + .option-block { margin-top: 14px; }
+.ghost.small { padding: 2px 8px; font-size: 11px; }
+@media (max-width: 900px) { .controls-device { grid-template-columns: 1fr; } }
+#controls-buttons { table-layout: fixed; width: 100%; }
+#controls-buttons th:first-child { width: 96px; }
+#controls-buttons th:nth-child(3) { width: 84px; }
+#controls-buttons td { overflow-wrap: anywhere; }

@@ -64,7 +64,12 @@ public sealed record ControlCatalogue(
         {
             if (string.IsNullOrWhiteSpace(key)) return "";
             var bare = key.StartsWith('@') ? key[1..] : key;
-            return text.TryGetValue(bare, out var value) && value.Length > 0 ? value : bare;
+            // The strings file keeps a platform variant under "key,P" - the
+            // PC wording - and for a third of the actions only that one:
+            // ui_CIMissileMode has no plain line, ui_CIMissileMode,P does.
+            if (text.TryGetValue(bare, out var value) && value.Length > 0) return value;
+            if (text.TryGetValue(bare + ",P", out var pc) && pc.Length > 0) return pc;
+            return bare;
         }
 
         var maps = new List<ActionMapInfo>();

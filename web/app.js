@@ -289,6 +289,9 @@ function showView(name) {
   }
 
   // Jobs change from the Crafting page and from play, so re-read on entry too.
+  // The keybinding profile is the game's file and changes under the app;
+  // read on entry so the page is never a stale copy of it.
+  if (name === 'controls') loadControls().catch(() => {});
   if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
   if (name === 'checklists') loadChecklists().catch(() => {});
   if (name === 'imports') loadImports().catch(() => {});
@@ -8917,6 +8920,648 @@ async function renderFleetBerths() {
 
 $('#screen-log-refresh')?.addEventListener('click', () => {
   (logPane === 'files' ? loadScanHistory() : renderScreenLog()).catch(() => {});
+});
+
+/* ---------- controls: sticks, bindings, backups ---------- */
+
+/**
+ * The Controls page reads the game's keybinding profile against the
+ * catalogue the archive holds, and draws each stick's bindings on a
+ * picture of it. The picture is a Joystick Diagrams template: an SVG with
+ * a photograph and text placeholders - Button_7, POV_1_U, AXIS_X - where
+ * the controls are, so drawing the bindings is writing the action's name
+ * into the right text node. Nothing else about the picture is understood.
+ */
+let controlsModel = null;
+let controlsPane = 'devices';
+let controlsDevice = null;
+let controlsBackups = [];
+let controlsDiffPick = [];
+let controlsExportSource = null;
+const CONTROLS_PANES = ['devices', 'actions', 'backups', 'pictures'];
+
+try {
+  const kept = localStorage.getItem('qw-controls-pane');
+  if (CONTROLS_PANES.includes(kept)) controlsPane = kept;
+} catch { /* a private window has no memory, which is fine */ }
+
+function showControlsPane(name) {
+  if (!CONTROLS_PANES.includes(name)) name = 'devices';
+  controlsPane = name;
+  try { localStorage.setItem('qw-controls-pane', name); } catch { /* as above */ }
+  for (const pane of CONTROLS_PANES) $(`#controls-pane-${pane}`)?.classList.toggle('active', pane === name);
+  for (const button of $('#controls-tabs')?.querySelectorAll('button') || [])
+    button.classList.toggle('active', button.dataset.pane === name);
+  if (name === 'backups') loadControlsBackups().catch(() => {});
+}
+
+$('#controls-tabs')?.addEventListener('click', (e) => {
+  const button = e.target.closest('button[data-pane]');
+  if (button) showControlsPane(button.dataset.pane);
+});
+
+async function loadControls() {
+  const unready = $('#controls-unready');
+  try {
+    controlsModel = await getJson('/api/controls');
+  } catch {
+    controlsModel = null;
+  }
+
+  const panes = [...CONTROLS_PANES.map((p) => $(`#controls-pane-${p}`)), $('#controls-tabs')];
+  if (!controlsModel) {
+    for (const p of panes) if (p) p.hidden = true;
+    if (unready) { unready.hidden = false; unready.textContent = 'The controls could not be read.'; }
+    return;
+  }
+  if (!controlsModel.ready) {
+    for (const p of panes) if (p) p.hidden = true;
+    if (unready) {
+      unready.hidden = false;
+      unready.textContent = gameDataExcuse() || 'The install has not been read yet - Settings says when the game data is ready.';
+    }
+    return;
+  }
+  if (unready) unready.hidden = true;
+  for (const p of panes) if (p) p.hidden = false;
+
+  const status = $('#controls-status');
+  if (status) {
+    const m = controlsModel;
+    status.textContent = m.profileFound
+      ? `${m.profile.devices.filter((d) => d.type === 'joystick' && d.product).length} sticks and ${m.profile.bindings.filter((b) => b.input.device === 'js' && b.input.kind !== 'none').length} joystick bindings in the game's profile · ${m.catalogue.actions.length} actions the game can bind · ${m.backupCount} version${m.backupCount === 1 ? '' : 's'} kept${m.backups ? `, the latest written ${relative(m.backups.writtenAt)}` : ''}.`
+      : m.problem
+        ? `The game's profile could not be read: ${m.problem}`
+        : 'The game has not written a keybinding profile yet - it appears after the first time the keybinding screen is used.';
+  }
+
+  renderControlsDevices();
+  renderControlsActions();
+  renderControlsPictures();
+  showControlsPane(controlsPane);
+}
+
+/* ---------- the sticks ---------- */
+
+/** The joysticks the profile knows, with a product; empty instances are not sticks. */
+function controlsSticks() {
+  return (controlsModel?.profile?.devices || []).filter((d) => d.type === 'joystick' && d.product);
+}
+
+function renderControlsDevices() {
+  const strip = $('#controls-devices');
+  if (!strip) return;
+  strip.textContent = '';
+  const sticks = controlsSticks();
+  if (!sticks.length) {
+    strip.append(el('p', 'muted', controlsModel?.profileFound
+      ? 'The profile names no joystick. Bind something to a stick in the game and it appears here.'
+      : 'No profile yet.'));
+    $('#controls-device').hidden = true;
+    return;
+  }
+  if (!sticks.some((d) => d.key === controlsDevice)) controlsDevice = sticks[0].key;
+  for (const d of sticks) {
+    const button = el('button', `controls-stick${d.key === controlsDevice ? ' active' : ''}`);
+    button.type = 'button';
+    button.append(el('span', 'controls-stick-key', d.key));
+    button.append(el('span', 'controls-stick-name', d.product));
+    button.append(el('span', 'controls-stick-count muted', `${d.bindings} bound`));
+    button.addEventListener('click', () => { controlsDevice = d.key; renderControlsDevices(); });
+    strip.append(button);
+  }
+  renderControlsDevice();
+}
+
+/**
+ * A template's placeholder for an input, and back: Button_7 is button7,
+ * POV_1_U is hat1_up, AXIS_RZ is rotz. Joystick Diagrams' spelling, since
+ * the pictures are theirs.
+ */
+const CONTROLS_AXIS_NAMES = { x: 'x', y: 'y', z: 'z', rx: 'rotx', ry: 'roty', rz: 'rotz', slider1: 'slider1', slider_1: 'slider1', slider2: 'slider2', slider_2: 'slider2' };
+const CONTROLS_HAT_DIRS = { u: 'up', d: 'down', l: 'left', r: 'right' };
+
+function controlsPlaceholderToControl(text) {
+  const t = String(text || '').trim();
+  let m = /^button_(\d+)$/i.exec(t);
+  if (m) return `button${Number(m[1])}`;
+  m = /^pov_(\d+)_([udlr])$/i.exec(t);
+  if (m) return `hat${Number(m[1])}_${CONTROLS_HAT_DIRS[m[2].toLowerCase()]}`;
+  m = /^axis_([a-z]+_?\d?)$/i.exec(t);
+  if (m) return CONTROLS_AXIS_NAMES[m[1].toLowerCase()] || m[1].toLowerCase();
+  return null;
+}
+
+/** The bindings on one stick, keyed by control, each a list (a button can do two things in two modes). */
+function controlsBindingsOf(deviceKey, bindings) {
+  const map = new Map();
+  for (const b of bindings || []) {
+    if (b.input.deviceKey !== deviceKey || b.input.kind === 'none') continue;
+    // A chord is listed under its final control, with the modifier in the label.
+    const key = b.input.control;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(b);
+  }
+  return map;
+}
+
+function controlsBindingWords(b) {
+  const held = b.input.modifiers?.length ? `${b.input.modifiers.map((m) => controlsShortInput(m)).join(' + ')} + ` : '';
+  return `${held}${b.label}`;
+}
+
+/** "js2 button 5" for a modifier's raw input. */
+function controlsShortInput(raw) {
+  const m = /^js(\d+)_button(\d+)$/i.exec(raw);
+  if (m) return `button ${m[2]}`;
+  return raw.replace(/^[a-z]{2}\d+_/, '');
+}
+
+function controlsModeWord(mode) {
+  return { tap: 'tap', hold: 'hold', press: 'press', double_tap: 'double tap', double_tap_nonblocking: 'double tap', delayed_press: 'long press', delayed_press_long: 'long press', delayed_press_medium: 'long press', delayed_press_quicker: 'long press', tap_quicker: 'tap', press_quicker: 'press', hold_no_retrigger: 'hold', all: '' }[mode] ?? (mode || '');
+}
+
+async function renderControlsDevice() {
+  const box = $('#controls-device');
+  const device = controlsSticks().find((d) => d.key === controlsDevice);
+  if (!box || !device) { if (box) box.hidden = true; return; }
+  box.hidden = false;
+
+  $('#controls-device-title').textContent = `${device.product} · ${device.key}`;
+  const usb = device.usb ? `USB ${device.usb.vendor.toString(16).padStart(4, '0')}:${device.usb.product.toString(16).padStart(4, '0')}` : 'no USB id';
+  $('#controls-device-note').textContent = `${usb} · ${device.guid || ''}`;
+
+  // The layout the game ships for this stick, beside the pilot's, if any.
+  const select = $('#controls-layout');
+  const keep = select?.value;
+  if (select) {
+    select.textContent = '';
+    select.append(new Option(device.layouts?.length ? 'Nothing' : 'The game ships no layout for this stick', ''));
+    for (const file of device.layouts || []) {
+      const layout = controlsModel.layouts.find((l) => l.file === file);
+      select.append(new Option(layout?.name || file, file));
+    }
+    select.disabled = !(device.layouts?.length);
+    select.value = (device.layouts || []).includes(keep) ? keep : '';
+  }
+
+  const bound = controlsBindingsOf(device.key, controlsModel.profile.bindings);
+  let reference = null;
+  if (select?.value) {
+    try {
+      const layout = await getJson(`/api/controls/layouts/${encodeURIComponent(select.value)}`);
+      // The layout names the stick by its own instance; match it by product.
+      const theirs = (layout.devices || []).find((d) => d.guid && device.guid && d.guid.toLowerCase() === device.guid.toLowerCase());
+      if (theirs) reference = controlsBindingsOf(theirs.key, layout.bindings);
+    } catch { reference = null; }
+  }
+  $('#controls-layout-head').hidden = !reference;
+
+  // The table: every control the picture names, then anything bound that
+  // the picture does not name, so nothing bound is ever hidden.
+  const svgControls = await renderControlsPicture(device, bound);
+  const q = ($('#controls-search')?.value || '').trim().toLowerCase();
+  const controls = [...svgControls];
+  for (const key of bound.keys()) if (!controls.includes(key)) controls.push(key);
+  if (reference) for (const key of reference.keys()) if (!controls.includes(key)) controls.push(key);
+  controls.sort(controlsControlOrder);
+
+  const body = $('#controls-buttons tbody');
+  body.textContent = '';
+  let shown = 0;
+  for (const control of controls) {
+    const here = bound.get(control) || [];
+    const there = reference?.get(control) || [];
+    const words = here.map((b) => `${controlsBindingWords(b)} ${b.map}`).join(' ');
+    if (q && !`${control} ${words}`.toLowerCase().includes(q)) continue;
+    shown++;
+    const tr = el('tr', here.length ? null : 'controls-unbound');
+    tr.dataset.control = control;
+    tr.append(el('td', 'controls-control', controlsControlLabel(control)));
+    const to = el('td');
+    if (!here.length) to.append(el('span', 'muted', 'nothing'));
+    for (const b of here) {
+      const line = el('div', 'controls-bound');
+      line.append(el('span', null, controlsBindingWords(b)));
+      line.append(el('span', 'armoury-kind', ` ${b.map}${b.category ? ` · ${b.category}` : ''}`));
+      if (!b.known) line.append(el('span', 'controls-unknown', ' not in this build\'s catalogue'));
+      to.append(line);
+    }
+    tr.append(to);
+    tr.append(el('td', 'num muted', here.map((b) => controlsModeWord(b.activationMode)).filter(Boolean).join(', ')));
+    if (reference) {
+      const ref = el('td', there.length ? null : 'muted');
+      ref.textContent = there.length ? there.map(controlsBindingWords).join(', ') : '—';
+      tr.append(ref);
+    }
+    tr.addEventListener('mouseenter', () => controlsHighlight(control, true));
+    tr.addEventListener('mouseleave', () => controlsHighlight(control, false));
+    body.append(tr);
+  }
+  if (!shown) {
+    const td = el('td', 'muted', q ? 'Nothing on this stick matches.' : 'Nothing is bound to this stick and its picture names no controls.');
+    td.colSpan = 4;
+    const tr = el('tr');
+    tr.append(td);
+    body.append(tr);
+  }
+
+  // Axes and their curves, which the picture rarely shows.
+  const axes = $('#controls-axes');
+  axes.textContent = '';
+  const curveLines = [];
+  for (const [axis, dz] of Object.entries(device.deadzones || {})) curveLines.push(`${axis} dead zone ${Math.round(dz * 1000) / 10}%`);
+  for (const c of device.curves || []) curveLines.push(`${c.option.replace(/^flight_/, '').replace(/_/g, ' ')}${c.exponent != null ? ` curve ${c.exponent}` : ''}${c.inverted ? ' inverted' : ''}`);
+  if (curveLines.length) {
+    axes.append(el('h4', null, 'Axes'));
+    axes.append(el('p', 'muted small', curveLines.join(' · ')));
+  }
+}
+
+function controlsControlOrder(a, b) {
+  const rank = (c) => (/^button/.test(c) ? 0 : /^hat/.test(c) ? 1 : 2);
+  const num = (c) => Number((/(\d+)/.exec(c) || [0, 0])[1]);
+  return rank(a) - rank(b) || num(a) - num(b) || a.localeCompare(b);
+}
+
+function controlsControlLabel(control) {
+  let m = /^button(\d+)$/.exec(control);
+  if (m) return `Button ${m[1]}`;
+  m = /^hat(\d+)_(\w+)$/.exec(control);
+  if (m) return `Hat ${m[1]} ${m[2]}`;
+  return `${control} axis`;
+}
+
+/**
+ * Draws the stick. The SVG is fetched as text and parsed here rather than
+ * shown in an img, because the bindings have to be written into it: every
+ * text node whose content is a placeholder gets the action bound to that
+ * control, or a dash. Returns the controls the picture names.
+ */
+async function renderControlsPicture(device, bound) {
+  const holder = $('#controls-svg');
+  const note = $('#controls-picture-note');
+  holder.textContent = '';
+  if (!device.template) {
+    note.textContent = controlsModel.templates?.enabled
+      ? 'No picture matched to this stick. Pick one under Pictures - the library has 45, and any of them can be assigned.'
+      : 'No picture: the picture library is off. Turn it on under Pictures, or point it at your own.';
+    return [];
+  }
+  note.textContent = `${device.template.name} · ${device.template.maker === 'yours' ? 'your own picture' : 'Joystick Diagrams'}`;
+
+  let text;
+  try {
+    const response = await fetch(`/api/controls/template?key=${encodeURIComponent(device.template.key)}`);
+    if (!response.ok) throw new Error(String(response.status));
+    text = await response.text();
+  } catch {
+    note.textContent = `${device.template.name} · the picture could not be fetched`;
+    return [];
+  }
+
+  return controlsDrawSvg(holder, text, bound, device.product);
+}
+
+/** Writes the bindings into a template's placeholders; the part a test can drive with a string. */
+function controlsDrawSvg(holder, svgText, bound, deviceName) {
+  // The test harness has no parser; the placeholder mapping is tested on its own.
+  if (typeof DOMParser === 'undefined') return [];
+  const parsed = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+  const svg = parsed.documentElement;
+  if (!svg || svg.nodeName.toLowerCase() !== 'svg') return [];
+  const controls = [];
+  const texts = [...svg.querySelectorAll('text, tspan, div, span')].filter((n) => !n.children.length || n.nodeName.toLowerCase() === 'text');
+  for (const node of texts) {
+    if (String(node.textContent).trim() === 'TEMPLATE_NAME') { node.textContent = deviceName || ''; continue; }
+    const control = controlsPlaceholderToControl(node.textContent);
+    if (!control) continue;
+    if (!controls.includes(control)) controls.push(control);
+    const here = bound.get(control) || [];
+    node.setAttribute('data-control', control);
+    node.classList?.add('controls-slot');
+    if (here.length) {
+      // The template's boxes were drawn for a word or two; a long name is
+      // cut with an ellipsis and set smaller, and the table has it whole.
+      const words = here.map(controlsBindingWords).join(' / ');
+      node.textContent = words.length > 22 ? `${words.slice(0, 21).trimEnd()}…` : words;
+      if (words.length > 12) node.setAttribute('font-size', words.length > 18 ? '7px' : '8px');
+      node.classList?.add('bound');
+    } else {
+      node.textContent = '—';
+      node.classList?.add('empty');
+    }
+  }
+  svg.removeAttribute('width');
+  svg.removeAttribute('height');
+  svg.setAttribute('preserveAspectRatio', 'xMidYMin meet');
+  holder.append(document.adoptNode ? document.adoptNode(svg) : svg);
+  return controls;
+}
+
+function controlsHighlight(control, on) {
+  for (const node of $('#controls-svg')?.querySelectorAll?.(`[data-control="${control}"]`) || [])
+    node.classList?.toggle('lit', on);
+}
+
+/* ---------- the actions ---------- */
+
+function renderControlsActions() {
+  const body = $('#controls-actions tbody');
+  if (!body || !controlsModel?.ready) return;
+  const catalogue = controlsModel.catalogue;
+  const profile = controlsModel.profile;
+
+  const categories = [...new Set(catalogue.maps.map((m) => m.category).filter(Boolean))].sort();
+  const select = $('#controls-category');
+  if (select && select.options.length !== categories.length + 1) {
+    const keep = select.value;
+    select.textContent = '';
+    select.append(new Option('Every category', ''));
+    for (const c of categories) select.append(new Option(c, c));
+    select.value = categories.includes(keep) ? keep : '';
+  }
+  const category = select?.value || '';
+  const unboundOnly = $('#controls-unbound')?.checked;
+  const reboundOnly = $('#controls-rebound')?.checked;
+  const q = ($('#controls-search')?.value || '').trim().toLowerCase();
+
+  // What the profile binds, per action, split by device kind.
+  const byAction = new Map();
+  for (const b of profile?.bindings || []) {
+    const key = `${b.actionMap}/${b.action}`;
+    if (!byAction.has(key)) byAction.set(key, []);
+    byAction.get(key).push(b);
+  }
+  const sticks = new Map(controlsSticks().map((d) => [d.key, d]));
+
+  body.textContent = '';
+  let shown = 0;
+  let total = 0;
+  for (const map of catalogue.maps) {
+    if (category && map.category !== category) continue;
+    for (const a of catalogue.actions.filter((x) => x.actionMap === map.name)) {
+      total++;
+      const mine = byAction.get(`${map.name}/${a.name}`) || [];
+      const onSticks = mine.filter((b) => b.input.device === 'js' && b.input.kind !== 'none');
+      const cleared = mine.some((b) => b.input.device === 'js' && b.input.kind === 'none');
+      const keyboard = mine.filter((b) => b.input.device === 'kb').map((b) => b.input.label);
+      if (unboundOnly && onSticks.length) continue;
+      if (reboundOnly && !mine.length) continue;
+      if (q && !`${a.label} ${a.name} ${map.label} ${onSticks.map(controlsBindingWords).join(' ')}`.toLowerCase().includes(q)) continue;
+      shown++;
+      const tr = el('tr', onSticks.length ? null : 'controls-unbound');
+      const name = el('td', null, a.label);
+      if (a.description && a.description !== a.label) name.title = a.description;
+      name.append(el('div', 'armoury-kind', a.name));
+      tr.append(name);
+      tr.append(el('td', 'muted', `${map.label}${map.category ? ` · ${map.category}` : ''}`));
+      const on = el('td');
+      if (!onSticks.length) on.append(el('span', 'muted', cleared ? 'cleared - the default was taken off' : a.joystick ? `default: ${a.joystick}` : 'nothing'));
+      for (const b of onSticks) {
+        const line = el('div', 'controls-bound');
+        const stick = sticks.get(b.input.deviceKey);
+        line.append(el('span', 'controls-stick-tag', stick ? stick.product : b.input.deviceKey));
+        line.append(el('span', null, ` ${b.input.label}`));
+        on.append(line);
+      }
+      tr.append(on);
+      tr.append(el('td', 'muted', keyboard.length ? keyboard.join(', ') : a.keyboard ? `default: ${a.keyboard}` : '—'));
+      tr.append(el('td', 'num muted', controlsModeWord((onSticks[0] || mine[0])?.activationMode || a.activationMode)));
+      body.append(tr);
+    }
+  }
+  $('#controls-actions-count').textContent = `${shown} of ${total} actions${category ? ` in ${category}` : ''}${unboundOnly ? ' on no stick' : ''}${reboundOnly ? ' you rebound' : ''}.`;
+}
+
+for (const id of ['#controls-category', '#controls-unbound', '#controls-rebound'])
+  $(id)?.addEventListener('change', renderControlsActions);
+$('#controls-layout')?.addEventListener('change', () => { renderControlsDevice().catch(() => {}); });
+onInput('#controls-search', () => { renderControlsActions(); renderControlsDevice().catch(() => {}); });
+$('#controls-refresh')?.addEventListener('click', () => { loadControls().catch(() => {}); });
+
+/* ---------- backups ---------- */
+
+async function loadControlsBackups() {
+  try {
+    controlsBackups = await getJson('/api/controls/backups');
+  } catch {
+    controlsBackups = [];
+  }
+  renderControlsBackups();
+}
+
+function renderControlsBackups() {
+  const body = $('#controls-backups tbody');
+  if (!body) return;
+  body.textContent = '';
+  const note = $('#controls-backups-note');
+  if (!controlsBackups.length) {
+    note.textContent = 'Nothing kept yet. The first copy is taken when the game has written a profile.';
+    $('#controls-diff').hidden = true;
+    return;
+  }
+  note.textContent = `${controlsBackups.length} version${controlsBackups.length === 1 ? '' : 's'} kept. Tick two to see what changed between them; tick one to see what changed since.`;
+
+  controlsBackups.forEach((b, i) => {
+    const tr = el('tr');
+    const pick = el('td');
+    const box = el('input');
+    box.type = 'checkbox';
+    box.checked = controlsDiffPick.includes(b.id);
+    box.addEventListener('change', () => {
+      controlsDiffPick = box.checked ? [...controlsDiffPick, b.id].slice(-2) : controlsDiffPick.filter((x) => x !== b.id);
+      renderControlsBackups();
+      showControlsDiff().catch(() => {});
+    });
+    pick.append(box);
+    tr.append(pick);
+    const when = el('td', null, `${dateOf(b.writtenAt)} ${shortTimeOf(b.writtenAt)}`);
+    if (i === 0) when.append(el('span', 'controls-latest', ' latest'));
+    tr.append(when);
+    tr.append(el('td', 'muted', relative(b.takenAt)));
+    tr.append(el('td', 'num', `${Math.round(b.bytes / 1024)} KB`));
+    const since = el('td', 'muted');
+    const previous = controlsBackups[i + 1];
+    since.textContent = previous ? 'see the diff' : 'first kept';
+    if (previous) {
+      const link = el('button', 'ghost small', 'Since the one before');
+      link.type = 'button';
+      link.addEventListener('click', () => { controlsDiffPick = [previous.id, b.id]; renderControlsBackups(); showControlsDiff().catch(() => {}); });
+      since.textContent = '';
+      since.append(link);
+    }
+    tr.append(since);
+    const act = el('td');
+    const restore = el('button', 'ghost small', 'Export this');
+    restore.type = 'button';
+    restore.title = 'Write this version as a file the game can import';
+    restore.addEventListener('click', () => { controlsExportSource = b.id; renderControlsExport(); });
+    act.append(restore);
+    tr.append(act);
+    body.append(tr);
+  });
+}
+
+$('#controls-keep')?.addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  button.disabled = true;
+  try {
+    const kept = await getJson2('/api/controls/backups');
+    $('#controls-backups-note').textContent = kept.taken ? 'Kept.' : 'Already kept: the profile has not changed since the latest copy.';
+    await loadControlsBackups();
+  } catch {
+    $('#controls-backups-note').textContent = 'Could not keep a copy.';
+  } finally {
+    button.disabled = false;
+  }
+});
+
+async function showControlsDiff() {
+  const box = $('#controls-diff');
+  if (!controlsDiffPick.length) { box.hidden = true; return; }
+  const [a, b] = controlsDiffPick.length === 2
+    ? [...controlsDiffPick].sort()
+    : [controlsDiffPick[0], 'live'];
+  let changes;
+  try {
+    changes = await getJson(`/api/controls/backups/${encodeURIComponent(a)}/diff/${encodeURIComponent(b)}`);
+  } catch {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  const name = (id) => id === 'live' ? 'the profile as it is now' : `the copy of ${dateOf(controlsBackups.find((x) => x.id === id)?.writtenAt || Date.now())}`;
+  $('#controls-diff-title').textContent = `From ${name(a)} to ${name(b)}`;
+  $('#controls-diff-count').textContent = changes.length ? `${changes.length} action${changes.length === 1 ? '' : 's'} changed` : 'no binding changed';
+  const body = $('#controls-diff-table tbody');
+  body.textContent = '';
+  for (const c of changes) {
+    const tr = el('tr');
+    const action = el('td', null, c.label);
+    action.append(el('div', 'armoury-kind', c.map));
+    tr.append(action);
+    tr.append(el('td', c.before.length ? 'controls-was' : 'muted', c.before.length ? c.before.join(', ') : 'nothing'));
+    tr.append(el('td', c.after.length ? 'controls-now' : 'muted', c.after.length ? c.after.join(', ') : 'nothing'));
+    body.append(tr);
+  }
+}
+
+function renderControlsExport() {
+  const box = $('#controls-export');
+  if (!box) return;
+  box.hidden = false;
+  const source = controlsExportSource || 'live';
+  $('#controls-export-source').textContent = source === 'live' ? 'from the profile as it is now' : `from the copy ${source}`;
+  $('#controls-export-result').textContent = '';
+  $('#controls-export-install').hidden = true;
+
+  // One select per stick: which number it is now. Left alone, nothing moves.
+  const retarget = $('#controls-retarget');
+  retarget.textContent = '';
+  const sticks = controlsSticks();
+  for (const d of sticks) {
+    const row = el('label', 'controls-retarget-row');
+    row.append(el('span', null, `${d.product} was ${d.key}, now`));
+    const select = el('select', 'select');
+    select.dataset.from = String(d.instance);
+    for (let i = 1; i <= Math.max(8, sticks.length); i++) select.append(new Option(`js${i}`, String(i)));
+    select.value = String(d.instance);
+    row.append(select);
+    retarget.append(row);
+  }
+}
+
+async function controlsWriteExport(install) {
+  const name = $('#controls-export-name')?.value || 'quantumwake';
+  const retarget = {};
+  for (const select of $('#controls-retarget')?.querySelectorAll('select') || [])
+    if (select.value !== select.dataset.from) retarget[select.dataset.from] = Number(select.value);
+  const result = $('#controls-export-result');
+  try {
+    const response = await fetch('/api/controls/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: controlsExportSource || 'live', name, retarget, install }),
+    });
+    if (!response.ok) throw new Error(String(response.status));
+    const written = await response.json();
+    result.textContent = written.installed
+      ? `In the game's folder as ${written.mappings}. In the game: Options → Keybindings → import "${written.name}", or at the console: ${written.command}.`
+      : `Written to ${written.path}. Not yet where the game reads: press the second button to copy it there, or copy it yourself.`;
+    $('#controls-export-install').hidden = written.installed;
+  } catch (err) {
+    result.textContent = `The export failed: ${err.message}`;
+  }
+}
+
+$('#controls-export-write')?.addEventListener('click', () => controlsWriteExport(false));
+$('#controls-export-install')?.addEventListener('click', () => controlsWriteExport(true));
+
+/* ---------- pictures ---------- */
+
+function renderControlsPictures() {
+  const t = controlsModel?.templates;
+  if (!t) return;
+  $('#controls-templates-status').textContent = t.enabled
+    ? `on · ${t.available.filter((x) => x.maker !== 'yours').length} in the library${t.fetchedAt ? `, listed ${relative(t.fetchedAt)}` : ''}`
+    : t.available.length ? 'off · what was fetched is kept' : 'off';
+  $('#controls-templates-enable').hidden = t.enabled;
+  $('#controls-templates-disable').hidden = !t.enabled;
+  const folder = $('#controls-folder');
+  if (folder && document.activeElement !== folder) folder.value = t.folder || '';
+  $('#controls-folder-note').textContent = t.folder
+    ? `${t.available.filter((x) => x.maker === 'yours').length} SVG${t.available.filter((x) => x.maker === 'yours').length === 1 ? '' : 's'} in ${t.folder}`
+    : '';
+
+  const box = $('#controls-assign');
+  box.textContent = '';
+  const sticks = controlsSticks();
+  if (!sticks.length) { box.append(el('p', 'muted', 'No stick in the profile to give a picture to.')); return; }
+  if (!t.available.length) { box.append(el('p', 'muted', 'No pictures to choose from yet.')); return; }
+  for (const d of sticks) {
+    const row = el('label', 'controls-assign-row');
+    row.append(el('span', 'controls-assign-name', `${d.product} (${d.key})`));
+    const select = el('select', 'select');
+    select.append(new Option(d.template && !t.assignments[d.guid] ? `Matched: ${d.template.name}` : 'None', ''));
+    let maker = null;
+    let group = null;
+    for (const x of t.available) {
+      if (x.maker !== maker) { maker = x.maker; group = el('optgroup'); group.label = maker || 'Library'; select.append(group); }
+      group.append(new Option(x.name, x.key));
+    }
+    select.value = t.assignments[d.guid] || '';
+    select.addEventListener('change', async () => {
+      await fetch('/api/controls/templates/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guid: d.guid, key: select.value }) });
+      await loadControls();
+    });
+    row.append(select);
+    box.append(row);
+  }
+}
+
+$('#controls-templates-enable')?.addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  button.disabled = true;
+  try {
+    await getJson2('/api/controls/templates/enable');
+    await loadControls();
+  } catch (err) {
+    $('#controls-templates-status').textContent = `could not fetch the library: ${err.message}`;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$('#controls-templates-disable')?.addEventListener('click', async () => {
+  await getJson2('/api/controls/templates/disable');
+  await loadControls();
+});
+
+$('#controls-folder-save')?.addEventListener('click', async () => {
+  const response = await fetch('/api/controls/templates/folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: $('#controls-folder').value }) });
+  if (!response.ok) { $('#controls-folder-note').textContent = 'No such folder.'; return; }
+  await loadControls();
 });
 
 /* ---------- the Log page's two panes ---------- */

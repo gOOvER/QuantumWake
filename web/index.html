@@ -84,6 +84,7 @@
       <div class="group-menu">
         <button data-view="settings">General</button>
         <button data-view="overlay">Overlay</button>
+        <button data-view="controls">Controls</button>
         <button data-view="labels">Item labels</button>
         <button data-view="imports">Shared files</button>
         <!-- An action, not a view. The strip's handler binds only
@@ -2588,6 +2589,179 @@
     </div>
   </section>
 
+
+  <!-- CONTROLS -->
+  <section id="view-controls" class="view">
+    <div class="section-bar">
+      <div>
+        <h2>Controls</h2>
+        <p class="muted caption">Your sticks and what is bound to them, read from the game's own keybinding
+          profile; every version of it kept as the game rewrites it.</p>
+      </div>
+      <div class="controls">
+        <input type="search" id="controls-search" class="search" placeholder="Search actions and buttons…"
+               autocomplete="off" spellcheck="false">
+        <button class="ghost" id="controls-refresh">Refresh</button>
+      </div>
+    </div>
+    <p class="muted" id="controls-unready" hidden></p>
+    <p class="muted small" id="controls-status"></p>
+
+    <nav class="subtabs" id="controls-tabs" aria-label="Controls pages">
+      <button type="button" data-pane="devices" class="active">Sticks</button>
+      <button type="button" data-pane="actions">Actions</button>
+      <button type="button" data-pane="backups">Backups</button>
+      <button type="button" data-pane="pictures">Pictures</button>
+    </nav>
+
+    <!-- One stick at a time: its picture with the bindings written on, and
+         the same as a table beside it. -->
+    <div class="controls-pane active" id="controls-pane-devices">
+      <div class="controls-devices" id="controls-devices"></div>
+      <div class="controls-device" id="controls-device" hidden>
+        <div class="controls-picture" id="controls-picture">
+          <p class="muted small" id="controls-picture-note"></p>
+          <div id="controls-svg"></div>
+        </div>
+        <div class="controls-bindings">
+          <div class="option-head">
+            <h3 id="controls-device-title"></h3>
+            <span class="muted" id="controls-device-note"></span>
+          </div>
+          <div class="controls-compare">
+            <label class="muted" for="controls-layout">Beside it</label>
+            <select id="controls-layout" class="select" title="One of the layouts the game ships for this stick"></select>
+          </div>
+          <div class="table-wrap">
+            <table id="controls-buttons">
+              <thead><tr>
+                <th>Control</th>
+                <th>Bound to</th>
+                <th class="num" title="How the action fires: tap, hold, double tap…">Mode</th>
+                <th id="controls-layout-head" hidden>The game's layout</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="controls-axes" id="controls-axes"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- The other way round: every action the game can bind, with what is
+         on it, by the keybinding screen's own categories. -->
+    <div class="controls-pane" id="controls-pane-actions">
+      <div class="controls armoury-filters">
+        <select id="controls-category" class="select" title="The keybinding screen's tab"></select>
+        <label class="toggle"><input type="checkbox" id="controls-unbound"> Only actions on no stick</label>
+        <label class="toggle"><input type="checkbox" id="controls-rebound"> Only actions you rebound</label>
+      </div>
+      <p class="muted small" id="controls-actions-count"></p>
+      <div class="table-wrap">
+        <table id="controls-actions">
+          <thead><tr>
+            <th>Action</th>
+            <th>Group</th>
+            <th>On your sticks</th>
+            <th>Keyboard</th>
+            <th class="num" title="How the action fires">Mode</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Every version kept, what changed between two, and the way back. -->
+    <div class="controls-pane" id="controls-pane-backups">
+      <p class="muted small">Each time the game rewrites its profile a copy is kept here, so a slip in the keybinding
+        screen or a stick that came back as a different number can be undone. Nothing is written under the game
+        unless you press the second button: the export lands in Quantum Wake's folder first, and only
+        <em>Put it where the game imports from</em> copies it into <code>controls\mappings</code>, where the
+        keybinding screen's import and <code>pp_rebindkeys</code> read.</p>
+      <div class="controls armoury-filters">
+        <button class="ghost" id="controls-keep">Keep a copy now</button>
+        <span class="muted small" id="controls-backups-note"></span>
+      </div>
+      <div class="table-wrap">
+        <table id="controls-backups">
+          <thead><tr>
+            <th></th>
+            <th>Written by the game</th>
+            <th>Kept</th>
+            <th class="num">Size</th>
+            <th>Changes since</th>
+            <th></th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="controls-diff" id="controls-diff" hidden>
+        <div class="option-head">
+          <h3 id="controls-diff-title"></h3>
+          <span class="muted" id="controls-diff-count"></span>
+        </div>
+        <table id="controls-diff-table">
+          <thead><tr><th>Action</th><th>Was</th><th>Now</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="controls-export" id="controls-export" hidden>
+        <div class="option-head">
+          <h3>Export for the game</h3>
+          <span class="muted" id="controls-export-source"></span>
+        </div>
+        <p class="muted small">A file the game imports. If your sticks came back under different numbers, say which is
+          which below and every binding follows its stick.</p>
+        <div class="controls-retarget" id="controls-retarget"></div>
+        <div class="controls armoury-filters">
+          <label class="muted" for="controls-export-name">Name</label>
+          <input type="text" id="controls-export-name" class="search" value="quantumwake" spellcheck="false">
+          <button class="ghost" id="controls-export-write">Write the export</button>
+          <button class="ghost" id="controls-export-install" hidden>Put it where the game imports from</button>
+        </div>
+        <p class="muted small" id="controls-export-result"></p>
+      </div>
+    </div>
+
+    <!-- Where the pictures come from, and which stick wears which. -->
+    <div class="controls-pane" id="controls-pane-pictures">
+      <div class="option-block">
+        <div class="option-head">
+          <h3>Pictures of sticks</h3>
+          <span class="muted" id="controls-templates-status"></span>
+        </div>
+        <p class="muted">The pictures are <a href="https://github.com/Rexeh/joystick-diagrams" target="_blank" rel="noopener">Joystick
+          Diagrams</a>' template library &mdash; 45 sticks, throttles and panels, each a photograph with the
+          buttons named on it, shared by that project under the GPL. Off until you turn it on: nothing is
+          fetched from the internet until then, and each picture is fetched once and kept.</p>
+        <div class="controls armoury-filters">
+          <button class="ghost" id="controls-templates-enable">Fetch the library</button>
+          <button class="ghost" id="controls-templates-disable" hidden>Stop fetching</button>
+        </div>
+      </div>
+      <div class="option-block">
+        <div class="option-head">
+          <h3>Your own pictures</h3>
+        </div>
+        <p class="muted">A folder of SVGs that follow the same convention &mdash; the community templates from the
+          project's Discord, or one you drew over a photo of your stick with <code>Button_1</code>,
+          <code>POV_1_U</code> and <code>AXIS_X</code> written where they are.</p>
+        <div class="controls armoury-filters">
+          <input type="text" id="controls-folder" class="search" placeholder="C:\Users\you\Documents\stick-pictures" spellcheck="false">
+          <button class="ghost" id="controls-folder-save">Use this folder</button>
+        </div>
+        <p class="muted small" id="controls-folder-note"></p>
+      </div>
+      <div class="option-block">
+        <div class="option-head">
+          <h3>Which picture for which stick</h3>
+        </div>
+        <p class="muted">Matched by the stick's USB ids where the library has a picture for it; pick one yourself
+          for anything else, or a different one.</p>
+        <div id="controls-assign"></div>
+      </div>
+    </div>
+  </section>
 
   <!-- OVERLAY -->
   <section id="view-overlay" class="view">
