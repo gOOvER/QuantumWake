@@ -97,7 +97,7 @@ holds zero, which the page prints as a dash rather than a number.
 
 ## Knives, grenades, attachments
 
-The three the first read left out, on their own Armoury tabs since 0.14.16.
+The three the first read left out, on their own Armoury tabs since 0.14.17.
 Read on this install 2026-09-17; `--armoury` prints all three under the guns.
 
 **Every knife is the same knife.** A knife's `SMeleeWeaponComponentParams`
@@ -262,12 +262,32 @@ app's consent to talk to the network. Probed 2026-09-16: the P4-AR is a
 core a 522×612 render (533 KB). Every finish and every colour has its own
 uuid, so the chips under a row swap the picture to that one.
 
+**Attachments are the exception, and come from the install.** Probed
+2026-09-17 for anything better than the glyph:
+`Data\UI\Textures\PlayerUI\WeaponAttachment\Icons\` holds 40 DXT5 icons at
+512 square, named by class - every plain `arma_barrel_*` (supp, comp, stab,
+flhd, sizes 1-3), the Behring/NV-TAC/Gemini/Klaus & Werner/Kastak/lbco
+sights, four underbarrel pieces and the multi-tool heads - so 35 of the 73
+plain attachments have one and their finishes wear it
+(`WeaponAttachment.Icon`, stamped from the archive listing in the load pass
+by `GameArmoury.StampIcons`). The Vera/Torrent/Stark/Escalate/Quell/Stoic
+variants have no file of their own and get none rather than a neighbour's.
+Decoded and cropped by the ship-icon path, cached under `attachment-icons/`,
+served first by the same endpoint and without the community dataset, since
+it is the pilot's own file. The rest of the archive was looked at so nobody
+looks again: `Visor_HUD\assets\TIF\` has 18 renders under old class names
+(`behr_rifle_ballistic_01`, `behr_frag_grenade_01`; seven guns in all),
+`mobiGlas\assets\TIF\CubbyBlast_items\` 17 hand-named shop adverts, and
+there is no picture of a knife anywhere - the inventory draws its thumbnails
+from the models at run time. Guns, armour, knives and grenades stay the
+wiki's.
+
 ## Storage, API
 
 Read in the same pass as the rest of the game data (`GameArmoury.Read`,
 cached in `commodities.json` under `Armoury`; `CacheVersion` moved).
 `GET /api/armoury` returns the plain guns with their modes and derived
-figures, their finishes with prices, the armour rows, and since 0.14.16 the
+figures, their finishes with prices, the armour rows, and since 0.14.17 the
 plain knives (`melee`, with `meleeConfigs` counting the tables they read
 from), grenades (`throwables`) and attachments, each with its finishes and
 the cheapest price across them. Nothing stored in a session changes: no

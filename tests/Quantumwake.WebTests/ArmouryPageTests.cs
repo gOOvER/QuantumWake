@@ -282,8 +282,8 @@ public class ArmouryPageTests
         "attachments":[
           {"class":"arma_barrel_supp_s1","uuid":"ffff","name":"Tacit Suppressor1","kind":"Barrel","family":"Suppressor","size":1,"manufacturer":"ArmaMod","mass":0.1,
            "effect":{"damage":0.92,"fireRate":1,"spread":1,"recoilStrength":1,"recoilTime":1,"sound":0.66,"heat":1,"ammoCost":1,"chargeTime":1,"projectileSpeed":1,"pellets":0,"burstShots":0,"zoom":0,"secondZoom":0,"zoomTime":1,"zeroingMax":0,"zeroingStep":0},
-           "unchanged":false,"market":{"price":1200,"shops":[{"terminal":"Guns Rod's Fuel","place":"Rod's Fuel & Supplies","system":"Pyro","price":1200}]},
-           "finishes":[{"class":"arma_barrel_supp_s1_firerats01","uuid":"gggg","name":"Tacit \"Scorched\" Suppressor1","market":{"price":null,"shops":[]}}]},
+           "unchanged":false,"pictured":true,"market":{"price":1200,"shops":[{"terminal":"Guns Rod's Fuel","place":"Rod's Fuel & Supplies","system":"Pyro","price":1200}]},
+           "finishes":[{"class":"arma_barrel_supp_s1_firerats01","uuid":"gggg","name":"Tacit \"Scorched\" Suppressor1","pictured":true,"market":{"price":null,"shops":[]}}]},
           {"class":"behr_optics_tsco_x4_s2","uuid":"hhhh","name":"EE04 (4x Telescopic)","kind":"Sight","family":"Telescopic","size":2,"manufacturer":"Behring","mass":0.1,
            "effect":{"damage":1,"fireRate":1,"spread":1,"recoilStrength":1,"recoilTime":1,"sound":1,"heat":1,"ammoCost":1,"chargeTime":1,"projectileSpeed":1,"pellets":0,"burstShots":0,"zoom":4,"secondZoom":6,"zoomTime":1.25,"zeroingMax":500,"zeroingStep":100},
            "unchanged":false,"market":{"price":null,"shops":[]},"finishes":[]},
@@ -474,6 +474,27 @@ public class ArmouryPageTests
         // One terminal only: nothing to hover for, and no underline promising it.
         var lone = "__dom.node('#armoury-knives tbody').children[1].children[7]";
         Assert.False(page.Truth($"{lone}.classList.contains('armoury-more')"));
+    }
+
+    /// <summary>
+    /// The install's own icon needs no consent: with the community dataset
+    /// off, an attachment that has one still shows it, and a knife, whose
+    /// picture would be the wiki's, still says what it needs.
+    /// </summary>
+    [Fact]
+    public void An_installs_own_icon_shows_without_the_community_dataset()
+    {
+        var page = new Page();
+        page.Serve("/api/armoury", WithKit(Model).Replace("\"picturesKnown\":true", "\"picturesKnown\":false"));
+        page.Do("await loadArmoury(); showArmouryPane('attachments'); __dom.node('#armoury-barrels tbody').children[0].click();");
+        var barrel = "__dom.node('#armoury-barrels tbody').children[1]";
+        Assert.Equal("/api/armoury/picture/ffff", page.Text($"{barrel}.querySelectorAll('.armoury-picture')[0].querySelectorAll('img')[0].src"));
+        Assert.Contains("game's own icon", page.Text($"{barrel}.querySelectorAll('.armoury-picture')[0].textContent"));
+
+        page.Do("showArmouryPane('knives'); __dom.node('#armoury-knives tbody').children[0].click();");
+        var knife = "__dom.node('#armoury-knives tbody').children[1]";
+        Assert.Equal(0, page.Count($"{knife}.querySelectorAll('.armoury-picture img').length"));
+        Assert.Contains("community dataset is on (Settings)", page.Text($"{knife}.querySelectorAll('.armoury-picture')[0].textContent"));
     }
 
     [Fact]

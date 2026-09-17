@@ -1365,7 +1365,7 @@ public static class ServerHost
             {
                 var finishes = all.Where(x => baseOf(x) == cls).OrderBy(nameOf, StringComparer.OrdinalIgnoreCase).ToList();
                 var market = EveryShop(new[] { cls }.Concat(finishes.Where(f => nameOf(f) == name).Select(classOf)));
-                return (market, finishes.Select(f => (object)new { @class = classOf(f), uuid = lib.GameCommodities.ItemUuid(classOf(f)), name = nameOf(f), market = Market(classOf(f)) }).ToList());
+                return (market, finishes.Select(f => (object)new { @class = classOf(f), uuid = lib.GameCommodities.ItemUuid(classOf(f)), name = nameOf(f), pictured = f is WeaponAttachment { Icon: not null }, market = Market(classOf(f)) }).ToList());
             }
 
             var melee = armoury.Melee.Where(k => k.BaseClass is null).Select(k =>
@@ -1383,7 +1383,7 @@ public static class ServerHost
             var attachments = armoury.Attachments.Where(a => a.BaseClass is null).Select(a =>
             {
                 var (market, finishes) = Family(a.Class, a.Name, armoury.Attachments, x => x.Class, x => x.Name, x => x.BaseClass);
-                return new { a.Class, uuid = lib.GameCommodities.ItemUuid(a.Class), a.Name, a.Kind, a.Family, a.Size, a.Manufacturer, a.Mass, a.Effect, unchanged = a.Effect.IsNone, market, finishes };
+                return new { a.Class, uuid = lib.GameCommodities.ItemUuid(a.Class), a.Name, a.Kind, a.Family, a.Size, a.Manufacturer, a.Mass, a.Effect, unchanged = a.Effect.IsNone, pictured = a.Icon is not null, market, finishes };
             }).ToList();
 
             return Results.Ok(new
@@ -1490,11 +1490,23 @@ public static class ServerHost
         // up arbitrary ids, and only once the community dataset is on.
         app.MapGet("/api/armoury/picture/{uuid}", async (string uuid, LogLibrary lib, PartPictures pictures, IHttpClientFactory httpFactory, HttpContext ctx) =>
         {
+            var armoury = lib.GameCommodities.Armoury;
+            bool Is(string cls) => string.Equals(lib.GameCommodities.ItemUuid(cls), uuid, StringComparison.OrdinalIgnoreCase);
+
+            // The install's own picture first: 40 attachments have one, and it
+            // needs no network and no consent. Everything else is the wiki's,
+            // which is asked only once the community dataset is on.
+            if (armoury.Attachments.FirstOrDefault(a => a.Icon is not null && Is(a.Class)) is { Icon: { } icon })
+                return ArchivePicture(icon, "attachment-icons");
+
             if (!lib.Community.IsEnabled) return Results.NotFound();
 
-            var armoury = lib.GameCommodities.Armoury;
-            var name = armoury.Weapons.Select(w => (w.Class, w.Name)).Concat(armoury.Armour.Select(a => (a.Class, a.Name)))
-                .Where(i => string.Equals(lib.GameCommodities.ItemUuid(i.Class), uuid, StringComparison.OrdinalIgnoreCase))
+            var name = armoury.Weapons.Select(w => (w.Class, w.Name))
+                .Concat(armoury.Armour.Select(a => (a.Class, a.Name)))
+                .Concat(armoury.Melee.Select(k => (k.Class, k.Name)))
+                .Concat(armoury.Throwables.Select(g => (g.Class, g.Name)))
+                .Concat(armoury.Attachments.Select(a => (a.Class, a.Name)))
+                .Where(i => Is(i.Class))
                 .Select(i => i.Name)
                 .FirstOrDefault();
             if (name is null) return Results.NotFound();

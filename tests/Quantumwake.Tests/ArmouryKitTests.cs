@@ -47,6 +47,33 @@ public class ArmouryKitTests
     }
 
     /// <summary>
+    /// The archive names an attachment's icon by class; a finish wears its
+    /// plain item's, and a variant with no file of its own gets none rather
+    /// than a neighbour's.
+    /// </summary>
+    [Fact]
+    public void An_attachment_wears_the_archives_icon_for_its_class_or_its_plain_items()
+    {
+        WeaponAttachment Piece(string cls, string? baseClass = null) =>
+            new(cls, cls, "Barrel", "Suppressor", 1, "ArmaMod", 0.1, AttachmentEffect.None, baseClass);
+        var data = new GameArmouryData([], [], [], [], [
+            Piece("arma_barrel_supp_s1"),
+            Piece("arma_barrel_supp_s1_firerats01", "arma_barrel_supp_s1"),
+            Piece("arma_barrel_supp_s1_02"),
+        ]);
+
+        GameArmoury.StampIcons(data, [
+            GameArmoury.AttachmentIconFolder + "arma_barrel_supp_s1.dds",
+            GameArmoury.AttachmentIconFolder + "nvtc_optics_rdot_x1_s1.dds",
+            GameArmoury.AttachmentIconFolder[..^6] + "weapon_attachment_bckg.dds",
+        ]);
+
+        Assert.Equal(GameArmoury.AttachmentIconFolder + "arma_barrel_supp_s1.dds", data.Attachments[0].Icon);
+        Assert.Equal(GameArmoury.AttachmentIconFolder + "arma_barrel_supp_s1.dds", data.Attachments[1].Icon);
+        Assert.Null(data.Attachments[2].Icon);
+    }
+
+    /// <summary>
     /// A cache written by a build before the third tab deserialises with the
     /// three lists missing; they must come back empty, not null, or every
     /// caller has to know the history.

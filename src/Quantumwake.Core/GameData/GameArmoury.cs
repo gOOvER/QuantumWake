@@ -268,6 +268,13 @@ public sealed record AttachmentEffect(
 /// <param name="Kind">Sight, Barrel or Underbarrel - the slot it goes in.</param>
 /// <param name="Family">What it is within the slot: Suppressor, Compensator, Stabilizer, Telescopic, Holographic, Reflex, Monitor, Laser pointer, Flashlight.</param>
 /// <param name="Size">The slot size it takes, 1 to 3.</param>
+/// <param name="Icon">
+/// The game's own picture of it, as an archive entry under
+/// <c>Data\UI\Textures\PlayerUI\WeaponAttachment\Icons\</c>, or null. The
+/// folder holds 40 on this install, named by class: the plain barrels and
+/// most sights, none of the Vera/Torrent/Stark/Escalate variants. A finish
+/// wears its plain item's.
+/// </param>
 public sealed record WeaponAttachment(
     string Class,
     string Name,
@@ -277,7 +284,8 @@ public sealed record WeaponAttachment(
     string Manufacturer,
     double Mass,
     AttachmentEffect Effect,
-    string? BaseClass = null);
+    string? BaseClass = null,
+    string? Icon = null);
 
 /// <summary>Everything the install says about what a pilot wears and carries.</summary>
 public sealed record GameArmouryData(
@@ -438,6 +446,29 @@ public static class GameArmoury
         data.Attachments.Sort((a, b) => string.Compare(a.Kind, b.Kind, StringComparison.OrdinalIgnoreCase) is var k && k != 0 ? k
             : a.Size != b.Size ? a.Size.CompareTo(b.Size) : string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
         return data;
+    }
+
+    /// <summary>Where the game keeps an attachment's picture; the class name is the file name.</summary>
+    public const string AttachmentIconFolder = @"Data\UI\Textures\PlayerUI\WeaponAttachment\Icons\";
+
+    /// <summary>
+    /// Stamps each attachment with the archive's picture of it, given the
+    /// entries the folder holds. Read separately from <see cref="Read"/>
+    /// because the DataCore does not name these files; only the archive's
+    /// own listing says which exist.
+    /// </summary>
+    public static void StampIcons(GameArmouryData data, IEnumerable<string> entries)
+    {
+        var have = entries
+            .Where(e => e.StartsWith(AttachmentIconFolder, StringComparison.OrdinalIgnoreCase) && e.EndsWith(".dds", StringComparison.OrdinalIgnoreCase))
+            .Select(e => Path.GetFileNameWithoutExtension(e))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < data.Attachments.Count; i++)
+        {
+            var a = data.Attachments[i];
+            var cls = have.Contains(a.Class) ? a.Class : a.BaseClass is not null && have.Contains(a.BaseClass) ? a.BaseClass : null;
+            if (cls is not null) data.Attachments[i] = a with { Icon = AttachmentIconFolder + cls + ".dds" };
+        }
     }
 
     /// <summary>

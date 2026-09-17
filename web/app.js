@@ -5662,7 +5662,8 @@ function armouryKitDetail(item, noun, facts) {
   const inner = el('div', 'armoury-detail');
   inner.append(el('div', 'panel-title', item.name));
   inner.append(el('div', 'panel-sub', [item.family, item.kind, item.manufacturer || 'maker unnamed', item.class].filter(Boolean).join(' · ')));
-  let picture = armouryPicture(item.uuid, item.name);
+  let picture = armouryPicture(item.uuid, item.name, item.pictured);
+  if (item.pictured) picture.append(el('span', 'muted small', "The game's own icon of it."));
   inner.append(picture);
 
   inner.append(el('h4', null, 'From the files'));
@@ -5686,7 +5687,7 @@ function armouryKitDetail(item, noun, facts) {
     for (const f of item.finishes) {
       const chip = el('span', 'armoury-finish clickable', f.name);
       chip.title = 'Show this finish';
-      chip.addEventListener('click', () => { picture = armouryShowPicture(picture, f.uuid, f.name); });
+      chip.addEventListener('click', () => { picture = armouryShowPicture(picture, f.uuid, f.name, f.pictured); });
       chip.append(el('span', 'muted', f.market?.price ? `${fmtInt(f.market.price)} aUEC · ${armouryWhere(f.market)}` : 'no terminal recorded'));
       chips.append(chip);
     }
@@ -5968,10 +5969,15 @@ function armouryMode(m) {
  * none. The game files hold no photograph of a gun or a helmet - a 64-pixel
  * loadout glyph and one generic icon per armour class are all there is.
  */
-function armouryPicture(uuid, name) {
+/**
+ * The item's picture. The install's own where it has one - the attachment
+ * icons, which need no network and no consent - and the wiki's otherwise,
+ * which is asked only once the community dataset is on.
+ */
+function armouryPicture(uuid, name, fromInstall) {
   const frame = el('div', 'armoury-picture');
   const note = el('span', 'muted small');
-  if (!armouryModel?.picturesKnown) {
+  if (!armouryModel?.picturesKnown && !fromInstall) {
     note.textContent = 'Pictures come from the Star Citizen Wiki once the community dataset is on (Settings).';
     frame.append(note);
     return frame;
@@ -5995,8 +6001,8 @@ function armouryPicture(uuid, name) {
 }
 
 /** Points the expansion's picture at another colour or finish of the same thing. */
-function armouryShowPicture(frame, uuid, name) {
-  const fresh = armouryPicture(uuid, name);
+function armouryShowPicture(frame, uuid, name, fromInstall) {
+  const fresh = armouryPicture(uuid, name, fromInstall);
   frame.replaceWith(fresh);
   return fresh;
 }

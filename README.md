@@ -365,7 +365,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.16
+### 0.14.17
 
 - **Knives, grenades and attachments, each on its own Armoury tab.** The three
   the Armoury said it did not read yet, read from the install. Attachments
@@ -384,7 +384,10 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   cache is re-read once on first start. Hover the *Cheapest at* cell for
   the other terminals, or click the row for the wiki's picture, every
   figure the files give it, and every terminal UEX records selling it —
-  guns get the full terminal list in their opened row too.
+  guns get the full terminal list in their opened row too. An attachment's
+  picture is the game's own icon where the install has one (35 of the 73),
+  shown without the community dataset; the rest, and every gun, knife and
+  grenade, stay the wiki's.
 
 - **Mining names the job in front of you.** Its header now changes with the
   active workspace: *Prospecting*, *Mining fit* or *Haul & refinery*. The
