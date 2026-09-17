@@ -76,6 +76,7 @@
         <button data-view="stash">Stash</button>
         <button data-view="loot">Loot</button>
         <button data-view="garage">Garage</button>
+        <button data-view="armoury">Armoury</button>
       </div>
     </div>
     <div class="tab-group">
@@ -1765,6 +1766,7 @@
       <button type="button" data-pane="go" class="active"><span>01</span> Where to go</button>
       <button type="button" data-pane="crack"><span>02</span> Mining fit</button>
       <button type="button" data-pane="runs"><span>03</span> Haul &amp; refinery</button>
+      <button type="button" data-pane="salvage"><span>04</span> Salvage</button>
     </nav>
 
     <div class="mining-pane active" id="mining-pane-go">
@@ -2029,6 +2031,88 @@
       </table>
     </div>
     <p class="muted caption" id="mining-log-note"></p>
+
+    <!-- The nine refining methods as UEX rates them: the game's own
+         three-point scale for yield, cost and speed, and nothing behind it -
+         the percentages are the server's. Shown so a run can be read against
+         the method it went in under; hidden until the feed is on. -->
+    <div id="mining-methods" hidden>
+      <h4 class="spaced">Refining methods</h4>
+      <p class="muted caption" id="mining-methods-note"></p>
+      <div class="table-wrap">
+        <table id="mining-methods-table">
+          <thead><tr>
+            <th>Method</th><th>Code</th>
+            <th class="num" title="UEX's rating, 1 to 3 - the game's own pips">Yield</th>
+            <th class="num" title="1 is cheapest, 3 dearest">Cost</th>
+            <th class="num" title="3 is fastest">Speed</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    </div>
+
+    <!-- Salvage as the install has it: the modules, the heads, each salvage
+         hull's controller, priced by UEX. Not what a hull is worth scraped -
+         the geometry that needs is not in the files - and the pane says so
+         first rather than leaving a column of blanks to say it. -->
+    <div class="mining-pane" id="mining-pane-salvage">
+      <div class="mining-brief">
+        <span class="mining-brief-mark" aria-hidden="true"></span>
+        <p class="muted caption" id="salvage-brief">
+          What the game files say about salvage: every scraper module's speed,
+          radius and efficiency, the heads and their slots, and what each
+          salvage hull makes &mdash; what its beam scrapes to, what its
+          disintegration makes and at what rate per cubic metre &mdash; with
+          UEX's price for each and what a full hold of it fetches.
+          <b>What a given hull is worth scraped is not here</b>: the rule is in
+          the files, the hull's area and volume are not, nor in UEX, nor in
+          the logs. A full hold is a ceiling on a trip, not a promise about a
+          wreck.
+        </p>
+      </div>
+      <p class="muted" id="salvage-unready" hidden></p>
+
+      <h4 class="spaced">Salvage hulls</h4>
+      <div class="table-wrap">
+        <table id="salvage-ships">
+          <thead><tr>
+            <th>Hull</th>
+            <th class="num" title="Salvage heads the hull runs, from its controller">Heads</th>
+            <th title="What the hull-scraping beam produces">Scrapes to</th>
+            <th class="num" title="SCU of the disintegration resource per cubic metre of hull taken apart">Disintegrates</th>
+            <th class="num" title="The hull's cargo capacity, from the community dataset">Hold</th>
+            <th class="num" title="A full hold of RMC at UEX's best sell - a ceiling on a trip">Full hold, RMC</th>
+            <th class="num" title="A full hold of construction material at UEX's best sell">Full hold, CM</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted small" id="salvage-ships-note"></p>
+
+      <h4 class="spaced">Scraper modules</h4>
+      <div class="table-wrap">
+        <table id="salvage-modules">
+          <thead><tr>
+            <th>Module</th>
+            <th class="num" title="Extraction speed, the file's own unit">Speed</th>
+            <th class="num" title="The beam's radius on the hull">Radius</th>
+            <th class="num" title="Share of what is scraped that reaches the hold">Efficiency</th>
+            <th class="num">Price</th><th>Cheapest at</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <h4 class="spaced">Heads</h4>
+      <div class="table-wrap">
+        <table id="salvage-heads">
+          <thead><tr><th>Head</th><th class="num">Module slots</th><th class="num">Price</th><th>Cheapest at</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted small" id="salvage-note"></p>
     </div>
 
   </section>
@@ -2194,6 +2278,26 @@
       <p class="muted" id="garage-optimise-status" aria-live="polite"></p>
     </section>
 
+    <!-- Does a load of crates fit this hull? The grids are the community
+         dump's, the crates the install's, the packing this app's - the
+         panel says which is which. -->
+    <section class="garage-cargo" id="garage-cargo" hidden aria-labelledby="garage-cargo-title">
+      <div class="garage-cargo-copy">
+        <div class="garage-eyebrow">Cargo fit</div>
+        <h3 id="garage-cargo-title">Will it fit?</h3>
+        <p class="muted" id="garage-cargo-sub"></p>
+      </div>
+      <div class="garage-cargo-load" id="garage-cargo-load" aria-label="Crates to fit"></div>
+      <div class="garage-cargo-tools">
+        <button type="button" class="ghost tiny" id="garage-cargo-fit">Fit it</button>
+        <button type="button" class="ghost tiny" id="garage-cargo-clear">Clear</button>
+      </div>
+      <p class="garage-cargo-verdict" id="garage-cargo-verdict" aria-live="polite"></p>
+      <div class="garage-cargo-grids" id="garage-cargo-grids"></div>
+      <div class="garage-cargo-fleet" id="garage-cargo-fleet" hidden></div>
+      <p class="muted small" id="garage-cargo-note"></p>
+    </section>
+
     <!-- The ship's fit as last photographed at a Vehicle Loadout Manager,
          offered as a starting point. Dated, because a screenshot is a moment
          and not a state; hidden when no loadout reading is of this ship. -->
@@ -2263,6 +2367,119 @@
       </div>
       <div class="bench-panel market-list" id="garage-market-body"></div>
     </section>
+  </section>
+
+  <section id="view-armoury" class="view">
+    <div class="section-bar">
+      <h2>Armoury</h2>
+      <div class="controls">
+        <input type="search" id="armoury-search" class="search" placeholder="Search guns and armour…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <p class="muted caption">
+      Which rifle, what armour, where to buy it. Every figure is read from your
+      own game files &mdash; a gun's damage sits on the ammunition its magazine
+      loads, a fire mode's rate on the gun, a piece of armour's resistance on a
+      table its class shares &mdash; and the price is UEX's cheapest terminal
+      for the item, as the Garage prices a part. <b>Nothing here is from your
+      logs</b>: they name what you had attached, never what it does.
+      Rates and damage a second are derived by holding the trigger down, and
+      say so; the game publishes neither. (<code>docs/armoury.md</code>)
+    </p>
+    <p class="muted" id="armoury-unready" hidden></p>
+
+    <nav class="subtabs" id="armoury-tabs" aria-label="Armoury pages">
+      <button type="button" data-pane="guns" class="active">Guns</button>
+      <button type="button" data-pane="armour">Armour</button>
+    </nav>
+
+    <div class="armoury-pane active" id="armoury-pane-guns">
+      <div class="controls armoury-filters">
+        <select id="armoury-gun-kind" class="select" title="Kind of gun"></select>
+        <select id="armoury-gun-damage" class="select" title="Damage kind">
+          <option value="">Any damage</option>
+          <option value="physical">Ballistic</option>
+          <option value="energy">Energy</option>
+          <option value="mixed">Mixed</option>
+        </select>
+        <select id="armoury-gun-sort" class="select" title="Sort guns by">
+          <option value="dps">Best damage a second</option>
+          <option value="hit">Hardest hit</option>
+          <option value="mag">Most a magazine</option>
+          <option value="reach">Longest before the drop</option>
+          <option value="price">Cheapest first</option>
+          <option value="name">By name</option>
+        </select>
+        <label class="toggle"><input type="checkbox" id="armoury-gun-priced"> Only guns UEX prices</label>
+      </div>
+      <p class="muted small" id="armoury-gun-count"></p>
+      <div class="table-wrap">
+        <table id="armoury-guns">
+          <thead><tr>
+            <th>Gun</th><th title="The kind, and the holster it takes: small on the hip, medium and large on the back">Kind</th>
+            <th class="num" title="One projectile at the muzzle, and what kind of damage it is">Hit</th>
+            <th title="Every way it fires, with the cyclic rate">Modes</th>
+            <th class="num" title="The best mode's damage a second with the trigger held - derived, not the game's">DPS</th>
+            <th class="num" title="Rounds in the magazine it ships with">Mag</th>
+            <th class="num" title="What a whole magazine does in the best mode - derived">Per mag</th>
+            <th class="num" title="Where the damage starts to fall, and the floor it falls to">Drop</th>
+            <th class="num" title="UEX's cheapest terminal for the plain gun, or a finish the game names the same">Price</th>
+            <th>Cheapest at</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted small">
+        DPS and per-magazine figures assume the trigger is held and, for a charge
+        mode, every shot held to full charge; a burst's sustained rate counts its
+        cooldown. Damage is at the muzzle, before the drop and before armour.
+        A launcher's blast is shown in the row's details. Knives, grenades and
+        the gadgets are not read yet.
+      </p>
+    </div>
+
+    <div class="armoury-pane" id="armoury-pane-armour">
+      <div class="controls armoury-filters">
+        <select id="armoury-armour-slot" class="select" title="Where it is worn"></select>
+        <select id="armoury-armour-weight" class="select" title="Light, medium or heavy">
+          <option value="">Any weight</option>
+          <option value="Light">Light</option>
+          <option value="Medium">Medium</option>
+          <option value="Heavy">Heavy</option>
+        </select>
+        <select id="armoury-armour-sort" class="select" title="Sort armour by">
+          <option value="name">By set</option>
+          <option value="cold">Coldest it takes</option>
+          <option value="hot">Hottest it takes</option>
+          <option value="carry">Carries most</option>
+          <option value="quiet">Quietest</option>
+          <option value="light">Lightest</option>
+          <option value="price">Cheapest first</option>
+        </select>
+        <label class="toggle"><input type="checkbox" id="armoury-armour-priced"> Only sets UEX prices</label>
+      </div>
+      <p class="muted small" id="armoury-armour-count"></p>
+      <p class="muted small" id="armoury-armour-note"></p>
+      <div class="table-wrap">
+        <table id="armoury-armour">
+          <thead><tr>
+            <th>Set</th><th>Slot</th><th>Weight</th>
+            <th class="num" title="How much of a hit gets through: the class's shared table, so every medium piece reads the same">Takes</th>
+            <th class="num" title="Of a stun hit">Stun</th>
+            <th class="num" title="The temperatures it keeps you comfortable in">Temp</th>
+            <th class="num" title="Radiation it soaks before you take it, and how fast it sheds it a second">Radiation</th>
+            <th class="num" title="What its pockets hold">Carries</th>
+            <th class="num" title="Electromagnetic emission it adds">EM</th>
+            <th class="num">kg</th>
+            <th class="num" title="Colours and editions the game sells with these figures">Colours</th>
+            <th class="num" title="UEX's cheapest terminal across the set's colours">From</th>
+            <th>Cheapest at</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
 

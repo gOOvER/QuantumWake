@@ -365,7 +365,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.14.12
+### 0.14.13
 
 - **Mining names the job in front of you.** Its header now changes with the
   active workspace: *Prospecting*, *Mining fit* or *Haul & refinery*. The
@@ -410,6 +410,73 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   and module slots its verdict uses, while refinery jobs have labeled handoff
   fields and a clearer waiting queue. Cargo trading remains an evidence-led
   history rather than a guessed hold or route.
+
+- **Dinyx or Cormack, at which station.** A new optional UEX feed,
+  *Refining methods* (Settings, ~2 KB): the nine methods with the game's own
+  three-point ratings for yield, cost and speed, as a table on the Mining
+  page's *Haul & refinery* pane. A run waiting at a refinery now carries a ceiling
+  on what it comes back as — the SCU that went in at UEX's best refined
+  price, the station's bonus on top where UEX reports one for that ore
+  there (40 SCU of copper at 4,200 is 168,000; +9 % at MIC-L5 makes
+  183,120) — and names the method it went in under with its ratings. It is
+  called a ceiling because it is before the method's own yield and the
+  refinery's fee, and neither is published anywhere: the install names the
+  methods and no more, and UEX rates them 1 to 3.
+
+- **Salvage, as far as the files go.** A fourth pane on the Mining page.
+  Every salvage hull's controller — what its beam scrapes to, what its
+  disintegration makes and at what rate per cubic metre, how many heads it
+  runs — with its hold and what a full hold of RMC or construction material
+  fetches at UEX's best sell, called the ceiling on a trip that it is; every
+  scraper module's speed, radius and efficiency, priced; the heads and their
+  slots. **What a given hull is worth scraped is not shown, because it is
+  not in the game files**: the rule is there (a beam takes 9 mm of hull) and
+  the hull's area and volume it would apply to are geometry the data core
+  does not hold, nor UEX, nor the logs. `docs/salvage.md` records the probe
+  so it is not repeated. (`--salvage` in the CLI prints the same tables.)
+
+- **Does 4 × 32 + 2 × 16 fit in the Hermes?** A cargo-fit panel on the
+  Garage page. Type how many crates of each size, and it says whether the
+  hull's grids take them and draws where each one goes, layer by layer;
+  under that, which of your ships take the load and the smallest hulls in
+  the reference that do, each a link that tries the same load there. The
+  grids are the community dataset's own placement — one entry per grid a
+  hull carries, which is the count the game files withhold, and their sum
+  matches the dataset's capacity on all 149 hulls that have one — and the
+  crates are read from your install: the 16, 24 and 32 are long boxes one
+  lane wide, a crate keeps its top up and turns on the spot, anything stacks
+  on anything. A grid's own largest-box rule is honoured (the Corsair takes a
+  24 and not a 32; the Cutlass Black's main grid takes nothing over 2 SCU),
+  except where the dataset left it at one cell on a big hold, which the row
+  says. **The packing is this app's**: a fit found is real; a fit not found
+  within the volume is called "no packing found", not "does not fit".
+  Refresh the community dataset once (Settings) for the grids to appear.
+  (`docs/cargo-fit.md`; `--cargo` in the CLI prints the tables.)
+
+- **An Armoury page, under Gear.** Which rifle, what armour, where to buy
+  it — read from your own game files. Every gun the game sells (46 on this
+  install, 327 counting the colours) with one projectile's damage by kind,
+  every fire mode with its rate, the magazine, the projectile's speed and
+  where its damage starts to fall, and every piece of armour (2,349 pieces
+  in 384 sets) with the temperatures it keeps you comfortable in, the
+  radiation it soaks, what its pockets hold, its signature and its mass.
+  UEX's cheapest terminal sits beside each, as the Garage prices a part; a
+  blank is no terminal recorded, not free. Click a gun for every mode's
+  figures, its drop curve and its finishes with their own prices; click a
+  set for its colours. **Two things the files say that the wikis do not
+  make obvious**: a gun's damage is on the ammunition its magazine loads,
+  not the gun, and armour resistance is by class, not by piece — every
+  medium piece lets 70 % of a hit through, every heavy 60 % — so the page
+  says that once above the table rather than repeating it down a column.
+  Damage a second, per magazine and time to empty are derived by holding
+  the trigger down and are called derived; the game publishes none of them.
+  Open a gun or a set and the wiki's photograph of it sits beside the figures
+  — every finish and colour has its own, a click on the chip swaps it in —
+  fetched once and kept, as the Garage keeps a cooler's, and only with the
+  community dataset on; the game files hold no picture of a gun beyond a
+  64-pixel loadout glyph.
+  Knives, grenades and attachments are not read yet, and the page says so.
+  (`docs/armoury.md`; `--armoury` in the CLI prints the same tables.)
 
 - **Mining is easier to work from at a glance.** The page now separates its
   prospecting, rock-fit and personal-log workspaces with a stronger operations

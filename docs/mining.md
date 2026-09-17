@@ -154,6 +154,23 @@ which is why the yield column reads from the feed and the app has no
 refinery calculator of its own beyond the mining log's "waiting on a
 refinery" and the yields it already shows.
 
+**The methods, since 0.14.10.** UEX's `refineries_methods` is nine records
+with the game's own three-point ratings - `rating_yield`, `rating_cost`,
+`rating_speed`, 1 to 3 - and no percentage, cost or time behind them; that
+is what the in-game pips show and all that anyone outside the server has.
+It is one more optional feed (~2 KB, *Refining methods* in Settings), a
+table on the *Your runs* pane, and the method named on a run waiting at a
+refinery is matched to it and its pips quoted. The run also carries a
+**ceiling**: the SCU that went in at UEX's best refined sell, and the
+station's bonus on top where the yields feed reports one for that ore at
+that refinery (40 SCU of copper at 4,200 is 168,000; +9 % at MIC-L5 makes
+183,120) - before the method's own yield and the fee, which nobody
+publishes, and the line says so. The station is matched by one name
+containing the other and not at all otherwise: a bonus at the wrong station
+is worse than none. "Dinyx or Cormack, at which station, for this ore" is
+therefore answered as far as the data goes - the station from the yields
+feed, the method from its pips - and no further.
+
 ## The scan panel, read
 
 No frame from this install exists - the logs record no mining and the

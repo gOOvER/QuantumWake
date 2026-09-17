@@ -143,7 +143,8 @@ public sealed record ShipBase(
     double CargoScu,
     IReadOnlyDictionary<string, int> PowerPools,
     DatasetTotals Dataset,
-    IReadOnlyList<FitPort> Loadout);
+    IReadOnlyList<FitPort> Loadout,
+    IReadOnlyList<CargoGrid>? CargoGrids = null);
 
 /// <summary>EM and IR for one power scenario, with the EM by group.</summary>
 public sealed record Signature(double Em, double Ir, IReadOnlyDictionary<string, double> EmByGroup);

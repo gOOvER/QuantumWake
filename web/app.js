@@ -269,6 +269,7 @@ function showView(name) {
     loadLikelyMined().catch(() => {});
     loadMiningLog().catch(() => {});
     loadCrackModel().catch(() => {});
+    loadSalvage().catch(() => {});
     // A rock handed over from the Log opens on the calculator; otherwise the
     // page opens where it was left.
     showMiningPane(crackFromScan ? 'crack' : miningPane);
@@ -301,6 +302,7 @@ function showView(name) {
   if (name === 'crew') loadCrew().catch(() => {});
   if (name === 'servers') loadServers().catch(() => {});
   if (name === 'garage') loadGarage().catch(() => {});
+  if (name === 'armoury') loadArmoury().catch(() => {});
   if (name === 'points') loadPoints().catch(() => {});
   if (name === 'wikelo') loadWikelo().catch(() => {});
 
@@ -4321,6 +4323,33 @@ const MINING_STAGE = {
   Sold: ['Sold', null],
 };
 
+/**
+ * The nine refining methods as UEX rates them - the game's own three-point
+ * pips for yield, cost and speed - so a run can be read against the method
+ * it went in under. The percentages behind the pips are the server's and
+ * are in no file or feed this app reads, which the note says.
+ */
+function renderMiningMethods() {
+  const box = $('#mining-methods');
+  const body = $('#mining-methods-table tbody');
+  if (!box || !body) return;
+  const methods = crackModel?.methods || [];
+  box.hidden = !crackModel?.methodsKnown || methods.length === 0;
+  if (box.hidden) return;
+  body.textContent = '';
+  const pips = (n) => '●'.repeat(Math.max(0, Math.min(3, n))) + '○'.repeat(3 - Math.max(0, Math.min(3, n)));
+  for (const m of [...methods].sort((a, b) => b.yieldRating - a.yieldRating || a.costRating - b.costRating || a.name.localeCompare(b.name))) {
+    const tr = el('tr');
+    tr.append(el('td', null, m.name));
+    tr.append(el('td', 'muted', m.code));
+    tr.append(el('td', 'num', pips(m.yieldRating)));
+    tr.append(el('td', 'num', pips(m.costRating)));
+    tr.append(el('td', 'num', pips(m.speedRating)));
+    body.append(tr);
+  }
+  $('#mining-methods-note').textContent = 'UEX’s ratings, which are the game’s own pips: three is the most yield, the dearest, the fastest. The percentages behind them are the server’s - the install names the nine methods and nothing more, and no feed carries them - so a run’s estimate above is before the method.';
+}
+
 async function loadMiningPending() {
   const panel = $('#mining-pending');
   if (!panel) return;
@@ -4362,6 +4391,22 @@ async function loadMiningPending() {
       run.refinery.cost != null ? `Job cost · ${money(run.refinery.cost)}` : null,
     ].filter(Boolean).join(' · ');
     if (detail) row.append(el('span', 'mining-waiting-detail', detail));
+
+    // What it might come back as - a ceiling, and said as one: the SCU that
+    // went in at UEX's best refined price, the station's bonus on top where
+    // the yields feed reports one, before the method's own yield and the
+    // refinery's charge, neither of which is published anywhere.
+    const e = run.estimate;
+    if (e) {
+      const method = run.method
+        ? ` under ${run.method.name} (yield ${run.method.yieldRating}/3, cost ${run.method.costRating}/3, speed ${run.method.speedRating}/3)`
+        : (run.refinery.method ? ` under ${run.refinery.method}` : '');
+      const bonus = e.bonusPercent != null
+        ? `, ${e.bonusPercent >= 0 ? '+' : ''}${e.bonusPercent} % station bonus at ${e.bonusAt} makes ${fmtInt(e.withBonus)}`
+        : e.bonusKnown ? ', no station bonus reported for this ore here' : '';
+      row.append(el('span', 'muted small mining-estimate',
+        `≤ ${fmtInt(e.gross)} aUEC at ${fmtInt(e.perScu)}/SCU refined${e.sellAt ? ` (${e.sellAt})` : ''}${bonus}${method} — before the method’s own yield and the fee, which nobody publishes`));
+    }
 
     list.append(row);
   }
@@ -4561,14 +4606,107 @@ $('#mining-log-form')?.addEventListener('submit', async (e) => {
   await loadMiningLog().catch(() => {});
 });
 
-/* ---------- the Mining page's three panes ---------- */
+/* ---------- salvage: the equipment and the rules, not the wreck ---------- */
+
+let salvageModel = null;
 
 /**
- * Prospecting, mining fit, haul and refinery: three questions that had grown
- * into one long page. The pane is remembered in this browser, and the
+ * The salvage pane: each salvage hull's controller, the scraper modules and
+ * heads, priced by UEX. What a hull is worth scraped is not here and the
+ * brief says why; nothing on this pane is derived from a wreck.
+ */
+async function loadSalvage() {
+  const unready = $('#salvage-unready');
+  if (!$('#mining-pane-salvage')) return;
+  try {
+    salvageModel = await getJson('/api/salvage/model');
+  } catch {
+    salvageModel = null;
+  }
+  const tables = ['#salvage-ships', '#salvage-modules', '#salvage-heads'].map((id) => $(id));
+  if (!salvageModel?.ready) {
+    if (unready) {
+      unready.hidden = false;
+      unready.textContent = gameDataExcuse() || 'The install has not been read yet - Settings says when the game data is ready.';
+    }
+    for (const t of tables) if (t) t.hidden = true;
+    return;
+  }
+  if (unready) unready.hidden = true;
+  for (const t of tables) if (t) t.hidden = false;
+
+  const price = (market) => market?.price ? `${fmtInt(market.price)} aUEC` : '—';
+  const where = (market) => {
+    const best = market?.shops?.[0];
+    if (!best) return salvageModel.itemPricesKnown ? 'no terminal recorded' : 'prices need UEX (Settings)';
+    const place = best.place && !best.terminal.toLowerCase().includes(best.place.toLowerCase()) ? `, ${best.place}` : '';
+    return `${best.terminal}${place}${market.shops.length > 1 ? ` +${market.shops.length - 1}` : ''}`;
+  };
+
+  const ships = $('#salvage-ships tbody');
+  ships.textContent = '';
+  for (const s of salvageModel.ships || []) {
+    const tr = el('tr');
+    const name = el('td', null, s.name);
+    if (s.flown) name.append(el('span', 'chip count', ' flown'));
+    tr.append(name);
+    tr.append(el('td', 'num', String(s.heads)));
+    tr.append(el('td', null, s.scrapesTo || '—'));
+    tr.append(el('td', 'num', s.scuPerCubicMetre > 0 ? `${s.scuPerCubicMetre} SCU/m³ of ${s.disintegratesTo}` : '—'));
+    tr.append(el('td', 'num', s.hold > 0 ? `${fmt1(s.hold)} SCU` : (salvageModel.holdsKnown ? '—' : 'needs the dataset')));
+    tr.append(el('td', 'num', s.fullHoldOfScrape ? `${fmtInt(s.fullHoldOfScrape)} aUEC` : '—'));
+    const cm = el('td', 'num', s.fullHoldOfPieces ? `${fmtInt(s.fullHoldOfPieces)} aUEC` : '—');
+    if (s.pieces && s.disintegratesTo && s.pieces.commodity !== s.disintegratesTo) cm.title = `UEX prices ${s.disintegratesTo} as ${s.pieces.commodity}`;
+    tr.append(cm);
+    ships.append(tr);
+  }
+  const first = (salvageModel.ships || []).find((s) => s.scrape);
+  const firstCm = (salvageModel.ships || []).find((s) => s.pieces);
+  $('#salvage-ships-note').textContent = [
+    first ? `RMC at UEX's best sell: ${fmtInt(first.scrape.perScu)} aUEC a SCU at ${first.scrape.at}.` : (salvageModel.itemPricesKnown ? 'UEX has no price for RMC.' : 'Prices need UEX, in Settings.'),
+    firstCm ? `Construction material: ${fmtInt(firstCm.pieces.perScu)} a SCU at ${firstCm.pieces.at}; the game's Construction Salvage, Rubble and Pieces are sold as that one commodity.` : '',
+    'A full hold is a ceiling on a trip, before the fuel and before the finding.',
+  ].filter(Boolean).join(' ');
+
+  const modules = $('#salvage-modules tbody');
+  modules.textContent = '';
+  for (const m of [...(salvageModel.modules || [])].sort((a, b) => b.radius - a.radius)) {
+    const tr = el('tr');
+    const name = el('td', null, m.name);
+    if (m.manufacturer) name.append(el('div', 'armoury-kind', m.manufacturer));
+    tr.append(name);
+    tr.append(el('td', 'num', String(m.speed)));
+    tr.append(el('td', 'num', `${m.radius} m`));
+    tr.append(el('td', 'num', `${Math.round(m.efficiency * 100)}%`));
+    tr.append(el('td', 'num', price(m.market)));
+    tr.append(el('td', 'muted', where(m.market)));
+    modules.append(tr);
+  }
+
+  const heads = $('#salvage-heads tbody');
+  heads.textContent = '';
+  for (const h of salvageModel.heads || []) {
+    const tr = el('tr');
+    tr.append(el('td', null, h.name));
+    tr.append(el('td', 'num', String(h.slots)));
+    tr.append(el('td', 'num', price(h.market)));
+    tr.append(el('td', 'muted', where(h.market)));
+    heads.append(tr);
+  }
+
+  const k = salvageModel.constants;
+  $('#salvage-note').textContent = `${k ? `The game's rule: a beam takes ${Math.round(k.hullThicknessMetres * 1000)} mm of hull, with a material factor of ${k.ammoToMaterialFactor}. ` : ''}${salvageModel.perHull}`;
+  renderMiningWorkspaceHeader();
+}
+
+/* ---------- the Mining page's four panes ---------- */
+
+/**
+ * Prospecting, mining fit, haul and refinery, salvage: four questions that
+ * had grown into one long page. The pane is remembered in this browser, and the
  * deposit filters in the header belong to the first alone.
  */
-const MINING_PANES = ['go', 'crack', 'runs'];
+const MINING_PANES = ['go', 'crack', 'runs', 'salvage'];
 let miningPane = 'go';
 let miningReferenceMatches = null;
 let miningPendingJobs = null;
@@ -4583,7 +4721,7 @@ function showMiningPane(name) {
   miningPane = name;
   try { localStorage.setItem('qw-mining-pane', name); } catch { /* as above */ }
 
-  for (const id of ['#mining-pane-go', '#mining-pane-crack', '#mining-pane-runs']) {
+  for (const id of ['#mining-pane-go', '#mining-pane-crack', '#mining-pane-runs', '#mining-pane-salvage']) {
     const pane = $(id);
     if (pane) pane.classList.toggle('active', id === `#mining-pane-${name}`);
   }
@@ -4622,6 +4760,19 @@ function renderMiningWorkspaceHeader() {
     else status.textContent = miningPendingJobs.length
       ? `${miningPendingJobs.length} refinery job${miningPendingJobs.length === 1 ? '' : 's'} await your update.`
       : 'No refinery jobs await your update.';
+    return;
+  }
+
+  // Both lines of work reached the header in the same release: the salvage
+  // pane arrived on one and the workspace header on the other, and without
+  // this the wrecks page calls itself Prospecting.
+  if (miningPane === 'salvage') {
+    heading.textContent = 'Salvage';
+    bar.dataset.workspace = 'SALVAGE';
+    bar.dataset.workspaceIcon = '';
+    status.textContent = salvageModel?.ready
+      ? `${salvageModel.ships?.length ?? 0} salvage hulls, ${salvageModel.modules?.length ?? 0} scraper modules, from the install.`
+      : 'Hulls, scrapers and heads, as far as the game files go.';
     return;
   }
 
@@ -4747,6 +4898,7 @@ async function loadCrackModel() {
   }
 
   renderCrackHeads();
+  renderMiningMethods();
   renderCrackDeposit();
   renderCrackFittings();
   if (crackFromScan) { fillCrackFromScan(crackFromScan); crackFromScan = null; renderCrackDeposit(); }
@@ -5340,6 +5492,454 @@ function renderMiningRef() {
 onInput('#mining-search', renderMiningRef);
 $('#mining-kind')?.addEventListener('change', renderMiningRef);
 $('#mining-system')?.addEventListener('change', renderMiningRef);
+
+/* ---------- the armoury: guns and armour, read from the install ---------- */
+
+let armouryModel = null;
+let armouryPane = 'guns';
+let armouryOpenGun = null;
+let armouryOpenSet = null;
+
+try {
+  const kept = localStorage.getItem('qw-armoury-pane');
+  if (kept === 'guns' || kept === 'armour') armouryPane = kept;
+} catch { /* a private window has no memory, which is fine */ }
+
+function showArmouryPane(name) {
+  if (name !== 'guns' && name !== 'armour') name = 'guns';
+  armouryPane = name;
+  try { localStorage.setItem('qw-armoury-pane', name); } catch { /* as above */ }
+  for (const id of ['#armoury-pane-guns', '#armoury-pane-armour']) {
+    const pane = $(id);
+    if (pane) pane.classList.toggle('active', id === `#armoury-pane-${name}`);
+  }
+  for (const button of $('#armoury-tabs')?.querySelectorAll('button') || [])
+    button.classList.toggle('active', button.dataset.pane === name);
+}
+
+$('#armoury-tabs')?.addEventListener('click', (e) => {
+  const button = e.target.closest('button[data-pane]');
+  if (button) showArmouryPane(button.dataset.pane);
+});
+
+async function loadArmoury() {
+  const unready = $('#armoury-unready');
+  try {
+    armouryModel = await getJson('/api/armoury');
+  } catch {
+    armouryModel = null;
+  }
+
+  const panes = [$('#armoury-pane-guns'), $('#armoury-pane-armour'), $('#armoury-tabs')];
+  if (!armouryModel?.ready) {
+    for (const p of panes) if (p) p.hidden = true;
+    if (unready) {
+      unready.hidden = false;
+      unready.textContent = gameDataExcuse() || 'The install has not been read yet - Settings says when the game data is ready.';
+    }
+    return;
+  }
+  if (unready) unready.hidden = true;
+  for (const p of panes) if (p) p.hidden = false;
+
+  // The kind filter lists what the install actually has, in the order a
+  // holster would: pistols first, the shouldered things last.
+  const order = ['Pistol', 'SMG', 'Rifle', 'Shotgun', 'Sniper rifle', 'Crossbow', 'LMG', 'Grenade launcher', 'Heavy'];
+  const kinds = [...new Set(armouryModel.weapons.map((w) => w.kind))]
+    .sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99) || a.localeCompare(b));
+  const kind = $('#armoury-gun-kind');
+  if (kind) {
+    const keep = kind.value;
+    kind.textContent = '';
+    kind.append(new Option('Every kind', ''));
+    for (const k of kinds) kind.append(new Option(k, k));
+    kind.value = kinds.includes(keep) ? keep : '';
+  }
+
+  const slotOrder = ['Helmet', 'Core', 'Arms', 'Legs', 'Undersuit', 'Backpack'];
+  const slots = [...new Set(armouryModel.armour.map((a) => a.slot))]
+    .sort((a, b) => (slotOrder.indexOf(a) + 1 || 99) - (slotOrder.indexOf(b) + 1 || 99) || a.localeCompare(b));
+  const slot = $('#armoury-armour-slot');
+  if (slot) {
+    const keep = slot.value;
+    slot.textContent = '';
+    slot.append(new Option('Every slot', ''));
+    for (const s of slots) slot.append(new Option(s, s));
+    slot.value = slots.includes(keep) ? keep : '';
+  }
+
+  showArmouryPane(armouryPane);
+  renderArmouryGuns();
+  renderArmouryArmour();
+}
+
+/** A detail row under the one clicked, spanning the table, so the figures open where the eye is. */
+function armouryExpansion(inner, columns) {
+  const tr = el('tr', 'armoury-expand');
+  const td = el('td');
+  td.colSpan = columns;
+  td.append(inner);
+  tr.append(td);
+  // A click inside the expansion is reading, not closing.
+  tr.addEventListener('click', (e) => e.stopPropagation());
+  return tr;
+}
+
+/** "4,138 aUEC" or a dash: UEX's cheapest terminal for the item, or none recorded. */
+function armouryPrice(market) {
+  return market?.price ? `${fmtInt(market.price)} aUEC` : '—';
+}
+
+function armouryWhere(market) {
+  const best = market?.shops?.[0];
+  if (!best) return armouryModel?.itemPricesKnown ? 'no terminal recorded' : 'prices need UEX (Settings)';
+  // "Guns Checkmate, Checkmate" says the place twice; the terminal name
+  // carries it, so the place is added only when it adds something.
+  const place = best.place && !best.terminal.toLowerCase().includes(best.place.toLowerCase()) ? `, ${best.place}` : '';
+  return `${best.terminal}${place}${market.shops.length > 1 ? ` +${market.shops.length - 1}` : ''}`;
+}
+
+/** "12 ballistic", "32.5 energy + 7.5 distortion + 1 stun": one hit, by kind. */
+function armouryHit(d) {
+  if (!d) return '—';
+  const parts = [
+    ['physical', 'ballistic'], ['energy', 'energy'], ['distortion', 'distortion'], ['thermal', 'thermal'], ['biochemical', 'biochemical'], ['stun', 'stun'],
+  ].filter(([k]) => d[k] > 0).map(([k, word]) => `${fmtDamage(d[k])} ${word}`);
+  return parts.length ? parts.join(' + ') : '—';
+}
+
+function fmtDamage(n) {
+  const v = Number(n) || 0;
+  return v >= 100 ? fmtInt(v) : String(Math.round(v * 100) / 100);
+}
+
+/** The mode in one line: "AUTO 810 rpm", "BURST 3 × 900 rpm", "CHARGE ×2 after 3.5 s", "BEAM 225/s to 10 m". */
+function armouryMode(m) {
+  let text;
+  if (m.kind === 'Beam') {
+    const reach = m.beamFullRange >= m.beamZeroRange ? `to ${fmtInt(m.beamZeroRange)} m` : `to ${fmtInt(m.beamFullRange)} m, none past ${fmtInt(m.beamZeroRange)} m`;
+    text = `${m.name} ${fmtDamage(m.beamDamagePerSecond?.total)}/s ${reach}`;
+  } else if (m.kind === 'Charge') {
+    text = `${m.name} ×${m.chargeDamageMultiplier}${m.chargePellets > 0 ? ` in ${m.chargePellets}` : ''} after ${m.chargeSeconds} s${m.chargeAmmoMultiplier > 1 ? `, ${m.chargeAmmoMultiplier} rounds` : ''}`;
+  } else if (m.kind === 'Burst') {
+    text = `${m.name} ${m.burstShots} × ${fmtInt(m.roundsPerMinute)} rpm`;
+  } else {
+    text = `${m.name} ${fmtInt(m.roundsPerMinute)} rpm`;
+  }
+  if (m.pellets > 1 && m.kind !== 'Charge') text += ` × ${m.pellets}`;
+  return text;
+}
+
+/** The mode a pilot would hold the trigger on: the highest derived DPS. */
+/**
+ * The wiki's picture of an item, by the game's uuid, in a frame that says
+ * why it is blank when it is: the community dataset off, or the wiki has
+ * none. The game files hold no photograph of a gun or a helmet - a 64-pixel
+ * loadout glyph and one generic icon per armour class are all there is.
+ */
+function armouryPicture(uuid, name) {
+  const frame = el('div', 'armoury-picture');
+  const note = el('span', 'muted small');
+  if (!armouryModel?.picturesKnown) {
+    note.textContent = 'Pictures come from the Star Citizen Wiki once the community dataset is on (Settings).';
+    frame.append(note);
+    return frame;
+  }
+  if (!uuid) {
+    note.textContent = 'No id to ask the wiki with.';
+    frame.append(note);
+    return frame;
+  }
+  const img = el('img');
+  img.alt = name;
+  img.loading = 'lazy';
+  img.src = `/api/armoury/picture/${encodeURIComponent(uuid)}`;
+  img.addEventListener('error', () => {
+    img.remove();
+    note.textContent = 'The wiki has no picture of this one.';
+    frame.append(note);
+  });
+  frame.append(img);
+  return frame;
+}
+
+/** Points the expansion's picture at another colour or finish of the same thing. */
+function armouryShowPicture(frame, uuid, name) {
+  const fresh = armouryPicture(uuid, name);
+  frame.replaceWith(fresh);
+  return fresh;
+}
+
+function armouryBestMode(w) {
+  return [...(w.modes || [])].sort((a, b) => b.damagePerSecond - a.damagePerSecond)[0] || null;
+}
+
+function armouryGunsFiltered() {
+  if (!armouryModel) return [];
+  const kind = $('#armoury-gun-kind')?.value || '';
+  const damage = $('#armoury-gun-damage')?.value || '';
+  const sort = $('#armoury-gun-sort')?.value || 'dps';
+  const priced = $('#armoury-gun-priced')?.checked;
+  const q = ($('#armoury-search')?.value || '').trim().toLowerCase();
+
+  const rows = armouryModel.weapons.filter((w) => {
+    if (kind && w.kind !== kind) return false;
+    if (damage && (w.damage?.dominant || '') !== damage) return false;
+    if (priced && !w.market?.price) return false;
+    if (q && !`${w.name} ${w.kind} ${w.manufacturer}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const best = (w) => armouryBestMode(w)?.damagePerSecond || 0;
+  const hit = (w) => armouryBestMode(w)?.damagePerShot || 0;
+  rows.sort((a, b) => {
+    switch (sort) {
+      case 'hit': return hit(b) - hit(a) || a.name.localeCompare(b.name);
+      case 'mag': return (armouryBestMode(b)?.damagePerMagazine || 0) - (armouryBestMode(a)?.damagePerMagazine || 0) || a.name.localeCompare(b.name);
+      case 'reach': return (b.dropStart || 1e9) - (a.dropStart || 1e9) || a.name.localeCompare(b.name);
+      case 'price': return (a.market?.price || 1e12) - (b.market?.price || 1e12) || a.name.localeCompare(b.name);
+      case 'name': return a.name.localeCompare(b.name);
+      default: return best(b) - best(a) || a.name.localeCompare(b.name);
+    }
+  });
+  return rows;
+}
+
+function renderArmouryGuns() {
+  const body = $('#armoury-guns tbody');
+  if (!body || !armouryModel?.ready) return;
+  body.textContent = '';
+  const rows = armouryGunsFiltered();
+  const count = $('#armoury-gun-count');
+  if (count) {
+    const c = armouryModel.counts || {};
+    count.textContent = `${rows.length} of ${c.plain ?? armouryModel.weapons.length} guns; the install describes ${c.weapons ?? '?'} counting every finish. `
+      + `${armouryModel.itemPricesKnown ? `UEX prices ${armouryModel.weapons.filter((w) => w.market?.price).length} of them.` : 'Prices need UEX, in Settings.'}`;
+  }
+  for (const w of rows) {
+    const best = armouryBestMode(w);
+    const tr = el('tr');
+    tr.dataset.class = w.class;
+    if (armouryOpenGun === w.class) tr.classList.add('open');
+    const name = el('td', null, w.name);
+    if (w.manufacturer) name.append(el('div', 'armoury-kind', w.manufacturer));
+    tr.append(name);
+    const kind = el('td', null, w.kind);
+    kind.append(el('div', 'armoury-kind', `${w.weight} holster`));
+    tr.append(kind);
+    tr.append(el('td', 'num', w.damage?.total > 0
+      ? armouryHit(w.damage) : (w.explosion ? `blast ${armouryHit(w.explosion.damage)}` : '—')));
+    const modes = el('td');
+    const list = el('div', 'armoury-modes');
+    for (const m of w.modes) {
+      const line = el('span', null, armouryMode(m));
+      if (m.condition) line.append(el('span', 'armoury-when', ` when ${m.condition}`));
+      list.append(line);
+    }
+    modes.append(list);
+    tr.append(modes);
+    tr.append(el('td', 'num', best ? fmtInt(best.damagePerSecond) : '—'));
+    tr.append(el('td', 'num', w.magazine > 0 ? String(w.magazine) : '—'));
+    tr.append(el('td', 'num', best && w.magazine > 0 ? fmtInt(best.damagePerMagazine) : '—'));
+    tr.append(el('td', 'num', w.dropStart > 0 ? `${fmtInt(w.dropStart)} m → ${fmtDamage(w.dropFloor)}` : 'none'));
+    tr.append(el('td', 'num', armouryPrice(w.market)));
+    tr.append(el('td', 'muted', armouryWhere(w.market)));
+    tr.addEventListener('click', () => {
+      armouryOpenGun = armouryOpenGun === w.class ? null : w.class;
+      renderArmouryGuns();
+    });
+    body.append(tr);
+    if (armouryOpenGun === w.class) body.append(armouryExpansion(renderArmouryGunDetail(w), 11));
+  }
+}
+
+/** Every mode's figures for one gun, its drop curve, its blast, and every finish with a price. */
+function renderArmouryGunDetail(w) {
+  const inner = el('div', 'armoury-detail');
+  inner.append(el('div', 'panel-title', w.name));
+  inner.append(el('div', 'panel-sub', `${w.kind} · ${w.weight} holster · ${w.manufacturer || 'maker unnamed'} · ${w.class}`));
+  let picture = armouryPicture(w.uuid, w.name);
+  inner.append(picture);
+
+  inner.append(el('h4', null, 'Fire modes, trigger held'));
+  const table = el('table');
+  const head = el('thead');
+  const hr = el('tr');
+  for (const [label, cls] of [['Mode', null], ['Per shot', 'num'], ['Cyclic', 'num'], ['Sustained', 'num'], ['DPS', 'num'], ['Per mag', 'num'], ['Empties in', 'num'], ['Heat', 'num']])
+    hr.append(el('th', cls, label));
+  head.append(hr);
+  table.append(head);
+  const tb = el('tbody');
+  for (const m of w.modes) {
+    const tr = el('tr');
+    const label = el('td', null, armouryMode(m));
+    if (m.condition) label.append(el('span', 'armoury-when', ` when ${m.condition}`));
+    if (m.secondaryAmmo) label.append(el('span', 'armoury-when', ' · the magazine’s second load'));
+    tr.append(label);
+    tr.append(el('td', 'num', m.kind === 'Beam' ? `${fmtDamage(m.damagePerSecond)}/s` : `${fmtDamage(m.damagePerShot)} (${armouryHit(m.hit)}${m.pellets > 1 || m.chargePellets > 0 ? ` × ${m.chargePellets > 0 && m.kind === 'Charge' ? m.chargePellets : m.pellets}` : ''}${m.kind === 'Charge' ? ` × ${m.chargeDamageMultiplier}` : ''})`));
+    tr.append(el('td', 'num', m.roundsPerMinute > 0 ? `${fmtInt(m.roundsPerMinute)} rpm` : '—'));
+    tr.append(el('td', 'num', m.sustainedRoundsPerMinute > 0 ? `${fmtInt(m.sustainedRoundsPerMinute)} rpm` : '—'));
+    tr.append(el('td', 'num', fmtInt(m.damagePerSecond)));
+    tr.append(el('td', 'num', w.magazine > 0 ? fmtInt(m.damagePerMagazine) : '—'));
+    tr.append(el('td', 'num', m.secondsToEmpty > 0 ? `${Math.round(m.secondsToEmpty * 10) / 10} s` : '—'));
+    tr.append(el('td', 'num', m.heatPerShot > 0 ? String(m.heatPerShot) : '—'));
+    tb.append(tr);
+  }
+  table.append(tb);
+  inner.append(table);
+
+  const notes = [];
+  notes.push(`Projectile ${fmtInt(w.projectileSpeed)} m/s for ${w.projectileLifetime} s (${fmtInt(w.projectileSpeed * w.projectileLifetime)} m before it is gone).`);
+  if (w.dropStart > 0) notes.push(`Damage holds to ${fmtInt(w.dropStart)} m, then loses ${w.dropPerMetre} a metre down to ${fmtDamage(w.dropFloor)} at ${fmtInt(w.floorAt)} m.`);
+  else notes.push('No damage drop with distance.');
+  if (w.explosion) notes.push(`On arrival: ${armouryHit(w.explosion.damage)} over ${w.explosion.radius}${w.explosion.outerRadius > w.explosion.radius ? `–${w.explosion.outerRadius}` : ''} m.`);
+  if (w.magazine > 0) notes.push(`Magazine ${w.magazine} rounds (${w.magazineClass}).`);
+  else notes.push('The files give this magazine no round count.');
+  notes.push(`${Math.round(w.mass * 100) / 100} kg.`);
+  inner.append(el('p', 'muted small', notes.join(' ')));
+
+  inner.append(el('h4', null, `Finishes${w.finishes?.length ? ` (${w.finishes.length})` : ''}`));
+  if (!w.finishes?.length) inner.append(el('p', 'muted small', 'The plain gun only.'));
+  else {
+    const list = el('div', 'armoury-finishes');
+    for (const f of w.finishes) {
+      const chip = el('span', 'armoury-finish', f.name);
+      chip.classList.add('clickable');
+      chip.title = 'Show this finish';
+      chip.addEventListener('click', () => { picture = armouryShowPicture(picture, f.uuid, f.name); });
+      chip.append(el('span', 'muted', f.market?.price ? `${fmtInt(f.market.price)} aUEC · ${armouryWhere(f.market)}` : 'no terminal recorded'));
+      list.append(chip);
+    }
+    inner.append(list);
+    inner.append(el('p', 'muted small', 'A finish is the same gun in another colour: same figures, its own price.'));
+  }
+  return inner;
+}
+
+function armouryArmourFiltered() {
+  if (!armouryModel) return [];
+  const slot = $('#armoury-armour-slot')?.value || '';
+  const weight = $('#armoury-armour-weight')?.value || '';
+  const sort = $('#armoury-armour-sort')?.value || 'name';
+  const priced = $('#armoury-armour-priced')?.checked;
+  const q = ($('#armoury-search')?.value || '').trim().toLowerCase();
+
+  const rows = armouryModel.armour.filter((a) => {
+    if (slot && a.slot !== slot) return false;
+    if (weight && a.weight !== weight) return false;
+    if (priced && !a.market?.price) return false;
+    if (q && !`${a.family} ${a.name} ${a.slot} ${a.manufacturer} ${(a.pieces || []).map((p) => p.name).join(' ')}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const byName = (a, b) => a.family.localeCompare(b.family) || a.slot.localeCompare(b.slot) || a.name.localeCompare(b.name);
+  rows.sort((a, b) => {
+    switch (sort) {
+      case 'cold': return a.temperatureMin - b.temperatureMin || byName(a, b);
+      case 'hot': return b.temperatureMax - a.temperatureMax || byName(a, b);
+      case 'carry': return b.capacityMicroScu - a.capacityMicroScu || byName(a, b);
+      case 'quiet': return (a.emSignature + a.irSignature) - (b.emSignature + b.irSignature) || byName(a, b);
+      case 'light': return a.mass - b.mass || byName(a, b);
+      case 'price': return (a.market?.price || 1e12) - (b.market?.price || 1e12) || byName(a, b);
+      default: return byName(a, b);
+    }
+  });
+  return rows;
+}
+
+/** "70%" - what a hit leaves after the class's multiplier; the same for every piece of the class. */
+function armouryTakes(r) {
+  if (!r) return '—';
+  return `${Math.round(r.physical * 100)}%${Math.abs(r.energy - r.physical) > 0.001 ? ` / ${Math.round(r.energy * 100)}% energy` : ''}`;
+}
+
+function renderArmouryArmour() {
+  const body = $('#armoury-armour tbody');
+  if (!body || !armouryModel?.ready) return;
+  body.textContent = '';
+  const rows = armouryArmourFiltered();
+  const count = $('#armoury-armour-count');
+  if (count) {
+    const c = armouryModel.counts || {};
+    count.textContent = `${rows.length} of ${c.sets ?? armouryModel.armour.length} sets, from ${c.armour ?? '?'} pieces in the install. `
+      + `${armouryModel.itemPricesKnown ? `UEX prices ${armouryModel.armour.filter((a) => a.market?.price).length} of the sets.` : 'Prices need UEX, in Settings.'}`;
+  }
+  const note = $('#armoury-armour-note');
+  if (note) {
+    // Said once, above the table, so a column of identical figures is not
+    // mistaken for a finding: the resistance is the class's, not the piece's.
+    const macros = new Map();
+    for (const a of armouryModel.armour) if (a.resistances) macros.set(a.resistances.macro, a.resistances);
+    const light = macros.get('LightArmor'), medium = macros.get('MediumArmor'), heavy = macros.get('HeavyArmor');
+    note.textContent = light && medium && heavy
+      ? `Resistance is by class, not by piece: every light piece lets ${Math.round(light.physical * 100)}% of a hit through, every medium ${Math.round(medium.physical * 100)}%, every heavy ${Math.round(heavy.physical * 100)}% (stun ${Math.round(light.stun * 100)} / ${Math.round(medium.stun * 100)} / ${Math.round(heavy.stun * 100)}%). What differs between two pieces of a class is the rest of the row.`
+      : 'Resistance is by class, not by piece; what differs between two pieces of a class is the rest of the row.';
+  }
+  for (const a of rows) {
+    const tr = el('tr');
+    const key = `${a.slot}|${a.name}`;
+    tr.dataset.key = key;
+    if (armouryOpenSet === key) tr.classList.add('open');
+    const name = el('td', null, a.family);
+    if (a.manufacturer) name.append(el('div', 'armoury-kind', a.manufacturer));
+    tr.append(name);
+    tr.append(el('td', null, a.slot));
+    tr.append(el('td', null, a.weight || (a.resistances?.macro === 'CombatFlightsuitArmor' ? 'Flight suit' : '—')));
+    tr.append(el('td', 'num', armouryTakes(a.resistances)));
+    tr.append(el('td', 'num', a.resistances ? `${Math.round(a.resistances.stun * 100)}%` : '—'));
+    tr.append(el('td', 'num', a.temperatureMin || a.temperatureMax ? `${fmtInt(a.temperatureMin)} to ${fmtInt(a.temperatureMax)} °C` : '—'));
+    tr.append(el('td', 'num', a.radiationCapacity > 0 ? `${fmtInt(a.radiationCapacity)} · ${a.radiationDissipation}/s` : '—'));
+    tr.append(el('td', 'num', a.capacityMicroScu > 0 ? `${fmtInt(a.capacityMicroScu / 1000)} mSCU` : '—'));
+    tr.append(el('td', 'num', a.emSignature > 0 || a.irSignature > 0 ? `${a.emSignature}${a.irSignature > 0 ? ` · IR ${a.irSignature}` : ''}` : '0'));
+    tr.append(el('td', 'num', String(Math.round(a.mass * 100) / 100)));
+    tr.append(el('td', 'num', String(a.pieces?.length || 1)));
+    tr.append(el('td', 'num', armouryPrice(a.market)));
+    tr.append(el('td', 'muted', armouryWhere(a.market)));
+    tr.addEventListener('click', () => {
+      armouryOpenSet = armouryOpenSet === key ? null : key;
+      renderArmouryArmour();
+    });
+    body.append(tr);
+    if (armouryOpenSet === key) body.append(armouryExpansion(renderArmouryArmourDetail(a), 13));
+  }
+}
+
+/** Every colour of one set with its own price, and the figures the row could not fit. */
+function renderArmouryArmourDetail(a) {
+  const inner = el('div', 'armoury-detail');
+  inner.append(el('div', 'panel-title', `${a.family} · ${a.slot}`));
+  inner.append(el('div', 'panel-sub', `${a.kind || a.slot}${a.weight ? ` · ${a.weight}` : ''} · ${a.manufacturer || 'maker unnamed'}`));
+  let picture = armouryPicture(a.pieces?.[0]?.uuid, a.pieces?.[0]?.name || a.name);
+  inner.append(picture);
+
+  const facts = [];
+  if (a.resistances) {
+    const r = a.resistances;
+    facts.push(`Takes ${Math.round(r.physical * 100)}% of ballistic, ${Math.round(r.energy * 100)}% of energy, ${Math.round(r.distortion * 100)}% of distortion, ${Math.round(r.thermal * 100)}% of thermal, ${Math.round(r.biochemical * 100)}% of biochemical and ${Math.round(r.stun * 100)}% of stun damage, ${Math.round(r.impact * 100)}% of an impact's force - the ${r.macro} table, shared by every piece that reads it.`);
+  } else facts.push('No resistance block: it stops nothing.');
+  if (a.protects?.length) facts.push(`Covers ${a.protects.join(', ')}.`);
+  if (a.gForceResistance) facts.push(`G tolerance ${a.gForceResistance > 0 ? '+' : ''}${a.gForceResistance}.`);
+  if (a.motionPenalty > 0 || a.viewPenalty > 0) facts.push(`Restriction penalty ${Math.round(a.motionPenalty * 100)}% movement, ${Math.round(a.viewPenalty * 100)}% view - the game's own figure; what puts the piece into that state is not read.`);
+  inner.append(el('p', 'muted small', facts.join(' ')));
+
+  inner.append(el('h4', null, `Colours and editions (${a.pieces?.length || 0})`));
+  const list = el('div', 'armoury-finishes');
+  for (const p of a.pieces || []) {
+    const chip = el('span', 'armoury-finish', p.name);
+    chip.classList.add('clickable');
+    chip.title = 'Show this colour';
+    chip.addEventListener('click', () => { picture = armouryShowPicture(picture, p.uuid, p.name); });
+    chip.append(el('span', 'muted', p.market?.price ? `${fmtInt(p.market.price)} aUEC · ${armouryWhere(p.market)}` : 'no terminal recorded'));
+    list.append(chip);
+  }
+  inner.append(list);
+  return inner;
+}
+
+for (const id of ['#armoury-gun-kind', '#armoury-gun-damage', '#armoury-gun-sort', '#armoury-gun-priced'])
+  $(id)?.addEventListener('change', renderArmouryGuns);
+for (const id of ['#armoury-armour-slot', '#armoury-armour-weight', '#armoury-armour-sort', '#armoury-armour-priced'])
+  $(id)?.addEventListener('change', renderArmouryArmour);
+onInput('#armoury-search', () => { renderArmouryGuns(); renderArmouryArmour(); });
+
 
 /* ---------- crafting blueprints ---------- */
 
@@ -10151,7 +10751,290 @@ async function openGarage(cls) {
   await loadBuilds();
   loadGarageMarket(cls).catch(() => { /* the panel says the feed is off or unread */ });
   loadGaragePhoto(cls).catch(() => { /* no reading of this ship: the offer stays hidden */ });
+  loadGarageCargo(cls).catch(() => { /* the panel hides itself when the hull has no grids to draw */ });
 }
+
+/* ---------- cargo fit: does a load of crates fit this hull? ---------- */
+
+let garageCargo = null;
+let garageCargoResult = null;
+const CARGO_CRATE_SIZES = [1, 2, 4, 8, 16, 24, 32];
+const CARGO_CRATE_COLOURS = { 1: '#6bbaff', 2: '#57d8ac', 4: '#e8b35e', 8: '#f27f68', 16: '#bc8cff', 24: '#35c8f0', 32: '#ff9ad5' };
+
+/** The counts typed in, by crate size; kept across ships so the same load can be tried on the next hull. */
+let garageCargoLoad = {};
+try {
+  const kept = JSON.parse(localStorage.getItem('qw-cargo-load') || '{}');
+  if (kept && typeof kept === 'object') garageCargoLoad = kept;
+} catch { /* a private window has no memory, which is fine */ }
+
+/** The ship's grids, drawn empty; the load inputs; the fleet answer only once asked. */
+async function loadGarageCargo(cls) {
+  const box = $('#garage-cargo');
+  if (!box) return;
+  garageCargoResult = null;
+  try {
+    garageCargo = await getJson(`/api/cargo/${encodeURIComponent(cls)}`);
+  } catch {
+    garageCargo = null;
+  }
+  if (!garageCargo) { box.hidden = true; return; }
+  box.hidden = false;
+
+  const sub = $('#garage-cargo-sub');
+  const grids = garageCargo.grids || [];
+  if (!garageCargo.gridsKnown) {
+    sub.textContent = 'The reference data predates cargo grids. Refresh the community dataset in Settings and this hull’s holds will be drawn.';
+  } else if (grids.length === 0) {
+    sub.textContent = `The dataset places no cargo grid on the ${garageCargo.name}${garageCargo.cargoScu ? ` though it credits it with ${fmt1(garageCargo.cargoScu)} SCU` : ''} — nothing to pack into.`;
+  } else {
+    const kinds = new Map();
+    for (const g of grids) kinds.set(g.class, (kinds.get(g.class) || 0) + 1);
+    sub.textContent = `${grids.length} grid${grids.length === 1 ? '' : 's'}, ${fmt1(grids.reduce((a, g) => a + g.scu, 0))} SCU by the dataset’s own placement: `
+      + [...kinds].map(([k, n]) => { const g = grids.find((x) => x.class === k); return `${n > 1 ? `${n} × ` : ''}${fmt1(g.x)} × ${fmt1(g.y)} × ${fmt1(g.z)} m`; }).join(', ')
+      + '. Type a load and see where each crate would go.';
+  }
+
+  renderCargoLoadInputs();
+  renderCargoGrids(grids.map(cargoEmpty), null);
+  const fleet = $('#garage-cargo-fleet');
+  if (fleet) { fleet.hidden = true; fleet.textContent = ''; }
+  $('#garage-cargo-verdict').textContent = '';
+  $('#garage-cargo-note').textContent = garageCargo.cratesFromInstall
+    ? 'Crate sizes are read from your install: 1 SCU is 1.25 m cubed, and the 16, 24 and 32 are one lane wide and 5, 7.5 and 10 m long. A crate keeps its top up and may turn on the spot; anything stacks on anything; nothing hangs over an edge. The packing is this app’s, largest crate first: a fit found is real, a fit not found is not proof.'
+    : 'The install has not been read yet, so the crate sizes are the table read from it on 16 Sep 2026. The packing is this app’s, largest crate first: a fit found is real, a fit not found is not proof.';
+
+  // A load already typed - or brought from another hull's answer - is tried
+  // straight away, so the fleet list is a link and not a form.
+  if (garageCargo.gridsKnown && grids.length && Object.keys(cargoLoadNow()).length) await fitCargo();
+}
+
+function cargoCells(g) {
+  return { w: Math.round(g.x / 1.25), l: Math.round(g.y / 1.25), h: Math.round(g.z / 1.25) };
+}
+
+/** The empty drawing, before a fit: the same one-cell-rule line the packer draws, so the caption does not change under the crates. */
+function cargoEmpty(g) {
+  const one = g.maxBox && Math.round(g.maxBox.x / 1.25) === 1 && Math.round(g.maxBox.y / 1.25) === 1 && Math.round(g.maxBox.z / 1.25) === 1;
+  return { grid: g, cells: cargoCells(g), placed: [], usedScu: 0, ruleIgnored: !!one && g.scu >= 16 };
+}
+
+function renderCargoLoadInputs() {
+  const box = $('#garage-cargo-load');
+  if (!box) return;
+  box.textContent = '';
+  for (const size of CARGO_CRATE_SIZES) {
+    const field = el('label', 'garage-cargo-crate');
+    const swatch = el('span', 'garage-cargo-swatch');
+    swatch.style.background = CARGO_CRATE_COLOURS[size];
+    field.append(swatch, el('span', 'garage-cargo-size', `${size} SCU`));
+    const input = el('input');
+    input.type = 'number';
+    input.min = '0';
+    input.max = '999';
+    input.inputMode = 'numeric';
+    input.dataset.size = String(size);
+    input.value = garageCargoLoad[size] ? String(garageCargoLoad[size]) : '';
+    input.placeholder = '0';
+    input.setAttribute('aria-label', `${size} SCU crates`);
+    input.addEventListener('input', () => {
+      garageCargoLoad[size] = Math.max(0, parseInt(input.value, 10) || 0);
+      try { localStorage.setItem('qw-cargo-load', JSON.stringify(garageCargoLoad)); } catch { /* as above */ }
+      renderCargoTotal();
+    });
+    field.append(input);
+    box.append(field);
+  }
+  box.append(el('span', 'garage-cargo-total muted', ''));
+  renderCargoTotal();
+}
+
+function cargoLoadNow() {
+  const crates = {};
+  for (const size of CARGO_CRATE_SIZES) if (garageCargoLoad[size] > 0) crates[size] = garageCargoLoad[size];
+  return crates;
+}
+
+function renderCargoTotal() {
+  const total = $('#garage-cargo-load')?.querySelector('.garage-cargo-total');
+  if (!total) return;
+  const crates = cargoLoadNow();
+  const scu = Object.entries(crates).reduce((a, [s, n]) => a + Number(s) * n, 0);
+  const count = Object.values(crates).reduce((a, n) => a + n, 0);
+  total.textContent = count ? `${count} crate${count === 1 ? '' : 's'}, ${fmtInt(scu)} SCU` : '';
+}
+
+/** The load as the panel has it, into this hull and every other. */
+async function fitCargo() {
+  const crates = cargoLoadNow();
+  const verdict = $('#garage-cargo-verdict');
+  if (!Object.keys(crates).length) { verdict.textContent = 'Type how many crates of each size.'; verdict.className = 'garage-cargo-verdict'; return; }
+  if (!garageCargo) return;
+
+  let data;
+  try {
+    const response = await fetch('/api/cargo/fit', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ship: garageCargo.class, crates }),
+    });
+    data = await response.json();
+    if (!response.ok) { verdict.textContent = data.message || 'The fit could not be worked out.'; verdict.className = 'garage-cargo-verdict'; return; }
+  } catch {
+    verdict.textContent = 'The fit could not be worked out.';
+    verdict.className = 'garage-cargo-verdict';
+    return;
+  }
+  garageCargoResult = data;
+  renderCargoVerdict(data);
+  if (data.ship) renderCargoGrids(data.ship.grids, data.ship);
+  renderCargoFleet(data);
+}
+
+function renderCargoVerdict(data) {
+  const verdict = $('#garage-cargo-verdict');
+  const s = data.ship;
+  if (!s) { verdict.textContent = ''; return; }
+  const load = data.load;
+  if (s.fits) {
+    verdict.className = 'garage-cargo-verdict fits';
+    verdict.textContent = `Fits: ${load.count} crate${load.count === 1 ? '' : 's'}, ${fmtInt(load.scu)} of ${fmtInt(s.capacityScu)} SCU, with ${fmtInt(s.capacityScu - s.placedScu)} SCU to spare.`;
+  } else {
+    verdict.className = 'garage-cargo-verdict no';
+    const left = Object.entries(s.left || {}).sort((a, b) => Number(b[0]) - Number(a[0])).map(([size, n]) => `${n} × ${size} SCU`).join(', ');
+    const byRule = (s.reasons || []).length > 0;
+    verdict.textContent = load.scu > s.capacityScu
+      ? `Does not fit: ${fmtInt(load.scu)} SCU asked of a ${fmtInt(s.capacityScu)} SCU hold. Left out: ${left}.`
+      : byRule
+        ? `Does not fit: ${left} left out. ${s.reasons.join(' ')}`
+        : `No packing found for ${left}: ${fmtInt(s.placedScu)} of ${fmtInt(load.scu)} SCU placed in ${fmtInt(s.capacityScu)}. The volume is there; this packer, largest crate first, could not arrange the rest, which is not proof it cannot be done.`;
+  }
+}
+
+/**
+ * Each grid as layers seen from above, one square a cell, crates coloured by
+ * size with the size written on them. Layers because the holds are two
+ * cells high and a crate on top hides the one under it.
+ */
+function renderCargoGrids(grids, fit) {
+  const box = $('#garage-cargo-grids');
+  if (!box) return;
+  box.textContent = '';
+  const cell = 14;
+  for (const g of grids || []) {
+    const card = el('div', 'garage-cargo-grid');
+    const cells = g.cells;
+    const title = el('div', 'garage-cargo-grid-title',
+      `${g.grid.class.replace(/^.*?_CargoGrid_?|^.*?_CargoInventory_?/i, '') || g.grid.class} — ${cells.w} × ${cells.l} × ${cells.h} cells, ${fmtInt(cells.w * cells.l * cells.h)} SCU${g.grid.external ? ', outside the hull' : ''}`);
+    card.append(title);
+    const rule = g.grid.maxBox;
+    const ruleText = g.ruleIgnored
+      ? 'The dataset gives this grid a largest box of one cell, a placeholder on a hold this size; packed by its geometry instead.'
+      : rule && rule.x > 0 ? `Takes a crate up to ${fmt1(rule.x)} × ${fmt1(rule.y)} × ${fmt1(rule.z)} m.` : '';
+    if (ruleText) card.append(el('div', 'muted small', ruleText));
+    const layers = el('div', 'garage-cargo-layers');
+    for (let z = 0; z < cells.h; z++) {
+      const layer = el('div', 'garage-cargo-layer');
+      layer.append(el('div', 'muted small', cells.h > 1 ? (z === 0 ? 'Floor' : `Layer ${z + 1}`) : ''));
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      const width = cells.w * cell, height = cells.l * cell;
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      svg.setAttribute('width', String(width));
+      svg.setAttribute('height', String(height));
+      svg.classList.add('garage-cargo-svg');
+      const back = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      back.setAttribute('width', String(width)); back.setAttribute('height', String(height));
+      back.setAttribute('class', 'cargo-floor');
+      svg.append(back);
+      for (let x = 1; x < cells.w; x++) { const l = document.createElementNS('http://www.w3.org/2000/svg', 'line'); l.setAttribute('x1', String(x * cell)); l.setAttribute('x2', String(x * cell)); l.setAttribute('y1', '0'); l.setAttribute('y2', String(height)); l.setAttribute('class', 'cargo-line'); svg.append(l); }
+      for (let y = 1; y < cells.l; y++) { const l = document.createElementNS('http://www.w3.org/2000/svg', 'line'); l.setAttribute('y1', String(y * cell)); l.setAttribute('y2', String(y * cell)); l.setAttribute('x1', '0'); l.setAttribute('x2', String(width)); l.setAttribute('class', 'cargo-line'); svg.append(l); }
+      for (const p of g.placed || []) {
+        if (z < p.z || z >= p.z + p.dz) continue;
+        const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        r.setAttribute('x', String(p.x * cell + 1)); r.setAttribute('y', String(p.y * cell + 1));
+        r.setAttribute('width', String(p.dx * cell - 2)); r.setAttribute('height', String(p.dy * cell - 2));
+        r.setAttribute('rx', '2');
+        r.setAttribute('fill', CARGO_CRATE_COLOURS[p.scu] || '#888');
+        r.setAttribute('class', `cargo-crate${z > p.z ? ' cargo-crate-upper' : ''}`);
+        const t = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+        t.textContent = `${p.scu} SCU at ${p.x + 1}, ${p.y + 1}, layer ${p.z + 1}`;
+        r.append(t);
+        svg.append(r);
+        if (z === p.z) {
+          const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          label.setAttribute('x', String(p.x * cell + p.dx * cell / 2));
+          label.setAttribute('y', String(p.y * cell + p.dy * cell / 2 + 3));
+          label.setAttribute('text-anchor', 'middle');
+          label.setAttribute('class', 'cargo-label');
+          label.textContent = String(p.scu);
+          svg.append(label);
+        }
+      }
+      layer.append(svg);
+      layers.append(layer);
+    }
+    card.append(layers);
+    if (fit) card.append(el('div', 'muted small', `${fmtInt(g.usedScu)} of ${fmtInt(cells.w * cells.l * cells.h)} SCU used`));
+    box.append(card);
+  }
+}
+
+/** Your ships that take the load, then the smallest in the reference that do. */
+function renderCargoFleet(data) {
+  const box = $('#garage-cargo-fleet');
+  if (!box) return;
+  box.textContent = '';
+  box.hidden = false;
+  const mine = data.yours || [];
+  const line = (s) => {
+    const li = el('li', s.fits ? 'fits' : 'no');
+    const link = el('a', null, s.name);
+    link.href = `#garage`;
+    link.addEventListener('click', (e) => { e.preventDefault(); openGarageShipForCargo(s.class); });
+    li.append(link, el('span', 'muted', ` — ${s.fits ? 'fits' : `${fmtInt(s.placedScu)} of ${fmtInt(data.load.scu)} SCU`}, ${fmtInt(s.cargoScu)} SCU hold${s.flown && s.hours ? `, flown ${s.hours} h` : ''}`));
+    return li;
+  };
+  const fitting = mine.filter((s) => s.fits);
+  const not = mine.filter((s) => !s.fits);
+  if (mine.length) {
+    box.append(el('h4', null, 'Your ships'));
+    if (fitting.length) {
+      const ul = el('ul', 'garage-cargo-ships');
+      for (const s of fitting) ul.append(line(s));
+      box.append(ul);
+    } else {
+      box.append(el('p', 'muted small', 'None of the ships the logs have seen you fly takes this load.'));
+    }
+    // The rest in one line, hold sizes attached, so the list is what fits
+    // and not a roll-call of fighters with a 2 SCU boot.
+    if (not.length) box.append(el('p', 'muted small', `Not in: ${not.map((s) => `${s.name} (${fmtInt(s.cargoScu)} SCU)`).join(', ')}.`));
+  } else {
+    box.append(el('p', 'muted small', 'None of the ships the logs have seen you fly has a cargo grid in the dataset.'));
+  }
+  const smallest = data.smallest || [];
+  if (smallest.length) {
+    box.append(el('h4', null, 'Smallest hulls in the reference that take it'));
+    const ul = el('ul', 'garage-cargo-ships');
+    for (const s of smallest) ul.append(line(s));
+    box.append(ul);
+  }
+}
+
+/** Opens the Garage on another hull and runs the same load there. */
+function openGarageShipForCargo(cls) {
+  const pick = $('#garage-all');
+  if (pick) { pick.value = cls; pick.dispatchEvent(new Event('change')); }
+}
+
+$('#garage-cargo-fit')?.addEventListener('click', () => fitCargo().catch(() => {}));
+$('#garage-cargo-clear')?.addEventListener('click', () => {
+  garageCargoLoad = {};
+  try { localStorage.removeItem('qw-cargo-load'); } catch { /* as above */ }
+  renderCargoLoadInputs();
+  $('#garage-cargo-verdict').textContent = '';
+  const fleet = $('#garage-cargo-fleet');
+  if (fleet) { fleet.hidden = true; fleet.textContent = ''; }
+  if (garageCargo) renderCargoGrids((garageCargo.grids || []).map(cargoEmpty), null);
+});
 
 /* ---------- the photographed fit ---------- */
 

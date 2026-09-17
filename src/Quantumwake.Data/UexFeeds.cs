@@ -27,6 +27,16 @@ public sealed record UexRefinery(string Commodity, string Terminal, string? Syst
 public sealed record UexRawPrice(string Commodity, string Terminal, decimal Sell);
 
 /// <summary>
+/// One refining method, as UEX rates it: the game's own three-point scale
+/// for yield, cost and speed - 3 is best - and nothing more. The
+/// percentages behind those pips are the server's; neither the install
+/// (<c>RefiningProcess</c> is nine records of two enums and a name) nor the
+/// feed carries them, so a return is estimated before the method and says
+/// so.
+/// </summary>
+public sealed record UexRefineryMethod(string Name, string Code, int YieldRating, int CostRating, int SpeedRating);
+
+/// <summary>
 /// One advertisement on UEX's player marketplace: a player offering (or
 /// asking for) an item, at a price they named, where they said they are.
 /// </summary>
@@ -146,6 +156,7 @@ public sealed class UexFeeds
     public const string RawPrices = "raw-prices";
     public const string Places = "places";
     public const string Marketplace = "marketplace";
+    public const string Methods = "methods";
 
     public const string ListingsUrl = "https://api.uexcorp.space/2.0/marketplace_listings";
     public const string ItemsUrl = "https://api.uexcorp.space/2.0/items?id_category=";
@@ -171,6 +182,9 @@ public sealed class UexFeeds
         new(Marketplace, "Player marketplace",
             "The newest five hundred advertisements on UEX's player-to-player marketplace - who is offering which component, weapon or armour, at what asking price and where - joined to the Garage bench by item.",
             "~600 KB, plus UEX's item table for the categories advertised"),
+        new(Methods, "Refining methods",
+            "The nine refining methods with the game's three-point ratings for yield, cost and speed, so a run waiting on a refinery can be read against the method it went in under.",
+            "~2 KB"),
     ];
 
     private static readonly Dictionary<string, string[]> Urls = new(StringComparer.OrdinalIgnoreCase)
@@ -191,6 +205,7 @@ public sealed class UexFeeds
             "https://api.uexcorp.space/2.0/poi",
         ],
         [Marketplace] = [ListingsUrl],
+        [Methods] = ["https://api.uexcorp.space/2.0/refineries_methods"],
     };
 
     private readonly string _directory;
@@ -227,6 +242,7 @@ public sealed class UexFeeds
             RawPrices => DigestRawPrices(documents[0]),
             Places => DigestPlaces(documents),
             Marketplace => await DigestMarketplaceAsync(documents[0], http, token),
+            Methods => DigestMethods(documents[0]),
             _ => throw new ArgumentException($"Unknown UEX feed '{key}'.", nameof(key))
         };
 
@@ -276,6 +292,7 @@ public sealed class UexFeeds
     public IReadOnlyList<UexRawPrice> RawOrePrices => Read<UexRawPrice>(RawPrices);
     public IReadOnlyList<UexPlace> PlaceDirectory => Read<UexPlace>(Places);
     public IReadOnlyList<UexListing> Listings => Read<UexListing>(Marketplace);
+    public IReadOnlyList<UexRefineryMethod> RefineryMethods => Read<UexRefineryMethod>(Methods);
 
     /// <summary>
     /// Players offering one item, cheapest first: sell listings only, and none
@@ -389,6 +406,15 @@ public sealed class UexFeeds
     /// Yields and capacities arrive as separate reports about the same
     /// terminals, so they are joined here rather than shown as two tables.
     /// </summary>
+    private static List<UexRefineryMethod> DigestMethods(JsonElement methods) =>
+    [
+        .. Rows(methods)
+            .Select(r => new UexRefineryMethod(
+                Str(r, "name") ?? "", Str(r, "code") ?? "",
+                (int)(Num(r, "rating_yield") ?? 0), (int)(Num(r, "rating_cost") ?? 0), (int)(Num(r, "rating_speed") ?? 0)))
+            .Where(m => m.Name.Length > 0)
+    ];
+
     private static List<UexRefinery> DigestRefineries(JsonElement yields, JsonElement capacities)
     {
         var capacityByTerminal = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);

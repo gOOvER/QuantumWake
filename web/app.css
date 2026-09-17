@@ -5185,3 +5185,63 @@ body.overlay .ship-picture { display: none; }
 }
 .ship-card.unflown { opacity: .92; }
 .ship-card.unflown .ship-name::after { content: " · never flown"; font-size: 10px; color: var(--muted); font-weight: 400; }
+
+/* ---------- armoury ---------- */
+.armoury-pane { display: none; }
+.armoury-pane.active { display: block; }
+.armoury-pane[hidden], #armoury-tabs[hidden] { display: none; }
+.armoury-filters { flex-wrap: wrap; margin: 0 0 8px; }
+#armoury-guns tbody tr, #armoury-armour tbody tr { cursor: pointer; }
+#armoury-guns tbody tr.open, #armoury-armour tbody tr.open { background: rgba(53, 200, 240, .09); }
+.armoury-modes { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; }
+.armoury-modes .armoury-when { color: var(--dim); }
+.armoury-kind { color: var(--muted); font-size: 11px; }
+/* width 0 with min-width 100%: fills the cell without widening the table past its own columns. */
+.armoury-detail { padding: 12px 14px; width: 0; min-width: 100%; box-sizing: border-box; white-space: normal; }
+.armoury-detail p { white-space: normal; }
+.armoury-detail h4 { margin: 10px 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.armoury-detail table { width: auto; min-width: 55%; }
+.armoury-finishes { display: flex; flex-wrap: wrap; gap: 6px; }
+.armoury-finish { border: 1px solid var(--rule); border-radius: 4px; padding: 3px 8px; font-size: 11.5px; }
+.armoury-finish .muted { margin-left: 6px; }
+#armoury-guns tbody tr.armoury-expand, #armoury-armour tbody tr.armoury-expand { cursor: default; background: var(--panel); }
+#armoury-guns tbody tr.armoury-expand:hover, #armoury-armour tbody tr.armoury-expand:hover { background: var(--panel); }
+.armoury-expand > td { padding: 0; border-left: 3px solid var(--cyan-deep); }
+.armoury-detail .panel-title { font-size: 14px; color: var(--text); }
+.armoury-detail .panel-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.armoury-picture { float: right; width: 280px; max-width: 40%; margin: 0 0 10px 16px; text-align: center; }
+.armoury-picture img { max-width: 100%; max-height: 220px; border: 1px solid var(--rule); border-radius: 4px; background: var(--deep); }
+.armoury-finish.clickable { cursor: pointer; }
+.armoury-finish.clickable:hover { border-color: var(--cyan-deep); }
+.armoury-detail::after { content: ""; display: block; clear: both; }
+
+/* ---------- cargo fit ---------- */
+.garage-cargo { margin: 14px 0 12px; padding: 12px 14px; border: 1px solid var(--rule-hot); background: linear-gradient(90deg, rgba(20, 55, 71, .3), rgba(4, 10, 17, .5)); }
+.garage-cargo h3 { margin: 2px 0 4px; font-size: 15px; }
+.garage-cargo-load { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 10px 0 8px; }
+.garage-cargo-crate { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.garage-cargo-crate input { width: 52px; padding: 3px 6px; font: inherit; color: var(--text); background: var(--deep); border: 1px solid var(--rule); border-radius: 4px; text-align: right; }
+.garage-cargo-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.garage-cargo-total { font-size: 12px; margin-left: 6px; }
+.garage-cargo-tools { display: flex; gap: 8px; margin-bottom: 8px; }
+.garage-cargo-verdict { margin: 6px 0 10px; font-size: 13px; }
+.garage-cargo-verdict.fits { color: var(--green); }
+.garage-cargo-verdict.no { color: var(--amber); }
+.garage-cargo-grids { display: flex; flex-wrap: wrap; gap: 14px 22px; }
+.garage-cargo-grid { display: flex; flex-direction: column; gap: 4px; max-width: 360px; }
+.garage-cargo-grid .small { white-space: normal; }
+.garage-cargo-grid-title { font-size: 12px; color: var(--text); }
+.garage-cargo-layers { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
+.garage-cargo-layer { display: flex; flex-direction: column; gap: 2px; }
+.garage-cargo-svg { display: block; border: 1px solid var(--rule-hot); background: var(--deep); }
+.garage-cargo-svg .cargo-floor { fill: rgba(53, 200, 240, .05); }
+.garage-cargo-svg .cargo-line { stroke: rgba(53, 200, 240, .18); stroke-width: 1; }
+.garage-cargo-svg .cargo-crate { stroke: rgba(0, 0, 0, .45); stroke-width: 1; opacity: .92; }
+.garage-cargo-svg .cargo-crate-upper { opacity: .55; }
+.garage-cargo-svg .cargo-label { font: 700 9px var(--mono); fill: #061018; pointer-events: none; }
+.garage-cargo-fleet h4 { margin: 12px 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.garage-cargo-ships { margin: 0; padding-left: 18px; font-size: 12.5px; }
+.garage-cargo-ships li.fits a { color: var(--green); }
+.garage-cargo-ships li.no a { color: var(--amber); }
+.mining-waiting .mining-estimate { flex: 0 0 100%; margin-left: 0; }
+.mining-waiting .time { margin-left: auto; }

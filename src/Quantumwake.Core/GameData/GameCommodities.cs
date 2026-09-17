@@ -31,7 +31,7 @@ namespace Quantumwake.Core.GameData;
 public sealed partial class GameCommodities
 {
     /// <summary>Bumped when the cached shape changes.</summary>
-    private const int CacheVersion = 33;
+    private const int CacheVersion = 40;
 
     private const string DataCoreEntry = @"Data\Game2.dcb";
     private const string LocalisationEntry = @"Data\Localization\english\global.ini";
@@ -49,6 +49,9 @@ public sealed partial class GameCommodities
     private readonly List<GamePaint> _paints;
     private readonly Dictionary<string, string> _makerLogos;
     private readonly GameMiningData _mining;
+    private readonly GameArmouryData _armoury;
+    private readonly List<CargoCrate> _crates;
+    private readonly GameSalvageData _salvage;
 
     private GameCommodities(
         Dictionary<string, string> byId,
@@ -61,11 +64,17 @@ public sealed partial class GameCommodities
         Dictionary<string, GameVehicle>? vehicles = null,
         List<GamePaint>? paints = null,
         Dictionary<string, string>? makerLogos = null,
-        GameMiningData? mining = null)
+        GameMiningData? mining = null,
+        GameArmouryData? armoury = null,
+        List<CargoCrate>? crates = null,
+        GameSalvageData? salvage = null)
     {
         _paints = paints ?? [];
         _makerLogos = makerLogos ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         _mining = mining ?? GameMiningData.Empty;
+        _armoury = armoury ?? GameArmouryData.Empty;
+        _crates = crates ?? [];
+        _salvage = salvage ?? GameSalvageData.Empty;
         _wikelo = wikelo ?? GameWikeloCatalogue.Empty;
         _vehicles = vehicles ?? new Dictionary<string, GameVehicle>(StringComparer.OrdinalIgnoreCase);
         _byId = byId;
@@ -114,6 +123,15 @@ public sealed partial class GameCommodities
 
     /// <summary>The mining model: constants, minerals, lasers, modules and gadgets, as the install has them.</summary>
     public GameMiningData Mining => _mining;
+
+    /// <summary>Personal weapons and armour, as the install has them.</summary>
+    public GameArmouryData Armoury => _armoury;
+
+    /// <summary>The standard cargo crates - 1 to 32 SCU - as the install sizes them; empty until read.</summary>
+    public IReadOnlyList<CargoCrate> Crates => _crates;
+
+    /// <summary>Salvage as the install has it: the modules, the heads, each hull's controller and the constants.</summary>
+    public GameSalvageData Salvage => _salvage;
 
     /// <summary>The archive entry of a maker's 256-square logo, by code, or null when the game has none.</summary>
     public string? MakerLogo(string? code) =>
@@ -174,16 +192,16 @@ public sealed partial class GameCommodities
 
         if (TryLoadCache(cachePath, stamp) is { } cached) return cached;
 
-        var (commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining) = Read(archive);
+        var (commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage) = Read(archive);
         if (commodities.Count > 0 || items.Count > 0)
-            SaveCache(cachePath, stamp, commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining);
+            SaveCache(cachePath, stamp, commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage);
 
-        return new GameCommodities(commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining);
+        return new GameCommodities(commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage);
     }
 
     private static (Dictionary<string, string> Commodities, Dictionary<string, string> Items,
         Dictionary<string, GameItem> Facts, List<GameBlueprint> Blueprints,
-        List<GameSpawn> Spawns, Dictionary<string, GamePlace> Places, GameWikeloCatalogue Wikelo, Dictionary<string, GameVehicle> Vehicles, List<GamePaint> Paints, Dictionary<string, string> MakerLogos, GameMiningData Mining) Read(string archivePath)
+        List<GameSpawn> Spawns, Dictionary<string, GamePlace> Places, GameWikeloCatalogue Wikelo, Dictionary<string, GameVehicle> Vehicles, List<GamePaint> Paints, Dictionary<string, string> MakerLogos, GameMiningData Mining, GameArmouryData Armoury, List<CargoCrate> Crates, GameSalvageData Salvage) Read(string archivePath)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var itemUuids = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -196,6 +214,9 @@ public sealed partial class GameCommodities
         var paints = new List<GamePaint>();
         var makerLogos = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var mining = GameMiningData.Empty;
+        var armoury = GameArmouryData.Empty;
+        var crates = new List<CargoCrate>();
+        var salvage = GameSalvageData.Empty;
 
         try
         {
@@ -205,7 +226,7 @@ public sealed partial class GameCommodities
             var ini = p4k.TryRead(LocalisationEntry);
 
             if (blob is null || ini is null)
-                return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining);
+                return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage);
 
             var text = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -260,14 +281,17 @@ public sealed partial class GameCommodities
             paints.AddRange(GamePaints.Stock(p4k.List(GamePaints.RenderFolder).Select(e => e.Path), paints));
             makerLogos = GameMakerLogos.Read(core, p4k.List(GameMakerLogos.Folder).Select(e => e.Path));
             mining = GameMining.Read(core, text, facts, result);
+            armoury = GameArmoury.Read(core, text, facts);
+            crates = GameCrates.Read(core);
+            salvage = GameSalvage.Read(core, facts, result);
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         {
             // A missing or unreadable archive degrades naming, never the app.
-            return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining);
+            return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage);
         }
 
-        return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining);
+        return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage);
     }
 
     /// <summary>
@@ -315,7 +339,10 @@ public sealed partial class GameCommodities
                 cache.Vehicles is not null ? new Dictionary<string, GameVehicle>(cache.Vehicles, StringComparer.OrdinalIgnoreCase) : null,
                 cache.Paints,
                 cache.MakerLogos is not null ? new Dictionary<string, string>(cache.MakerLogos, StringComparer.OrdinalIgnoreCase) : null,
-                cache.Mining);
+                cache.Mining,
+                cache.Armoury,
+                cache.Crates,
+                cache.Salvage);
         }
         catch (Exception e) when (e is IOException or JsonException)
         {
@@ -328,7 +355,7 @@ public sealed partial class GameCommodities
         Dictionary<string, string> items, Dictionary<string, GameItem> facts,
         List<GameBlueprint> blueprints, List<GameSpawn> spawns,
         Dictionary<string, GamePlace> places, GameWikeloCatalogue wikelo,
-        Dictionary<string, GameVehicle> vehicles, List<GamePaint> paints, Dictionary<string, string> makerLogos, GameMiningData mining)
+        Dictionary<string, GameVehicle> vehicles, List<GamePaint> paints, Dictionary<string, string> makerLogos, GameMiningData mining, GameArmouryData armoury, List<CargoCrate> crates, GameSalvageData salvage)
     {
         try
         {
@@ -339,7 +366,7 @@ public sealed partial class GameCommodities
                     {
                         Stamp = stamp, Commodities = names, Items = items,
                         Facts = facts, Blueprints = blueprints, Spawns = spawns, Places = places,
-                        Wikelo = wikelo, Vehicles = vehicles, Paints = paints, MakerLogos = makerLogos, Mining = mining
+                        Wikelo = wikelo, Vehicles = vehicles, Paints = paints, MakerLogos = makerLogos, Mining = mining, Armoury = armoury, Crates = crates, Salvage = salvage
                     },
                     Json));
         }
@@ -366,5 +393,8 @@ public sealed partial class GameCommodities
         public List<GamePaint>? Paints { get; set; }
         public Dictionary<string, string>? MakerLogos { get; set; }
         public GameMiningData? Mining { get; set; }
+        public GameArmouryData? Armoury { get; set; }
+        public List<CargoCrate>? Crates { get; set; }
+        public GameSalvageData? Salvage { get; set; }
     }
 }

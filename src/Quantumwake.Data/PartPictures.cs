@@ -88,12 +88,20 @@ public sealed class PartPictures
     /// The picture for a part: from the cache when it has one, from the wiki
     /// once when it does not, null when the wiki has none either.
     /// </summary>
-    public Task<PartPicture?> GetAsync(HttpClient http, PartStats part, CancellationToken token = default)
+    public Task<PartPicture?> GetAsync(HttpClient http, PartStats part, CancellationToken token = default) =>
+        GetItemAsync(http, part.Uuid, part.Name, token);
+
+    /// <summary>
+    /// The same for any item the install names - a rifle, a helmet - by the
+    /// game's uuid and display name. The Armoury's guns and armour go through
+    /// here; the wiki photographs those far more often than it does radars.
+    /// </summary>
+    public Task<PartPicture?> GetItemAsync(HttpClient http, string? uuid, string? name, CancellationToken token = default)
     {
-        if (string.IsNullOrEmpty(part.Uuid) || string.IsNullOrWhiteSpace(part.Name))
+        if (string.IsNullOrEmpty(uuid) || string.IsNullOrWhiteSpace(name))
             return Task.FromResult<PartPicture?>(null);
 
-        return Get(http, part.Uuid, Titles(part.Name), _parts, logo: false, token, itemUuid: part.Uuid);
+        return Get(http, uuid, Titles(name), _parts, logo: false, token, itemUuid: uuid);
     }
 
     /// <summary>

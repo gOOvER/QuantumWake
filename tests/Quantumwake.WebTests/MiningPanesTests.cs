@@ -73,5 +73,14 @@ public class MiningPanesTests
         Assert.Equal("Haul & refinery", page.NodeText("#mining-workspace-title"));
         Assert.Equal("No refinery jobs await your update.", page.NodeText("#mining-workspace-status"));
         Assert.Equal("", page.Text("__dom.node('#view-mining .section-bar').dataset.workspaceIcon"));
+
+        // The fourth pane came from another branch than the header did; it
+        // must not call itself Prospecting.
+        page.Do("salvageModel = null; showMiningPane('salvage');");
+        Assert.Equal("Salvage", page.NodeText("#mining-workspace-title"));
+        Assert.Equal("Hulls, scrapers and heads, as far as the game files go.", page.NodeText("#mining-workspace-status"));
+
+        page.Do("salvageModel = {ready:true, ships:[{}, {}, {}], modules:[{}]}; renderMiningWorkspaceHeader();");
+        Assert.Equal("3 salvage hulls, 1 scraper modules, from the install.", page.NodeText("#mining-workspace-status"));
     }
 }
