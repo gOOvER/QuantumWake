@@ -226,3 +226,36 @@ a diff; a `RawGameController` service in the tray host with a stub in the
 server. The reading half is a few days; the live half a day once the two
 open questions are answered; the pilot-taught picture is its own line of
 work later.
+
+## Built: 0.15.0
+
+The reading half, as planned above, on branch `controls`:
+
+- `CryXml` (Core/GameData) decodes CryXmlB; `ControlInput`,
+  `ControlProfile`, `ControlCatalogue`, `GameControls` and
+  `ControlsExport` (Core/Controls) read and write the documents.
+  `GameCommodities.Controls` carries the catalogue and the 17 layouts in the
+  game-data cache. One thing the first read missed: a third of the action
+  labels exist in `global.ini` only under a `,P` line
+  (`ui_CIMissileMode,P=Toggle Missile Operator Mode`); the catalogue reads
+  that as the fallback, which takes the labelled count from 753 to over a
+  thousand.
+- `ControlsStore` (Data) keeps every distinct `actionmaps.xml` under
+  `controls\backups\`, named by time and content hash;
+  `ControlsWatchService` (Server) looks every five seconds. `ControlsDiff`
+  says what changed; `ControlsExport` writes the import form, retargeted.
+- `JoystickTemplates` (Data) is the opt-in feed: the repository's tree from
+  the GitHub API for the index, each SVG from raw.githubusercontent.com,
+  kept under `controls\templates\`; a GUID table for the sticks this
+  install and the shipped layouts name; a folder of the pilot's own.
+- `GET /api/controls` and the rest in `ControlsEndpoints`; the page in
+  `web/`, four panes under Settings → Controls. The SVG is fetched as
+  text and the placeholders rewritten in the browser
+  (`controlsDrawSvg`), long names cut to fit the template's boxes with
+  the table holding them whole.
+- Checked on this install 2026-09-17: 6 sticks, 101 real joystick
+  bindings (59 more rebinds are `jsN_ `, defaults taken away), 45
+  templates indexed, the Warthog stick and throttle matched and drawn.
+
+Not built yet: the live half (`RawGameController` in the tray host, the
+pressed button lit on the picture), and the pilot-taught picture.

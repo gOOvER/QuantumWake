@@ -365,6 +365,38 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.15.0
+
+- **A Controls page, under Settings: your sticks and what is bound to
+  them.** Read from the game's own keybinding profile — every joystick it
+  knows, by the name and USB id the game recorded — with each stick's
+  bindings written onto a picture of it and listed beside it, control by
+  control, in the game's own words for the action (*Eject*, *Cycle Lock -
+  Hostiles - Forward*) with how it fires (tap, hold, long press). The
+  other way round too: every one of the 1,103 actions the game can bind,
+  by the keybinding screen's categories, with what is on each stick and
+  the keyboard — filter to the ones on no stick to see the sea of buttons
+  as a list with gaps. Where the game ships a layout for your stick (the
+  Warthog, X52/X55/X56, T.16000M, VKB, T.Flight), it can be shown beside
+  yours. The pictures come from [Joystick Diagrams](https://github.com/Rexeh/joystick-diagrams)'
+  template library — 45 sticks, throttles and panels — fetched only once
+  you turn that on under *Pictures*, kept, and credited; a stick the
+  library knows (Warthog, T.16000M, X52, X56, VKB Gladiator) gets its
+  picture on its own, any other is yours to pick, and a folder of your own
+  SVGs in the same convention works too.
+
+- **Every version of your keybindings is kept.** The game rewrites its
+  profile whenever a binding changes and keeps no history; Quantum Wake
+  now keeps a copy of each distinct version as it appears, and *Backups*
+  lists them, shows what changed between any two ("Eject: was button 7,
+  now button 4"), and writes any of them back as a file the game imports
+  — with the sticks retargeted, for the day the throttle comes back as
+  `js3` and every throttle binding points at the pedals. The export lands
+  in Quantum Wake's own folder first; a second, explicit press copies it
+  into the game's `controls\mappings` folder, from where Options →
+  Keybindings imports it (or `pp_rebindkeys <name>` at the console). The
+  live profile is never written; that stays the game's.
+
 ### 0.14.17
 
 - **Knives, grenades and attachments, each on its own Armoury tab.** The three
