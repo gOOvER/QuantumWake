@@ -81,6 +81,7 @@ public static class ControlsEndpoints
             return Results.Ok(new
             {
                 ready = !controls.Catalogue.IsEmpty,
+                gameRunning = System.Diagnostics.Process.GetProcessesByName("StarCitizen").Length > 0,
                 profilePath = path,
                 profileFound = profile is not null,
                 problem,
@@ -177,6 +178,92 @@ public static class ControlsEndpoints
             }
             var after = store.Snapshot(path);
             return Results.Ok(new { restored = body.Source, path, keptBefore = before?.Backup.Id, now = after?.Backup.Id });
+        });
+
+        // A stick's curves and dead zones changed. Written the two ways a
+        // restore is: into the live profile with the game closed, after
+        // keeping it as it was; or as an import file with the game open.
+        app.MapPost("/api/controls/axes", (AxesRequest body, ControlsStore store) =>
+        {
+            if (install is null) return Results.NotFound(new { message = "No install." });
+            var path = ControlsWatchService.ProfilePath(install);
+            if (!File.Exists(path)) return Results.NotFound(new { message = "The game has not written a keybinding profile yet." });
+            if (body.Instance <= 0) return Results.BadRequest(new { message = "Which stick?" });
+
+            var running = System.Diagnostics.Process.GetProcessesByName("StarCitizen").Length > 0;
+            var how = body.How ?? (running ? "export" : "live");
+            if (how == "live" && running)
+                return Results.Conflict(new { message = "Star Citizen is running. Close it to write the profile, or apply as an import file and load it from the keybinding screen." });
+
+            XDocument changed;
+            try
+            {
+                var source = Quantumwake.Core.GameData.CryXml.Parse(File.ReadAllBytes(path));
+                var profile = ControlProfile.Parse(source);
+                var device = profile.Devices.FirstOrDefault(d => d.Type == "joystick" && d.Instance == body.Instance);
+                changed = ControlsExport.ApplyAxes(source, body.Instance, device?.Product, device?.Guid,
+                    (body.Curves ?? []).Select(c => new CurveSetting(c.Option ?? "", c.Exponent, c.Inverted)).ToList(),
+                    body.Deadzones ?? new Dictionary<string, double>());
+            }
+            catch (Exception e) when (e is InvalidDataException or System.Xml.XmlException or IOException)
+            {
+                return Results.Problem(e.Message);
+            }
+
+            if (how == "live")
+            {
+                var before = store.Snapshot(path);
+                try { File.WriteAllText(path, changed.ToString(), new UTF8Encoding(false)); }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Results.Problem(title: "The profile could not be written.", detail: e.Message, statusCode: 500); }
+                var after = store.Snapshot(path);
+                return Results.Ok(new { how, path, keptBefore = before?.Backup.Id, now = after?.Backup.Id });
+            }
+
+            var name = ControlsExport.SafeName(body.Name ?? "quantumwake-axes");
+            var export = ControlsExport.Build(changed, name);
+            var mappings = Path.Combine(ControlsWatchService.MappingsFolder(install), name + ".xml");
+            Directory.CreateDirectory(ControlsWatchService.MappingsFolder(install));
+            File.WriteAllText(mappings, export.ToString(), new UTF8Encoding(false));
+            return Results.Ok(new { how, name, mappings, command = $"pp_rebindkeys {name}" });
+        });
+
+        // Bindings changed - a control given an action, or taken off one -
+        // written the same two ways as the axes.
+        app.MapPost("/api/controls/bindings", (BindingsRequest body, ControlsStore store) =>
+        {
+            if (install is null) return Results.NotFound(new { message = "No install." });
+            var path = ControlsWatchService.ProfilePath(install);
+            if (!File.Exists(path)) return Results.NotFound(new { message = "The game has not written a keybinding profile yet." });
+            var changes = (body.Changes ?? [])
+                .Where(c => !string.IsNullOrWhiteSpace(c.ActionMap) && !string.IsNullOrWhiteSpace(c.Action) && !string.IsNullOrWhiteSpace(c.Input))
+                .Select(c => new BindingChange(c.ActionMap!, c.Action!, c.Input!, c.Remove, c.ActivationMode))
+                .ToList();
+            if (changes.Count == 0) return Results.BadRequest(new { message = "Nothing to change." });
+
+            var running = System.Diagnostics.Process.GetProcessesByName("StarCitizen").Length > 0;
+            var how = body.How ?? (running ? "export" : "live");
+            if (how == "live" && running)
+                return Results.Conflict(new { message = "Star Citizen is running. Close it to write the profile, or apply as an import file and load it from the keybinding screen." });
+
+            XDocument changed;
+            try { changed = ControlsExport.ApplyBindings(Quantumwake.Core.GameData.CryXml.Parse(File.ReadAllBytes(path)), changes); }
+            catch (Exception e) when (e is InvalidDataException or System.Xml.XmlException or IOException) { return Results.Problem(e.Message); }
+
+            if (how == "live")
+            {
+                var before = store.Snapshot(path);
+                try { File.WriteAllText(path, changed.ToString(), new UTF8Encoding(false)); }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Results.Problem(title: "The profile could not be written.", detail: e.Message, statusCode: 500); }
+                var after = store.Snapshot(path);
+                return Results.Ok(new { how, path, changed = changes.Count, keptBefore = before?.Backup.Id, now = after?.Backup.Id });
+            }
+
+            var name = ControlsExport.SafeName(body.Name ?? "quantumwake-bindings");
+            var export = ControlsExport.Build(changed, name);
+            var mappings = Path.Combine(ControlsWatchService.MappingsFolder(install), name + ".xml");
+            Directory.CreateDirectory(ControlsWatchService.MappingsFolder(install));
+            File.WriteAllText(mappings, export.ToString(), new UTF8Encoding(false));
+            return Results.Ok(new { how, name, mappings, changed = changes.Count, command = $"pp_rebindkeys {name}" });
         });
 
         // One kept version, read against the catalogue like the live one.
@@ -354,6 +441,10 @@ public static class ControlsEndpoints
 
     public sealed record ExportRequest(string? Source, string? Name, Dictionary<string, int>? Retarget, bool Install = false);
     public sealed record RestoreRequest(string? Source);
+    public sealed record BindingChangeRequest(string? ActionMap, string? Action, string? Input, bool Remove = false, string? ActivationMode = null);
+    public sealed record BindingsRequest(List<BindingChangeRequest>? Changes, string? How, string? Name);
+    public sealed record CurveRequest(string? Option, double? Exponent, bool Inverted);
+    public sealed record AxesRequest(int Instance, List<CurveRequest>? Curves, Dictionary<string, double>? Deadzones, string? How, string? Name);
     public sealed record FolderRequest(string? Folder);
     public sealed record AssignRequest(string? Guid, string? Key);
 }

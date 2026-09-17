@@ -83,6 +83,63 @@ public sealed class ControlsStoreTests : IDisposable
         Assert.Empty(_store.Backups());
     }
 
+    /// <summary>
+    /// A curve is per option group on the stick's options line, a dead zone
+    /// per axis on its deviceoptions block; a setting back at its default is
+    /// removed, the way the game writes one put back.
+    /// </summary>
+    [Fact]
+    public void Axis_settings_are_written_where_the_game_keeps_them_and_defaults_are_removed()
+    {
+        var changed = ControlsExport.ApplyAxes(XDocument.Parse(Live), 2, "Throttle - HOTAS Warthog", "{0404044F-0000-0000-0000-504944564944}",
+            [new CurveSetting("flight_strafe_forward", 1, false), new CurveSetting("flight_throttle_abs", 1.75, true)],
+            new Dictionary<string, double> { ["z"] = 0.12, ["x"] = 0 });
+        var throttle = ControlProfile.Parse(changed).Devices.Single(d => d.Key == "js2");
+
+        Assert.DoesNotContain(throttle.Curves, c => c.Option == "flight_strafe_forward");
+        var abs = Assert.Single(throttle.Curves);
+        Assert.Equal("flight_throttle_abs", abs.Option);
+        Assert.Equal(1.75, abs.Exponent);
+        Assert.True(abs.Inverted);
+        Assert.Equal(0.12, throttle.Deadzones["z"], 6);
+        Assert.False(throttle.Deadzones.ContainsKey("x"));
+
+        // A stick the profile has no options line for gets one, with its product.
+        var pedals = ControlsExport.ApplyAxes(XDocument.Parse(Live), 5, "T-Rudder", "{B679044F-0000-0000-0000-504944564944}",
+            [new CurveSetting("flight_move_yaw", 0.5, false)], new Dictionary<string, double> { ["x"] = 0.02 });
+        var js5 = ControlProfile.Parse(pedals).Devices.Single(d => d.Key == "js5");
+        Assert.Equal("T-Rudder", js5.Product);
+        Assert.Equal(0.5, Assert.Single(js5.Curves).Exponent);
+        Assert.Equal(0.02, js5.Deadzones["x"], 6);
+    }
+
+    /// <summary>
+    /// Setting a control on an action replaces that action's binding on the
+    /// same stick and leaves its keyboard one; taking one off falls back to
+    /// the game's own; an action with nothing left is no line at all.
+    /// </summary>
+    [Fact]
+    public void Binding_changes_replace_per_device_and_remove_cleanly()
+    {
+        var changed = ControlsExport.ApplyBindings(XDocument.Parse(Live),
+        [
+            new BindingChange("spaceship_movement", "v_afterburner", "js2_button3"),
+            new BindingChange("seat_general", "v_eject", "js2_button7", Remove: true),
+            new BindingChange("spaceship_targeting", "v_target_cycle_all_fwd", "js3_button1", ActivationMode: "hold"),
+        ]);
+        var profile = ControlProfile.Parse(changed);
+
+        var afterburner = profile.Bindings.Where(b => b.Action == "v_afterburner").Select(b => b.Input.Raw).Order().ToList();
+        Assert.Equal(["js2_button3", "kb1_lshift"], afterburner);
+        Assert.DoesNotContain(profile.Bindings, b => b.Action == "v_eject");
+        Assert.Null(changed.Root!.Element("ActionProfiles")!.Elements("actionmap").FirstOrDefault(m => (string?)m.Attribute("name") == "seat_general"));
+        var cycle = Assert.Single(profile.Bindings, b => b.Action == "v_target_cycle_all_fwd");
+        Assert.Equal("js3_button1", cycle.Input.Raw);
+        Assert.Equal("hold", cycle.ActivationMode);
+        // The rest untouched.
+        Assert.Equal("js3_x", Assert.Single(profile.Bindings, b => b.Action == "v_yaw").Input.Raw);
+    }
+
     [Fact]
     public void The_diff_names_what_moved_what_went_and_what_arrived()
     {

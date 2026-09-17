@@ -2607,6 +2607,19 @@
     <p class="muted" id="controls-unready" hidden></p>
     <p class="muted small" id="controls-status"></p>
 
+    <!-- Staged changes, from either pane, applied as one write. -->
+    <div class="controls-pending" id="controls-pending" hidden>
+      <div class="option-head">
+        <h3 id="controls-pending-title"></h3>
+        <div class="controls">
+          <button class="ghost" id="controls-pending-apply">Apply</button>
+          <button class="ghost" id="controls-pending-discard">Discard</button>
+        </div>
+      </div>
+      <ul class="controls-pending-list" id="controls-pending-list"></ul>
+      <p class="muted small" id="controls-pending-note"></p>
+    </div>
+
     <nav class="subtabs" id="controls-tabs" aria-label="Controls pages">
       <button type="button" data-pane="devices" class="active">Sticks</button>
       <button type="button" data-pane="actions">Actions</button>
@@ -2639,6 +2652,7 @@
                 <th>Bound to</th>
                 <th class="num" title="How the action fires: tap, hold, double tap…">Mode</th>
                 <th id="controls-layout-head" hidden>The game's layout</th>
+                <th title="Give this control an action, or take its binding off">Change</th>
               </tr></thead>
               <tbody></tbody>
             </table>
@@ -2665,6 +2679,7 @@
             <th>On your sticks</th>
             <th>Keyboard</th>
             <th class="num" title="How the action fires">Mode</th>
+            <th title="Bind this action to a stick's control">Bind</th>
           </tr></thead>
           <tbody></tbody>
         </table>

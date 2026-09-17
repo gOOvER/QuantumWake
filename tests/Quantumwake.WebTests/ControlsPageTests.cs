@@ -108,11 +108,12 @@ public class ControlsPageTests
         Assert.Contains("y axis", table);
         Assert.Contains("Pitch", table);
         Assert.Contains("Flight - Movement · FLIGHT", table);
-        Assert.Contains("x dead zone 3%", page.NodeText("#controls-axes"));
-        Assert.Contains("move pitch curve 1.5", page.NodeText("#controls-axes"));
+        Assert.Contains("x axis", page.NodeText("#controls-axes"));
+        Assert.Contains("move pitch", page.NodeText("#controls-axes"));
 
         page.Do("controlsDevice = 'js2'; await renderControlsDevice();");
-        var throttle = page.NodeText("#controls-buttons tbody");
+        // The bound-to cells alone: the change picker lists every action, Eject included.
+        var throttle = page.Text("__dom.node('#controls-buttons tbody').children.map(tr => tr.children.slice(0, 3).map(td => td.textContent).join(' ')).join('|')");
         Assert.Contains("Button 11", throttle);
         Assert.Contains("button 5 + Afterburner", throttle);
         Assert.Contains("hold", throttle);
@@ -283,6 +284,90 @@ public class ControlsPageTests
         var page = Opened("backups");
         page.Do("controlsBackups = [{id:'x', writtenAt:'2026-09-16T23:56:10Z', takenAt:'2026-09-16T23:56:12Z', bytes:1, hash:'x'}]; globalThis.confirm = () => false; await controlsRestore(controlsBackups[0], __dom.node('#controls-keep'));");
         Assert.DoesNotContain("POST /api/controls/restore", page.Fetched());
+    }
+
+    /// <summary>
+    /// The axes editor: one row per axis and option group, the profile's
+    /// curve and dead zone in the fields, and Apply sending the group's
+    /// exponent, invert and the axis's dead zone as a fraction.
+    /// </summary>
+    [Fact]
+    public void The_axes_editor_shows_the_curves_and_sends_what_was_set()
+    {
+        var page = Opened();
+        page.Serve("/api/controls/axes", """{"how":"live","path":"x","keptBefore":"a","now":"b"}""");
+        page.Do("controlsDevice = 'js4'; await renderControlsDevice();");
+
+        var rows = "__dom.node('#controls-axes').querySelectorAll('tr').filter(tr => tr.dataset.axis)";
+        Assert.Equal(2, page.Count($"{rows}.length"));
+        Assert.Equal("1.5", page.Text($"{rows}.find(tr => tr.dataset.axis === 'y').querySelector('.controls-exponent').value"));
+        Assert.Equal("flight_move_pitch", page.Text($"{rows}.find(tr => tr.dataset.axis === 'y').dataset.group"));
+        Assert.Equal("3", page.Text($"{rows}.find(tr => tr.dataset.axis === 'x').querySelector('.controls-deadzone').value"));
+        Assert.Contains("Apply to the profile", page.NodeText("#controls-axes"));
+
+        page.Do($"{{ const rx = {rows}.find(tr => tr.dataset.axis === 'x'); rx.querySelector('.controls-exponent').value = '2.25'; rx.querySelector('.controls-invert').checked = true; rx.querySelector('.controls-deadzone').value = '5'; await controlsApplyAxes(controlsSticks().find(d => d.key === 'js4'), __dom.node('#controls-keep')); }}");
+        var sent = page.BodyOf("/api/controls/axes");
+        Assert.Contains("\"instance\":4", sent);
+        Assert.Contains("{\"option\":\"flight_move_yaw\",\"exponent\":2.25,\"inverted\":true}", sent);
+        Assert.Contains("\"x\":0.05", sent);
+        Assert.Contains("\"how\":\"live\"", sent);
+    }
+
+    /// <summary>
+    /// Mapping: a control given an action from the stick's table, an action
+    /// taken off a stick from the Actions pane, both staged into one list
+    /// with the clash the game would flag named, and applied as one write.
+    /// </summary>
+    [Fact]
+    public void Binding_changes_stage_from_either_pane_and_apply_together()
+    {
+        var page = Opened();
+        page.Serve("/api/controls/bindings", """{"how":"live","path":"x","changed":2,"keptBefore":"a","now":"b"}""");
+        page.Do("controlsDevice = 'js4'; await renderControlsDevice(); controlsPending = [];");
+        Assert.True(page.Truth("__dom.node('#controls-pending').hidden"));
+
+        // Button 6 (nothing on it) gets Self destruct, from the stick's table.
+        page.Do("{ const row14 = __dom.node('#controls-buttons tbody').children.find(tr => tr.dataset.control === 'button6'); const pick14 = row14.querySelector('.controls-action-pick'); pick14.value = 'seat_general/v_self_destruct'; pick14.listeners.change[0](); }");
+        Assert.False(page.Truth("__dom.node('#controls-pending').hidden"));
+        Assert.Contains("1 change to apply", page.NodeText("#controls-pending-title"));
+        Assert.Contains("Joystick - HOTAS Warthog button6 → Self destruct", page.NodeText("#controls-pending-list"));
+
+        // Eject taken off button 4, from the Actions pane.
+        page.Do("{ renderControlsActions(); const ejectRow = __dom.node('#controls-actions tbody').children.find(tr => tr.textContent.includes('Eject')); ejectRow.querySelectorAll('button')[0].click(); }");
+        Assert.Contains("2 changes to apply", page.NodeText("#controls-pending-title"));
+        Assert.Contains("Eject: take off Joystick - HOTAS Warthog button4", page.NodeText("#controls-pending-list"));
+
+        // Staging a second action on the same control replaces the first, not adds.
+        page.Do("controlsStage({actionMap:'seat_general', action:'v_light_amplification_toggle', input:'js4_button6', label:'Light amplification'});");
+        Assert.Contains("3 changes", page.NodeText("#controls-pending-title"));
+        page.Do("controlsStage({actionMap:'seat_general', action:'v_light_amplification_toggle', input:'js4_button15', label:'Light amplification'});");
+        Assert.Contains("3 changes", page.NodeText("#controls-pending-title"));
+        Assert.DoesNotContain("button6 → Light", page.NodeText("#controls-pending-list"));
+
+        // A clash the game would flag: Yaw's group already has Pitch on... no; the same control in the same group.
+        page.Do("controlsStage({actionMap:'spaceship_targeting_advanced', action:'v_target_cycle_hostile_fwd', input:'js4_button4', label:'Cycle Lock - Hostiles - Forward'});");
+        page.Do("controlsStage({actionMap:'seat_general', action:'v_self_destruct', input:'js4_button4', label:'Self destruct'});");
+        Assert.Contains("also Eject in the same group", page.NodeText("#controls-pending-list"));
+
+        page.Do("await controlsApplyBindings(__dom.node('#controls-pending-apply'));");
+        var sent = page.BodyOf("/api/controls/bindings");
+        Assert.Contains("\"action\":\"v_self_destruct\",\"input\":\"js4_button4\",\"remove\":false", sent);
+        Assert.Contains("\"action\":\"v_eject\",\"input\":\"js4_button4\",\"remove\":true", sent);
+        Assert.Contains("\"how\":\"live\"", sent);
+        Assert.True(page.Truth("__dom.node('#controls-pending').hidden"));
+    }
+
+    [Fact]
+    public void With_the_game_running_the_apply_becomes_an_import_file()
+    {
+        var page = new Page();
+        page.Serve("/api/controls", Model.Replace("\"ready\":true,", "\"ready\":true,\"gameRunning\":true,"));
+        page.Serve("/api/controls/backups", "[]");
+        page.Do("await loadControls(); controlsStage({actionMap:'seat_general', action:'v_self_destruct', input:'js4_button6', label:'Self destruct'});");
+
+        Assert.Contains("Apply as an import file", page.NodeText("#controls-pending-apply"));
+        Assert.Contains("Star Citizen is running", page.NodeText("#controls-pending-note"));
+        page.Do("controlsPending = [];");
     }
 
     /// <summary>

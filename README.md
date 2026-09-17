@@ -365,7 +365,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.3
+### 0.15.4
 
 - **A Controls page, under Settings: your sticks and what is bound to
   them.** Read from the game's own keybinding profile — every joystick it
@@ -405,6 +405,18 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   game closed, since it reads the profile at start and rewrites it in
   play, and only after keeping the profile as it was, so a restore is
   itself undoable.
+
+- **Mapping, and curves.** A control on a stick can be given any of the
+  game's actions from its row, or have its binding taken off; an action
+  can be bound to a stick and control from the Actions pane, or taken off
+  one. The changes stage into one list — with the clash the game would
+  flag named before it flags it — and go with one *Apply*. Each stick's
+  axes are an editor too: the curve the game keeps per axis group (its
+  exponent, with a preview), invert, and the dead zone per axis. Both are
+  written the way a restore is: into the profile with the game closed,
+  after keeping it as it was; as an import file for the keybinding screen
+  with the game open. The activation mode (tap, hold…) stays the action's
+  own for now.
 
 ### 0.14.17
 

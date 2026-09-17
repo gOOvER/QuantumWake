@@ -24,6 +24,16 @@ namespace Quantumwake.Core.Controls;
 /// <see cref="ControlInput"/> so a chord's modifiers move with it.
 /// </para>
 /// </remarks>
+/// <summary>One change to what an action is bound to.</summary>
+/// <param name="Input">The input as the game writes it - <c>js4_button7</c>; for a removal, the one to take off.</param>
+/// <param name="Remove">True to take the binding off; the action then falls back to the game's default for that device kind.</param>
+/// <param name="ActivationMode">A mode to write on the binding - <c>hold</c>, <c>double_tap</c> - or null for the action's own.</param>
+public sealed record BindingChange(string ActionMap, string Action, string Input, bool Remove = false, string? ActivationMode = null);
+
+/// <summary>A curve for one option group on one stick: the exponent, and whether the axis is inverted.</summary>
+/// <param name="Exponent">1 is linear; above it the centre is flatter; null leaves the game's default.</param>
+public sealed record CurveSetting(string Option, double? Exponent, bool Inverted);
+
 public static class ControlsExport
 {
     /// <summary>
@@ -105,6 +115,127 @@ public static class ControlsExport
         foreach (var child in root.Elements())
             if (child.Name.LocalName != "CustomisationUIHeader") profile.Add(new XElement(child));
         return new XDocument(new XElement("ActionMaps", profile));
+    }
+
+    /// <summary>
+    /// The profile with one stick's axis settings changed: the curve per
+    /// option group on its <c>options</c> line, the dead zone per axis on its
+    /// <c>deviceoptions</c> block. Everything else is left as the game wrote
+    /// it. A setting at its default - exponent 1, not inverted, dead zone 0 -
+    /// is removed rather than written, which is how the game writes a
+    /// setting put back.
+    /// </summary>
+    /// <param name="instance">The stick's number.</param>
+    /// <param name="product">Its product name, for a deviceoptions block that has to be made.</param>
+    /// <param name="guid">Its product GUID, likewise.</param>
+    public static XDocument ApplyAxes(
+        XDocument source, int instance, string? product, string? guid,
+        IReadOnlyList<CurveSetting> curves, IReadOnlyDictionary<string, double> deadzones)
+    {
+        var document = new XDocument(source);
+        var root = document.Root ?? throw new InvalidDataException("No root element.");
+        var profile = root.Name.LocalName == "ActionMaps" && root.Element("ActionProfiles") is { } inner ? inner : root;
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+
+        var options = profile.Elements("options").FirstOrDefault(o =>
+            (string?)o.Attribute("type") == "joystick" && (string?)o.Attribute("instance") == instance.ToString(culture));
+        if (options is null)
+        {
+            options = new XElement("options", new XAttribute("type", "joystick"), new XAttribute("instance", instance));
+            if (product is not null) options.SetAttributeValue("Product", guid is not null ? $"{product}  {guid}" : product);
+            // After the last options line, where the game keeps them.
+            var last = profile.Elements("options").LastOrDefault();
+            if (last is not null) last.AddAfterSelf(options); else profile.AddFirst(options);
+        }
+        foreach (var curve in curves)
+        {
+            if (string.IsNullOrWhiteSpace(curve.Option)) continue;
+            var line = options.Element(curve.Option);
+            var plain = (curve.Exponent is null || Math.Abs(curve.Exponent.Value - 1) < 0.0005) && !curve.Inverted;
+            if (plain) { line?.Remove(); continue; }
+            if (line is null) { line = new XElement(curve.Option); options.Add(line); }
+            if (curve.Exponent is { } e && Math.Abs(e - 1) >= 0.0005) line.SetAttributeValue("exponent", e.ToString("0.###", culture));
+            else line.SetAttributeValue("exponent", null);
+            line.SetAttributeValue("invert", curve.Inverted ? "1" : null);
+        }
+
+        if (deadzones.Count > 0 && product is not null)
+        {
+            var block = profile.Elements("deviceoptions").FirstOrDefault(d =>
+                ((string?)d.Attribute("name") ?? "").StartsWith(product, StringComparison.OrdinalIgnoreCase));
+            if (block is null)
+            {
+                block = new XElement("deviceoptions", new XAttribute("name", guid is not null ? $"{product}  {guid}" : product));
+                profile.AddFirst(block);
+            }
+            foreach (var (axis, value) in deadzones)
+            {
+                var option = block.Elements("option").FirstOrDefault(o => string.Equals((string?)o.Attribute("input"), axis, StringComparison.OrdinalIgnoreCase));
+                if (value <= 0) { option?.Remove(); continue; }
+                if (option is null) { option = new XElement("option", new XAttribute("input", axis)); block.Add(option); }
+                option.SetAttributeValue("deadzone", value.ToString("0.####", culture));
+            }
+            if (!block.Elements("option").Any()) block.Remove();
+        }
+
+        return document;
+    }
+
+    /// <summary>
+    /// The profile with bindings changed. Setting an input on an action
+    /// replaces whatever that action had on the same device - the game
+    /// keeps one binding per device per action - and leaves its bindings on
+    /// other devices alone; removing one takes that rebind off, which is
+    /// the game's default back, not a cleared default. An action map or
+    /// action the profile has no line for yet is made.
+    /// </summary>
+    public static XDocument ApplyBindings(XDocument source, IReadOnlyList<BindingChange> changes)
+    {
+        var document = new XDocument(source);
+        var root = document.Root ?? throw new InvalidDataException("No root element.");
+        var profile = root.Name.LocalName == "ActionMaps" && root.Element("ActionProfiles") is { } inner ? inner : root;
+
+        foreach (var change in changes)
+        {
+            if (string.IsNullOrWhiteSpace(change.ActionMap) || string.IsNullOrWhiteSpace(change.Action) || string.IsNullOrWhiteSpace(change.Input)) continue;
+            var input = ControlInput.Parse(change.Input);
+            var map = profile.Elements("actionmap").FirstOrDefault(m => (string?)m.Attribute("name") == change.ActionMap);
+            if (map is null)
+            {
+                if (change.Remove) continue;
+                map = new XElement("actionmap", new XAttribute("name", change.ActionMap));
+                profile.Add(map);
+            }
+            var action = map.Elements("action").FirstOrDefault(a => (string?)a.Attribute("name") == change.Action);
+            if (action is null)
+            {
+                if (change.Remove) continue;
+                action = new XElement("action", new XAttribute("name", change.Action));
+                map.Add(action);
+            }
+
+            if (change.Remove)
+            {
+                foreach (var rebind in action.Elements("rebind").Where(r => string.Equals((string?)r.Attribute("input"), change.Input, StringComparison.OrdinalIgnoreCase)).ToList())
+                    rebind.Remove();
+            }
+            else
+            {
+                // One binding per device on an action: the old one on this
+                // device goes, one on a keyboard or another stick stays.
+                foreach (var rebind in action.Elements("rebind").Where(r => ControlInput.Parse((string?)r.Attribute("input") ?? "").DeviceKey == input.DeviceKey).ToList())
+                    rebind.Remove();
+                var made = new XElement("rebind", new XAttribute("input", change.Input));
+                if (!string.IsNullOrWhiteSpace(change.ActivationMode)) made.SetAttributeValue("activationMode", change.ActivationMode);
+                action.Add(made);
+            }
+
+            // An action with nothing left is no line at all, as the game writes it.
+            if (!action.HasElements) action.Remove();
+            if (!map.HasElements) map.Remove();
+        }
+
+        return document;
     }
 
     /// <summary>One input string with its joystick instances moved; anything not a joystick is left alone.</summary>

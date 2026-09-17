@@ -257,5 +257,7 @@ The reading half, as planned above, on branch `controls`:
   bindings (59 more rebinds are `jsN_ `, defaults taken away), 45
   templates indexed, the Warthog stick and throttle matched and drawn.
 
+Since then (0.15.3, 0.15.4): download and add-from-file for the backups, a restore over the live profile with the game closed (the profile kept first; an export re-framed by `ControlsExport.ToLive`), an axes editor (`ControlsExport.ApplyAxes` - exponent and invert per option group on the stick's options line, dead zone per axis on deviceoptions), and binding changes (`ControlsExport.ApplyBindings` - one binding per device per action, a removal falls back to the game's default). Both write the two ways a restore does: `POST /api/controls/axes` and `/api/controls/bindings` with `how: live|export`.
+
 Not built yet: the live half (`RawGameController` in the tray host, the
 pressed button lit on the picture), and the pilot-taught picture.

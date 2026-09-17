@@ -8998,6 +8998,7 @@ async function loadControls() {
   renderControlsDevices();
   renderControlsActions();
   renderControlsPictures();
+  renderControlsPending();
   showControlsPane(controlsPane);
 }
 
@@ -9154,27 +9155,194 @@ async function renderControlsDevice() {
       ref.textContent = there.length ? there.map(controlsBindingWords).join(', ') : '—';
       tr.append(ref);
     }
+    // Change: give the control an action, or take its binding off.
+    const change = el('td');
+    const pick = controlsActionPicker(here);
+    pick.addEventListener('change', () => {
+      if (!pick.value) return;
+      const input = `${device.key}_${control}`;
+      if (pick.value === '__remove__') {
+        for (const b of here) controlsStage({ actionMap: b.actionMap, action: b.action, input: b.input.raw, remove: true, label: b.label });
+      } else {
+        const [actionMap, action] = pick.value.split('/');
+        const info = controlsModel.catalogue.actions.find((a) => a.actionMap === actionMap && a.name === action);
+        controlsStage({ actionMap, action, input, label: info?.label || action });
+      }
+      pick.value = '';
+    });
+    change.append(pick);
+    tr.append(change);
     tr.addEventListener('mouseenter', () => controlsHighlight(control, true));
     tr.addEventListener('mouseleave', () => controlsHighlight(control, false));
     body.append(tr);
   }
   if (!shown) {
     const td = el('td', 'muted', q ? 'Nothing on this stick matches.' : 'Nothing is bound to this stick and its picture names no controls.');
-    td.colSpan = 4;
+    td.colSpan = 5;
     const tr = el('tr');
     tr.append(td);
     body.append(tr);
   }
 
-  // Axes and their curves, which the picture rarely shows.
-  const axes = $('#controls-axes');
-  axes.textContent = '';
-  const curveLines = [];
-  for (const [axis, dz] of Object.entries(device.deadzones || {})) curveLines.push(`${axis} dead zone ${Math.round(dz * 1000) / 10}%`);
-  for (const c of device.curves || []) curveLines.push(`${c.option.replace(/^flight_/, '').replace(/_/g, ' ')}${c.exponent != null ? ` curve ${c.exponent}` : ''}${c.inverted ? ' inverted' : ''}`);
-  if (curveLines.length) {
-    axes.append(el('h4', null, 'Axes'));
-    axes.append(el('p', 'muted small', curveLines.join(' · ')));
+  renderControlsAxes(device, bound);
+}
+
+/**
+ * The axes as an editor: for each axis the stick binds, the curve the
+ * profile sets on the action's option group (exponent and invert) and the
+ * dead zone on the axis, with a preview, and Apply. The game keeps the
+ * curve per option group - flight_move_pitch, not "y" - so an axis that
+ * drives two groups gets two rows and a group nothing drives gets none.
+ */
+function renderControlsAxes(device, bound) {
+  const box = $('#controls-axes');
+  box.textContent = '';
+  const catalogue = controlsModel.catalogue;
+  const rows = [];
+  for (const [control, list] of bound) {
+    if (/^(button|hat)/.test(control)) continue;
+    for (const b of list) {
+      const action = catalogue.actions.find((a) => a.actionMap === b.actionMap && a.name === b.action);
+      rows.push({ axis: control, binding: b, group: action?.optionGroup || '' });
+    }
+  }
+  if (!rows.length) return;
+
+  box.append(el('h4', null, 'Axes'));
+  box.append(el('p', 'muted small', 'The curve is the game\'s exponent on the action\'s axis group: 1 is straight, above it the centre goes softer and the ends sharper. The dead zone is on the axis itself. What you set here is written the way a restore is.'));
+  const table = el('table', 'controls-axes-table');
+  const head = el('tr');
+  for (const [label, cls] of [['Axis', null], ['Drives', null], ['Curve', 'num'], ['Invert', null], ['Dead zone', 'num'], ['', null]]) head.append(el('th', cls, label));
+  const thead = el('thead');
+  thead.append(head);
+  table.append(thead);
+  const body = el('tbody');
+  const seenAxis = new Set();
+  for (const r of rows) {
+    const curve = (device.curves || []).find((c) => c.option === r.group) || {};
+    const tr = el('tr');
+    tr.dataset.axis = r.axis;
+    tr.dataset.group = r.group;
+    tr.append(el('td', 'controls-control', `${r.axis} axis`));
+    const drives = el('td', null, r.binding.label);
+    drives.append(el('div', 'armoury-kind', r.group ? r.group.replace(/^flight_/, '').replace(/_/g, ' ') : 'no curve group: the game keeps no curve for this action'));
+    tr.append(drives);
+
+    const curveCell = el('td', 'num');
+    const exponent = el('input', 'controls-exponent');
+    exponent.type = 'number';
+    exponent.min = '0.2';
+    exponent.max = '5';
+    exponent.step = '0.05';
+    exponent.value = String(curve.exponent ?? 1);
+    exponent.disabled = !r.group;
+    curveCell.append(exponent);
+    tr.append(curveCell);
+
+    const invertCell = el('td');
+    const invert = el('input', 'controls-invert');
+    invert.type = 'checkbox';
+    invert.checked = !!curve.inverted;
+    invert.disabled = !r.group;
+    invertCell.append(invert);
+    tr.append(invertCell);
+
+    const dzCell = el('td', 'num');
+    const dz = el('input', 'controls-deadzone');
+    dz.type = 'number';
+    dz.min = '0';
+    dz.max = '50';
+    dz.step = '0.5';
+    const dzNow = device.deadzones?.[r.axis];
+    dz.value = String(dzNow != null ? Math.round(dzNow * 1000) / 10 : 0);
+    // One dead zone per axis: a second row on the same axis shows it, and
+    // the first row's is the one sent.
+    if (seenAxis.has(r.axis)) dz.disabled = true; else seenAxis.add(r.axis);
+    dzCell.append(dz);
+    dzCell.append(el('span', 'muted', ' %'));
+    tr.append(dzCell);
+
+    const preview = el('td');
+    const svg = controlsCurvePreview(Number(exponent.value), invert.checked, Number(dz.value) / 100);
+    preview.append(svg);
+    const redraw = () => preview.replaceChild(controlsCurvePreview(Number(exponent.value) || 1, invert.checked, (Number(dz.value) || 0) / 100), preview.firstChild);
+    exponent.addEventListener('input', redraw);
+    invert.addEventListener('change', redraw);
+    dz.addEventListener('input', redraw);
+    tr.append(preview);
+    body.append(tr);
+  }
+  table.append(body);
+  box.append(table);
+
+  const bar = el('div', 'controls armoury-filters');
+  const apply = el('button', 'ghost', controlsModel.gameRunning ? 'Apply as an import file' : 'Apply to the profile');
+  apply.type = 'button';
+  apply.title = controlsModel.gameRunning
+    ? 'Star Citizen is running: the change is written as a file the keybinding screen imports'
+    : 'Written into the game\'s profile, after keeping it as it is';
+  apply.addEventListener('click', () => controlsApplyAxes(device, apply));
+  bar.append(apply);
+  bar.append(el('span', 'muted small controls-axes-note'));
+  box.append(bar);
+}
+
+/** A small graph of output against input for a curve, with the dead zone as a flat start. */
+function controlsCurvePreview(exponent, inverted, deadzone) {
+  const ns = 'http://www.w3.org/2000/svg';
+  const make = (tag) => (typeof document.createElementNS === 'function' ? document.createElementNS(ns, tag) : el(tag));
+  const svg = make('svg');
+  svg.setAttribute('viewBox', '0 0 64 64');
+  svg.setAttribute('class', 'controls-curve');
+  const axis = make('path');
+  axis.setAttribute('d', 'M0 64 L64 64 M0 0 L0 64 M0 64 L64 0');
+  axis.setAttribute('class', 'controls-curve-axis');
+  svg.append(axis);
+  const points = [];
+  for (let i = 0; i <= 32; i++) {
+    const x = i / 32;
+    const past = Math.max(0, x - deadzone) / Math.max(0.0001, 1 - deadzone);
+    let y = Math.pow(past, exponent > 0 ? exponent : 1);
+    if (inverted) y = -y;
+    points.push(`${(x * 64).toFixed(1)},${(64 - y * 64).toFixed(1)}`);
+  }
+  const line = make('polyline');
+  line.setAttribute('points', points.join(' '));
+  line.setAttribute('class', 'controls-curve-line');
+  svg.append(line);
+  return svg;
+}
+
+async function controlsApplyAxes(device, button) {
+  const note = $('#controls-axes .controls-axes-note');
+  const curves = [];
+  const deadzones = {};
+  for (const tr of $('#controls-axes')?.querySelectorAll?.('tr') || []) {
+    if (!tr.dataset?.axis) continue;
+    const exponent = tr.querySelector('.controls-exponent');
+    const invert = tr.querySelector('.controls-invert');
+    const dz = tr.querySelector('.controls-deadzone');
+    if (tr.dataset.group && exponent && !exponent.disabled)
+      curves.push({ option: tr.dataset.group, exponent: Number(exponent.value) || 1, inverted: !!invert?.checked });
+    if (dz && !dz.disabled) deadzones[tr.dataset.axis] = Math.max(0, Number(dz.value) || 0) / 100;
+  }
+  button.disabled = true;
+  try {
+    const response = await fetch('/api/controls/axes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instance: device.instance, curves, deadzones, how: controlsModel.gameRunning ? 'export' : 'live' }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) { note.textContent = result.message || result.title || `Could not apply (${response.status}).`; return; }
+    note.textContent = result.how === 'live'
+      ? 'Written to the profile; the game reads it at its next start. The profile as it was is kept under Backups.'
+      : `Written as ${result.mappings}. In the game: Options → Keybindings → import "${result.name}", or at the console: ${result.command}.`;
+    if (result.how === 'live') await loadControls();
+  } catch (err) {
+    note.textContent = `Could not apply: ${err.message}`;
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -9410,6 +9578,138 @@ function controlsHighlight(control, on) {
     node.classList?.toggle('lit', on);
 }
 
+/* ---------- changing bindings ---------- */
+
+/**
+ * Changes are staged, from either pane, and written together: one write
+ * to the profile with the game closed, or one import file with it open.
+ * A change is keyed by action and device, since the game keeps one binding
+ * per device per action - staging a second control for the same action on
+ * the same stick replaces the first.
+ */
+let controlsPending = [];
+
+function controlsStage(change) {
+  const key = (c) => `${c.actionMap}/${c.action}/${ControlInput_deviceKey(c.input)}`;
+  controlsPending = controlsPending.filter((c) => key(c) !== key(change));
+  controlsPending.push(change);
+  renderControlsPending();
+}
+
+/** js4 from js4_button7, without parsing the rest. */
+function ControlInput_deviceKey(raw) {
+  const m = /^([a-z]{2}\d+)_/i.exec(raw || '');
+  return m ? m[1].toLowerCase() : '';
+}
+
+function controlsUnstage(index) {
+  controlsPending.splice(index, 1);
+  renderControlsPending();
+}
+
+/** What a control on a stick is bound to right now, as words, for the pending list. */
+function controlsBoundNow(input) {
+  return (controlsModel?.profile?.bindings || []).filter((b) => b.input.raw.toLowerCase() === input.toLowerCase()).map((b) => b.label);
+}
+
+function renderControlsPending() {
+  const box = $('#controls-pending');
+  if (!box) return;
+  box.hidden = !controlsPending.length;
+  if (!controlsPending.length) return;
+  $('#controls-pending-title').textContent = `${controlsPending.length} change${controlsPending.length === 1 ? '' : 's'} to apply`;
+  const list = $('#controls-pending-list');
+  list.textContent = '';
+  const sticks = new Map(controlsSticks().map((d) => [d.key, d]));
+  controlsPending.forEach((c, i) => {
+    const li = el('li');
+    const stick = sticks.get(ControlInput_deviceKey(c.input));
+    const where = `${stick ? stick.product : ControlInput_deviceKey(c.input)} ${c.input.replace(/^[a-z]{2}\d+_/, '').replace('_', ' ')}`;
+    li.append(el('span', null, c.remove ? `${c.label}: take off ${where}` : `${where} → ${c.label}`));
+    if (!c.remove) {
+      // The game flags two actions on one control in the same group; say so before it does.
+      const also = (controlsModel?.profile?.bindings || []).filter((b) => b.input.raw.toLowerCase() === c.input.toLowerCase() && b.actionMap === c.actionMap && b.action !== c.action);
+      if (also.length) li.append(el('span', 'controls-warn', ` also ${also.map((b) => b.label).join(', ')} in the same group - the game will flag the clash`));
+      const now = controlsBoundNow(c.input).filter((l) => l !== c.label);
+      if (now.length && !also.length) li.append(el('span', 'muted', ` (was ${now.join(', ')})`));
+    }
+    const undo = el('button', 'ghost small', 'undo');
+    undo.type = 'button';
+    undo.addEventListener('click', () => controlsUnstage(i));
+    li.append(undo);
+    list.append(li);
+  });
+  $('#controls-pending-apply').textContent = controlsModel?.gameRunning ? 'Apply as an import file' : 'Apply to the profile';
+  $('#controls-pending-note').textContent = controlsModel?.gameRunning
+    ? 'Star Citizen is running: the changes are written as a file the keybinding screen imports.'
+    : 'Written into the game\'s profile, after keeping it as it is; the game reads it at its next start.';
+}
+
+async function controlsApplyBindings(button) {
+  if (!controlsPending.length) return;
+  const note = $('#controls-pending-note');
+  button.disabled = true;
+  try {
+    const response = await fetch('/api/controls/bindings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        changes: controlsPending.map((c) => ({ actionMap: c.actionMap, action: c.action, input: c.input, remove: !!c.remove })),
+        how: controlsModel?.gameRunning ? 'export' : 'live',
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) { note.textContent = result.message || result.title || `Could not apply (${response.status}).`; return; }
+    controlsPending = [];
+    if (result.how === 'live') {
+      await loadControls();
+      $('#controls-status').textContent += ' Bindings written; the profile as it was is kept under Backups.';
+    } else {
+      renderControlsPending();
+      $('#controls-status').textContent = `Written as ${result.mappings}. In the game: Options → Keybindings → import "${result.name}", or at the console: ${result.command}.`;
+    }
+  } catch (err) {
+    note.textContent = `Could not apply: ${err.message}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+$('#controls-pending-apply')?.addEventListener('click', (e) => controlsApplyBindings(e.currentTarget));
+$('#controls-pending-discard')?.addEventListener('click', () => { controlsPending = []; renderControlsPending(); });
+
+/** A select of every action the game can bind, by group, with "keep" and "take off" first. */
+function controlsActionPicker(current) {
+  const select = el('select', 'select controls-action-pick');
+  select.append(new Option('…', ''));
+  if (current?.length) select.append(new Option('take off', '__remove__'));
+  const maps = controlsModel?.catalogue?.maps || [];
+  for (const map of maps) {
+    const group = el('optgroup');
+    group.label = map.category ? `${map.label} · ${map.category}` : map.label;
+    for (const a of (controlsModel?.catalogue?.actions || []).filter((x) => x.actionMap === map.name))
+      group.append(new Option(a.label, `${map.name}/${a.name}`));
+    select.append(group);
+  }
+  return select;
+}
+
+/** A stick and one of its controls, composed into the input the game writes. */
+function controlsInputPicker() {
+  const wrap = el('span', 'controls-input-pick');
+  const stick = el('select', 'select');
+  for (const d of controlsSticks()) stick.append(new Option(d.product, d.key));
+  const control = el('select', 'select');
+  for (let i = 1; i <= 32; i++) control.append(new Option(`button ${i}`, `button${i}`));
+  for (const h of [1, 2]) for (const dir of ['up', 'down', 'left', 'right']) control.append(new Option(`hat ${h} ${dir}`, `hat${h}_${dir}`));
+  for (const a of ['x', 'y', 'z', 'rotx', 'roty', 'rotz', 'slider1', 'slider2']) control.append(new Option(`${a} axis`, a));
+  wrap.append(stick, control);
+  wrap.value = () => `${stick.value}_${control.value}`;
+  wrap.stick = stick;
+  wrap.control = control;
+  return wrap;
+}
+
 /* ---------- the actions ---------- */
 
 function renderControlsActions() {
@@ -9474,6 +9774,34 @@ function renderControlsActions() {
       tr.append(on);
       tr.append(el('td', 'muted', keyboard.length ? keyboard.join(', ') : a.keyboard ? `default: ${a.keyboard}` : '—'));
       tr.append(el('td', 'num muted', controlsModeWord((onSticks[0] || mine[0])?.activationMode || a.activationMode)));
+      // Bind: a stick and a control for this action; × on a binding takes it off.
+      const bind = el('td', 'controls-bind-cell');
+      for (const b of onSticks) {
+        const off = el('button', 'ghost small', `× ${b.input.label}`);
+        off.type = 'button';
+        off.title = `Take this action off ${sticks.get(b.input.deviceKey)?.product || b.input.deviceKey}`;
+        off.addEventListener('click', () => controlsStage({ actionMap: map.name, action: a.name, input: b.input.raw, remove: true, label: a.label }));
+        bind.append(off);
+      }
+      if (controlsSticks().length) {
+        const add = el('button', 'ghost small', 'Bind to…');
+        add.type = 'button';
+        add.addEventListener('click', () => {
+          add.hidden = true;
+          const picker = controlsInputPicker();
+          const ok = el('button', 'ghost small', 'Stage');
+          ok.type = 'button';
+          ok.addEventListener('click', () => {
+            controlsStage({ actionMap: map.name, action: a.name, input: picker.value(), label: a.label });
+            picker.remove();
+            ok.remove();
+            add.hidden = false;
+          });
+          bind.append(picker, ok);
+        });
+        bind.append(add);
+      }
+      tr.append(bind);
       body.append(tr);
     }
   }

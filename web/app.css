@@ -5322,3 +5322,16 @@ td.armoury-cost { color: var(--amber); }
 .controls-grid-axis-name { font: 12px var(--mono); color: var(--cyan); min-width: 60px; }
 .controls-backup-actions { white-space: nowrap; }
 .controls-backup-actions .ghost + .ghost { margin-left: 5px; }
+.controls-axes-table { width: auto; min-width: 70%; margin-top: 6px; }
+.controls-axes-table input[type="number"] { width: 64px; padding: 2px 4px; font: 12px var(--mono); background: var(--deep); color: var(--text); border: 1px solid var(--rule); }
+.controls-curve { width: 48px; height: 48px; display: block; }
+.controls-curve-axis { fill: none; stroke: var(--rule-hot); stroke-width: 1; }
+.controls-curve-line { fill: none; stroke: var(--cyan); stroke-width: 2; }
+.controls-pending { margin: 0 0 12px; border: 1px solid var(--cyan-deep); background: var(--panel); padding: 10px 14px; }
+.controls-pending-list { margin: 6px 0; padding-left: 18px; font-size: 12.5px; line-height: 1.6; }
+.controls-pending-list .ghost.small { margin-left: 8px; }
+.controls-warn { color: var(--amber); }
+.controls-action-pick { max-width: 160px; font-size: 11px; }
+.controls-input-pick .select { font-size: 11px; margin-right: 4px; }
+.controls-bind-cell { white-space: nowrap; }
+.controls-bind-cell .ghost.small { margin: 1px 4px 1px 0; }
