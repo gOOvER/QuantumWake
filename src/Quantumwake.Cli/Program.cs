@@ -75,6 +75,183 @@ if (GetOption(args, "--screen") is { } screenFile)
     return Screen(screenFile, install.RootPath, GetOption(args, "--catalogue"));
 }
 
+// The mining model as the install has it: the constants, every mineral's
+// resistance and instability, every laser's power and modifiers, the modules
+// and the gadgets. The table behind docs/mining.md; run it again after a
+// patch and against the community tools, which read the same files.
+if (args.Contains("--mining"))
+{
+    var cache = Path.Combine(Path.GetDirectoryName(SessionStore.DatabasePathFor(install.RootPath))!, "commodities.json");
+    var mining = GameCommodities.Load(install.RootPath, cache).Mining;
+
+    if (mining.Constants is { } k)
+    {
+        Console.WriteLine($"constants: capacity {k.PowerCapacityPerMass}/kg, decay {k.DecayPerMass}/kg/s, window {k.OptimalWindowSize} (max {k.OptimalWindowMaxSize}, factor {k.OptimalWindowFactor}), "
+            + $"resistance curve {k.ResistanceCurveFactor}, thinness curve {k.OptimalWindowThinnessCurveFactor}, fill {k.ControlledBreakingFillRate}/s (danger {k.DangerBreakingFillRate}/s), "
+            + $"absorbable below {k.AbsorbableVolumeThreshold}, {k.CentiScuPerVolume} cSCU per volume");
+    }
+    else Console.WriteLine("constants: none read");
+
+    Console.WriteLine($"\n{mining.Minerals.Count} minerals");
+    foreach (var m in mining.Minerals)
+        Console.WriteLine($"  {m.Name,-24} {m.Method,-6} resistance {m.Resistance,6:0.00}  instability {m.Instability,6:0}  window {m.WindowMidpoint:0.00}±{m.WindowRandomness:0.00} thin {m.WindowThinness,5:0.0}  explosion ×{m.ExplosionMultiplier,-5:0}  cluster {m.ClusterFactor:0.00}  [{m.Class}]");
+
+    static string Mods(MiningModifiers x) => string.Join(" ", new[]
+    {
+        x.Resistance != 0 ? $"res {x.Resistance:+0.#;-0.#}%" : null,
+        x.Instability != 0 ? $"inst {x.Instability:+0.#;-0.#}%" : null,
+        x.WindowSize != 0 ? $"window {x.WindowSize:+0.#;-0.#}%" : null,
+        x.WindowRate != 0 ? $"rate {x.WindowRate:+0.#;-0.#}%" : null,
+        x.CatastrophicRate != 0 ? $"overcharge {x.CatastrophicRate:+0.#;-0.#}%" : null,
+        x.ShatterDamage != 0 ? $"shatter {x.ShatterDamage:+0.#;-0.#}%" : null,
+        x.ClusterFactor != 0 ? $"cluster {x.ClusterFactor:+0.#;-0.#}%" : null,
+    }.Where(s => s is not null));
+
+    Console.WriteLine($"\n{mining.Lasers.Count} lasers");
+    foreach (var l in mining.Lasers)
+        Console.WriteLine($"  S{l.Size} {l.Name,-28} power {l.Power,6:0}  extraction {l.ExtractionPower,5:0}  slots {l.Slots}  filter {l.FilterModifier,3:0}%  throttle min {l.ThrottleMinimum:0.00}  {Mods(l.Modifiers)}  [{l.Class}]");
+
+    Console.WriteLine($"\n{mining.Modules.Count} modules");
+    foreach (var m in mining.Modules)
+        Console.WriteLine($"  {(m.Active ? "active " : "passive")} {m.Name,-22} power ×{m.PowerMultiplier:0.00}  extraction ×{m.ExtractionMultiplier:0.00}  filter {m.FilterModifier,4:0.#}%  {(m.Active ? $"{m.Lifetime:0}s × {m.Charges}  " : "")}{Mods(m.Modifiers)}  [{m.Class}]");
+
+    Console.WriteLine($"\n{mining.Gadgets.Count} gadgets");
+    foreach (var g in mining.Gadgets)
+        Console.WriteLine($"  {g.Name,-12} {Mods(g.Modifiers)}  [{g.Class}]");
+
+    Console.WriteLine($"\n{mining.Compositions.Count} compositions");
+    foreach (var c in mining.Compositions.OrderBy(c => c.Class, StringComparer.OrdinalIgnoreCase))
+        Console.WriteLine($"  {c.Class,-36} {c.Name,-24} min {c.MinimumDistinctElements} distinct: {string.Join(", ", c.Parts.Select(p => $"{p.Element} {p.MinPercent:0}-{p.MaxPercent:0}% p{p.Probability:0.00}"))}");
+
+    return 0;
+}
+
+// The personal armoury as the install has it: every gun with its damage,
+// rate, magazine and fire modes, every piece of armour with its resistances
+// and the figures that actually differ between pieces. The table behind
+// docs/armoury.md; run it again after a patch and against the community
+// tables, which read the same files. --armoury=all lists the finishes too.
+// Cargo fit: the crates as the install sizes them, every hull's grids as the
+// community digest places them, the check that the grids sum to the dump's
+// own capacity, and the question that started it. The table behind
+// docs/cargo-fit.md; run it again after a patch or a dataset refresh.
+// Salvage as the install has it: the constants, every scraper module and
+// head, and each hull's controller - what it scrapes to, what it
+// disintegrates to and how fast. What is NOT here, and why, is in
+// docs/salvage.md: a hull's own yield needs its surface area and volume,
+// which are geometry the DataCore does not hold.
+if (args.Contains("--salvage", StringComparer.OrdinalIgnoreCase))
+{
+    var cache = Path.Combine(Path.GetDirectoryName(SessionStore.DatabasePathFor(install.RootPath))!, "commodities.json");
+    var salvage = GameCommodities.Load(install.RootPath, cache).Salvage;
+
+    Console.WriteLine(salvage.Constants is { } k
+        ? $"constants: hull thickness {k.HullThicknessMetres * 1000:0.#} mm, ammo-to-material factor {k.AmmoToMaterialFactor}"
+        : "constants: none read");
+
+    Console.WriteLine($"\n{salvage.Heads.Count} heads");
+    foreach (var h in salvage.Heads) Console.WriteLine($"  {h.Name,-28} {h.Slots} module slots  {h.Manufacturer}  [{h.Class}]");
+
+    Console.WriteLine($"\n{salvage.Modules.Count} scraper modules");
+    foreach (var m in salvage.Modules) Console.WriteLine($"  {m.Name,-28} speed {m.Speed,5:0.###}  radius {m.Radius,4:0.##} m  efficiency {m.Efficiency:P0}  {m.Manufacturer}  [{m.Class}]");
+
+    Console.WriteLine($"\n{salvage.Ships.Count} salvage hulls");
+    foreach (var s in salvage.Ships)
+        Console.WriteLine($"  {s.Ship,-24} scrapes to {s.ScrapesTo ?? "-",-6} disintegrates {s.ScuPerCubicMetre:0.#####} SCU/m³ of {s.DisintegratesTo ?? "-",-28} heads {s.Heads}  {s.BoxSecondsPerScu:0.#} s/SCU to box");
+
+    return 0;
+}
+
+if (args.Contains("--cargo", StringComparer.OrdinalIgnoreCase))
+{
+    var cache = Path.Combine(Path.GetDirectoryName(SessionStore.DatabasePathFor(install.RootPath))!, "commodities.json");
+    var crates = GameCommodities.Load(install.RootPath, cache).Crates;
+    Console.WriteLine($"{crates.Count} crate sizes read from the install" + (crates.Count == 0 ? " - the built-in table stands in" : ""));
+    foreach (var c in crates.Count > 0 ? crates : CargoFit.StandardCrates)
+        Console.WriteLine($"  {c.Scu,3} SCU  {c.X:0.##} x {c.Y:0.##} x {c.Z:0.##} m  ({c.X / CargoFit.CellMetres:0} x {c.Y / CargoFit.CellMetres:0} x {c.Z / CargoFit.CellMetres:0} cells)  {c.Mass:N0} kg full");
+
+    var community = new CommunityData();
+    if (!community.HasCargoGrids) { Console.WriteLine("\nThe community digest has no cargo grids - refresh the reference data first."); return 1; }
+    var withGrids = community.GarageShips.Values.Where(s => s.CargoGrids is { Count: > 0 }).ToList();
+    var agree = withGrids.Count(s => Math.Abs(s.CargoGrids!.Sum(g => g.Scu) - s.CargoScu) < 0.01);
+    var offLattice = withGrids.SelectMany(s => s.CargoGrids!).Count(g => !CargoFit.OnLattice(g));
+    Console.WriteLine($"\n{withGrids.Count} hulls with grids of {community.GarageShips.Count}; the grids sum to the dump's capacity on {agree}; {offLattice} grids off the 1.25 m lattice");
+    foreach (var s in withGrids.Where(s => Math.Abs(s.CargoGrids!.Sum(g => g.Scu) - s.CargoScu) >= 0.01))
+        Console.WriteLine($"  ! {s.Class}: grids {s.CargoGrids!.Sum(g => g.Scu)} vs {s.CargoScu}");
+    foreach (var s in withGrids.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase))
+        Console.WriteLine($"  {s.Name,-34} {s.CargoScu,6:0} SCU  " + string.Join("; ", s.CargoGrids!.GroupBy(g => g.Class).Select(g => $"{g.Count()}x {g.Key} {g.First().X:0.##}x{g.First().Y:0.##}x{g.First().Z:0.##} m, up to {g.First().MaxBox.X:0.##}x{g.First().MaxBox.Y:0.##}x{g.First().MaxBox.Z:0.##}")));
+
+    if (community.GarageShip("RSI_Hermes") is { CargoGrids: { Count: > 0 } } hermes)
+    {
+        var fit = CargoFit.Pack(hermes.CargoGrids, new CargoLoad(new Dictionary<int, int> { [32] = 4, [16] = 2 }), crates.Count > 0 ? crates : null);
+        Console.WriteLine($"\n4 x 32 + 2 x 16 in the Hermes: {(fit.Fits ? "fits" : "no packing found")}, {fit.PlacedScu} of {fit.LoadScu} SCU placed in {fit.CapacityScu}");
+        foreach (var g in fit.Grids) Console.WriteLine($"  {g.Grid.Class} {g.Cells.W}x{g.Cells.L}x{g.Cells.H}: " + string.Join(", ", g.Placed.Select(p => $"{p.Scu}@({p.X},{p.Y},{p.Z}) {p.DX}x{p.DY}x{p.DZ}")) + (g.RuleIgnored ? "  [one-cell rule ignored]" : ""));
+    }
+    return 0;
+}
+
+if (args.Any(a => a.StartsWith("--armoury", StringComparison.OrdinalIgnoreCase)))
+{
+    var all = args.Contains("--armoury=all", StringComparer.OrdinalIgnoreCase);
+    var cache = Path.Combine(Path.GetDirectoryName(SessionStore.DatabasePathFor(install.RootPath))!, "commodities.json");
+    var armoury = GameCommodities.Load(install.RootPath, cache).Armoury;
+
+    static string Kinds(DamageKinds d) => string.Join("+", new[]
+    {
+        d.Physical > 0 ? $"{d.Physical:0.##} phys" : null, d.Energy > 0 ? $"{d.Energy:0.##} energy" : null,
+        d.Distortion > 0 ? $"{d.Distortion:0.##} dist" : null, d.Thermal > 0 ? $"{d.Thermal:0.##} therm" : null,
+        d.Biochemical > 0 ? $"{d.Biochemical:0.##} bio" : null, d.Stun > 0 ? $"{d.Stun:0.##} stun" : null,
+    }.Where(s => s is not null));
+
+    static string Mode(FireMode m) => m.Kind switch
+    {
+        "Beam" => $"{m.Name} {Kinds(m.BeamDamagePerSecond ?? DamageKinds.None)}/s to {m.BeamFullRange:0}m (none past {m.BeamZeroRange:0}m) {m.BeamAmmoPerSecond:0.#} rounds/s",
+        "Charge" => $"{m.Name} {m.RoundsPerMinute:0} rpm, ×{m.ChargeDamageMultiplier:0.##} after {m.ChargeSeconds:0.##}s for ×{m.ChargeAmmoMultiplier:0.##} rounds",
+        "Burst" => $"{m.Name} {m.BurstShots}×{m.Pellets} at {m.RoundsPerMinute:0} rpm, {m.BurstCooldown:0.##}s between (sustained {Armoury.SustainedRoundsPerMinute(m):0})",
+        _ => $"{m.Name} {m.RoundsPerMinute:0} rpm" + (m.Pellets > 1 ? $" ×{m.Pellets} pellets" : "") + (m.AmmoPerShot != 1 ? $" {m.AmmoPerShot} rounds/shot" : ""),
+    } + (m.Condition.Length > 0 ? $" when {m.Condition}" : "");
+
+    var guns = armoury.Weapons.Where(w => all || w.BaseClass is null).ToList();
+    Console.WriteLine($"{armoury.Weapons.Count} personal weapons, {armoury.Weapons.Count(w => w.BaseClass is null)} of them plain and the rest finishes of one");
+    foreach (var w in guns)
+    {
+        var finishes = armoury.Weapons.Count(o => o.BaseClass == w.Class);
+        Console.WriteLine($"  {w.Name,-38} {w.Kind,-16} {w.Weight,-6} S{w.Size} {w.Mass,5:0.##}kg  hit {Kinds(w.Damage),-22} {w.ProjectileSpeed,5:0} m/s for {w.ProjectileLifetime:0.#}s"
+            + (w.DropStart > 0 ? $"  drops {w.DropPerMetre:0.###}/m past {w.DropStart:0}m to {w.DropFloor:0.##}" : "")
+            + $"  mag {w.Magazine}"
+            + (w.Explosion is { } x ? $"  blast {Kinds(x.Damage)} over {x.Radius:0.#}-{x.OuterRadius:0.#}m" : "")
+            + (finishes > 0 ? $"  +{finishes} finishes" : "") + (w.BaseClass is not null ? $"  finish of {w.BaseClass}" : "")
+            + $"  [{w.Class}] {w.Manufacturer}");
+        foreach (var m in w.Modes)
+            Console.WriteLine($"      {Mode(m),-80} {Armoury.DamagePerSecond(w, m),7:0} dps  {Armoury.DamagePerMagazine(w, m),7:0}/mag  empties in {Armoury.SecondsToEmpty(w, m),5:0.#}s");
+    }
+
+    Console.WriteLine($"\n{armoury.Armour.Count} pieces of armour");
+    foreach (var group in armoury.Armour.GroupBy(a => a.Resistances?.Macro ?? "(none)").OrderBy(g => g.Key))
+    {
+        var r = group.First().Resistances;
+        Console.WriteLine(r is null
+            ? $"  {group.Key}: {group.Count()} pieces, no resistance block"
+            : $"  {group.Key}: {group.Count()} pieces at ×{r.Physical:0.###} phys ×{r.Energy:0.###} energy ×{r.Distortion:0.###} dist ×{r.Thermal:0.###} therm ×{r.Biochemical:0.###} bio ×{r.Stun:0.###} stun, impact ×{r.Impact:0.###}");
+    }
+    Console.WriteLine();
+    foreach (var slot in armoury.Armour.GroupBy(a => a.Slot))
+    {
+        Console.WriteLine($"  {slot.Key}: {slot.Count()} pieces in {slot.Select(a => a.Family).Distinct(StringComparer.OrdinalIgnoreCase).Count()} sets");
+        foreach (var family in slot.GroupBy(a => (a.Family, a.Weight, a.Resistances?.Macro, a.TemperatureMin, a.TemperatureMax, a.RadiationCapacity, a.CapacityMicroScu, a.EmSignature, a.IrSignature, a.Mass)).OrderBy(g => g.Key.Weight).ThenBy(g => g.Key.Family))
+        {
+            var a = family.First();
+            Console.WriteLine($"    {a.Family,-34} {a.Weight,-6} {family.Count(),3}× {a.Resistances?.Macro ?? "-",-20} {a.TemperatureMin,4:0}..{a.TemperatureMax,-4:0}C rad {a.RadiationCapacity,6:0} -{a.RadiationDissipation:0.#}/s"
+                + (a.GForceResistance != 0 ? $" g {a.GForceResistance:+0.##;-0.##}" : "")
+                + (a.CapacityMicroScu > 0 ? $" carries {a.CapacityMicroScu / 1_000_000.0:0.###} SCU" : "")
+                + $" em {a.EmSignature:0.#} ir {a.IrSignature:0.#} {a.Mass:0.#}kg" + (a.MotionPenalty > 0 ? $" broken -{a.MotionPenalty:P0} move" : "")
+                + $"  {a.Manufacturer}" + (all ? "  " + string.Join(" | ", family.Select(p => p.Name)) : ""));
+        }
+    }
+
+    return 0;
+}
+
 var liveOnly = args.Contains("--live-only");
 
 // Machine-readable mode. Everything the human report would say goes to stderr

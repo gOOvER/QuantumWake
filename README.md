@@ -365,6 +365,187 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.14.13
+
+- **Mining names the job in front of you.** Its header now changes with the
+  active workspace: *Prospecting*, *Mining fit* or *Haul & refinery*. The
+  companion line reports only the current result count, fitted head and slots,
+  or the number of refinery jobs awaiting an update; *Your runs* is now
+  *Haul & refinery*.
+
+- **The Log page shows which game logs were read.** A new *Game logs* tab
+  lists every `Game.log` the install has — the live one and each rotated
+  backup — with its size, the session it held, and whether the copy on disk
+  is the one Quantum Wake summarised: *read*, *grown* since it was read,
+  never read, or *gone* because the game deleted the backup while the app
+  kept the session. Below it, every scan the app has run: when, how many
+  files, how many actually parsed, and how long it took. When a page looks
+  thin, this is where to check whether the log behind it was read at all.
+  Scans are recorded from this version on, so the first one appears on the
+  next start; logs read by an earlier build say so instead of showing a
+  date. A *Scan now* button runs the routine pass without the full re-read
+  Settings offers. While a scan runs, the row it is on reads *parsing…* and
+  the pass under way sits at the top of the scans table with its count and
+  the file it has reached, so a cold re-read can be watched file by file.
+
+- **Read a kit's readiness before inspecting its parts.** The Armoury now
+  summarizes the last observed kit's body-zone coverage, weapon and
+  consumable attachments, and sighting age above the pilot. Missing entries
+  are named as not observed rather than shown as live zeroes; searching a card
+  does not alter the kit-wide briefing.
+
+- **The Armoury is clearer and more tactile.** Equipped gear now frames a
+  brighter pilot readout, shows exactly how many body zones the log observed,
+  and keeps its details one inspect away. Stowed weapons and supplies form a
+  visibly separate amber field-kit panel with its own slot count. The page is
+  still an observed loadout rather than a claim about live game inventory.
+
+- **Mining fit is the clearer name for the rock calculator.** The tab says
+  *Mining fit* and its page asks *Will this fit crack it?*, keeping the focus
+  on the ship's heads and modules as well as the rock in front of it.
+
+- **Salvage, fit and refinery work now read as distinct operations.** Salvage
+  no longer inherits the mining-only per-rock ranking; it names the location
+  evidence the game actually has. The crack calculator shows how many heads
+  and module slots its verdict uses, while refinery jobs have labeled handoff
+  fields and a clearer waiting queue. Cargo trading remains an evidence-led
+  history rather than a guessed hold or route.
+
+- **Dinyx or Cormack, at which station.** A new optional UEX feed,
+  *Refining methods* (Settings, ~2 KB): the nine methods with the game's own
+  three-point ratings for yield, cost and speed, as a table on the Mining
+  page's *Haul & refinery* pane. A run waiting at a refinery now carries a ceiling
+  on what it comes back as — the SCU that went in at UEX's best refined
+  price, the station's bonus on top where UEX reports one for that ore
+  there (40 SCU of copper at 4,200 is 168,000; +9 % at MIC-L5 makes
+  183,120) — and names the method it went in under with its ratings. It is
+  called a ceiling because it is before the method's own yield and the
+  refinery's fee, and neither is published anywhere: the install names the
+  methods and no more, and UEX rates them 1 to 3.
+
+- **Salvage, as far as the files go.** A fourth pane on the Mining page.
+  Every salvage hull's controller — what its beam scrapes to, what its
+  disintegration makes and at what rate per cubic metre, how many heads it
+  runs — with its hold and what a full hold of RMC or construction material
+  fetches at UEX's best sell, called the ceiling on a trip that it is; every
+  scraper module's speed, radius and efficiency, priced; the heads and their
+  slots. **What a given hull is worth scraped is not shown, because it is
+  not in the game files**: the rule is there (a beam takes 9 mm of hull) and
+  the hull's area and volume it would apply to are geometry the data core
+  does not hold, nor UEX, nor the logs. `docs/salvage.md` records the probe
+  so it is not repeated. (`--salvage` in the CLI prints the same tables.)
+
+- **Does 4 × 32 + 2 × 16 fit in the Hermes?** A cargo-fit panel on the
+  Garage page. Type how many crates of each size, and it says whether the
+  hull's grids take them and draws where each one goes, layer by layer;
+  under that, which of your ships take the load and the smallest hulls in
+  the reference that do, each a link that tries the same load there. The
+  grids are the community dataset's own placement — one entry per grid a
+  hull carries, which is the count the game files withhold, and their sum
+  matches the dataset's capacity on all 149 hulls that have one — and the
+  crates are read from your install: the 16, 24 and 32 are long boxes one
+  lane wide, a crate keeps its top up and turns on the spot, anything stacks
+  on anything. A grid's own largest-box rule is honoured (the Corsair takes a
+  24 and not a 32; the Cutlass Black's main grid takes nothing over 2 SCU),
+  except where the dataset left it at one cell on a big hold, which the row
+  says. **The packing is this app's**: a fit found is real; a fit not found
+  within the volume is called "no packing found", not "does not fit".
+  Refresh the community dataset once (Settings) for the grids to appear.
+  (`docs/cargo-fit.md`; `--cargo` in the CLI prints the tables.)
+
+- **An Armoury page, under Gear.** Which rifle, what armour, where to buy
+  it — read from your own game files. Every gun the game sells (46 on this
+  install, 327 counting the colours) with one projectile's damage by kind,
+  every fire mode with its rate, the magazine, the projectile's speed and
+  where its damage starts to fall, and every piece of armour (2,349 pieces
+  in 384 sets) with the temperatures it keeps you comfortable in, the
+  radiation it soaks, what its pockets hold, its signature and its mass.
+  UEX's cheapest terminal sits beside each, as the Garage prices a part; a
+  blank is no terminal recorded, not free. Click a gun for every mode's
+  figures, its drop curve and its finishes with their own prices; click a
+  set for its colours. **Two things the files say that the wikis do not
+  make obvious**: a gun's damage is on the ammunition its magazine loads,
+  not the gun, and armour resistance is by class, not by piece — every
+  medium piece lets 70 % of a hit through, every heavy 60 % — so the page
+  says that once above the table rather than repeating it down a column.
+  Damage a second, per magazine and time to empty are derived by holding
+  the trigger down and are called derived; the game publishes none of them.
+  Open a gun or a set and the wiki's photograph of it sits beside the figures
+  — every finish and colour has its own, a click on the chip swaps it in —
+  fetched once and kept, as the Garage keeps a cooler's, and only with the
+  community dataset on; the game files hold no picture of a gun beyond a
+  64-pixel loadout glyph.
+  Knives, grenades and attachments are not read yet, and the page says so.
+  (`docs/armoury.md`; `--armoury` in the CLI prints the same tables.)
+
+- **Mining is easier to work from at a glance.** The page now separates its
+  prospecting, rock-fit and personal-log workspaces with a stronger operations
+  header, clearer tab states, ranked prospect board, structured rock analysis
+  and labelled haul form. It remains the same data and calculations, just less
+  of a wall of tables when you are deciding what to do next.
+
+- **A second copy of Quantum Wake closes itself.** Starting the app while it
+  was already running used to leave the second copy up without a dashboard
+  — its own tray icon, overlay, MFD frames and MFD setup window — and the two
+  looked like one app. A layout saved in one copy's setup window did nothing
+  to the other copy's frames, which read as "the MFD settings don't save".
+  The second copy now says the first is running, opens it, and closes.
+
+- **The Mining page is three pages.** *Where to go*, *Mining fit* and *Your runs* are tabs under the heading now, one at a time and remembered, with the kind, system and search filters on the first alone; the page had grown into one long scroll.
+
+- **Mining fit.** A rock calculator on the Mining page. Pick the ship
+  — the heads come from its own loadout, the Prospector's one S1, the MOLE's
+  three S2, the Golem's Pitman — put the HUD's mass, resistance and
+  instability in, choose the lasers, up to three modules a head and a gadget
+  on the rock, and it says whether the fit breaks it, how much power reaches
+  the rock against what it needs, the heaviest rock the fit breaks at that
+  resistance, and the same rock on every other head of that size. The
+  lasers, modules, gadgets and minerals are read from your own game files —
+  18 heads, 29 modules, 6 gadgets, 31 ship minerals, the game's rock
+  constants — and their figures agree with scminer.rocks's, which reads the
+  same files. **The line itself is not the game's**: it does not publish how
+  mass, resistance and power meet, so the verdict uses the community's rule
+  (0.36 W per kilogram at zero resistance, solo from 115 %, with a gadget
+  from 70 %), is called an estimate, and says whose it is. The game's own
+  constants for the rock are quoted beside it. Each head takes as many
+  modules as it has slots — one on the Arbor MH1, three on the Helix II,
+  none on the Klein-S1 — read from the head itself. Pick a deposit and the
+  game's mix for it is shown, share and chance per mineral with the refined
+  price a SCU and a rough worth of a SCU of the mix; per rock is not given,
+  because nothing in the files turns the HUD's kilograms into SCU, and it
+  says so. Under the calculator, every head, module and gadget the game has
+  with its figures and UEX's cheapest terminal and where; the deposit mix
+  also shows the raw-ore price and the best refinery station bonus where
+  those feeds are on, and values a SCU of the mix at refined prices (before
+  the refinery's yield, which is in no file or feed) and raw.
+  `docs/mining.md` has the whole model and the dump.
+
+- **A scanned rock reads from a screenshot.** Screenshot the mining HUD's
+  scan-results panel with a rock selected and the Log tab reads it — the
+  primary mineral, mass, resistance, instability, the game's own SCU figure
+  for the rock, and each mineral's share and quality — and offers *Can it be
+  cracked?*, which opens the calculator with the rock in the form; the
+  Mining page's *Use the last scanned rock* does the same. Written from the
+  one public frame available (the wiki's 4.7 panel); the first scan you
+  take is what the reader gets checked against. Instability is left as
+  typed: the panel prints a figure and the rule wants a percentage, and
+  nothing measured says they are the same scale.
+
+- **What you brought back lists only minerals.** The Mining page infers what you mined from ore sold that was never bought; a mission reward or a found trinket leaves the hold the same way, and a Year of the Rat Envelope had been listed as a SCU of ore. The list is kept to the minerals the game's deposit tables name.
+
+- **A ship you own but never flew has a card.** The Fleet page's cards are sorties, so a ship the Fleet Manager listed that the logs never saw aboard — the Ironclad, delivered and not yet flown — was a line in the berth list and on no card. It gets a card under the berths now, marked *never flown*, with its picture, the terminal's word on where it is, and the Garage.
+
+- **The Fleet Manager reads the Ironclad.** The row glyph in the terminal's
+  margin came back as a letter — "V Drake Ironclad" — and with two Ironclads
+  in the game's list the row named neither. A one-letter first word is
+  dropped, and a name the row carries whole is the ship.
+
+- **The refinery figure on the Mining page is a bonus, not a yield.** UEX's
+  refinery feed reports a station's percentage points on the method's yield
+  — +9 at MIC-L5 for copper, −5 at Nyx Gateway for iron — and the deposit
+  table had shown it as "Yield 9%", which read as nine percent of the ore
+  coming back. It is now *Bonus*, signed.
+
 ### 0.13.33
 
 - **The Garage counts your pips.** The HUD draws one lead indicator per

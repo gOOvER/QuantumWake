@@ -277,6 +277,13 @@ public static partial class ScreenFrames
     /// <summary>A ship name as read, matched the way the loadout's dropdown is.</summary>
     private static (string? Ship, IReadOnlyList<string> LooksLike) NameShip(string read, IReadOnlyList<string> shipNames)
     {
+        // The Fleet Manager draws a glyph in the row's margin that the engine
+        // reads as a letter - "V Drake Ironclad" on the frame of 2026-09-15 -
+        // and a one-letter first word is never a ship's. Dropped before the
+        // names are tried, not from the text kept.
+        var words = read.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length > 2 && ScreenInsight.Plain(words[0]).Length <= 1) read = string.Join(' ', words[1..]);
+
         var plain = ScreenInsight.Plain(read);
         var folded = ScreenInsight.Fold(read);
 
@@ -288,6 +295,24 @@ public static partial class ScreenFrames
 
         if (exact.Count == 1) return (exact[0], []);
         if (exact.Count > 1) return (null, exact);
+
+        // A name the read carries whole, word for word, with something around
+        // it - a state word, what the glyph became. When the read holds both
+        // "Drake Ironclad" and "Drake Ironclad Assault" it said the longer one;
+        // when it holds only the shorter, the longer is not what it said.
+        var readWords = words.Select(ScreenInsight.Fold).ToList();
+        var contained = shipNames
+            .Where(name =>
+            {
+                var nameWords = name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(ScreenInsight.Fold).ToList();
+                return nameWords.Count > 0 && Enumerable.Range(0, Math.Max(0, readWords.Count - nameWords.Count + 1))
+                    .Any(start => nameWords.Select((w, i) => readWords[start + i] == w).All(same => same));
+            })
+            .Distinct()
+            .OrderByDescending(name => name.Length)
+            .ToList();
+
+        if (contained.Count > 0) return (contained[0], []);
 
         var model = read.Split(' ', StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
         if (model is null || ScreenInsight.Plain(model).Length < 5) return (null, []);

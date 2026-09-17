@@ -253,7 +253,9 @@ placement*. Two things looked at and left:
 - **`<Connection Flow>`** (1,388) — comms channels opened with NPC modules
   (`AImodule_Pyro_751896004783`). Shows NPC interaction but little else.
 - **Salvage** (592) — mostly `SetSalvageRepairAmmoCount_NoTarget` warnings and
-  damage-map file paths. Noisy; no clean "salvaged X" event found.
+  damage-map file paths. Noisy; no clean "salvaged X" event found. What the
+  install says about salvage instead - and why a hull's yield is not in it
+  either - is `salvage.md`.
 - **Beacons** (76) — too sparse here to build on.
 - **Mining** (15) — essentially absent from this player's logs.
 

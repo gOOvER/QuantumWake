@@ -974,10 +974,8 @@ public sealed class LogLibrary : IDisposable
     /// <returns>How many files were parsed (as opposed to served from cache).</returns>
     public int Scan(GameInstall install, IProgress<ScanProgress>? progress = null, bool force = false)
     {
-        var files = new List<string>(install.BackupLogs());
-        if (install.HasGameLog)
-            files.Add(install.GameLogPath);
-
+        var startedAt = DateTimeOffset.UtcNow;
+        var files = LogFiles(install);
         var parsed = 0;
         var pending = new List<(SessionSummary, string)>();
 
@@ -1010,7 +1008,21 @@ public sealed class LogLibrary : IDisposable
         if (pending.Count > 0)
             _store.SaveAll(pending);
 
+        // Kept even when nothing was parsed: a warm start that read nothing is
+        // the normal case, and the page needs it to say "checked, unchanged"
+        // rather than showing the last cold backfill as the latest news.
+        _store.RecordScan(new ScanRun(startedAt, DateTimeOffset.UtcNow, files.Count, parsed, force));
+
         return parsed;
+    }
+
+    /// <summary>The files a scan walks, in the order it walks them: backups oldest first, then the live log.</summary>
+    public static List<string> LogFiles(GameInstall install)
+    {
+        var files = new List<string>(install.BackupLogs());
+        if (install.HasGameLog)
+            files.Add(install.GameLogPath);
+        return files;
     }
 
     /// <summary>Parses one log file into a summary.</summary>

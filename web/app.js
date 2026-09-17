@@ -268,6 +268,11 @@ function showView(name) {
     loadMiningPlaces().catch(() => {});
     loadLikelyMined().catch(() => {});
     loadMiningLog().catch(() => {});
+    loadCrackModel().catch(() => {});
+    loadSalvage().catch(() => {});
+    // A rock handed over from the Log opens on the calculator; otherwise the
+    // page opens where it was left.
+    showMiningPane(crackFromScan ? 'crack' : miningPane);
   }
 
   // Settings reflects live state (the tray can change it), so re-read on entry.
@@ -278,7 +283,10 @@ function showView(name) {
 
   // A log is a live reference, not an Overlay setting. Read it when the pilot
   // opens its tab so pasted locations and screenshots stay together.
-  if (name === 'log') renderScreenPanel().catch(() => {});
+  if (name === 'log') {
+    renderScreenPanel().catch(() => {});
+    showLogPane(logPane);
+  }
 
   // Jobs change from the Crafting page and from play, so re-read on entry too.
   if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
@@ -294,6 +302,7 @@ function showView(name) {
   if (name === 'crew') loadCrew().catch(() => {});
   if (name === 'servers') loadServers().catch(() => {});
   if (name === 'garage') loadGarage().catch(() => {});
+  if (name === 'armoury') loadArmoury().catch(() => {});
   if (name === 'points') loadPoints().catch(() => {});
   if (name === 'wikelo') loadWikelo().catch(() => {});
 
@@ -4314,11 +4323,45 @@ const MINING_STAGE = {
   Sold: ['Sold', null],
 };
 
+/**
+ * The nine refining methods as UEX rates them - the game's own three-point
+ * pips for yield, cost and speed - so a run can be read against the method
+ * it went in under. The percentages behind the pips are the server's and
+ * are in no file or feed this app reads, which the note says.
+ */
+function renderMiningMethods() {
+  const box = $('#mining-methods');
+  const body = $('#mining-methods-table tbody');
+  if (!box || !body) return;
+  const methods = crackModel?.methods || [];
+  box.hidden = !crackModel?.methodsKnown || methods.length === 0;
+  if (box.hidden) return;
+  body.textContent = '';
+  const pips = (n) => '●'.repeat(Math.max(0, Math.min(3, n))) + '○'.repeat(3 - Math.max(0, Math.min(3, n)));
+  for (const m of [...methods].sort((a, b) => b.yieldRating - a.yieldRating || a.costRating - b.costRating || a.name.localeCompare(b.name))) {
+    const tr = el('tr');
+    tr.append(el('td', null, m.name));
+    tr.append(el('td', 'muted', m.code));
+    tr.append(el('td', 'num', pips(m.yieldRating)));
+    tr.append(el('td', 'num', pips(m.costRating)));
+    tr.append(el('td', 'num', pips(m.speedRating)));
+    body.append(tr);
+  }
+  $('#mining-methods-note').textContent = 'UEX’s ratings, which are the game’s own pips: three is the most yield, the dearest, the fastest. The percentages behind them are the server’s - the install names the nine methods and nothing more, and no feed carries them - so a run’s estimate above is before the method.';
+}
+
 async function loadMiningPending() {
   const panel = $('#mining-pending');
   if (!panel) return;
 
-  const waiting = await getJson('/api/mining/pending').catch(() => []);
+  const waiting = await getJson('/api/mining/pending').catch(() => null);
+  miningPendingJobs = waiting;
+  renderMiningWorkspaceHeader();
+
+  if (!waiting) {
+    panel.hidden = true;
+    return;
+  }
 
   panel.hidden = waiting.length === 0;
   if (!waiting.length) return;
@@ -4332,16 +4375,38 @@ async function loadMiningPending() {
     const row = el('div', 'mining-waiting');
 
     row.append(el('span', 'name', `${run.scu} SCU ${run.resource}`));
-    row.append(el('span', 'muted', run.refinery.place));
+    row.append(el('span', 'muted', run.refinery.place || 'Refinery not named'));
 
     // The two states read differently on purpose: one is waiting, the other is
     // the app pointing out that your own estimate has passed.
-    row.append(el('span', run.stage === 'Ready' ? 'want' : 'muted',
+    row.append(el('span', `${run.stage === 'Ready' ? 'want' : 'muted'} mining-waiting-time`,
       run.refinery.expectedAt
         ? (run.stage === 'Ready'
           ? `you expected it by ${dateOf(run.refinery.expectedAt)}`
           : `due ${dateOf(run.refinery.expectedAt)}`)
         : 'no time given'));
+
+    const detail = [
+      run.refinery.method ? `Method · ${run.refinery.method}` : null,
+      run.refinery.cost != null ? `Job cost · ${money(run.refinery.cost)}` : null,
+    ].filter(Boolean).join(' · ');
+    if (detail) row.append(el('span', 'mining-waiting-detail', detail));
+
+    // What it might come back as - a ceiling, and said as one: the SCU that
+    // went in at UEX's best refined price, the station's bonus on top where
+    // the yields feed reports one, before the method's own yield and the
+    // refinery's charge, neither of which is published anywhere.
+    const e = run.estimate;
+    if (e) {
+      const method = run.method
+        ? ` under ${run.method.name} (yield ${run.method.yieldRating}/3, cost ${run.method.costRating}/3, speed ${run.method.speedRating}/3)`
+        : (run.refinery.method ? ` under ${run.refinery.method}` : '');
+      const bonus = e.bonusPercent != null
+        ? `, ${e.bonusPercent >= 0 ? '+' : ''}${e.bonusPercent} % station bonus at ${e.bonusAt} makes ${fmtInt(e.withBonus)}`
+        : e.bonusKnown ? ', no station bonus reported for this ore here' : '';
+      row.append(el('span', 'muted small mining-estimate',
+        `≤ ${fmtInt(e.gross)} aUEC at ${fmtInt(e.perScu)}/SCU refined${e.sellAt ? ` (${e.sellAt})` : ''}${bonus}${method} — before the method’s own yield and the fee, which nobody publishes`));
+    }
 
     list.append(row);
   }
@@ -4361,25 +4426,28 @@ function miningStageForm(run) {
   const form = el('div', 'mining-form');
   const inputs = {};
 
-  function field(key, placeholder, type = 'text') {
+  function field(key, label, placeholder, type = 'text') {
+    const wrap = el('label', 'mining-stage-field');
+    wrap.append(el('span', null, label));
     const input = el('input', 'search');
     input.type = type;
     input.placeholder = placeholder;
     if (type === 'number') input.step = 'any';
     inputs[key] = input;
-    form.append(input);
+    wrap.append(input);
+    form.append(wrap);
     return input;
   }
 
   if (run.stage === 'Extracted') {
-    field('place', 'Refinery');
-    field('method', 'Method');
-    field('cost', 'Cost', 'number');
-    field('expectedAt', 'Back by (yyyy-mm-dd hh:mm)');
+    field('place', 'Refinery', 'e.g. ArcCorp 141');
+    field('method', 'Method (optional)', 'e.g. Dinyx Solventation');
+    field('cost', 'Job cost (optional)', 'aUEC', 'number');
+    field('expectedAt', 'Expected ready time (optional)', 'yyyy-mm-dd hh:mm');
   } else if (run.stage === 'Submitted' || run.stage === 'Ready') {
-    field('yield', 'SCU that came back', 'number');
+    field('yield', 'SCU that came back', 'e.g. 24', 'number');
   } else if (run.stage === 'Collected') {
-    field('revenue', 'Sold for', 'number');
+    field('revenue', 'Sold for', 'aUEC', 'number');
   }
 
   const save = el('button', 'ghost', 'Save');
@@ -4538,6 +4606,644 @@ $('#mining-log-form')?.addEventListener('submit', async (e) => {
   await loadMiningLog().catch(() => {});
 });
 
+/* ---------- salvage: the equipment and the rules, not the wreck ---------- */
+
+let salvageModel = null;
+
+/**
+ * The salvage pane: each salvage hull's controller, the scraper modules and
+ * heads, priced by UEX. What a hull is worth scraped is not here and the
+ * brief says why; nothing on this pane is derived from a wreck.
+ */
+async function loadSalvage() {
+  const unready = $('#salvage-unready');
+  if (!$('#mining-pane-salvage')) return;
+  try {
+    salvageModel = await getJson('/api/salvage/model');
+  } catch {
+    salvageModel = null;
+  }
+  const tables = ['#salvage-ships', '#salvage-modules', '#salvage-heads'].map((id) => $(id));
+  if (!salvageModel?.ready) {
+    if (unready) {
+      unready.hidden = false;
+      unready.textContent = gameDataExcuse() || 'The install has not been read yet - Settings says when the game data is ready.';
+    }
+    for (const t of tables) if (t) t.hidden = true;
+    return;
+  }
+  if (unready) unready.hidden = true;
+  for (const t of tables) if (t) t.hidden = false;
+
+  const price = (market) => market?.price ? `${fmtInt(market.price)} aUEC` : '—';
+  const where = (market) => {
+    const best = market?.shops?.[0];
+    if (!best) return salvageModel.itemPricesKnown ? 'no terminal recorded' : 'prices need UEX (Settings)';
+    const place = best.place && !best.terminal.toLowerCase().includes(best.place.toLowerCase()) ? `, ${best.place}` : '';
+    return `${best.terminal}${place}${market.shops.length > 1 ? ` +${market.shops.length - 1}` : ''}`;
+  };
+
+  const ships = $('#salvage-ships tbody');
+  ships.textContent = '';
+  for (const s of salvageModel.ships || []) {
+    const tr = el('tr');
+    const name = el('td', null, s.name);
+    if (s.flown) name.append(el('span', 'chip count', ' flown'));
+    tr.append(name);
+    tr.append(el('td', 'num', String(s.heads)));
+    tr.append(el('td', null, s.scrapesTo || '—'));
+    tr.append(el('td', 'num', s.scuPerCubicMetre > 0 ? `${s.scuPerCubicMetre} SCU/m³ of ${s.disintegratesTo}` : '—'));
+    tr.append(el('td', 'num', s.hold > 0 ? `${fmt1(s.hold)} SCU` : (salvageModel.holdsKnown ? '—' : 'needs the dataset')));
+    tr.append(el('td', 'num', s.fullHoldOfScrape ? `${fmtInt(s.fullHoldOfScrape)} aUEC` : '—'));
+    const cm = el('td', 'num', s.fullHoldOfPieces ? `${fmtInt(s.fullHoldOfPieces)} aUEC` : '—');
+    if (s.pieces && s.disintegratesTo && s.pieces.commodity !== s.disintegratesTo) cm.title = `UEX prices ${s.disintegratesTo} as ${s.pieces.commodity}`;
+    tr.append(cm);
+    ships.append(tr);
+  }
+  const first = (salvageModel.ships || []).find((s) => s.scrape);
+  const firstCm = (salvageModel.ships || []).find((s) => s.pieces);
+  $('#salvage-ships-note').textContent = [
+    first ? `RMC at UEX's best sell: ${fmtInt(first.scrape.perScu)} aUEC a SCU at ${first.scrape.at}.` : (salvageModel.itemPricesKnown ? 'UEX has no price for RMC.' : 'Prices need UEX, in Settings.'),
+    firstCm ? `Construction material: ${fmtInt(firstCm.pieces.perScu)} a SCU at ${firstCm.pieces.at}; the game's Construction Salvage, Rubble and Pieces are sold as that one commodity.` : '',
+    'A full hold is a ceiling on a trip, before the fuel and before the finding.',
+  ].filter(Boolean).join(' ');
+
+  const modules = $('#salvage-modules tbody');
+  modules.textContent = '';
+  for (const m of [...(salvageModel.modules || [])].sort((a, b) => b.radius - a.radius)) {
+    const tr = el('tr');
+    const name = el('td', null, m.name);
+    if (m.manufacturer) name.append(el('div', 'armoury-kind', m.manufacturer));
+    tr.append(name);
+    tr.append(el('td', 'num', String(m.speed)));
+    tr.append(el('td', 'num', `${m.radius} m`));
+    tr.append(el('td', 'num', `${Math.round(m.efficiency * 100)}%`));
+    tr.append(el('td', 'num', price(m.market)));
+    tr.append(el('td', 'muted', where(m.market)));
+    modules.append(tr);
+  }
+
+  const heads = $('#salvage-heads tbody');
+  heads.textContent = '';
+  for (const h of salvageModel.heads || []) {
+    const tr = el('tr');
+    tr.append(el('td', null, h.name));
+    tr.append(el('td', 'num', String(h.slots)));
+    tr.append(el('td', 'num', price(h.market)));
+    tr.append(el('td', 'muted', where(h.market)));
+    heads.append(tr);
+  }
+
+  const k = salvageModel.constants;
+  $('#salvage-note').textContent = `${k ? `The game's rule: a beam takes ${Math.round(k.hullThicknessMetres * 1000)} mm of hull, with a material factor of ${k.ammoToMaterialFactor}. ` : ''}${salvageModel.perHull}`;
+  renderMiningWorkspaceHeader();
+}
+
+/* ---------- the Mining page's four panes ---------- */
+
+/**
+ * Prospecting, mining fit, haul and refinery, salvage: four questions that
+ * had grown into one long page. The pane is remembered in this browser, and the
+ * deposit filters in the header belong to the first alone.
+ */
+const MINING_PANES = ['go', 'crack', 'runs', 'salvage'];
+let miningPane = 'go';
+let miningReferenceMatches = null;
+let miningPendingJobs = null;
+let miningFitStatus = 'Fit data has not been read yet.';
+try {
+  const kept = localStorage.getItem('qw-mining-pane');
+  if (MINING_PANES.includes(kept)) miningPane = kept;
+} catch { /* private browsing keeps the default */ }
+
+function showMiningPane(name) {
+  if (!MINING_PANES.includes(name)) name = 'go';
+  miningPane = name;
+  try { localStorage.setItem('qw-mining-pane', name); } catch { /* as above */ }
+
+  for (const id of ['#mining-pane-go', '#mining-pane-crack', '#mining-pane-runs', '#mining-pane-salvage']) {
+    const pane = $(id);
+    if (pane) pane.classList.toggle('active', id === `#mining-pane-${name}`);
+  }
+  for (const button of $('#mining-tabs')?.querySelectorAll('button') || [])
+    button.classList.toggle('active', button.dataset.pane === name);
+
+  // The kind, system and search filters shape the deposit tables and nothing else.
+  for (const id of ['#mining-kind', '#mining-system', '#mining-search']) {
+    const control = $(id);
+    if (control) control.hidden = name !== 'go';
+  }
+  renderMiningWorkspaceHeader();
+}
+
+/* The header is the page's one stable piece of chrome. Let it name the job the
+   current pane performs and report only a count or fit the pane already owns. */
+function renderMiningWorkspaceHeader() {
+  const heading = $('#mining-workspace-title');
+  const status = $('#mining-workspace-status');
+  const bar = $('#view-mining .section-bar');
+  if (!heading || !status || !bar) return;
+
+  if (miningPane === 'crack') {
+    heading.textContent = 'Mining fit';
+    bar.dataset.workspace = 'MINING FIT';
+    bar.dataset.workspaceIcon = 'fit';
+    status.textContent = miningFitStatus;
+    return;
+  }
+
+  if (miningPane === 'runs') {
+    heading.textContent = 'Haul & refinery';
+    bar.dataset.workspace = 'HAUL // REFINERY';
+    bar.dataset.workspaceIcon = '';
+    if (miningPendingJobs === null) status.textContent = 'Refinery job status is unavailable.';
+    else status.textContent = miningPendingJobs.length
+      ? `${miningPendingJobs.length} refinery job${miningPendingJobs.length === 1 ? '' : 's'} await your update.`
+      : 'No refinery jobs await your update.';
+    return;
+  }
+
+  const count = (n, noun) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+
+  // Both lines of work reached the header in the same release: the salvage
+  // pane arrived on one and the workspace header on the other, and without
+  // this the wrecks page calls itself Prospecting.
+  if (miningPane === 'salvage') {
+    heading.textContent = 'Salvage';
+    bar.dataset.workspace = 'SALVAGE';
+    bar.dataset.workspaceIcon = '';
+    status.textContent = salvageModel?.ready
+      ? `${count(salvageModel.ships?.length ?? 0, 'salvage hull')}, ${count(salvageModel.modules?.length ?? 0, 'scraper module')}, from the install.`
+      : 'Hulls, scrapers and heads, as far as the game files go.';
+    return;
+  }
+
+  heading.textContent = 'Prospecting';
+  bar.dataset.workspace = 'PROSPECTING';
+  bar.dataset.workspaceIcon = '';
+  if (miningReferenceMatches === null) {
+    status.textContent = 'Loading reference locations…';
+    return;
+  }
+  const locations = new Set(miningReferenceMatches.map((spawn) => spawn.location).filter(Boolean)).size;
+  const salvage = $('#mining-kind')?.value === 'salvageable';
+  status.textContent = locations
+    ? `${locations} ${salvage ? 'salvage ' : ''}location${locations === 1 ? '' : 's'} ${locations === 1 ? 'matches' : 'match'} current filters.`
+    : 'No locations match current filters.';
+}
+
+for (const button of $('#mining-tabs')?.querySelectorAll('button') || [])
+  button.addEventListener('click', () => showMiningPane(button.dataset.pane));
+
+/* ---------- can it be cracked? ---------- */
+
+/**
+ * The rock calculator. The model comes from the server once per page - the
+ * lasers, modules, gadgets, minerals and ships as the install has them - and
+ * every change to the form asks the server for the verdict, because the rule
+ * lives in one place there and is tested there. The ship picked decides how
+ * many heads there are and what size; each head starts as the laser the ship
+ * ships with and takes as many modules as that head has slots for - one on
+ * the Arbor MH1, three on the Helix II - read from the head's own item ports.
+ */
+let crackModel = null;
+
+/** A scanned rock handed over from the Log tab, taken up once the model is in. */
+let crackFromScan = null;
+
+/**
+ * The form filled from a scan-results reading: mass, resistance, the
+ * primary mineral, and the deposit when one preset's likeliest mineral is
+ * the rock's. Instability is left alone - the panel prints it as a figure
+ * like 1.75 and the community rule takes a percentage, and the two are not
+ * known to be the same scale; the note says so. Each figure lands only
+ * where the engine read it.
+ */
+function fillCrackFromScan(scan) {
+  if (!scan || !crackModel) return;
+  if (scan.massKg != null) $('#crack-mass').value = String(Math.round(scan.massKg));
+  if (scan.resistancePercent != null) $('#crack-resistance').value = String(Math.round(scan.resistancePercent));
+
+  const primary = scan.primary || scan.parts?.find((p) => p.mineral && p.mineral !== 'Inert materials')?.mineral;
+  const mineral = primary ? crackModel.minerals.find((m) => m.name.toLowerCase() === primary.toLowerCase()) : null;
+  if (mineral) $('#crack-mineral').value = mineral.class;
+
+  const say = $('#crack-scan-note');
+  if (say) {
+    const missing = [scan.massKg == null ? 'mass' : null, scan.resistancePercent == null ? 'resistance' : null].filter(Boolean);
+    say.hidden = false;
+    say.textContent = `From the scan read on the Log tab: ${scan.primary || scan.primaryRead || 'a rock'}`
+      + (scan.scu != null ? `, ${scan.scu} SCU by the game's own count` : '')
+      + `. ${missing.length ? `The panel's ${missing.join(' and ')} did not read and the field is as it was. ` : ''}`
+      + `Instability is left as typed: the panel prints ${scan.instability ?? 'a figure'} and the rule wants a percentage, and nothing measured says they are the same scale.`;
+  }
+}
+
+async function loadCrackModel() {
+  const box = $('#crack');
+  const unready = $('#crack-unready');
+  if (!box) return;
+
+  try {
+    crackModel = await getJson('/api/mining/model');
+  } catch {
+    crackModel = null;
+  }
+
+  if (!crackModel?.ready) {
+    miningFitStatus = 'Fit data has not been read yet.';
+    renderMiningWorkspaceHeader();
+    box.hidden = true;
+    if (unready) {
+      unready.hidden = false;
+      unready.textContent = gameDataExcuse() || 'The install has not been read yet - Settings says when the game data is ready.';
+    }
+    return;
+  }
+  if (unready) unready.hidden = true;
+  box.hidden = false;
+
+  const rule = $('#crack-rule');
+  if (rule && crackModel.rule) rule.textContent = `${crackModel.rule.requiredWattsPerKg} W per kilogram at zero resistance, breaking solo from ${Math.round(crackModel.rule.soloRatio * 100)}% and with a gadget from ${Math.round(crackModel.rule.gadgetRatio * 100)}% (${crackModel.rule.source})`;
+
+  // Ships you have flown first, then the rest of the mining hulls.
+  const ship = $('#crack-ship');
+  const keep = ship.value;
+  ship.textContent = '';
+  const ships = [...crackModel.ships].sort((a, b) => (b.flown - a.flown) || a.name.localeCompare(b.name));
+  for (const s of ships) {
+    const heads = s.heads.length;
+    ship.append(new Option(`${s.name} · ${heads} S${s.heads[0]?.size ?? '?'} head${heads === 1 ? '' : 's'}${s.flown ? ' · flown' : ''}`, s.class));
+  }
+  ship.value = keep && ships.some((s) => s.class === keep) ? keep : (ships[0]?.class || '');
+
+  const mineral = $('#crack-mineral');
+  mineral.textContent = '';
+  mineral.append(new Option('Not said', ''));
+  for (const m of crackModel.minerals) mineral.append(new Option(m.name, m.class));
+
+  const gadget = $('#crack-gadget');
+  gadget.textContent = '';
+  gadget.append(new Option('None', ''));
+  for (const g of crackModel.gadgets) gadget.append(new Option(`${g.name} · ${describeModifiers(g.modifiers) || 'no figures'}`, g.class));
+
+  // The deposits: the HUD's name for the kind, and where several presets
+  // share it, the mineral the class names - Asteroid (P-Type) · copper.
+  const deposit = $('#crack-deposit');
+  deposit.textContent = '';
+  deposit.append(new Option('Not said', ''));
+  for (const c of crackModel.compositions || []) {
+    const bits = c.class.split('_');
+    const shared = (crackModel.compositions || []).filter((o) => o.name === c.name).length > 1;
+    const twin = shared && bits.length > 2 ? ` · ${bits.slice(2).join(' ').toLowerCase()}` : shared ? ` · ${bits.slice(1).join(' ').toLowerCase() || 'plain'}` : '';
+    deposit.append(new Option(`${c.name}${twin}`, c.class));
+  }
+
+  renderCrackHeads();
+  renderMiningMethods();
+  renderCrackDeposit();
+  renderCrackFittings();
+  if (crackFromScan) { fillCrackFromScan(crackFromScan); crackFromScan = null; renderCrackDeposit(); }
+  await assessCrack();
+}
+
+/** The newest rock scan on the Log, into the form. */
+async function useLastScan() {
+  let got;
+  try {
+    got = await getJson('/api/screen/readings?take=50');
+  } catch {
+    return;
+  }
+  const scan = (got.readings || []).filter((s) => s.mining && !s.dismissed).sort((a, b) => new Date(b.shotAt) - new Date(a.shotAt))[0];
+  const say = $('#crack-scan-note');
+  if (!scan) {
+    if (say) { say.hidden = false; say.textContent = 'No rock scan has been read yet. Screenshot the scan-results panel with a rock selected; with Watch screenshots on (Log tab) it is read as it lands.'; }
+    return;
+  }
+  fillCrackFromScan(scan.mining);
+  renderCrackDeposit();
+  await assessCrack();
+}
+
+$('#crack-use-scan')?.addEventListener('click', () => useLastScan().catch(() => {}));
+
+/** "55,100 aUEC" or a dash: UEX's cheapest terminal for the item, or none recorded. */
+function crackPrice(market) {
+  return market?.price ? `${fmtInt(market.price)} aUEC` : '—';
+}
+
+function crackWhere(market) {
+  const best = market?.shops?.[0];
+  if (!best) return crackModel?.itemPricesKnown ? 'no terminal recorded' : 'prices need UEX (Settings)';
+  return `${best.terminal}${best.place && best.place !== best.terminal ? `, ${best.place}` : ''}${market.shops.length > 1 ? ` +${market.shops.length - 1}` : ''}`;
+}
+
+/**
+ * Every head, module and gadget with the game's figures and UEX's price:
+ * what to buy, before the calculator says what it would do on a rock.
+ */
+function renderCrackFittings() {
+  if (!crackModel) return;
+  const heads = $('#crack-heads-table tbody');
+  if (!heads) return;
+  heads.textContent = '';
+  for (const l of [...crackModel.lasers].sort((a, b) => a.size - b.size || b.power - a.power)) {
+    const tr = el('tr');
+    tr.append(el('td', null, l.name));
+    tr.append(el('td', 'num', `S${l.size}`));
+    tr.append(el('td', 'num', fmtInt(l.power)));
+    tr.append(el('td', 'num', fmtInt(l.extractionPower)));
+    tr.append(el('td', 'num', String(l.slots)));
+    tr.append(el('td', 'num', `${l.filterModifier}%`));
+    tr.append(el('td', 'num', `${Math.round(l.throttleMinimum * 100)}%`));
+    tr.append(el('td', null, describeModifiers(l.modifiers) || '—'));
+    tr.append(el('td', 'num', crackPrice(l.market)));
+    tr.append(el('td', 'muted', crackWhere(l.market)));
+    heads.append(tr);
+  }
+
+  const modules = $('#crack-modules-table tbody');
+  modules.textContent = '';
+  for (const m of crackModel.modules) {
+    const tr = el('tr');
+    tr.append(el('td', null, m.name));
+    tr.append(el('td', null, m.active ? 'active' : 'passive'));
+    tr.append(el('td', 'num', `×${m.powerMultiplier}`));
+    tr.append(el('td', 'num', `×${m.extractionMultiplier}`));
+    tr.append(el('td', null, describeModifiers(m.modifiers) || '—'));
+    tr.append(el('td', 'num', m.filterModifier ? `+${m.filterModifier}%` : '—'));
+    tr.append(el('td', 'num', m.active ? `${m.lifetime}s × ${m.charges}` : '—'));
+    tr.append(el('td', 'num', crackPrice(m.market)));
+    tr.append(el('td', 'muted', crackWhere(m.market)));
+    modules.append(tr);
+  }
+
+  const gadgets = $('#crack-gadgets-table tbody');
+  gadgets.textContent = '';
+  for (const g of crackModel.gadgets) {
+    const tr = el('tr');
+    tr.append(el('td', null, g.name));
+    tr.append(el('td', null, describeModifiers(g.modifiers) || '—'));
+    tr.append(el('td', 'num', crackPrice(g.market)));
+    tr.append(el('td', 'muted', crackWhere(g.market)));
+    gadgets.append(tr);
+  }
+}
+
+/**
+ * The deposit's mix, as the game's preset has it: each mineral's share when
+ * present and its chance of being present, with UEX's refined price a SCU
+ * beside it. Value per rock is not given: the HUD's mass is kilograms and
+ * nothing read says what a kilogram of this rock is in SCU.
+ */
+function renderCrackDeposit() {
+  const panel = $('#crack-deposit-panel');
+  if (!panel || !crackModel) return;
+  const chosen = (crackModel.compositions || []).find((c) => c.class === $('#crack-deposit').value);
+  panel.hidden = !chosen;
+  if (!chosen) return;
+
+  const body = $('#crack-mix tbody');
+  body.textContent = '';
+  const parts = [...chosen.parts].sort((a, b) => (b.probability * (b.minPercent + b.maxPercent)) - (a.probability * (a.minPercent + a.maxPercent)));
+  for (const pt of parts) {
+    const mineral = crackModel.minerals.find((m) => m.class === pt.element);
+    const tr = el('tr');
+    tr.append(el('td', null, pt.name));
+    tr.append(el('td', 'num', `${fmtInt(pt.minPercent)}–${fmtInt(pt.maxPercent)}%`));
+    tr.append(el('td', 'num', `${Math.round(pt.probability * 100)}%`));
+    tr.append(el('td', 'num', pt.sellPerScu ? fmtInt(pt.sellPerScu) : '—'));
+    tr.append(el('td', 'num', pt.rawPerScu ? fmtInt(pt.rawPerScu) : '—'));
+    const yieldCell = el('td', 'num', pt.yield ? `${pt.yield > 0 ? '+' : ''}${Math.round(pt.yield)}%` : '—');
+    if (pt.yieldAt) yieldCell.title = `Best station bonus on the method's yield, at ${pt.yieldAt}`;
+    tr.append(yieldCell);
+    tr.append(el('td', 'num', mineral ? `res ${mineral.resistance} · inst ${fmtInt(mineral.instability)}` : '—'));
+    body.append(tr);
+  }
+
+  // A rough worth of a SCU of the mix, each way it can be sold: refined, at
+  // the refined price before the refinery's own yield - the method's yield
+  // is the server's and in no file or feed, only a station's bonus on it -
+  // or raw. Each mineral's middle share, times its chance, times the price.
+  // Rough because the shares of the minerals present are normalised by the
+  // game and are not here, and because the price is the best on offer.
+  const weight = (pt) => ((pt.minPercent + pt.maxPercent) / 200) * pt.probability;
+  const refinedParts = parts.filter((pt) => pt.sellPerScu);
+  const refined = refinedParts.reduce((sum, pt) => sum + weight(pt) * Number(pt.sellPerScu), 0);
+  const rawParts = parts.filter((pt) => pt.rawPerScu);
+  const raw = rawParts.reduce((sum, pt) => sum + weight(pt) * Number(pt.rawPerScu), 0);
+  const worth = [];
+  if (refinedParts.length) worth.push(`Roughly ${fmtInt(refined)} aUEC a SCU of the mix at refined prices, before the refinery's yield`);
+  if (rawParts.length) worth.push(`${worth.length ? '' : 'Roughly '}${fmtInt(raw)} aUEC sold raw`);
+  $('#crack-mix-note').textContent = `${chosen.name}: at least ${chosen.minimumDistinctElements} mineral${chosen.minimumDistinctElements === 1 ? '' : 's'} a rock. `
+    + (worth.length
+      ? `${worth.join(', ')} - middle share × chance × price, ${refinedParts.length} of ${parts.length} minerals priced. `
+      : 'No UEX prices for these minerals (Settings). ')
+    + 'Per rock is not given: the HUD’s mass is in kilograms and nothing read says what a kilogram of rock is in SCU.';
+
+  // The likeliest mineral is the one the notes speak to, unless the pilot picked one.
+  const mineral = $('#crack-mineral');
+  if (mineral && !mineral.value && parts[0]) mineral.value = parts[0].element;
+}
+
+/** "-30% resistance, +40% window" - the game's percentage points, in the game's numbers. */
+function describeModifiers(m) {
+  if (!m) return '';
+  const signed = (v) => `${v > 0 ? '+' : '−'}${Math.abs(v)}%`;
+  return [
+    m.resistance ? `${signed(m.resistance)} resistance` : null,
+    m.instability ? `${signed(m.instability)} instability` : null,
+    m.windowSize ? `${signed(m.windowSize)} window` : null,
+    m.windowRate ? `${signed(m.windowRate)} charge rate` : null,
+    m.catastrophicRate ? `${signed(m.catastrophicRate)} overcharge` : null,
+    m.shatterDamage ? `${signed(m.shatterDamage)} shatter` : null,
+    m.clusterFactor ? `${signed(m.clusterFactor)} cluster` : null,
+  ].filter(Boolean).join(', ');
+}
+
+/** One row per head on the picked ship: its laser, and three module slots. */
+function renderCrackHeads() {
+  const host = $('#crack-heads');
+  if (!host) return;
+  if (!crackModel) {
+    renderCrackFitSummary();
+    return;
+  }
+  const ship = crackModel.ships.find((s) => s.class === $('#crack-ship').value);
+  host.textContent = '';
+  if (!ship) {
+    renderCrackFitSummary();
+    return;
+  }
+
+  ship.heads.forEach((head, i) => {
+    const row = el('div', 'crack-head');
+    row.append(el('span', 'crack-head-label', `Head ${i + 1} · S${head.size}`));
+
+    const laser = document.createElement('select');
+    laser.className = 'select crack-laser';
+    for (const l of crackModel.lasers.filter((l) => l.size === head.size)) {
+      laser.append(new Option(`${l.name} · ${fmtInt(l.power)} · ${describeModifiers(l.modifiers) || 'no modifiers'}`, l.class));
+    }
+    if (head.stock && [...laser.options].some((o) => o.value === head.stock)) laser.value = head.stock;
+    laser.title = 'The head; the ship\'s own is picked first';
+    laser.addEventListener('change', () => {
+      renderCrackSlots(row);
+      renderCrackFitSummary();
+      assessCrack().catch(() => {});
+    });
+    row.append(laser);
+    renderCrackSlots(row);
+    host.append(row);
+  });
+  renderCrackFitSummary();
+}
+
+/* The selector rows say what is fitted; this one-line summary says whether the
+   calculator is assessing one head or an entire multi-head ship before the
+   verdict turns the same fit into a rock-specific number. */
+function renderCrackFitSummary() {
+  const summary = $('#crack-fit-summary');
+  const rows = [...($('#crack-heads')?.querySelectorAll('.crack-head') || [])];
+  if (!summary) return;
+
+  const lasers = rows.map((row) => crackModel?.lasers.find((laser) =>
+    laser.class === row.querySelector('.crack-laser')?.value)).filter(Boolean);
+  const capacity = lasers.reduce((total, laser) => total + Number(laser.slots || 0), 0);
+  const fitted = rows.reduce((total, row) => total
+    + [...row.querySelectorAll('.crack-module')].filter((module) => module.value).length, 0);
+  miningFitStatus = lasers.length
+    ? `Current fit · ${lasers.length} head${lasers.length === 1 ? '' : 's'} · ${fitted}/${capacity} module slot${capacity === 1 ? '' : 's'} fitted`
+    : crackModel?.ready ? 'Choose a mining head to inspect its fit.' : 'Fit data has not been read yet.';
+  summary.textContent = miningFitStatus;
+  renderMiningWorkspaceHeader();
+}
+
+/** As many module slots as the head has: the Arbor MH1's one, the Helix II's three. Picks stay where a slot remains. */
+function renderCrackSlots(row) {
+  const laser = crackModel.lasers.find((l) => l.class === row.querySelector('.crack-laser')?.value);
+  const slots = laser?.slots ?? 0;
+  const kept = [...row.querySelectorAll('.crack-module')].map((m) => m.value);
+  for (const old of [...row.querySelectorAll('.crack-module')]) old.remove();
+  for (const old of [...row.querySelectorAll('.crack-noslots')]) old.remove();
+
+  if (slots === 0) {
+    row.append(el('span', 'muted crack-noslots', 'no module slots'));
+    return;
+  }
+  for (let slot = 0; slot < slots; slot++) {
+    const module = document.createElement('select');
+    module.className = 'select tiny crack-module';
+    module.append(new Option(slot === 0 ? 'No module' : '—', ''));
+    for (const m of crackModel.modules) {
+      module.append(new Option(`${m.active ? '⚡ ' : ''}${m.name} · ×${m.powerMultiplier} power${m.modifiers ? (describeModifiers(m.modifiers) ? ', ' + describeModifiers(m.modifiers) : '') : ''}${m.active ? ` · ${m.lifetime}s × ${m.charges}` : ''}`, m.class));
+    }
+    if (kept[slot] && crackModel.modules.some((m) => m.class === kept[slot])) module.value = kept[slot];
+    module.title = 'A module in this head\'s slot; an active one counts as switched on';
+    module.addEventListener('change', () => {
+      renderCrackFitSummary();
+      assessCrack().catch(() => {});
+    });
+    row.append(module);
+  }
+}
+
+function crackRequest() {
+  const heads = [...($('#crack-heads')?.querySelectorAll('.crack-head') || [])].map((row) => ({
+    laser: row.querySelector('.crack-laser')?.value || '',
+    modules: [...row.querySelectorAll('.crack-module')].map((s) => s.value).filter(Boolean),
+  }));
+  return {
+    massKg: Number($('#crack-mass').value) || 0,
+    resistance: Number($('#crack-resistance').value) || 0,
+    instability: Number($('#crack-instability').value) || 0,
+    heads,
+    gadget: $('#crack-gadget').value || null,
+  };
+}
+
+const CRACK_VERDICTS = {
+  solo: ['Breaks on this fit', 'good'],
+  gadget: ['Needs a gadget or an active', 'warn'],
+  crew: ['Not this fit', 'bad'],
+  none: ['No laser', 'bad'],
+};
+
+async function assessCrack() {
+  const out = $('#crack-verdict');
+  if (!out || !crackModel?.ready) return;
+  const request = crackRequest();
+
+  let got;
+  try {
+    const response = await fetch('/api/mining/crack', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request),
+    });
+    if (!response.ok) throw new Error(`${response.status}`);
+    got = await response.json();
+  } catch (err) {
+    out.textContent = '';
+    out.append(el('p', 'muted', `Could not assess the rock: ${err.message}`));
+    return;
+  }
+
+  const v = got.verdict;
+  const [label, tone] = CRACK_VERDICTS[v.verdict] || [v.verdict, ''];
+  out.textContent = '';
+
+  const head = el('div', `crack-call ${tone}`);
+  head.append(el('b', null, label));
+  head.append(el('span', 'muted', ` · ${fmtInt(v.powerDelivered)} delivered against ${fmtInt(v.powerRequired)} needed · ${Math.round(v.ratio * 100)}% · estimate, community rule`));
+  out.append(head);
+
+  const facts = el('div', 'crack-facts');
+  const fact = (k, val, title) => { const f = el('span'); f.append(el('span', 'k', k), el('b', null, val)); if (title) f.title = title; facts.append(f); };
+  fact('Resistance after fit', `${v.effectiveResistancePercent}%`, 'The HUD figure scaled by the heads\', modules\' and gadget\'s resistance points');
+  fact('Instability after fit', `${v.effectiveInstabilityPercent}%`);
+  fact('Window', `${v.windowPercent}% of gauge`, 'The game\'s optimal window, widened or narrowed by the fit');
+  fact('Breaks up to', `${fmtInt(v.maxCrackableMassKg)} kg`, 'At this resistance, on this fit');
+  if (v.energyCapacity) fact('Rock holds', `${fmtInt(v.energyCapacity)} · sheds ${fmtInt(v.energyDecayPerSecond)}/s`, 'By the game\'s own constants: capacity per kilogram and decay per kilogram a second');
+  out.append(facts);
+
+  // The mineral is for the notes: what the game says about it, in its own figures.
+  const mineral = crackModel.minerals.find((m) => m.class === $('#crack-mineral').value);
+  const notes = [...(v.notes || [])];
+  if (mineral) {
+    notes.push(`${mineral.name}: element resistance ${mineral.resistance}, instability ${mineral.instability}, window at ${Math.round(mineral.windowMidpoint * 100)}%±${Math.round(mineral.windowRandomness * 100)} of the gauge, overcharge blast ×${mineral.explosionMultiplier}${mineral.instability >= 600 ? ' - an overcharge here is the rock gone' : ''}.`);
+  }
+  if (notes.length) {
+    const list = el('ul', 'crack-notes');
+    for (const n of notes) list.append(el('li', null, n));
+    out.append(list);
+  }
+
+  const body = $('#crack-matrix tbody');
+  body.textContent = '';
+  for (const r of got.matrix || []) {
+    const tr = el('tr');
+    if (request.heads.some((h) => h.laser === r.laser)) tr.classList.add('current');
+    const [rl, rt] = CRACK_VERDICTS[r.verdict] || [r.verdict, ''];
+    tr.append(el('td', null, r.name));
+    tr.append(el('td', 'num', fmtInt(r.power)));
+    tr.append(el('td', 'num', fmtInt(r.powerDelivered)));
+    tr.append(el('td', 'num', `${Math.round(r.ratio * 100)}%`));
+    tr.append(el('td', 'num', fmtInt(r.maxCrackableMassKg)));
+    const verdict = el('td', null, rl);
+    verdict.classList.add(`crack-${rt}`);
+    tr.append(verdict);
+    tr.append(el('td', 'num muted', crackPrice(crackModel.lasers.find((l) => l.class === r.laser)?.market)));
+    body.append(tr);
+  }
+  const heads = request.heads.length;
+  $('#crack-matrix-note').textContent = `Every S${crackModel.ships.find((s) => s.class === $('#crack-ship').value)?.heads[0]?.size ?? '?'} head on this rock, ${heads} to a fit with the same modules; only the laser changes, and a module is carried over even where the other head has no slot for it.`;
+}
+
+$('#crack-ship')?.addEventListener('change', () => { renderCrackHeads(); assessCrack().catch(() => {}); });
+for (const id of ['#crack-mass', '#crack-resistance', '#crack-instability']) $(id)?.addEventListener('input', () => assessCrack().catch(() => {}));
+for (const id of ['#crack-mineral', '#crack-gadget']) $(id)?.addEventListener('change', () => assessCrack().catch(() => {}));
+$('#crack-deposit')?.addEventListener('change', () => { $('#crack-mineral').value = ''; renderCrackDeposit(); assessCrack().catch(() => {}); });
+
 async function loadMiningPlaces() {
   const body = $('#mining-places tbody');
   const note = $('#mining-places-note');
@@ -4641,6 +5347,14 @@ function renderMiningRef() {
   const body = $('#mining-table tbody');
   body.textContent = '';
 
+  // The prospect board has a deliberately mining-specific score: ore share ×
+  // price. Salvage has neither, so keeping the board visible would dress a row
+  // of dashes up as a recommendation.
+  const salvage = kind === 'salvageable';
+  $('#mining-prospect-board').hidden = salvage;
+  $('#mining-salvage-brief').hidden = !salvage;
+  $('#mining-table').classList.toggle('salvage-table', salvage);
+
   // The two sources mean different things by "chance". The download carried a
   // real probability; the game stores a weight whose scale is its own business,
   // so the install's is that group's share of what spawns at the place. Both
@@ -4665,6 +5379,8 @@ function renderMiningRef() {
     // what sorting on best sell alone used to say.
     .sort((a, b) => (oreWorth(b) ?? 0) - (oreWorth(a) ?? 0)
       || (b.groupChance * b.share) - (a.groupChance * a.share));
+  miningReferenceMatches = rows;
+  renderMiningWorkspaceHeader();
 
   const counter = $('#mining-count');
   counter.textContent = rows.length > MINING_CAP
@@ -4763,9 +5479,12 @@ function renderMiningRef() {
     if (spawn.rawTerminal) raw.title = `at ${spawn.rawTerminal}`;
     tr.append(raw);
 
+    // A station's bonus on the method's yield, signed - not the yield itself,
+    // which is the server's and in no feed. Read unsigned it looked like
+    // nine percent of the ore coming back.
     const yieldCell = el('td', spawn.refineryYield ? 'num' : 'num muted',
-      spawn.refineryYield ? `${spawn.refineryYield.toFixed(0)}%` : '—');
-    if (spawn.refineryTerminal) yieldCell.title = `best at ${spawn.refineryTerminal}`;
+      spawn.refineryYield ? `${spawn.refineryYield > 0 ? '+' : ''}${spawn.refineryYield.toFixed(0)}%` : '—');
+    if (spawn.refineryTerminal) yieldCell.title = `best station bonus, at ${spawn.refineryTerminal}`;
     tr.append(yieldCell);
 
     body.append(tr);
@@ -4775,6 +5494,454 @@ function renderMiningRef() {
 onInput('#mining-search', renderMiningRef);
 $('#mining-kind')?.addEventListener('change', renderMiningRef);
 $('#mining-system')?.addEventListener('change', renderMiningRef);
+
+/* ---------- the armoury: guns and armour, read from the install ---------- */
+
+let armouryModel = null;
+let armouryPane = 'guns';
+let armouryOpenGun = null;
+let armouryOpenSet = null;
+
+try {
+  const kept = localStorage.getItem('qw-armoury-pane');
+  if (kept === 'guns' || kept === 'armour') armouryPane = kept;
+} catch { /* a private window has no memory, which is fine */ }
+
+function showArmouryPane(name) {
+  if (name !== 'guns' && name !== 'armour') name = 'guns';
+  armouryPane = name;
+  try { localStorage.setItem('qw-armoury-pane', name); } catch { /* as above */ }
+  for (const id of ['#armoury-pane-guns', '#armoury-pane-armour']) {
+    const pane = $(id);
+    if (pane) pane.classList.toggle('active', id === `#armoury-pane-${name}`);
+  }
+  for (const button of $('#armoury-tabs')?.querySelectorAll('button') || [])
+    button.classList.toggle('active', button.dataset.pane === name);
+}
+
+$('#armoury-tabs')?.addEventListener('click', (e) => {
+  const button = e.target.closest('button[data-pane]');
+  if (button) showArmouryPane(button.dataset.pane);
+});
+
+async function loadArmoury() {
+  const unready = $('#armoury-unready');
+  try {
+    armouryModel = await getJson('/api/armoury');
+  } catch {
+    armouryModel = null;
+  }
+
+  const panes = [$('#armoury-pane-guns'), $('#armoury-pane-armour'), $('#armoury-tabs')];
+  if (!armouryModel?.ready) {
+    for (const p of panes) if (p) p.hidden = true;
+    if (unready) {
+      unready.hidden = false;
+      unready.textContent = gameDataExcuse() || 'The install has not been read yet - Settings says when the game data is ready.';
+    }
+    return;
+  }
+  if (unready) unready.hidden = true;
+  for (const p of panes) if (p) p.hidden = false;
+
+  // The kind filter lists what the install actually has, in the order a
+  // holster would: pistols first, the shouldered things last.
+  const order = ['Pistol', 'SMG', 'Rifle', 'Shotgun', 'Sniper rifle', 'Crossbow', 'LMG', 'Grenade launcher', 'Heavy'];
+  const kinds = [...new Set(armouryModel.weapons.map((w) => w.kind))]
+    .sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99) || a.localeCompare(b));
+  const kind = $('#armoury-gun-kind');
+  if (kind) {
+    const keep = kind.value;
+    kind.textContent = '';
+    kind.append(new Option('Every kind', ''));
+    for (const k of kinds) kind.append(new Option(k, k));
+    kind.value = kinds.includes(keep) ? keep : '';
+  }
+
+  const slotOrder = ['Helmet', 'Core', 'Arms', 'Legs', 'Undersuit', 'Backpack'];
+  const slots = [...new Set(armouryModel.armour.map((a) => a.slot))]
+    .sort((a, b) => (slotOrder.indexOf(a) + 1 || 99) - (slotOrder.indexOf(b) + 1 || 99) || a.localeCompare(b));
+  const slot = $('#armoury-armour-slot');
+  if (slot) {
+    const keep = slot.value;
+    slot.textContent = '';
+    slot.append(new Option('Every slot', ''));
+    for (const s of slots) slot.append(new Option(s, s));
+    slot.value = slots.includes(keep) ? keep : '';
+  }
+
+  showArmouryPane(armouryPane);
+  renderArmouryGuns();
+  renderArmouryArmour();
+}
+
+/** A detail row under the one clicked, spanning the table, so the figures open where the eye is. */
+function armouryExpansion(inner, columns) {
+  const tr = el('tr', 'armoury-expand');
+  const td = el('td');
+  td.colSpan = columns;
+  td.append(inner);
+  tr.append(td);
+  // A click inside the expansion is reading, not closing.
+  tr.addEventListener('click', (e) => e.stopPropagation());
+  return tr;
+}
+
+/** "4,138 aUEC" or a dash: UEX's cheapest terminal for the item, or none recorded. */
+function armouryPrice(market) {
+  return market?.price ? `${fmtInt(market.price)} aUEC` : '—';
+}
+
+function armouryWhere(market) {
+  const best = market?.shops?.[0];
+  if (!best) return armouryModel?.itemPricesKnown ? 'no terminal recorded' : 'prices need UEX (Settings)';
+  // "Guns Checkmate, Checkmate" says the place twice; the terminal name
+  // carries it, so the place is added only when it adds something.
+  const place = best.place && !best.terminal.toLowerCase().includes(best.place.toLowerCase()) ? `, ${best.place}` : '';
+  return `${best.terminal}${place}${market.shops.length > 1 ? ` +${market.shops.length - 1}` : ''}`;
+}
+
+/** "12 ballistic", "32.5 energy + 7.5 distortion + 1 stun": one hit, by kind. */
+function armouryHit(d) {
+  if (!d) return '—';
+  const parts = [
+    ['physical', 'ballistic'], ['energy', 'energy'], ['distortion', 'distortion'], ['thermal', 'thermal'], ['biochemical', 'biochemical'], ['stun', 'stun'],
+  ].filter(([k]) => d[k] > 0).map(([k, word]) => `${fmtDamage(d[k])} ${word}`);
+  return parts.length ? parts.join(' + ') : '—';
+}
+
+function fmtDamage(n) {
+  const v = Number(n) || 0;
+  return v >= 100 ? fmtInt(v) : String(Math.round(v * 100) / 100);
+}
+
+/** The mode in one line: "AUTO 810 rpm", "BURST 3 × 900 rpm", "CHARGE ×2 after 3.5 s", "BEAM 225/s to 10 m". */
+function armouryMode(m) {
+  let text;
+  if (m.kind === 'Beam') {
+    const reach = m.beamFullRange >= m.beamZeroRange ? `to ${fmtInt(m.beamZeroRange)} m` : `to ${fmtInt(m.beamFullRange)} m, none past ${fmtInt(m.beamZeroRange)} m`;
+    text = `${m.name} ${fmtDamage(m.beamDamagePerSecond?.total)}/s ${reach}`;
+  } else if (m.kind === 'Charge') {
+    text = `${m.name} ×${m.chargeDamageMultiplier}${m.chargePellets > 0 ? ` in ${m.chargePellets}` : ''} after ${m.chargeSeconds} s${m.chargeAmmoMultiplier > 1 ? `, ${m.chargeAmmoMultiplier} rounds` : ''}`;
+  } else if (m.kind === 'Burst') {
+    text = `${m.name} ${m.burstShots} × ${fmtInt(m.roundsPerMinute)} rpm`;
+  } else {
+    text = `${m.name} ${fmtInt(m.roundsPerMinute)} rpm`;
+  }
+  if (m.pellets > 1 && m.kind !== 'Charge') text += ` × ${m.pellets}`;
+  return text;
+}
+
+/** The mode a pilot would hold the trigger on: the highest derived DPS. */
+/**
+ * The wiki's picture of an item, by the game's uuid, in a frame that says
+ * why it is blank when it is: the community dataset off, or the wiki has
+ * none. The game files hold no photograph of a gun or a helmet - a 64-pixel
+ * loadout glyph and one generic icon per armour class are all there is.
+ */
+function armouryPicture(uuid, name) {
+  const frame = el('div', 'armoury-picture');
+  const note = el('span', 'muted small');
+  if (!armouryModel?.picturesKnown) {
+    note.textContent = 'Pictures come from the Star Citizen Wiki once the community dataset is on (Settings).';
+    frame.append(note);
+    return frame;
+  }
+  if (!uuid) {
+    note.textContent = 'No id to ask the wiki with.';
+    frame.append(note);
+    return frame;
+  }
+  const img = el('img');
+  img.alt = name;
+  img.loading = 'lazy';
+  img.src = `/api/armoury/picture/${encodeURIComponent(uuid)}`;
+  img.addEventListener('error', () => {
+    img.remove();
+    note.textContent = 'The wiki has no picture of this one.';
+    frame.append(note);
+  });
+  frame.append(img);
+  return frame;
+}
+
+/** Points the expansion's picture at another colour or finish of the same thing. */
+function armouryShowPicture(frame, uuid, name) {
+  const fresh = armouryPicture(uuid, name);
+  frame.replaceWith(fresh);
+  return fresh;
+}
+
+function armouryBestMode(w) {
+  return [...(w.modes || [])].sort((a, b) => b.damagePerSecond - a.damagePerSecond)[0] || null;
+}
+
+function armouryGunsFiltered() {
+  if (!armouryModel) return [];
+  const kind = $('#armoury-gun-kind')?.value || '';
+  const damage = $('#armoury-gun-damage')?.value || '';
+  const sort = $('#armoury-gun-sort')?.value || 'dps';
+  const priced = $('#armoury-gun-priced')?.checked;
+  const q = ($('#armoury-search')?.value || '').trim().toLowerCase();
+
+  const rows = armouryModel.weapons.filter((w) => {
+    if (kind && w.kind !== kind) return false;
+    if (damage && (w.damage?.dominant || '') !== damage) return false;
+    if (priced && !w.market?.price) return false;
+    if (q && !`${w.name} ${w.kind} ${w.manufacturer}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const best = (w) => armouryBestMode(w)?.damagePerSecond || 0;
+  const hit = (w) => armouryBestMode(w)?.damagePerShot || 0;
+  rows.sort((a, b) => {
+    switch (sort) {
+      case 'hit': return hit(b) - hit(a) || a.name.localeCompare(b.name);
+      case 'mag': return (armouryBestMode(b)?.damagePerMagazine || 0) - (armouryBestMode(a)?.damagePerMagazine || 0) || a.name.localeCompare(b.name);
+      case 'reach': return (b.dropStart || 1e9) - (a.dropStart || 1e9) || a.name.localeCompare(b.name);
+      case 'price': return (a.market?.price || 1e12) - (b.market?.price || 1e12) || a.name.localeCompare(b.name);
+      case 'name': return a.name.localeCompare(b.name);
+      default: return best(b) - best(a) || a.name.localeCompare(b.name);
+    }
+  });
+  return rows;
+}
+
+function renderArmouryGuns() {
+  const body = $('#armoury-guns tbody');
+  if (!body || !armouryModel?.ready) return;
+  body.textContent = '';
+  const rows = armouryGunsFiltered();
+  const count = $('#armoury-gun-count');
+  if (count) {
+    const c = armouryModel.counts || {};
+    count.textContent = `${rows.length} of ${c.plain ?? armouryModel.weapons.length} guns; the install describes ${c.weapons ?? '?'} counting every finish. `
+      + `${armouryModel.itemPricesKnown ? `UEX prices ${armouryModel.weapons.filter((w) => w.market?.price).length} of them.` : 'Prices need UEX, in Settings.'}`;
+  }
+  for (const w of rows) {
+    const best = armouryBestMode(w);
+    const tr = el('tr');
+    tr.dataset.class = w.class;
+    if (armouryOpenGun === w.class) tr.classList.add('open');
+    const name = el('td', null, w.name);
+    if (w.manufacturer) name.append(el('div', 'armoury-kind', w.manufacturer));
+    tr.append(name);
+    const kind = el('td', null, w.kind);
+    kind.append(el('div', 'armoury-kind', `${w.weight} holster`));
+    tr.append(kind);
+    tr.append(el('td', 'num', w.damage?.total > 0
+      ? armouryHit(w.damage) : (w.explosion ? `blast ${armouryHit(w.explosion.damage)}` : '—')));
+    const modes = el('td');
+    const list = el('div', 'armoury-modes');
+    for (const m of w.modes) {
+      const line = el('span', null, armouryMode(m));
+      if (m.condition) line.append(el('span', 'armoury-when', ` when ${m.condition}`));
+      list.append(line);
+    }
+    modes.append(list);
+    tr.append(modes);
+    tr.append(el('td', 'num', best ? fmtInt(best.damagePerSecond) : '—'));
+    tr.append(el('td', 'num', w.magazine > 0 ? String(w.magazine) : '—'));
+    tr.append(el('td', 'num', best && w.magazine > 0 ? fmtInt(best.damagePerMagazine) : '—'));
+    tr.append(el('td', 'num', w.dropStart > 0 ? `${fmtInt(w.dropStart)} m → ${fmtDamage(w.dropFloor)}` : 'none'));
+    tr.append(el('td', 'num', armouryPrice(w.market)));
+    tr.append(el('td', 'muted', armouryWhere(w.market)));
+    tr.addEventListener('click', () => {
+      armouryOpenGun = armouryOpenGun === w.class ? null : w.class;
+      renderArmouryGuns();
+    });
+    body.append(tr);
+    if (armouryOpenGun === w.class) body.append(armouryExpansion(renderArmouryGunDetail(w), 11));
+  }
+}
+
+/** Every mode's figures for one gun, its drop curve, its blast, and every finish with a price. */
+function renderArmouryGunDetail(w) {
+  const inner = el('div', 'armoury-detail');
+  inner.append(el('div', 'panel-title', w.name));
+  inner.append(el('div', 'panel-sub', `${w.kind} · ${w.weight} holster · ${w.manufacturer || 'maker unnamed'} · ${w.class}`));
+  let picture = armouryPicture(w.uuid, w.name);
+  inner.append(picture);
+
+  inner.append(el('h4', null, 'Fire modes, trigger held'));
+  const table = el('table');
+  const head = el('thead');
+  const hr = el('tr');
+  for (const [label, cls] of [['Mode', null], ['Per shot', 'num'], ['Cyclic', 'num'], ['Sustained', 'num'], ['DPS', 'num'], ['Per mag', 'num'], ['Empties in', 'num'], ['Heat', 'num']])
+    hr.append(el('th', cls, label));
+  head.append(hr);
+  table.append(head);
+  const tb = el('tbody');
+  for (const m of w.modes) {
+    const tr = el('tr');
+    const label = el('td', null, armouryMode(m));
+    if (m.condition) label.append(el('span', 'armoury-when', ` when ${m.condition}`));
+    if (m.secondaryAmmo) label.append(el('span', 'armoury-when', ' · the magazine’s second load'));
+    tr.append(label);
+    tr.append(el('td', 'num', m.kind === 'Beam' ? `${fmtDamage(m.damagePerSecond)}/s` : `${fmtDamage(m.damagePerShot)} (${armouryHit(m.hit)}${m.pellets > 1 || m.chargePellets > 0 ? ` × ${m.chargePellets > 0 && m.kind === 'Charge' ? m.chargePellets : m.pellets}` : ''}${m.kind === 'Charge' ? ` × ${m.chargeDamageMultiplier}` : ''})`));
+    tr.append(el('td', 'num', m.roundsPerMinute > 0 ? `${fmtInt(m.roundsPerMinute)} rpm` : '—'));
+    tr.append(el('td', 'num', m.sustainedRoundsPerMinute > 0 ? `${fmtInt(m.sustainedRoundsPerMinute)} rpm` : '—'));
+    tr.append(el('td', 'num', fmtInt(m.damagePerSecond)));
+    tr.append(el('td', 'num', w.magazine > 0 ? fmtInt(m.damagePerMagazine) : '—'));
+    tr.append(el('td', 'num', m.secondsToEmpty > 0 ? `${Math.round(m.secondsToEmpty * 10) / 10} s` : '—'));
+    tr.append(el('td', 'num', m.heatPerShot > 0 ? String(m.heatPerShot) : '—'));
+    tb.append(tr);
+  }
+  table.append(tb);
+  inner.append(table);
+
+  const notes = [];
+  notes.push(`Projectile ${fmtInt(w.projectileSpeed)} m/s for ${w.projectileLifetime} s (${fmtInt(w.projectileSpeed * w.projectileLifetime)} m before it is gone).`);
+  if (w.dropStart > 0) notes.push(`Damage holds to ${fmtInt(w.dropStart)} m, then loses ${w.dropPerMetre} a metre down to ${fmtDamage(w.dropFloor)} at ${fmtInt(w.floorAt)} m.`);
+  else notes.push('No damage drop with distance.');
+  if (w.explosion) notes.push(`On arrival: ${armouryHit(w.explosion.damage)} over ${w.explosion.radius}${w.explosion.outerRadius > w.explosion.radius ? `–${w.explosion.outerRadius}` : ''} m.`);
+  if (w.magazine > 0) notes.push(`Magazine ${w.magazine} rounds (${w.magazineClass}).`);
+  else notes.push('The files give this magazine no round count.');
+  notes.push(`${Math.round(w.mass * 100) / 100} kg.`);
+  inner.append(el('p', 'muted small', notes.join(' ')));
+
+  inner.append(el('h4', null, `Finishes${w.finishes?.length ? ` (${w.finishes.length})` : ''}`));
+  if (!w.finishes?.length) inner.append(el('p', 'muted small', 'The plain gun only.'));
+  else {
+    const list = el('div', 'armoury-finishes');
+    for (const f of w.finishes) {
+      const chip = el('span', 'armoury-finish', f.name);
+      chip.classList.add('clickable');
+      chip.title = 'Show this finish';
+      chip.addEventListener('click', () => { picture = armouryShowPicture(picture, f.uuid, f.name); });
+      chip.append(el('span', 'muted', f.market?.price ? `${fmtInt(f.market.price)} aUEC · ${armouryWhere(f.market)}` : 'no terminal recorded'));
+      list.append(chip);
+    }
+    inner.append(list);
+    inner.append(el('p', 'muted small', 'A finish is the same gun in another colour: same figures, its own price.'));
+  }
+  return inner;
+}
+
+function armouryArmourFiltered() {
+  if (!armouryModel) return [];
+  const slot = $('#armoury-armour-slot')?.value || '';
+  const weight = $('#armoury-armour-weight')?.value || '';
+  const sort = $('#armoury-armour-sort')?.value || 'name';
+  const priced = $('#armoury-armour-priced')?.checked;
+  const q = ($('#armoury-search')?.value || '').trim().toLowerCase();
+
+  const rows = armouryModel.armour.filter((a) => {
+    if (slot && a.slot !== slot) return false;
+    if (weight && a.weight !== weight) return false;
+    if (priced && !a.market?.price) return false;
+    if (q && !`${a.family} ${a.name} ${a.slot} ${a.manufacturer} ${(a.pieces || []).map((p) => p.name).join(' ')}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const byName = (a, b) => a.family.localeCompare(b.family) || a.slot.localeCompare(b.slot) || a.name.localeCompare(b.name);
+  rows.sort((a, b) => {
+    switch (sort) {
+      case 'cold': return a.temperatureMin - b.temperatureMin || byName(a, b);
+      case 'hot': return b.temperatureMax - a.temperatureMax || byName(a, b);
+      case 'carry': return b.capacityMicroScu - a.capacityMicroScu || byName(a, b);
+      case 'quiet': return (a.emSignature + a.irSignature) - (b.emSignature + b.irSignature) || byName(a, b);
+      case 'light': return a.mass - b.mass || byName(a, b);
+      case 'price': return (a.market?.price || 1e12) - (b.market?.price || 1e12) || byName(a, b);
+      default: return byName(a, b);
+    }
+  });
+  return rows;
+}
+
+/** "70%" - what a hit leaves after the class's multiplier; the same for every piece of the class. */
+function armouryTakes(r) {
+  if (!r) return '—';
+  return `${Math.round(r.physical * 100)}%${Math.abs(r.energy - r.physical) > 0.001 ? ` / ${Math.round(r.energy * 100)}% energy` : ''}`;
+}
+
+function renderArmouryArmour() {
+  const body = $('#armoury-armour tbody');
+  if (!body || !armouryModel?.ready) return;
+  body.textContent = '';
+  const rows = armouryArmourFiltered();
+  const count = $('#armoury-armour-count');
+  if (count) {
+    const c = armouryModel.counts || {};
+    count.textContent = `${rows.length} of ${c.sets ?? armouryModel.armour.length} sets, from ${c.armour ?? '?'} pieces in the install. `
+      + `${armouryModel.itemPricesKnown ? `UEX prices ${armouryModel.armour.filter((a) => a.market?.price).length} of the sets.` : 'Prices need UEX, in Settings.'}`;
+  }
+  const note = $('#armoury-armour-note');
+  if (note) {
+    // Said once, above the table, so a column of identical figures is not
+    // mistaken for a finding: the resistance is the class's, not the piece's.
+    const macros = new Map();
+    for (const a of armouryModel.armour) if (a.resistances) macros.set(a.resistances.macro, a.resistances);
+    const light = macros.get('LightArmor'), medium = macros.get('MediumArmor'), heavy = macros.get('HeavyArmor');
+    note.textContent = light && medium && heavy
+      ? `Resistance is by class, not by piece: every light piece lets ${Math.round(light.physical * 100)}% of a hit through, every medium ${Math.round(medium.physical * 100)}%, every heavy ${Math.round(heavy.physical * 100)}% (stun ${Math.round(light.stun * 100)} / ${Math.round(medium.stun * 100)} / ${Math.round(heavy.stun * 100)}%). What differs between two pieces of a class is the rest of the row.`
+      : 'Resistance is by class, not by piece; what differs between two pieces of a class is the rest of the row.';
+  }
+  for (const a of rows) {
+    const tr = el('tr');
+    const key = `${a.slot}|${a.name}`;
+    tr.dataset.key = key;
+    if (armouryOpenSet === key) tr.classList.add('open');
+    const name = el('td', null, a.family);
+    if (a.manufacturer) name.append(el('div', 'armoury-kind', a.manufacturer));
+    tr.append(name);
+    tr.append(el('td', null, a.slot));
+    tr.append(el('td', null, a.weight || (a.resistances?.macro === 'CombatFlightsuitArmor' ? 'Flight suit' : '—')));
+    tr.append(el('td', 'num', armouryTakes(a.resistances)));
+    tr.append(el('td', 'num', a.resistances ? `${Math.round(a.resistances.stun * 100)}%` : '—'));
+    tr.append(el('td', 'num', a.temperatureMin || a.temperatureMax ? `${fmtInt(a.temperatureMin)} to ${fmtInt(a.temperatureMax)} °C` : '—'));
+    tr.append(el('td', 'num', a.radiationCapacity > 0 ? `${fmtInt(a.radiationCapacity)} · ${a.radiationDissipation}/s` : '—'));
+    tr.append(el('td', 'num', a.capacityMicroScu > 0 ? `${fmtInt(a.capacityMicroScu / 1000)} mSCU` : '—'));
+    tr.append(el('td', 'num', a.emSignature > 0 || a.irSignature > 0 ? `${a.emSignature}${a.irSignature > 0 ? ` · IR ${a.irSignature}` : ''}` : '0'));
+    tr.append(el('td', 'num', String(Math.round(a.mass * 100) / 100)));
+    tr.append(el('td', 'num', String(a.pieces?.length || 1)));
+    tr.append(el('td', 'num', armouryPrice(a.market)));
+    tr.append(el('td', 'muted', armouryWhere(a.market)));
+    tr.addEventListener('click', () => {
+      armouryOpenSet = armouryOpenSet === key ? null : key;
+      renderArmouryArmour();
+    });
+    body.append(tr);
+    if (armouryOpenSet === key) body.append(armouryExpansion(renderArmouryArmourDetail(a), 13));
+  }
+}
+
+/** Every colour of one set with its own price, and the figures the row could not fit. */
+function renderArmouryArmourDetail(a) {
+  const inner = el('div', 'armoury-detail');
+  inner.append(el('div', 'panel-title', `${a.family} · ${a.slot}`));
+  inner.append(el('div', 'panel-sub', `${a.kind || a.slot}${a.weight ? ` · ${a.weight}` : ''} · ${a.manufacturer || 'maker unnamed'}`));
+  let picture = armouryPicture(a.pieces?.[0]?.uuid, a.pieces?.[0]?.name || a.name);
+  inner.append(picture);
+
+  const facts = [];
+  if (a.resistances) {
+    const r = a.resistances;
+    facts.push(`Takes ${Math.round(r.physical * 100)}% of ballistic, ${Math.round(r.energy * 100)}% of energy, ${Math.round(r.distortion * 100)}% of distortion, ${Math.round(r.thermal * 100)}% of thermal, ${Math.round(r.biochemical * 100)}% of biochemical and ${Math.round(r.stun * 100)}% of stun damage, ${Math.round(r.impact * 100)}% of an impact's force - the ${r.macro} table, shared by every piece that reads it.`);
+  } else facts.push('No resistance block: it stops nothing.');
+  if (a.protects?.length) facts.push(`Covers ${a.protects.join(', ')}.`);
+  if (a.gForceResistance) facts.push(`G tolerance ${a.gForceResistance > 0 ? '+' : ''}${a.gForceResistance}.`);
+  if (a.motionPenalty > 0 || a.viewPenalty > 0) facts.push(`Restriction penalty ${Math.round(a.motionPenalty * 100)}% movement, ${Math.round(a.viewPenalty * 100)}% view - the game's own figure; what puts the piece into that state is not read.`);
+  inner.append(el('p', 'muted small', facts.join(' ')));
+
+  inner.append(el('h4', null, `Colours and editions (${a.pieces?.length || 0})`));
+  const list = el('div', 'armoury-finishes');
+  for (const p of a.pieces || []) {
+    const chip = el('span', 'armoury-finish', p.name);
+    chip.classList.add('clickable');
+    chip.title = 'Show this colour';
+    chip.addEventListener('click', () => { picture = armouryShowPicture(picture, p.uuid, p.name); });
+    chip.append(el('span', 'muted', p.market?.price ? `${fmtInt(p.market.price)} aUEC · ${armouryWhere(p.market)}` : 'no terminal recorded'));
+    list.append(chip);
+  }
+  inner.append(list);
+  return inner;
+}
+
+for (const id of ['#armoury-gun-kind', '#armoury-gun-damage', '#armoury-gun-sort', '#armoury-gun-priced'])
+  $(id)?.addEventListener('change', renderArmouryGuns);
+for (const id of ['#armoury-armour-slot', '#armoury-armour-weight', '#armoury-armour-sort', '#armoury-armour-priced'])
+  $(id)?.addEventListener('change', renderArmouryArmour);
+onInput('#armoury-search', () => { renderArmouryGuns(); renderArmouryArmour(); });
+
 
 /* ---------- crafting blueprints ---------- */
 
@@ -5170,6 +6337,7 @@ const SCREEN_KINDS = {
   Fleet: 'fleet',
   Reputation: 'reputation',
   Kiosk: 'kiosk',
+  Mining: 'rock scan',
   MobiGlas: 'mobiGlas',
   Unknown: 'unread',
 };
@@ -5311,6 +6479,38 @@ function renderSighting(box, s, { full = true } = {}) {
       box.append(el('div', 'muted', `Balance on screen: ${Number(k.balance).toLocaleString()} aUEC, printed in full.`));
     else if (k.balanceRead)
       box.append(el('div', 'muted', `Balance on screen: ${k.balanceRead}, abbreviated — no figure is taken from it.`));
+  }
+
+  // A scanned rock: the panel's figures, each said only where it read, and a
+  // way to the calculator with them already in the form.
+  if (s.mining) {
+    const m = s.mining;
+    box.append(el('div', 'strong', `a rock scanned: ${m.primary || m.primaryRead || 'mineral unread'}`));
+    const facts = [
+      m.massKg != null ? `${Number(m.massKg).toLocaleString()} kg` : 'mass did not read',
+      m.resistancePercent != null ? `${m.resistancePercent}% resistance` : 'resistance did not read',
+      m.instability != null ? `instability ${m.instability}` : 'instability did not read',
+      m.scu != null ? `${m.scu} SCU` : null,
+      m.difficulty ? m.difficulty.toLowerCase() : null,
+    ].filter(Boolean);
+    box.append(el('div', 'muted', facts.join(' · ')));
+
+    if (full && (m.parts || []).length) {
+      const list = el('ul', 'feed screen-fittings');
+      for (const part of m.parts) {
+        const li = el('li');
+        li.append(el('span', 'what', part.mineral || `read as “${part.read}”`));
+        li.append(el('span', 'd', ` · ${part.percent ? `${part.percent}%` : 'share did not read'}${part.quality != null ? ` · quality ${part.quality}` : ''}`));
+        list.append(li);
+      }
+      box.append(list);
+    }
+
+    const go = el('button', 'ghost tiny', 'Mining fit');
+    go.type = 'button';
+    go.title = 'Open the Mining page with this rock in the calculator';
+    go.addEventListener('click', () => { crackFromScan = m; showView('mining'); });
+    box.append(go);
   }
 
   if (s.contracts) {
@@ -7345,10 +8545,280 @@ async function renderFleetBerths() {
   const feed = el('ul', 'feed screen-fittings');
   for (const row of rows) feed.append(fleetRow(row));
   list.append(feed);
+
+  // A ship the terminal lists that the logs never saw fly has no card above -
+  // the cards are sorties - so it gets one here that says exactly that, with
+  // the terminal's word on where it is and the Garage a click away. Without
+  // this the Ironclad was in the reading and on no card anywhere.
+  const unflown = rows.filter((row) => row.ship && !row.flown);
+  if (!unflown.length) return;
+
+  list.append(el('h3', 'spaced', `Owned, never flown in the logs · ${unflown.length}`));
+  list.append(el('p', 'muted caption', 'Listed at the Fleet Manager and never seen aboard in a session: no sorties, no hours, no photographed fit. The numbers a card would carry are all zero, so it carries the terminal\'s instead.'));
+  const grid = el('div', 'ship-grid');
+  for (const row of unflown) {
+    const card = el('article', 'ship-card unflown');
+    const maker = makerOf(row.ship);
+    if (row.className) card.append(shipPicture({ name: row.ship, className: row.className }, maker));
+    const body = el('div', 'ship-body');
+    body.append(el('div', 'ship-name', row.ship));
+    const facts = [row.location ? `at ${row.location}` : null, row.state ? row.state.toLowerCase() : null, row.focus, row.cargo != null ? `${row.cargo} SCU` : null].filter(Boolean);
+    body.append(el('div', 'ship-ref muted', facts.join(' · ') || 'no berth read'));
+    body.append(el('div', 'ship-ref muted', 'never flown in the logs'));
+    if (row.className) {
+      const garage = el('button', 'ghost ship-upgrade', 'Garage');
+      garage.type = 'button';
+      garage.title = `${row.ship}'s numbers, what fits it, and what a part would change`;
+      garage.addEventListener('click', () => openGarageFor(row.className));
+      body.append(garage);
+    }
+    card.append(body);
+    grid.append(card);
+  }
+  list.append(grid);
 }
 
 $('#screen-log-refresh')?.addEventListener('click', () => {
-  renderScreenLog().catch(() => {});
+  (logPane === 'files' ? loadScanHistory() : renderScreenLog()).catch(() => {});
+});
+
+/* ---------- the Log page's two panes ---------- */
+
+/**
+ * Readings is what the pilot showed the app; Game logs is what the app read
+ * on its own. They share a page because both answer "what does Quantum Wake
+ * know, and where from" - but a screenshot log and a file table are different
+ * shapes, so they take turns rather than stacking.
+ */
+const LOG_PANES = ['readings', 'files'];
+let logPane = 'readings';
+try {
+  const kept = localStorage.getItem('qw-log-pane');
+  if (LOG_PANES.includes(kept)) logPane = kept;
+} catch { /* private browsing keeps the default */ }
+
+const LOG_CAPTIONS = {
+  readings: 'What you have shown Quantum Wake, and the coordinates you chose to keep.',
+  files: 'Every log the game has written, and whether Quantum Wake has read it as it stands.',
+};
+
+function showLogPane(name) {
+  if (!LOG_PANES.includes(name)) name = 'readings';
+  logPane = name;
+  try { localStorage.setItem('qw-log-pane', name); } catch { /* as above */ }
+
+  for (const pane of LOG_PANES) $(`#log-pane-${pane}`)?.classList.toggle('active', pane === name);
+  for (const button of $('#log-tabs')?.querySelectorAll('button') || [])
+    button.classList.toggle('active', button.dataset.pane === name);
+
+  // Clearing readings and scanning logs each belong to one pane; the header
+  // shows the button for the pane on screen and not the other one.
+  const clear = $('#screen-log-clear');
+  if (clear) clear.hidden = name !== 'readings';
+  const scan = $('#scan-now');
+  if (scan) scan.hidden = name !== 'files';
+  const caption = $('#log-caption');
+  if (caption) caption.textContent = LOG_CAPTIONS[name];
+
+  if (name === 'files') loadScanHistory().catch(() => {});
+}
+
+for (const button of $('#log-tabs')?.querySelectorAll('button') || [])
+  button.addEventListener('click', () => showLogPane(button.dataset.pane));
+
+/** Megabytes to one place; a log is 2-4 MB and the whole folder ~400. */
+function megabytes(bytes) {
+  if (bytes == null) return '—';
+  const mb = bytes / 1048576;
+  return `${mb.toLocaleString(undefined, { maximumFractionDigits: mb < 10 ? 1 : 0 })} MB`;
+}
+
+/** Date and time in one short cell: "Sep 14, 2026 21:03". */
+const stampOf = (iso) => (iso ? `${dateOf(iso)} ${shortTimeOf(iso)}` : '—');
+
+/** What a file's state means to someone reading the table, not to the scanner. */
+const FILE_STATES = {
+  current: ['read', 'Summarised as it stands on disk'],
+  changed: ['grown', 'Has changed since it was read; the next scan re-reads it'],
+  unread: ['not read', 'In the folder but never scanned'],
+  gone: ['gone', 'The game has deleted this backup; its session is kept from the last read'],
+  parsing: ['parsing…', 'Being read right now'],
+};
+
+/** The scan in progress, as the bar last polled it; null between scans. */
+let scanNow = null;
+
+/** The runs as last fetched, kept so a poll can redraw the table with the live row on top. */
+let scanRunsSeen = [];
+
+function paintFileState(cell, state) {
+  const [label, why] = FILE_STATES[state] || [state, ''];
+  cell.className = `scan-state ${state}`;
+  cell.textContent = label;
+  cell.title = why;
+}
+
+/**
+ * One poll of a scan, on the file table.
+ *
+ * The rows are not re-fetched mid-scan: sessions land in batches of 25, so
+ * the store would describe a pass half committed. The table keeps what it
+ * last read and only the row being parsed changes, back to its resting
+ * state once the scan has moved on; the finish reloads everything.
+ */
+function paintScanFiles(status) {
+  scanNow = status && status.running ? status : null;
+
+  const body = $('#scan-files-table tbody');
+  if (!body) return;
+
+  for (const tr of body.children || []) {
+    const cell = tr.querySelector?.('.scan-state');
+    if (!cell || !tr.dataset) continue;
+    const parsing = !!scanNow && tr.dataset.file === scanNow.file;
+    paintFileState(cell, parsing ? 'parsing' : tr.dataset.state);
+  }
+
+  renderScanRuns(scanRunsSeen);
+}
+
+async function loadScanHistory() {
+  const table = $('#scan-files-table tbody');
+  if (!table) return;
+
+  let history;
+  try {
+    history = await getJson('/api/scan/history');
+  } catch {
+    $('#scan-files-summary').textContent = 'could not read the scan history';
+    return;
+  }
+
+  renderScanFiles(history);
+  renderScanRuns(history.runs || []);
+}
+
+function renderScanFiles(history) {
+  const body = $('#scan-files-table tbody');
+  body.textContent = '';
+  const files = history.files || [];
+
+  const read = files.filter((f) => f.state === 'current').length;
+  const gone = files.filter((f) => f.state === 'gone').length;
+  const parts = [`${history.onDisk ?? 0} in the folder`, megabytes(history.bytes || 0), `${read} read as they stand`];
+  if (gone) parts.push(`${gone} gone`);
+  $('#scan-files-summary').textContent = parts.join(' · ');
+
+  if (!files.length) {
+    const td = el('td', 'muted', history.root
+      ? 'No Game.log in this install yet. The game writes one the first time it runs.'
+      : 'No install found, so there is nothing to read. Point the app at one from Settings.');
+    td.colSpan = 8;
+    const tr = el('tr');
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const file of files) {
+    const tr = el('tr', file.state === 'gone' ? 'gone' : file.live ? 'live' : null);
+
+    const name = el('td');
+    name.append(el('span', 'scan-file', file.name));
+    if (file.live) name.append(el('span', 'scan-live', 'live'));
+    name.title = file.path;
+    tr.append(name);
+
+    // Remembered on the row so a poll can mark it parsing and put it back.
+    tr.dataset.file = file.name;
+    tr.dataset.state = file.state;
+    const state = el('td');
+    paintFileState(state, scanNow && scanNow.file === file.name ? 'parsing' : file.state);
+    tr.append(state);
+
+    tr.append(el('td', 'num', megabytes(file.bytes)));
+    tr.append(el('td', null, stampOf(file.writtenAt)));
+
+    // The session is the log's own clock; the file's write time is the OS's.
+    // They differ by a rotation and a time zone, and both are shown so a row
+    // can be matched against the Sessions page or against Explorer.
+    tr.append(el('td', null, file.startedAt ? `${dateOf(file.startedAt)} ${shortTimeOf(file.startedAt)} → ${shortTimeOf(file.endedAt)}` : '—'));
+    tr.append(el('td', 'num', file.startedAt
+      ? duration((new Date(file.endedAt) - new Date(file.startedAt)) / 1000)
+      : '—'));
+    tr.append(el('td', null, file.handle || '—'));
+
+    const when = el('td', 'muted', file.scannedAt ? relative(file.scannedAt) : file.sessionId ? 'before 0.14.10' : '—');
+    if (file.scannedAt) when.title = stampOf(file.scannedAt);
+    else if (file.sessionId) when.title = 'Read by a build that did not yet record when';
+    tr.append(when);
+
+    body.append(tr);
+  }
+}
+
+function renderScanRuns(runs) {
+  scanRunsSeen = runs;
+  const body = $('#scan-runs-table tbody');
+  body.textContent = '';
+
+  const latest = runs[0];
+  $('#scan-runs-summary').textContent = scanNow
+    ? `running · ${scanNow.done} of ${scanNow.total} checked · ${scanNow.parsed} read so far`
+    : latest
+      ? `last ${relative(latest.finishedAt)} · ${latest.parsed} of ${latest.files} read`
+      : '';
+
+  // The pass under way sits above the ones that finished, with the file it
+  // is on: the same facts the bar at the top shows, kept beside the history
+  // they are about to join.
+  if (scanNow) {
+    const tr = el('tr', 'running');
+    tr.append(el('td', null, 'now'));
+    tr.append(el('td', 'num', String(scanNow.total)));
+    tr.append(el('td', 'num', String(scanNow.parsed)));
+    tr.append(el('td', 'num', `${scanNow.elapsedSeconds}s`));
+    tr.append(el('td', 'scan-state parsing', `parsing ${scanNow.done} / ${scanNow.total}${scanNow.file ? ` · ${scanNow.file}` : ''}`));
+    body.append(tr);
+  }
+
+  if (!runs.length && !scanNow) {
+    const td = el('td', 'muted', 'No scan recorded yet. Scans are kept from 0.14.10 on; the first one lands on the next start.');
+    td.colSpan = 5;
+    const tr = el('tr');
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const run of runs) {
+    const tr = el('tr');
+    const when = el('td', null, stampOf(run.startedAt));
+    when.title = relative(run.startedAt);
+    tr.append(when);
+    tr.append(el('td', 'num', String(run.files)));
+    tr.append(el('td', 'num', String(run.parsed)));
+    const seconds = Math.max(0, (new Date(run.finishedAt) - new Date(run.startedAt)) / 1000);
+    tr.append(el('td', 'num', seconds < 1 ? '<1s' : `${Math.round(seconds)}s`));
+    tr.append(el('td', run.forced ? 'scan-forced' : 'muted', run.forced ? 'full re-read' : run.parsed ? 'new logs' : 'unchanged'));
+    body.append(tr);
+  }
+}
+
+// A routine pass, not the forced re-read Settings offers: unchanged backups
+// are skipped, so this is seconds, and it is what picks up a log the game
+// rotated while the app was already running.
+$('#scan-now')?.addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  button.disabled = true;
+  try {
+    await getJson2('/api/scan');
+    await loadScanHistory();
+  } catch {
+    $('#scan-files-summary').textContent = 'the scan could not be started';
+  } finally {
+    button.disabled = false;
+  }
 });
 
 /**
@@ -9283,7 +10753,290 @@ async function openGarage(cls) {
   await loadBuilds();
   loadGarageMarket(cls).catch(() => { /* the panel says the feed is off or unread */ });
   loadGaragePhoto(cls).catch(() => { /* no reading of this ship: the offer stays hidden */ });
+  loadGarageCargo(cls).catch(() => { /* the panel hides itself when the hull has no grids to draw */ });
 }
+
+/* ---------- cargo fit: does a load of crates fit this hull? ---------- */
+
+let garageCargo = null;
+let garageCargoResult = null;
+const CARGO_CRATE_SIZES = [1, 2, 4, 8, 16, 24, 32];
+const CARGO_CRATE_COLOURS = { 1: '#6bbaff', 2: '#57d8ac', 4: '#e8b35e', 8: '#f27f68', 16: '#bc8cff', 24: '#35c8f0', 32: '#ff9ad5' };
+
+/** The counts typed in, by crate size; kept across ships so the same load can be tried on the next hull. */
+let garageCargoLoad = {};
+try {
+  const kept = JSON.parse(localStorage.getItem('qw-cargo-load') || '{}');
+  if (kept && typeof kept === 'object') garageCargoLoad = kept;
+} catch { /* a private window has no memory, which is fine */ }
+
+/** The ship's grids, drawn empty; the load inputs; the fleet answer only once asked. */
+async function loadGarageCargo(cls) {
+  const box = $('#garage-cargo');
+  if (!box) return;
+  garageCargoResult = null;
+  try {
+    garageCargo = await getJson(`/api/cargo/${encodeURIComponent(cls)}`);
+  } catch {
+    garageCargo = null;
+  }
+  if (!garageCargo) { box.hidden = true; return; }
+  box.hidden = false;
+
+  const sub = $('#garage-cargo-sub');
+  const grids = garageCargo.grids || [];
+  if (!garageCargo.gridsKnown) {
+    sub.textContent = 'The reference data predates cargo grids. Refresh the community dataset in Settings and this hull’s holds will be drawn.';
+  } else if (grids.length === 0) {
+    sub.textContent = `The dataset places no cargo grid on the ${garageCargo.name}${garageCargo.cargoScu ? ` though it credits it with ${fmt1(garageCargo.cargoScu)} SCU` : ''} — nothing to pack into.`;
+  } else {
+    const kinds = new Map();
+    for (const g of grids) kinds.set(g.class, (kinds.get(g.class) || 0) + 1);
+    sub.textContent = `${grids.length} grid${grids.length === 1 ? '' : 's'}, ${fmt1(grids.reduce((a, g) => a + g.scu, 0))} SCU by the dataset’s own placement: `
+      + [...kinds].map(([k, n]) => { const g = grids.find((x) => x.class === k); return `${n > 1 ? `${n} × ` : ''}${fmt1(g.x)} × ${fmt1(g.y)} × ${fmt1(g.z)} m`; }).join(', ')
+      + '. Type a load and see where each crate would go.';
+  }
+
+  renderCargoLoadInputs();
+  renderCargoGrids(grids.map(cargoEmpty), null);
+  const fleet = $('#garage-cargo-fleet');
+  if (fleet) { fleet.hidden = true; fleet.textContent = ''; }
+  $('#garage-cargo-verdict').textContent = '';
+  $('#garage-cargo-note').textContent = garageCargo.cratesFromInstall
+    ? 'Crate sizes are read from your install: 1 SCU is 1.25 m cubed, and the 16, 24 and 32 are one lane wide and 5, 7.5 and 10 m long. A crate keeps its top up and may turn on the spot; anything stacks on anything; nothing hangs over an edge. The packing is this app’s, largest crate first: a fit found is real, a fit not found is not proof.'
+    : 'The install has not been read yet, so the crate sizes are the table read from it on 16 Sep 2026. The packing is this app’s, largest crate first: a fit found is real, a fit not found is not proof.';
+
+  // A load already typed - or brought from another hull's answer - is tried
+  // straight away, so the fleet list is a link and not a form.
+  if (garageCargo.gridsKnown && grids.length && Object.keys(cargoLoadNow()).length) await fitCargo();
+}
+
+function cargoCells(g) {
+  return { w: Math.round(g.x / 1.25), l: Math.round(g.y / 1.25), h: Math.round(g.z / 1.25) };
+}
+
+/** The empty drawing, before a fit: the same one-cell-rule line the packer draws, so the caption does not change under the crates. */
+function cargoEmpty(g) {
+  const one = g.maxBox && Math.round(g.maxBox.x / 1.25) === 1 && Math.round(g.maxBox.y / 1.25) === 1 && Math.round(g.maxBox.z / 1.25) === 1;
+  return { grid: g, cells: cargoCells(g), placed: [], usedScu: 0, ruleIgnored: !!one && g.scu >= 16 };
+}
+
+function renderCargoLoadInputs() {
+  const box = $('#garage-cargo-load');
+  if (!box) return;
+  box.textContent = '';
+  for (const size of CARGO_CRATE_SIZES) {
+    const field = el('label', 'garage-cargo-crate');
+    const swatch = el('span', 'garage-cargo-swatch');
+    swatch.style.background = CARGO_CRATE_COLOURS[size];
+    field.append(swatch, el('span', 'garage-cargo-size', `${size} SCU`));
+    const input = el('input');
+    input.type = 'number';
+    input.min = '0';
+    input.max = '999';
+    input.inputMode = 'numeric';
+    input.dataset.size = String(size);
+    input.value = garageCargoLoad[size] ? String(garageCargoLoad[size]) : '';
+    input.placeholder = '0';
+    input.setAttribute('aria-label', `${size} SCU crates`);
+    input.addEventListener('input', () => {
+      garageCargoLoad[size] = Math.max(0, parseInt(input.value, 10) || 0);
+      try { localStorage.setItem('qw-cargo-load', JSON.stringify(garageCargoLoad)); } catch { /* as above */ }
+      renderCargoTotal();
+    });
+    field.append(input);
+    box.append(field);
+  }
+  box.append(el('span', 'garage-cargo-total muted', ''));
+  renderCargoTotal();
+}
+
+function cargoLoadNow() {
+  const crates = {};
+  for (const size of CARGO_CRATE_SIZES) if (garageCargoLoad[size] > 0) crates[size] = garageCargoLoad[size];
+  return crates;
+}
+
+function renderCargoTotal() {
+  const total = $('#garage-cargo-load')?.querySelector('.garage-cargo-total');
+  if (!total) return;
+  const crates = cargoLoadNow();
+  const scu = Object.entries(crates).reduce((a, [s, n]) => a + Number(s) * n, 0);
+  const count = Object.values(crates).reduce((a, n) => a + n, 0);
+  total.textContent = count ? `${count} crate${count === 1 ? '' : 's'}, ${fmtInt(scu)} SCU` : '';
+}
+
+/** The load as the panel has it, into this hull and every other. */
+async function fitCargo() {
+  const crates = cargoLoadNow();
+  const verdict = $('#garage-cargo-verdict');
+  if (!Object.keys(crates).length) { verdict.textContent = 'Type how many crates of each size.'; verdict.className = 'garage-cargo-verdict'; return; }
+  if (!garageCargo) return;
+
+  let data;
+  try {
+    const response = await fetch('/api/cargo/fit', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ship: garageCargo.class, crates }),
+    });
+    data = await response.json();
+    if (!response.ok) { verdict.textContent = data.message || 'The fit could not be worked out.'; verdict.className = 'garage-cargo-verdict'; return; }
+  } catch {
+    verdict.textContent = 'The fit could not be worked out.';
+    verdict.className = 'garage-cargo-verdict';
+    return;
+  }
+  garageCargoResult = data;
+  renderCargoVerdict(data);
+  if (data.ship) renderCargoGrids(data.ship.grids, data.ship);
+  renderCargoFleet(data);
+}
+
+function renderCargoVerdict(data) {
+  const verdict = $('#garage-cargo-verdict');
+  const s = data.ship;
+  if (!s) { verdict.textContent = ''; return; }
+  const load = data.load;
+  if (s.fits) {
+    verdict.className = 'garage-cargo-verdict fits';
+    verdict.textContent = `Fits: ${load.count} crate${load.count === 1 ? '' : 's'}, ${fmtInt(load.scu)} of ${fmtInt(s.capacityScu)} SCU, with ${fmtInt(s.capacityScu - s.placedScu)} SCU to spare.`;
+  } else {
+    verdict.className = 'garage-cargo-verdict no';
+    const left = Object.entries(s.left || {}).sort((a, b) => Number(b[0]) - Number(a[0])).map(([size, n]) => `${n} × ${size} SCU`).join(', ');
+    const byRule = (s.reasons || []).length > 0;
+    verdict.textContent = load.scu > s.capacityScu
+      ? `Does not fit: ${fmtInt(load.scu)} SCU asked of a ${fmtInt(s.capacityScu)} SCU hold. Left out: ${left}.`
+      : byRule
+        ? `Does not fit: ${left} left out. ${s.reasons.join(' ')}`
+        : `No packing found for ${left}: ${fmtInt(s.placedScu)} of ${fmtInt(load.scu)} SCU placed in ${fmtInt(s.capacityScu)}. The volume is there; this packer, largest crate first, could not arrange the rest, which is not proof it cannot be done.`;
+  }
+}
+
+/**
+ * Each grid as layers seen from above, one square a cell, crates coloured by
+ * size with the size written on them. Layers because the holds are two
+ * cells high and a crate on top hides the one under it.
+ */
+function renderCargoGrids(grids, fit) {
+  const box = $('#garage-cargo-grids');
+  if (!box) return;
+  box.textContent = '';
+  const cell = 14;
+  for (const g of grids || []) {
+    const card = el('div', 'garage-cargo-grid');
+    const cells = g.cells;
+    const title = el('div', 'garage-cargo-grid-title',
+      `${g.grid.class.replace(/^.*?_CargoGrid_?|^.*?_CargoInventory_?/i, '') || g.grid.class} — ${cells.w} × ${cells.l} × ${cells.h} cells, ${fmtInt(cells.w * cells.l * cells.h)} SCU${g.grid.external ? ', outside the hull' : ''}`);
+    card.append(title);
+    const rule = g.grid.maxBox;
+    const ruleText = g.ruleIgnored
+      ? 'The dataset gives this grid a largest box of one cell, a placeholder on a hold this size; packed by its geometry instead.'
+      : rule && rule.x > 0 ? `Takes a crate up to ${fmt1(rule.x)} × ${fmt1(rule.y)} × ${fmt1(rule.z)} m.` : '';
+    if (ruleText) card.append(el('div', 'muted small', ruleText));
+    const layers = el('div', 'garage-cargo-layers');
+    for (let z = 0; z < cells.h; z++) {
+      const layer = el('div', 'garage-cargo-layer');
+      layer.append(el('div', 'muted small', cells.h > 1 ? (z === 0 ? 'Floor' : `Layer ${z + 1}`) : ''));
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      const width = cells.w * cell, height = cells.l * cell;
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      svg.setAttribute('width', String(width));
+      svg.setAttribute('height', String(height));
+      svg.classList.add('garage-cargo-svg');
+      const back = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      back.setAttribute('width', String(width)); back.setAttribute('height', String(height));
+      back.setAttribute('class', 'cargo-floor');
+      svg.append(back);
+      for (let x = 1; x < cells.w; x++) { const l = document.createElementNS('http://www.w3.org/2000/svg', 'line'); l.setAttribute('x1', String(x * cell)); l.setAttribute('x2', String(x * cell)); l.setAttribute('y1', '0'); l.setAttribute('y2', String(height)); l.setAttribute('class', 'cargo-line'); svg.append(l); }
+      for (let y = 1; y < cells.l; y++) { const l = document.createElementNS('http://www.w3.org/2000/svg', 'line'); l.setAttribute('y1', String(y * cell)); l.setAttribute('y2', String(y * cell)); l.setAttribute('x1', '0'); l.setAttribute('x2', String(width)); l.setAttribute('class', 'cargo-line'); svg.append(l); }
+      for (const p of g.placed || []) {
+        if (z < p.z || z >= p.z + p.dz) continue;
+        const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        r.setAttribute('x', String(p.x * cell + 1)); r.setAttribute('y', String(p.y * cell + 1));
+        r.setAttribute('width', String(p.dx * cell - 2)); r.setAttribute('height', String(p.dy * cell - 2));
+        r.setAttribute('rx', '2');
+        r.setAttribute('fill', CARGO_CRATE_COLOURS[p.scu] || '#888');
+        r.setAttribute('class', `cargo-crate${z > p.z ? ' cargo-crate-upper' : ''}`);
+        const t = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+        t.textContent = `${p.scu} SCU at ${p.x + 1}, ${p.y + 1}, layer ${p.z + 1}`;
+        r.append(t);
+        svg.append(r);
+        if (z === p.z) {
+          const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          label.setAttribute('x', String(p.x * cell + p.dx * cell / 2));
+          label.setAttribute('y', String(p.y * cell + p.dy * cell / 2 + 3));
+          label.setAttribute('text-anchor', 'middle');
+          label.setAttribute('class', 'cargo-label');
+          label.textContent = String(p.scu);
+          svg.append(label);
+        }
+      }
+      layer.append(svg);
+      layers.append(layer);
+    }
+    card.append(layers);
+    if (fit) card.append(el('div', 'muted small', `${fmtInt(g.usedScu)} of ${fmtInt(cells.w * cells.l * cells.h)} SCU used`));
+    box.append(card);
+  }
+}
+
+/** Your ships that take the load, then the smallest in the reference that do. */
+function renderCargoFleet(data) {
+  const box = $('#garage-cargo-fleet');
+  if (!box) return;
+  box.textContent = '';
+  box.hidden = false;
+  const mine = data.yours || [];
+  const line = (s) => {
+    const li = el('li', s.fits ? 'fits' : 'no');
+    const link = el('a', null, s.name);
+    link.href = `#garage`;
+    link.addEventListener('click', (e) => { e.preventDefault(); openGarageShipForCargo(s.class); });
+    li.append(link, el('span', 'muted', ` — ${s.fits ? 'fits' : `${fmtInt(s.placedScu)} of ${fmtInt(data.load.scu)} SCU`}, ${fmtInt(s.cargoScu)} SCU hold${s.flown && s.hours ? `, flown ${s.hours} h` : ''}`));
+    return li;
+  };
+  const fitting = mine.filter((s) => s.fits);
+  const not = mine.filter((s) => !s.fits);
+  if (mine.length) {
+    box.append(el('h4', null, 'Your ships'));
+    if (fitting.length) {
+      const ul = el('ul', 'garage-cargo-ships');
+      for (const s of fitting) ul.append(line(s));
+      box.append(ul);
+    } else {
+      box.append(el('p', 'muted small', 'None of the ships the logs have seen you fly takes this load.'));
+    }
+    // The rest in one line, hold sizes attached, so the list is what fits
+    // and not a roll-call of fighters with a 2 SCU boot.
+    if (not.length) box.append(el('p', 'muted small', `Not in: ${not.map((s) => `${s.name} (${fmtInt(s.cargoScu)} SCU)`).join(', ')}.`));
+  } else {
+    box.append(el('p', 'muted small', 'None of the ships the logs have seen you fly has a cargo grid in the dataset.'));
+  }
+  const smallest = data.smallest || [];
+  if (smallest.length) {
+    box.append(el('h4', null, 'Smallest hulls in the reference that take it'));
+    const ul = el('ul', 'garage-cargo-ships');
+    for (const s of smallest) ul.append(line(s));
+    box.append(ul);
+  }
+}
+
+/** Opens the Garage on another hull and runs the same load there. */
+function openGarageShipForCargo(cls) {
+  const pick = $('#garage-all');
+  if (pick) { pick.value = cls; pick.dispatchEvent(new Event('change')); }
+}
+
+$('#garage-cargo-fit')?.addEventListener('click', () => fitCargo().catch(() => {}));
+$('#garage-cargo-clear')?.addEventListener('click', () => {
+  garageCargoLoad = {};
+  try { localStorage.removeItem('qw-cargo-load'); } catch { /* as above */ }
+  renderCargoLoadInputs();
+  $('#garage-cargo-verdict').textContent = '';
+  const fleet = $('#garage-cargo-fleet');
+  if (fleet) { fleet.hidden = true; fleet.textContent = ''; }
+  if (garageCargo) renderCargoGrids((garageCargo.grids || []).map(cargoEmpty), null);
+});
 
 /* ---------- the photographed fit ---------- */
 
@@ -15013,6 +16766,8 @@ function loadoutArmorProfile(equipped) {
 function loadoutFigure(equipped) {
   const observed = new Set(equipped.map(loadoutPlacement));
   const profile = loadoutArmorProfile(equipped);
+  const observedZones = ['head', 'core', 'base', 'back', 'arms', 'legs']
+    .filter((part) => observed.has(part));
   const observedParts = ['head', 'core', 'base', 'back', 'arms', 'legs']
     .filter((part) => observed.has(part))
     .map((part) => `loadout-has-${part}`)
@@ -15020,6 +16775,7 @@ function loadoutFigure(equipped) {
   const figure = el('div', `loadout-figure loadout-profile-${profile.id} ${observedParts}`);
   figure.innerHTML = `
     <div class="loadout-figure-tag">${profile.label.toUpperCase()} ARMOUR PROFILE</div>
+    <div class="loadout-figure-status"><b>${observedZones.length}/6</b> BODY ZONES OBSERVED</div>
     <div class="loadout-pilot-frame">
       <img class="loadout-pilot-art" src="${profile.art}" alt="" />
       <span class="loadout-pilot-zone loadout-pilot-zone-head"></span>
@@ -15029,7 +16785,7 @@ function loadoutFigure(equipped) {
       <span class="loadout-pilot-zone loadout-pilot-zone-arms"></span>
       <span class="loadout-pilot-zone loadout-pilot-zone-legs"></span>
     </div>
-    <div class="loadout-figure-key"><span>HEAD</span><span>CORE</span><span>BASE</span><span>PACK</span><span>INSPECT MARKERS</span></div>`;
+    <div class="loadout-figure-key"><span>HEAD</span><span>CORE</span><span>BASE</span><span>PACK</span><span>OBSERVED ZONES LIT</span></div>`;
   return figure;
 }
 
@@ -15122,6 +16878,56 @@ function loadoutInventorySlot(slot) {
   return card;
 }
 
+/* A readiness strip is a briefing on the same observed kit as the cards, not
+   a live-inventory verdict. Keep it outside the search result so looking for
+   one attachment does not make the rest of the recorded kit disappear. */
+function loadoutReadiness(slots, completeSighting) {
+  const strip = el('section', 'loadout-readiness');
+  strip.setAttribute('aria-label', 'Observed kit readiness');
+  const zones = [
+    ['head', 'Head'], ['core', 'Core'], ['base', 'Base'],
+    ['back', 'Pack'], ['arms', 'Arms'], ['legs', 'Legs'],
+  ];
+  const observed = new Set(slots.map(loadoutPlacement));
+  const observedZones = zones.filter(([id]) => observed.has(id));
+  const unseenZones = zones.filter(([id]) => !observed.has(id)).map(([, label]) => label);
+  const weaponItems = slots
+    .filter((slot) => /weapon/i.test(slot.category || ''))
+    .flatMap((slot) => slot.items || []);
+  const consumableSlots = slots
+    .filter((slot) => /medical|throwable/i.test(slot.category || ''));
+  const itemCount = (items) => items.reduce((total, item) => total + (Number(item.count) || 1), 0);
+  const consumables = consumableSlots.map((slot) =>
+    `${itemCount(slot.items || [])} ${slot.label || slot.category}`.toLowerCase());
+  const latestSlotSighting = slots.map((slot) => slot.currentSeen).filter(Boolean).sort().at(-1);
+  const sighting = completeSighting || latestSlotSighting;
+
+  const add = (label, value, note, state = '') => {
+    const card = el('div', `loadout-readiness-card ${state}`.trim());
+    card.append(el('div', 'loadout-readiness-label', label));
+    card.append(el('strong', null, value));
+    card.append(el('span', null, note));
+    strip.append(card);
+  };
+
+  add('Coverage', `${observedZones.length}/6 zones observed`,
+    unseenZones.length ? `Not observed: ${unseenZones.join(' · ')}` : 'Every body zone was observed',
+    unseenZones.length ? 'partial' : 'complete');
+  add('Weapons', weaponItems.length
+    ? `${weaponItems.length} weapon${weaponItems.length === 1 ? '' : 's'} observed`
+    : 'No weapon observed', weaponItems.length
+    ? weaponItems.slice(0, 2).map(loadoutItemName).join(' · ')
+    : 'The log has no weapon attachment for this kit');
+  add('Consumables', consumables.length
+    ? `${itemCount(consumableSlots.flatMap((slot) => slot.items || []))} carried`
+    : 'No consumables observed', consumables.length
+    ? consumables.join(' · ')
+    : 'The log has no medical or throwable attachment for this kit');
+  add('Sighting', sighting ? `Observed ${relative(sighting)}` : 'No sighting time recorded',
+    sighting ? 'Latest complete kit when available' : 'Individual cards may still carry a time');
+  return strip;
+}
+
 function renderLoadout(stats) {
   libraryStats = stats;
 
@@ -15158,6 +16964,7 @@ function renderLoadout(stats) {
   screen.append(el('p', 'loadout-overview',
     'Wearable kit sits around the pilot. Stowed weapons, supplies and tools sit in the Field Kit. '
     + 'Everything here is the latest equipment the log observed, not a live game inventory.'));
+  screen.append(loadoutReadiness(stats.loadout, stats.loadoutAsOf));
 
   const sheet = el('div', 'loadout-sheet');
   const avatarRig = el('div', 'loadout-avatar-rig');
@@ -15166,7 +16973,8 @@ function renderLoadout(stats) {
   const field = el('aside', 'loadout-field-kit');
   const fieldHead = el('div', 'loadout-field-head');
   fieldHead.append(el('div', 'loadout-eyebrow', 'Field kit'));
-  fieldHead.append(el('span', 'group-meta', 'stowed & supplies'));
+  const stowedCount = slots.filter((slot) => !loadoutPlacement(slot)).length;
+  fieldHead.append(el('span', 'group-meta', `${stowedCount} stowed slot${stowedCount === 1 ? '' : 's'}`));
   field.append(fieldHead);
   const inventory = el('div', 'loadout-inventory-grid');
 
@@ -20732,6 +22540,14 @@ async function watchScan() {
     const finished = paintScan(status, sawRunning);
     sawRunning = status.running;
 
+    // The file table follows the same poll while it is on screen, so the row
+    // being parsed says so rather than the bar alone. The status is kept
+    // either way, so opening the pane mid-scan draws the pass already under way.
+    const wasScanning = scanNow !== null;
+    scanNow = status.running ? status : null;
+    if ((status.running || wasScanning) && $('#view-log')?.classList.contains('active') && logPane === 'files')
+      paintScanFiles(status);
+
     if (finished) {
       // The bar holds on "complete" long enough to be read, then goes.
       await wait(1200);
@@ -20740,6 +22556,11 @@ async function watchScan() {
       try {
         await loadHistory();
       } catch { /* the retry loop in boot covers this */ }
+
+      // The file table is the one page that is *about* the scan that just
+      // ended, so it does not wait for a click to show what it read.
+      if ($('#view-log')?.classList.contains('active') && logPane === 'files')
+        loadScanHistory().catch(() => {});
     }
 
     // Never returns. The forced rescan on the Settings page re-reads all 400 MB

@@ -238,7 +238,7 @@ public sealed class ScreenInsightService(
             shot, shotAt, frame.Kind,
             Summarise(frame, loadout, item),
             checks, item, loadout, frame.Map, frame.Wallet, frame.Lines, tookMs,
-            frame.Contracts, frame.Fleet, frame.Reputation, frame.Kiosk);
+            frame.Contracts, frame.Fleet, frame.Reputation, frame.Kiosk, Mining: frame.Mining);
     }
 
     /// <summary>Reads the clipboard for a <c>/showlocation</c> reading.</summary>
@@ -330,6 +330,11 @@ public sealed class ScreenInsightService(
                 : "the Rep app",
         ScreenKind.Kiosk when frame.Kiosk is not null =>
             $"a kiosk {(frame.Kiosk.Buying == false ? "selling" : "buying")}, {frame.Kiosk.Rows.Count} commodities listed",
+        ScreenKind.Mining when frame.Mining is not null =>
+            $"a rock scanned: {frame.Mining.Primary ?? frame.Mining.PrimaryRead ?? "mineral unread"}"
+            + (frame.Mining.MassKg is { } kg ? $", {kg:N0} kg" : ", mass unread")
+            + (frame.Mining.ResistancePercent is { } r ? $", {r:0}% resistance" : "")
+            + (frame.Mining.Scu is { } scu ? $", {scu:0.##} SCU" : ""),
         ScreenKind.MobiGlas => "a mobiGlas screen this app cannot read yet",
         _ => "nothing this app knows how to read",
     };

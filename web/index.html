@@ -76,6 +76,7 @@
         <button data-view="stash">Stash</button>
         <button data-view="loot">Loot</button>
         <button data-view="garage">Garage</button>
+        <button data-view="armoury">Armoury</button>
       </div>
     </div>
     <div class="tab-group">
@@ -845,14 +846,21 @@
     <div class="section-bar">
       <div>
         <h2>Log</h2>
-        <p class="muted caption">What you have shown Quantum Wake, and the coordinates you chose to keep.</p>
+        <p class="muted caption" id="log-caption">What you have shown Quantum Wake, and the coordinates you chose to keep.</p>
       </div>
       <div class="controls">
         <button class="ghost" id="screen-log-refresh">Refresh</button>
         <button class="ghost" id="screen-log-clear">Clear readings</button>
+        <button class="ghost" id="scan-now" hidden title="Read any log the game has written or grown since the last pass; unchanged backups are skipped">Scan now</button>
       </div>
     </div>
 
+    <nav class="subtabs" id="log-tabs" aria-label="Log pages">
+      <button type="button" data-pane="readings" class="active">Readings</button>
+      <button type="button" data-pane="files">Game logs</button>
+    </nav>
+
+    <div class="log-pane active" id="log-pane-readings">
     <div class="log-overview">
       <div class="log-card">
         <div class="option-head">
@@ -920,6 +928,59 @@
         how to turn that screen into a structured reading. Open the capture and its extracted text together.</p>
       <div id="screen-review-list"></div>
     </section>
+    </div>
+
+    <!-- What the scans have read. Every other page is built from this and
+         none of them says so; when a view looks thin, this is where to check
+         whether the logs behind it were read at all. -->
+    <div class="log-pane" id="log-pane-files">
+      <div class="log-history">
+        <div class="option-head">
+          <h3>Scans</h3>
+          <span class="muted" id="scan-runs-summary"></span>
+        </div>
+        <p class="muted">Each pass over the folder, newest first. <em>Read</em> is how many files were parsed rather
+          than served from the cache: near zero on a normal start, everything on a full re-read from Settings.</p>
+        <table id="scan-runs-table">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th class="num">Files</th>
+              <th class="num">Read</th>
+              <th class="num">Took</th>
+              <th>Kind</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="log-history">
+        <div class="option-head">
+          <h3>Game logs</h3>
+          <span class="muted" id="scan-files-summary"></span>
+        </div>
+        <p class="muted">Every <code>Game.log</code> the install has &mdash; the one the game is writing and the
+          backups it rotated &mdash; and what Quantum Wake made of each. A backup is read once and skipped
+          by fingerprint after that; the live log is re-read whenever it has grown. <em>Gone</em> means
+          the game has since deleted the file and the session it held is kept from the last read.</p>
+        <table id="scan-files-table">
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>State</th>
+              <th class="num">Size</th>
+              <th>Written</th>
+              <th>Session</th>
+              <th class="num">Length</th>
+              <th>Handle</th>
+              <th>Read</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <!-- LOGBOOK -->
@@ -1163,7 +1224,7 @@
   <!-- LOADOUT -->
   <section id="view-loadout" class="view">
     <div class="section-bar">
-      <h2>Character loadout</h2>
+      <h2>Armoury</h2>
       <div class="controls">
         <input type="search" id="loadout-search" class="search" placeholder="Search items or slots…"
                autocomplete="off" spellcheck="false">
@@ -1683,9 +1744,16 @@
   </section>
 
   <!-- REFERENCE: mining and salvage spawns -->
-  <section id="view-mining" class="view">
-    <div class="section-bar">
-      <h2>Mining &amp; salvage</h2>
+  <section id="view-mining" class="view mining-view">
+    <div class="section-bar" data-workspace="PROSPECTING">
+      <div class="mining-title">
+        <span class="mining-kicker">Resource operations</span>
+        <div class="mining-heading-line">
+          <span class="mining-workspace-icon" id="mining-workspace-icon" aria-hidden="true"></span>
+          <h2 id="mining-workspace-title">Prospecting</h2>
+        </div>
+        <p class="mining-workspace-status" id="mining-workspace-status" aria-live="polite">Loading reference locations…</p>
+      </div>
       <div class="controls">
         <select id="mining-kind" class="select" title="Filter by resource kind"></select>
         <select id="mining-system" class="select" title="Filter by system"></select>
@@ -1693,7 +1761,18 @@
                autocomplete="off" spellcheck="false">
       </div>
     </div>
-    <p class="muted caption">
+
+    <nav class="subtabs" id="mining-tabs" aria-label="Mining pages">
+      <button type="button" data-pane="go" class="active"><span>01</span> Where to go</button>
+      <button type="button" data-pane="crack"><span>02</span> Mining fit</button>
+      <button type="button" data-pane="runs"><span>03</span> Haul &amp; refinery</button>
+      <button type="button" data-pane="salvage"><span>04</span> Salvage</button>
+    </nav>
+
+    <div class="mining-pane active" id="mining-pane-go">
+    <div class="mining-brief">
+      <span class="mining-brief-mark" aria-hidden="true"></span>
+      <p class="muted caption">
       <span id="mining-source"></span>The game's own deposit tables, ranked by
       what a SCU of rock is actually worth &mdash; how much of the rock is this
       ore, times what it sells for. <em>Find</em> is how much of everything
@@ -1702,9 +1781,20 @@
       <b>There is no per-hour ranking</b>, because nothing in the logs says how
       long a rock takes to mine; respawn is how long it takes to come back,
       which is a different question.
-    </p>
-    <h3 class="spaced">Where to go</h3>
-    <p class="muted caption">
+      </p>
+    </div>
+    <aside class="mining-salvage-brief" id="mining-salvage-brief" hidden>
+      <span class="mining-salvage-mark" aria-hidden="true">SALVAGE</span>
+      <div><b>Salvage is a location reference, not a rock-ranking problem.</b>
+        The game data does not give salvage sites an ore share, quality floor, respawn timer or refinery route.
+        The catalogue below names the places and spawn groups it does know.</div>
+    </aside>
+    <div id="mining-prospect-board">
+    <div class="mining-section-head">
+      <div><span class="mining-overline">Prospect board</span><h3>Where to go</h3></div>
+      <span class="mining-section-note">Ranked by value per rock</span>
+    </div>
+    <p class="muted caption mining-explainer">
       Every place ranked by what a rock found there is worth. <em>Rich</em> is how
       much of an average rock here is actually ore; <em>Quality</em> is the best
       floor on offer, starred where this place beats the usual. <em>Per rock</em>
@@ -1714,7 +1804,7 @@
       respawn cannot be compared with a poor one on twenty minutes. Respawn is
       there so you can judge that yourself.
     </p>
-    <div class="table-wrap">
+    <div class="table-wrap mining-table-wrap">
       <table id="mining-places">
         <thead>
           <tr>
@@ -1731,8 +1821,173 @@
       </table>
     </div>
     <p class="muted caption" id="mining-places-note"></p>
+    </div>
+    <div class="mining-section-head mining-section-head-secondary">
+      <div><span class="mining-overline">Reference catalogue</span><h3>Every deposit</h3></div>
+      <span class="mining-section-note">Filter by resource, kind or system</span>
+    </div>
 
-    <h3 class="spaced">What you have brought back</h3>
+    <div class="table-wrap mining-table-wrap">
+      <table id="mining-table">
+        <thead>
+          <tr>
+            <th>Resource</th><th>Deposit</th>
+            <th class="num" title="How much of the rock this ore makes up">In rock</th>
+            <th class="num" title="The quality this comes out at here">Quality</th>
+            <th class="num" title="How long the slot takes to refill">Respawn</th>
+            <th>Kind</th>
+            <th>Where</th><th>System</th><th>Spawn group</th>
+            <th class="num" title="How much of what spawns here is this">Find</th>
+            <th class="num" title="What a SCU of this rock is worth once sold">Worth</th>
+            <th class="num">Best sell</th>
+            <th class="num" title="What the unrefined rock fetches">Raw</th>
+            <th class="num" title="Best refinery station bonus for this ore, on the method's own yield (UEX)">Bonus</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="muted caption" id="mining-count"></p>
+    </div>
+
+    <div class="mining-pane" id="mining-pane-crack">
+    <div class="mining-section-head mining-crack-head">
+      <div><span class="mining-overline">Fit analysis</span><h3>Will this fit crack it?</h3></div>
+      <span class="mining-section-note">A community-rule estimate</span>
+    </div>
+    <p class="muted caption mining-explainer" id="crack-caption">
+      The rock as the HUD scans it against the heads on your ship. The lasers,
+      modules, gadgets and minerals are the game's own figures, read from your
+      install. <b>The line itself is not the game's</b>: it does not publish how
+      mass, resistance and power meet, so this uses the community's rule
+      &mdash; <span id="crack-rule">0.36 W per kilogram at zero resistance</span>
+      &mdash; and calls the result an estimate. The game's own constants for the
+      rock are quoted beside it.
+    </p>
+    <p class="muted" id="crack-unready" hidden></p>
+    <div class="crack" id="crack" hidden>
+      <div class="crack-rock">
+        <label>Ship
+          <select id="crack-ship" class="select" title="The heads come from the ship's own loadout"></select>
+        </label>
+        <label>Mass
+          <input type="number" id="crack-mass" class="search" min="0" step="100" value="5000" title="Kilograms, as the scan HUD prints it">
+          <span class="unit">kg</span>
+        </label>
+        <label>Resistance
+          <input type="number" id="crack-resistance" class="search" min="0" max="100" step="1" value="0" title="The HUD's resistance, in percent">
+          <span class="unit">%</span>
+        </label>
+        <label>Instability
+          <input type="number" id="crack-instability" class="search" min="0" max="100" step="1" value="15" title="The HUD's instability, in percent">
+          <span class="unit">%</span>
+        </label>
+        <label>Deposit
+          <select id="crack-deposit" class="select" title="The kind of rock, as the game defines its mix; picks the likeliest mineral below"></select>
+        </label>
+        <label>Mineral
+          <select id="crack-mineral" class="select" title="What most of the rock is - for the notes; the HUD's figures above are what count"></select>
+        </label>
+        <label>Gadget
+          <select id="crack-gadget" class="select" title="A gadget placed on the rock"></select>
+        </label>
+        <button type="button" class="ghost tiny" id="crack-use-scan" title="Fill the rock from the newest scan-results screenshot the Log tab has read">Use the last scanned rock</button>
+      </div>
+      <p class="muted crack-note" id="crack-scan-note" hidden></p>
+      <div class="crack-heads" id="crack-heads"></div>
+      <div class="crack-fit-summary" id="crack-fit-summary"></div>
+      <div class="crack-verdict" id="crack-verdict"></div>
+      <div class="crack-deposit" id="crack-deposit-panel" hidden>
+        <div class="table-wrap">
+          <table id="crack-mix">
+            <thead>
+              <tr>
+                <th>Mineral</th>
+                <th class="num" title="The share of the rock this mineral takes when it is present, as the game's preset has it">Share</th>
+                <th class="num" title="How likely the preset is to include it at all">Chance</th>
+                <th class="num" title="UEX's best sell for a SCU, refined - as the places table values rock">Refined /SCU</th>
+                <th class="num" title="What the unrefined ore fetches a SCU, from UEX's raw-ore feed">Raw /SCU</th>
+                <th class="num" title="The best refinery station bonus UEX reports for this ore, on the method's own yield, and where">Bonus</th>
+                <th class="num" title="The rock's resistance and instability figures for this mineral, from the game's element table">Element</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="muted crack-note" id="crack-mix-note"></p>
+      </div>
+      <div class="table-wrap">
+        <table id="crack-matrix">
+          <thead>
+            <tr>
+              <th>Head</th>
+              <th class="num" title="The fracture beam's energy a second, before modules">Power</th>
+              <th class="num" title="After the fit's modules and the rock's resistance">Delivered</th>
+              <th class="num" title="Delivered over what the rock needs">Ratio</th>
+              <th class="num" title="The heaviest rock this head breaks at this resistance">Up to</th>
+              <th>Verdict</th>
+              <th class="num" title="UEX's cheapest terminal for the head">Price</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted crack-note" id="crack-matrix-note"></p>
+
+      <details class="crack-fittings" id="crack-fittings">
+        <summary>Every head, module and gadget the game has, with what it costs</summary>
+        <p class="muted crack-note">
+          The game's own figures for each, from your install; the price is UEX's cheapest terminal for the item
+          and where, as the Garage's bench prices a part. A blank price is no terminal recorded, not free.
+        </p>
+        <h4>Heads</h4>
+        <div class="table-wrap">
+          <table id="crack-heads-table">
+            <thead><tr>
+              <th>Head</th><th class="num">Size</th>
+              <th class="num" title="The fracture beam's energy a second">Power</th>
+              <th class="num" title="The extraction beam's">Extract</th>
+              <th class="num" title="Module slots on the head">Slots</th>
+              <th class="num" title="Waste the head's own filter removes">Filter</th>
+              <th class="num" title="The lowest the beam throttles, as a share of full power">Min</th>
+              <th>Modifiers</th>
+              <th class="num">Price</th><th>Cheapest at</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <h4>Modules</h4>
+        <div class="table-wrap">
+          <table id="crack-modules-table">
+            <thead><tr>
+              <th>Module</th><th>Kind</th>
+              <th class="num" title="On the fracture beam's power">Power</th>
+              <th class="num" title="On the extraction beam's">Extract</th>
+              <th>Modifiers</th>
+              <th class="num" title="Filter the module adds">Filter</th>
+              <th class="num" title="An active's seconds per charge, and charges">Charges</th>
+              <th class="num">Price</th><th>Cheapest at</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <h4>Gadgets</h4>
+        <div class="table-wrap">
+          <table id="crack-gadgets-table">
+            <thead><tr><th>Gadget</th><th>Modifiers</th><th class="num">Price</th><th>Cheapest at</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+    </div>
+
+
+    <div class="mining-pane" id="mining-pane-runs">
+    <div class="mining-section-head mining-runs-head">
+      <div><span class="mining-overline">Personal log</span><h3>What you have brought back</h3></div>
+      <span class="mining-section-note">Your notes stay separate from game data</span>
+    </div>
     <div class="summary-strip" id="mining-mine"></div>
     <p class="muted caption" id="mining-mine-note" hidden></p>
 
@@ -1744,16 +1999,16 @@
     </p>
 
     <form class="mining-form" id="mining-log-form">
-      <input type="text" id="mining-log-resource" class="search" maxlength="30"
-             placeholder="Ore" autocomplete="off" required>
-      <input type="text" id="mining-log-place" class="search" maxlength="30"
-             placeholder="Where" autocomplete="off">
-      <input type="number" id="mining-log-scu" class="search" min="0" step="0.01"
-             placeholder="SCU" required>
-      <input type="number" id="mining-log-quality" class="search" min="1" max="1000"
-             placeholder="Quality">
-      <input type="number" id="mining-log-revenue" class="search" min="0" step="1"
-             placeholder="Sold for">
+      <label>Ore<input type="text" id="mining-log-resource" class="search" maxlength="30"
+             placeholder="e.g. Quantanium" autocomplete="off" required></label>
+      <label>Where<input type="text" id="mining-log-place" class="search" maxlength="30"
+             placeholder="Optional" autocomplete="off"></label>
+      <label>SCU<input type="number" id="mining-log-scu" class="search" min="0" step="0.01"
+             placeholder="0" required></label>
+      <label>Quality<input type="number" id="mining-log-quality" class="search" min="1" max="1000"
+             placeholder="Optional"></label>
+      <label>Sold for<input type="number" id="mining-log-revenue" class="search" min="0" step="1"
+             placeholder="Optional"></label>
       <button type="submit" class="ghost">Record</button>
     </form>
 
@@ -1777,29 +2032,89 @@
     </div>
     <p class="muted caption" id="mining-log-note"></p>
 
-    <h3 class="spaced">Every deposit</h3>
-
-    <div class="table-wrap">
-      <table id="mining-table">
-        <thead>
-          <tr>
-            <th>Resource</th><th>Deposit</th>
-            <th class="num" title="How much of the rock this ore makes up">In rock</th>
-            <th class="num" title="The quality this comes out at here">Quality</th>
-            <th class="num" title="How long the slot takes to refill">Respawn</th>
-            <th>Kind</th>
-            <th>Where</th><th>System</th><th>Spawn group</th>
-            <th class="num" title="How much of what spawns here is this">Find</th>
-            <th class="num" title="What a SCU of this rock is worth once sold">Worth</th>
-            <th class="num">Best sell</th>
-            <th class="num" title="What the unrefined rock fetches">Raw</th>
-            <th class="num" title="Best refinery yield for this ore">Yield</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+    <!-- The nine refining methods as UEX rates them: the game's own
+         three-point scale for yield, cost and speed, and nothing behind it -
+         the percentages are the server's. Shown so a run can be read against
+         the method it went in under; hidden until the feed is on. -->
+    <div id="mining-methods" hidden>
+      <h4 class="spaced">Refining methods</h4>
+      <p class="muted caption" id="mining-methods-note"></p>
+      <div class="table-wrap">
+        <table id="mining-methods-table">
+          <thead><tr>
+            <th>Method</th><th>Code</th>
+            <th class="num" title="UEX's rating, 1 to 3 - the game's own pips">Yield</th>
+            <th class="num" title="1 is cheapest, 3 dearest">Cost</th>
+            <th class="num" title="3 is fastest">Speed</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
-    <p class="muted caption" id="mining-count"></p>
+    </div>
+
+    <!-- Salvage as the install has it: the modules, the heads, each salvage
+         hull's controller, priced by UEX. Not what a hull is worth scraped -
+         the geometry that needs is not in the files - and the pane says so
+         first rather than leaving a column of blanks to say it. -->
+    <div class="mining-pane" id="mining-pane-salvage">
+      <div class="mining-brief">
+        <span class="mining-brief-mark" aria-hidden="true"></span>
+        <p class="muted caption" id="salvage-brief">
+          What the game files say about salvage: every scraper module's speed,
+          radius and efficiency, the heads and their slots, and what each
+          salvage hull makes &mdash; what its beam scrapes to, what its
+          disintegration makes and at what rate per cubic metre &mdash; with
+          UEX's price for each and what a full hold of it fetches.
+          <b>What a given hull is worth scraped is not here</b>: the rule is in
+          the files, the hull's area and volume are not, nor in UEX, nor in
+          the logs. A full hold is a ceiling on a trip, not a promise about a
+          wreck.
+        </p>
+      </div>
+      <p class="muted" id="salvage-unready" hidden></p>
+
+      <h4 class="spaced">Salvage hulls</h4>
+      <div class="table-wrap">
+        <table id="salvage-ships">
+          <thead><tr>
+            <th>Hull</th>
+            <th class="num" title="Salvage heads the hull runs, from its controller">Heads</th>
+            <th title="What the hull-scraping beam produces">Scrapes to</th>
+            <th class="num" title="SCU of the disintegration resource per cubic metre of hull taken apart">Disintegrates</th>
+            <th class="num" title="The hull's cargo capacity, from the community dataset">Hold</th>
+            <th class="num" title="A full hold of RMC at UEX's best sell - a ceiling on a trip">Full hold, RMC</th>
+            <th class="num" title="A full hold of construction material at UEX's best sell">Full hold, CM</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted small" id="salvage-ships-note"></p>
+
+      <h4 class="spaced">Scraper modules</h4>
+      <div class="table-wrap">
+        <table id="salvage-modules">
+          <thead><tr>
+            <th>Module</th>
+            <th class="num" title="Extraction speed, the file's own unit">Speed</th>
+            <th class="num" title="The beam's radius on the hull">Radius</th>
+            <th class="num" title="Share of what is scraped that reaches the hold">Efficiency</th>
+            <th class="num">Price</th><th>Cheapest at</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <h4 class="spaced">Heads</h4>
+      <div class="table-wrap">
+        <table id="salvage-heads">
+          <thead><tr><th>Head</th><th class="num">Module slots</th><th class="num">Price</th><th>Cheapest at</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted small" id="salvage-note"></p>
+    </div>
+
   </section>
 
   <!-- REFERENCE: crafting blueprints -->
@@ -1963,6 +2278,26 @@
       <p class="muted" id="garage-optimise-status" aria-live="polite"></p>
     </section>
 
+    <!-- Does a load of crates fit this hull? The grids are the community
+         dump's, the crates the install's, the packing this app's - the
+         panel says which is which. -->
+    <section class="garage-cargo" id="garage-cargo" hidden aria-labelledby="garage-cargo-title">
+      <div class="garage-cargo-copy">
+        <div class="garage-eyebrow">Cargo fit</div>
+        <h3 id="garage-cargo-title">Will it fit?</h3>
+        <p class="muted" id="garage-cargo-sub"></p>
+      </div>
+      <div class="garage-cargo-load" id="garage-cargo-load" aria-label="Crates to fit"></div>
+      <div class="garage-cargo-tools">
+        <button type="button" class="ghost tiny" id="garage-cargo-fit">Fit it</button>
+        <button type="button" class="ghost tiny" id="garage-cargo-clear">Clear</button>
+      </div>
+      <p class="garage-cargo-verdict" id="garage-cargo-verdict" aria-live="polite"></p>
+      <div class="garage-cargo-grids" id="garage-cargo-grids"></div>
+      <div class="garage-cargo-fleet" id="garage-cargo-fleet" hidden></div>
+      <p class="muted small" id="garage-cargo-note"></p>
+    </section>
+
     <!-- The ship's fit as last photographed at a Vehicle Loadout Manager,
          offered as a starting point. Dated, because a screenshot is a moment
          and not a state; hidden when no loadout reading is of this ship. -->
@@ -2032,6 +2367,119 @@
       </div>
       <div class="bench-panel market-list" id="garage-market-body"></div>
     </section>
+  </section>
+
+  <section id="view-armoury" class="view">
+    <div class="section-bar">
+      <h2>Armoury</h2>
+      <div class="controls">
+        <input type="search" id="armoury-search" class="search" placeholder="Search guns and armour…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <p class="muted caption">
+      Which rifle, what armour, where to buy it. Every figure is read from your
+      own game files &mdash; a gun's damage sits on the ammunition its magazine
+      loads, a fire mode's rate on the gun, a piece of armour's resistance on a
+      table its class shares &mdash; and the price is UEX's cheapest terminal
+      for the item, as the Garage prices a part. <b>Nothing here is from your
+      logs</b>: they name what you had attached, never what it does.
+      Rates and damage a second are derived by holding the trigger down, and
+      say so; the game publishes neither. (<code>docs/armoury.md</code>)
+    </p>
+    <p class="muted" id="armoury-unready" hidden></p>
+
+    <nav class="subtabs" id="armoury-tabs" aria-label="Armoury pages">
+      <button type="button" data-pane="guns" class="active">Guns</button>
+      <button type="button" data-pane="armour">Armour</button>
+    </nav>
+
+    <div class="armoury-pane active" id="armoury-pane-guns">
+      <div class="controls armoury-filters">
+        <select id="armoury-gun-kind" class="select" title="Kind of gun"></select>
+        <select id="armoury-gun-damage" class="select" title="Damage kind">
+          <option value="">Any damage</option>
+          <option value="physical">Ballistic</option>
+          <option value="energy">Energy</option>
+          <option value="mixed">Mixed</option>
+        </select>
+        <select id="armoury-gun-sort" class="select" title="Sort guns by">
+          <option value="dps">Best damage a second</option>
+          <option value="hit">Hardest hit</option>
+          <option value="mag">Most a magazine</option>
+          <option value="reach">Longest before the drop</option>
+          <option value="price">Cheapest first</option>
+          <option value="name">By name</option>
+        </select>
+        <label class="toggle"><input type="checkbox" id="armoury-gun-priced"> Only guns UEX prices</label>
+      </div>
+      <p class="muted small" id="armoury-gun-count"></p>
+      <div class="table-wrap">
+        <table id="armoury-guns">
+          <thead><tr>
+            <th>Gun</th><th title="The kind, and the holster it takes: small on the hip, medium and large on the back">Kind</th>
+            <th class="num" title="One projectile at the muzzle, and what kind of damage it is">Hit</th>
+            <th title="Every way it fires, with the cyclic rate">Modes</th>
+            <th class="num" title="The best mode's damage a second with the trigger held - derived, not the game's">DPS</th>
+            <th class="num" title="Rounds in the magazine it ships with">Mag</th>
+            <th class="num" title="What a whole magazine does in the best mode - derived">Per mag</th>
+            <th class="num" title="Where the damage starts to fall, and the floor it falls to">Drop</th>
+            <th class="num" title="UEX's cheapest terminal for the plain gun, or a finish the game names the same">Price</th>
+            <th>Cheapest at</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted small">
+        DPS and per-magazine figures assume the trigger is held and, for a charge
+        mode, every shot held to full charge; a burst's sustained rate counts its
+        cooldown. Damage is at the muzzle, before the drop and before armour.
+        A launcher's blast is shown in the row's details. Knives, grenades and
+        the gadgets are not read yet.
+      </p>
+    </div>
+
+    <div class="armoury-pane" id="armoury-pane-armour">
+      <div class="controls armoury-filters">
+        <select id="armoury-armour-slot" class="select" title="Where it is worn"></select>
+        <select id="armoury-armour-weight" class="select" title="Light, medium or heavy">
+          <option value="">Any weight</option>
+          <option value="Light">Light</option>
+          <option value="Medium">Medium</option>
+          <option value="Heavy">Heavy</option>
+        </select>
+        <select id="armoury-armour-sort" class="select" title="Sort armour by">
+          <option value="name">By set</option>
+          <option value="cold">Coldest it takes</option>
+          <option value="hot">Hottest it takes</option>
+          <option value="carry">Carries most</option>
+          <option value="quiet">Quietest</option>
+          <option value="light">Lightest</option>
+          <option value="price">Cheapest first</option>
+        </select>
+        <label class="toggle"><input type="checkbox" id="armoury-armour-priced"> Only sets UEX prices</label>
+      </div>
+      <p class="muted small" id="armoury-armour-count"></p>
+      <p class="muted small" id="armoury-armour-note"></p>
+      <div class="table-wrap">
+        <table id="armoury-armour">
+          <thead><tr>
+            <th>Set</th><th>Slot</th><th>Weight</th>
+            <th class="num" title="How much of a hit gets through: the class's shared table, so every medium piece reads the same">Takes</th>
+            <th class="num" title="Of a stun hit">Stun</th>
+            <th class="num" title="The temperatures it keeps you comfortable in">Temp</th>
+            <th class="num" title="Radiation it soaks before you take it, and how fast it sheds it a second">Radiation</th>
+            <th class="num" title="What its pockets hold">Carries</th>
+            <th class="num" title="Electromagnetic emission it adds">EM</th>
+            <th class="num">kg</th>
+            <th class="num" title="Colours and editions the game sells with these figures">Colours</th>
+            <th class="num" title="UEX's cheapest terminal across the set's colours">From</th>
+            <th>Cheapest at</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
 

@@ -486,6 +486,26 @@ public sealed class DataCore
         return (-1, null);
     }
 
+    /// <summary>A one-byte field, or null - a burst's shot count is stored this narrow.</summary>
+    public int? ByteAt(long instance, int structIndex, string name)
+    {
+        var (at, field) = FieldAt(instance, structIndex, name);
+
+        return at >= 0 && field is { ConversionType: 0, DataType: 0x0002 or 0x0006 } && at + 1 <= _data.LongLength
+            ? _data[at]
+            : null;
+    }
+
+    /// <summary>A boolean field, or null.</summary>
+    public bool? BoolAt(long instance, int structIndex, string name)
+    {
+        var (at, field) = FieldAt(instance, structIndex, name);
+
+        return at >= 0 && field is { ConversionType: 0, DataType: 0x0001 } && at + 1 <= _data.LongLength
+            ? _data[at] != 0
+            : null;
+    }
+
     /// <summary>An integer field, or null.</summary>
     public int? Int32At(long instance, int structIndex, string name)
     {

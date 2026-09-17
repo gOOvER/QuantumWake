@@ -657,6 +657,11 @@ public static class ServerHost
 
         app.MapGet("/api/scan/status", (ScanStatus status) => status.Snapshot());
 
+        // What the scans have read: each log file the install has, whether the
+        // copy on disk is the one summarised, and the runs themselves. The Log
+        // page's answer to "did it actually read my logs, and which ones".
+        app.MapGet("/api/scan/history", (LogLibrary lib) => ScanHistory.Build(install, lib.Store));
+
         app.MapGet("/api/now", (LiveSessionService live) => live.Current);
 
         // The Now page is a briefing, not another report to go hunting through:
@@ -993,14 +998,456 @@ public static class ServerHost
         // somebody dug it up rather than hauled it, and it is an inference
         // rather than an observation. Worded that way on the page.
         app.MapGet("/api/mining/mine", (LogLibrary lib, UexData uex) =>
-            lib.Market(uex)
+        {
+            // Only what the game's deposit tables say comes out of a rock. Sold
+            // and never bought is also how a mission reward or a found trinket
+            // leaves the hold - a Year of the Rat Envelope was listed as ore on
+            // this install - so the inference is kept to the minerals.
+            var mineable = SpawnMerge.Merge(lib.GameCommodities.Spawns, lib.Community.ResourceSpawns)
+                .Select(s => s.Resource)
+                .Concat(lib.GameCommodities.Mining.Minerals.Select(m => m.Name))
+                .Concat(lib.GameCommodities.Mining.Minerals.Select(m => m.Name
+                    .Replace(" (Raw)", "", StringComparison.OrdinalIgnoreCase).Replace("Raw ", "", StringComparison.OrdinalIgnoreCase)
+                    .Replace(" (Ore)", "", StringComparison.OrdinalIgnoreCase).Replace("Ore ", "", StringComparison.OrdinalIgnoreCase).Trim()))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            return lib.Market(uex)
                 .Where(e => e.MyScuSold > 0 && e.MyScuBought == 0)
+                .Where(e => mineable.Count == 0 || mineable.Contains(e.Name))
                 .Select(e => new { e.Name, scu = e.MyScuSold, revenue = e.MyRevenue, trips = e.MyTrades })
-                .OrderByDescending(e => e.revenue));
+                .OrderByDescending(e => e.revenue);
+        });
 
         // Where to go, rather than what to shoot. Ranked in MiningPlaces, which
         // the Now page's mining focus asks the same question of.
         app.MapGet("/api/mining/places", (LogLibrary lib, UexData uex) => MiningPlaces(lib, uex));
+
+        // The mining model as the install has it - lasers, modules, gadgets,
+        // minerals, the game's constants - and the ships that carry a mining
+        // head, with how many and what size. Nothing here is from the logs,
+        // which record no mining; it is all read from the game files, and the
+        // page says so. Ready is false until the install has been read.
+        app.MapGet("/api/mining/model", (LogLibrary lib, UexData uex, UexFeeds feeds) =>
+        {
+            var mining = lib.GameCommodities.Mining;
+            var flown = lib.Stats().Ships.Select(s => s.ClassName).Where(c => c is not null).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var minerals = mining.Minerals.ToDictionary(m => m.Class, StringComparer.OrdinalIgnoreCase);
+
+            // What a SCU of each mineral sells for, refined, as the places
+            // table values rock: UEX names the refined commodity ("Quantainium")
+            // and the element names the raw ("Quantainium (Raw)", "Ore Iron").
+            static string Refined(string name) => name
+                .Replace(" (Raw)", "", StringComparison.OrdinalIgnoreCase).Replace("Raw ", "", StringComparison.OrdinalIgnoreCase)
+                .Replace(" (Ore)", "", StringComparison.OrdinalIgnoreCase).Replace("Ore ", "", StringComparison.OrdinalIgnoreCase).Trim();
+            decimal? SellPerScu(string elementClass) =>
+                minerals.TryGetValue(elementClass, out var m) && uex.Best(Refined(m.Name))?.BestSell is { } best && best > 0 ? best : null;
+
+            // The raw price and the best refinery yield, joined the way the
+            // deposit table joins them: raw ore is listed as "Quartz (Raw)",
+            // yields as "Quartz (Ore)" or the bare name. Both are optional feeds
+            // and come out null when the pilot has not switched them on.
+            var rawPrices = feeds.RawOrePrices
+                .GroupBy(r => r.Commodity, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.MaxBy(r => r.Sell)!, StringComparer.OrdinalIgnoreCase);
+            var yields = feeds.RefineryYields
+                .GroupBy(r => r.Commodity, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.MaxBy(r => r.Yield)!, StringComparer.OrdinalIgnoreCase);
+            // The feeds list ore under the element's own name - "Copper (Ore)",
+            // "Laranite (Raw)" - so that is tried first, the decorated forms after.
+            decimal? RawPerScu(string elementClass) =>
+                minerals.TryGetValue(elementClass, out var m)
+                    && (rawPrices.GetValueOrDefault(m.Name) ?? rawPrices.GetValueOrDefault($"{Refined(m.Name)} (Raw)") ?? rawPrices.GetValueOrDefault(Refined(m.Name))) is { } row && row.Sell > 0
+                    ? row.Sell : null;
+            UexRefinery? BestYield(string elementClass) =>
+                minerals.TryGetValue(elementClass, out var m)
+                    ? yields.GetValueOrDefault(m.Name) ?? yields.GetValueOrDefault($"{Refined(m.Name)} (Ore)") ?? yields.GetValueOrDefault(Refined(m.Name))
+                    : null;
+
+            // Ship deposits only: every element in the mix is a ship mineral.
+            var compositions = mining.Compositions
+                .Where(c => c.Parts.All(pt => minerals.TryGetValue(pt.Element, out var m) && m.Method == "Ship"))
+                .Select(c => new
+                {
+                    c.Class, c.Name, c.MinimumDistinctElements,
+                    parts = c.Parts.Select(pt => new
+                    {
+                        pt.Element, name = minerals[pt.Element].Name, pt.MinPercent, pt.MaxPercent, pt.Probability,
+                        sellPerScu = SellPerScu(pt.Element),
+                        rawPerScu = RawPerScu(pt.Element),
+                        yield = BestYield(pt.Element)?.Yield,
+                        yieldAt = BestYield(pt.Element)?.Terminal,
+                    }).ToList(),
+                })
+                .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ThenBy(c => c.Class, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            // What each head, module and gadget costs and where, the way the
+            // Garage's bench prices a part: UEX's item prices by the game's own
+            // id for the class. Null price is "no terminal recorded", not free.
+            object Priced(string cls)
+            {
+                var uuid = lib.GameCommodities.ItemUuid(cls);
+                return new
+                {
+                    price = uex.ItemPrice(uuid),
+                    shops = uex.ItemMarket(uuid)
+                        .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
+                        .Select(g => g.MinBy(r => r.Buy)!)
+                        .OrderBy(r => r.Buy)
+                        .Take(3)
+                        .Select(r =>
+                        {
+                            var place = lib.Terminals.Resolve(r.Terminal);
+                            return new { terminal = r.Terminal, place = place?.Name, system = place?.System, price = r.Buy };
+                        })
+                        .ToList(),
+                };
+            }
+
+            return Results.Ok(new
+            {
+                ready = mining.Lasers.Count > 0,
+                mining.Constants,
+                // Ship heads only: the S0 heads are the ROC's and the hand tool's,
+                // and the MPUV arm reuses the Arbor's name for a weaker beam.
+                lasers = mining.Lasers.Where(l => l.Size >= 1 && !l.Class.Contains("MPUV", StringComparison.OrdinalIgnoreCase))
+                    .Select(l => new { l.Class, l.Name, l.Size, l.Power, l.ExtractionPower, l.FilterModifier, l.ThrottleMinimum, l.Modifiers, l.Manufacturer, l.Slots, market = Priced(l.Class) }),
+                modules = mining.Modules.Select(m => new { m.Class, m.Name, m.Active, m.Lifetime, m.Charges, m.PowerMultiplier, m.ExtractionMultiplier, m.FilterModifier, m.Modifiers, m.Manufacturer, market = Priced(m.Class) }),
+                gadgets = mining.Gadgets.Select(g => new { g.Class, g.Name, g.Modifiers, g.Manufacturer, market = Priced(g.Class) }),
+                minerals = mining.Minerals.Where(m => m.Method == "Ship"),
+                compositions,
+                pricesKnown = compositions.Any(c => c.parts.Any(pt => pt.sellPerScu is not null)),
+                itemPricesKnown = uex.IsEnabled,
+                // UEX's ratings of the nine methods, 1 to 3, when that feed is on; the
+                // percentages behind them are the server's and in no file or feed.
+                methods = feeds.RefineryMethods,
+                methodsKnown = feeds.IsEnabled(UexFeeds.Methods),
+                // Ship heads only, as above: the ROC and the ATLS mine under the
+                // ground-vehicle constants, which this does not model.
+                ships = MiningShips(lib.Community).Where(s => s.Heads.Any(h => h.Size >= 1))
+                    .Select(s => new { s.Class, s.Name, s.Heads, flown = flown.Contains(s.Class) }),
+                rule = new
+                {
+                    RockCracking.RequiredWattsPerKg, RockCracking.SoloRatio, RockCracking.GadgetRatio,
+                    source = "scminer.rocks, 2026-09-15 - the community's line, not the game's",
+                },
+            });
+        });
+
+        // A rock as scanned against a fit: the verdict, and the same rock on
+        // every head of that size so the pilot sees what a different head
+        // would do without refitting.
+        // Salvage as the install has it - the scraper modules with their
+        // speed, radius and efficiency, the heads, each salvage hull's
+        // controller - priced by UEX, with what a full hold of what each hull
+        // makes fetches at UEX's best sell. Not what a hull is worth scraped:
+        // that needs its surface area and volume, which are geometry the
+        // DataCore does not hold, and the response says so in words.
+        app.MapGet("/api/salvage/model", (LogLibrary lib, UexData uex) =>
+        {
+            var salvage = lib.GameCommodities.Salvage;
+            var terminals = lib.Terminals;
+            var flown = lib.Stats().Ships.Select(s => s.ClassName).Where(c => c is not null).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            object Market(string cls)
+            {
+                var uuid = lib.GameCommodities.ItemUuid(cls);
+                return new
+                {
+                    price = uex.ItemPrice(uuid),
+                    shops = uex.ItemMarket(uuid)
+                        .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
+                        .Select(g => g.MinBy(r => r.Buy)!)
+                        .OrderBy(r => r.Buy)
+                        .Take(3)
+                        .Select(r => { var place = terminals.Resolve(r.Terminal); return new { terminal = r.Terminal, place = place?.Name, system = place?.System, price = r.Buy }; })
+                        .ToList(),
+                };
+            }
+
+            // UEX prices what the kiosk takes: the game's three construction
+            // resources are sold as Construction Materials, and says so.
+            static string Sold(string? resource) =>
+                resource is not null && resource.StartsWith("Construction", StringComparison.OrdinalIgnoreCase) ? "Construction Materials" : resource ?? "";
+            (string Commodity, decimal PerScu, string? At)? Price(string? resource)
+            {
+                var name = Sold(resource);
+                var best = name.Length > 0 ? uex.Best(name) : null;
+                return best is null || best.BestSell <= 0 ? null : (name, best.BestSell, best.BestSellTerminal);
+            }
+
+            var ships = salvage.Ships.Select(s =>
+            {
+                var hull = lib.Community.GarageShip(s.Ship);
+                var hold = hull?.CargoScu ?? 0;
+                var scrape = Price(s.ScrapesTo);
+                var pieces = Price(s.DisintegratesTo);
+                return new
+                {
+                    s.Ship, name = hull?.Name ?? lib.GameCommodities.Vehicle(s.Ship)?.Name ?? s.Ship.Replace('_', ' '),
+                    s.ScrapesTo, s.ScuPerCubicMetre, s.DisintegratesTo, s.Heads, s.BoxSecondsPerScu,
+                    hold, flown = flown.Contains(s.Ship),
+                    scrape = scrape is { } sc ? new { commodity = sc.Commodity, perScu = sc.PerScu, at = sc.At } : null,
+                    pieces = pieces is { } pc ? new { commodity = pc.Commodity, perScu = pc.PerScu, at = pc.At } : null,
+                    // A full hold of what the hull makes, at UEX's best sell: a
+                    // ceiling on a trip, before the fuel and before the finding.
+                    fullHoldOfScrape = scrape is { } s1 && hold > 0 ? (decimal)hold * s1.PerScu : (decimal?)null,
+                    fullHoldOfPieces = pieces is { } p1 && hold > 0 ? (decimal)hold * p1.PerScu : (decimal?)null,
+                };
+            }).OrderByDescending(s => s.flown).ThenBy(s => s.hold).ToList();
+
+            return Results.Ok(new
+            {
+                ready = salvage.Modules.Count > 0,
+                salvage.Constants,
+                modules = salvage.Modules.Select(m => new { m.Class, m.Name, m.Speed, m.Radius, m.Efficiency, m.Manufacturer, market = Market(m.Class) }),
+                heads = salvage.Heads.Select(h => new { h.Class, h.Name, h.Slots, h.Manufacturer, market = Market(h.Class) }),
+                ships,
+                itemPricesKnown = uex.IsEnabled,
+                holdsKnown = lib.Community.HasGarage,
+                perHull = "What a given hull is worth scraped is not in the game files: the rule is there and the hull's area and volume it would apply to are not, nor in UEX, nor in the logs.",
+            });
+        });
+
+        app.MapPost("/api/mining/crack", (MiningCrackRequest request, LogLibrary lib) =>
+        {
+            var mining = lib.GameCommodities.Mining;
+            if (mining.Lasers.Count == 0)
+                return Results.BadRequest(new { message = "The game data has not been read yet; Settings says when it is ready." });
+
+            var lasers = mining.Lasers.ToDictionary(l => l.Class, StringComparer.OrdinalIgnoreCase);
+            var modules = mining.Modules.ToDictionary(m => m.Class, StringComparer.OrdinalIgnoreCase);
+            var gadget = request.Gadget is { Length: > 0 } g ? mining.Gadgets.FirstOrDefault(x => x.Class.Equals(g, StringComparison.OrdinalIgnoreCase)) : null;
+
+            var heads = (request.Heads ?? [])
+                .Where(h => h.Laser is { Length: > 0 } && lasers.ContainsKey(h.Laser))
+                .Select(h => new LaserFit(lasers[h.Laser],
+                    (h.Modules ?? []).Where(modules.ContainsKey).Select(m => modules[m]).ToList()))
+                .ToList();
+
+            var rock = new RockScan(Math.Max(0, request.MassKg), Math.Clamp(request.Resistance, 0, 100), Math.Clamp(request.Instability, 0, 100));
+            var verdict = RockCracking.Assess(mining.Constants, rock, heads, gadget);
+
+            // The matrix keeps the head count and each head's modules and
+            // swaps only the laser, size for size.
+            var size = heads.FirstOrDefault()?.Laser.Size ?? 1;
+            var matrix = mining.Lasers
+                .Where(l => l.Size == size && !l.Class.Contains("MPUV", StringComparison.OrdinalIgnoreCase))
+                .Select(l =>
+                {
+                    var swapped = heads.Count == 0
+                        ? [new LaserFit(l, [])]
+                        : heads.Select(h => new LaserFit(l, h.Modules)).ToList();
+                    var v = RockCracking.Assess(mining.Constants, rock, swapped, gadget);
+                    return new { laser = l.Class, l.Name, l.Power, v.PowerDelivered, v.Ratio, v.Verdict, v.MaxCrackableMassKg, v.EffectiveResistancePercent };
+                })
+                .OrderByDescending(r => r.Ratio);
+
+            return Results.Ok(new { verdict, matrix });
+        });
+
+        // The personal armoury as the install has it: every gun with its
+        // damage, rate, magazine and fire modes, every piece of armour with
+        // the figures that differ between pieces, and UEX's price for each.
+        // Nothing here is from the logs, which name the pilot's gear only as
+        // it is attached; it is all read from the game files, and the page
+        // says so. Ready is false until the install has been read.
+        app.MapGet("/api/armoury", (LogLibrary lib, UexData uex) =>
+        {
+            var armoury = lib.GameCommodities.Armoury;
+            // Taken once: the resolver is rebuilt from the atlas on every read of
+            // the property, and three thousand pieces each asking for it took
+            // thirty seconds.
+            var terminals = lib.Terminals;
+
+            // UEX's cheapest terminal for a class, the way the Mining page
+            // prices a head. Null is "no terminal recorded", not free.
+            (decimal? Price, List<object> Shops) Priced(string cls)
+            {
+                var uuid = lib.GameCommodities.ItemUuid(cls);
+                return (uex.ItemPrice(uuid), uex.ItemMarket(uuid)
+                    .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => g.MinBy(r => r.Buy)!)
+                    .OrderBy(r => r.Buy)
+                    .Take(3)
+                    .Select(r =>
+                    {
+                        var place = terminals.Resolve(r.Terminal);
+                        return (object)new { terminal = r.Terminal, place = place?.Name, system = place?.System, price = r.Buy };
+                    })
+                    .ToList());
+            }
+            object Market(string cls) { var (price, shops) = Priced(cls); return new { price, shops }; }
+
+            // UEX files a gun under whichever of its classes it met first - its
+            // P4-AR is behr_rifle_ballistic_01_contestedzonereward, not the
+            // plain class - so the plain gun's price is the cheapest across
+            // every class the game gives the same name.
+            var finishesOf = armoury.Weapons.Where(w => w.BaseClass is not null)
+                .GroupBy(w => w.BaseClass!, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+            object WeaponMarket(PersonalWeapon w)
+            {
+                var same = new[] { w }.Concat(finishesOf.GetValueOrDefault(w.Class) ?? []).Where(x => x.Name == w.Name).ToList();
+                var priced = same.Select(x => (x, Priced(x.Class))).Where(p => p.Item2.Price is not null).OrderBy(p => p.Item2.Price).FirstOrDefault();
+                return priced == default ? new { price = (decimal?)null, shops = new List<object>() } : new { price = priced.Item2.Price, shops = priced.Item2.Shops };
+            }
+
+            var weapons = armoury.Weapons.Where(w => w.BaseClass is null).Select(w => new
+            {
+                w.Class, uuid = lib.GameCommodities.ItemUuid(w.Class), w.Name, w.Kind, w.Weight, w.Size, w.Manufacturer, w.Damage, w.ProjectileSpeed, w.ProjectileLifetime,
+                w.DropStart, w.DropPerMetre, w.DropFloor, floorAt = Armoury.FloorAt(w), w.Magazine, w.MagazineClass, w.Mass, w.Explosion,
+                modes = w.Modes.Select(m => new
+                {
+                    m.Name, m.Kind, m.RoundsPerMinute, m.Pellets, m.AmmoPerShot, m.BurstShots, m.BurstCooldown,
+                    m.ChargeSeconds, m.ChargeDamageMultiplier, m.ChargeAmmoMultiplier, m.ChargePellets,
+                    m.BeamDamagePerSecond, m.BeamFullRange, m.BeamZeroRange, m.BeamAmmoPerSecond, m.HeatPerShot, m.Condition, m.SecondaryAmmo,
+                    hit = Armoury.Hit(w, m),
+                    sustainedRoundsPerMinute = Armoury.SustainedRoundsPerMinute(m),
+                    damagePerShot = Armoury.DamagePerShot(w, m),
+                    damagePerSecond = Armoury.DamagePerSecond(w, m),
+                    damagePerMagazine = Armoury.DamagePerMagazine(w, m),
+                    secondsToEmpty = Armoury.SecondsToEmpty(w, m),
+                }),
+                market = WeaponMarket(w),
+                finishes = (finishesOf.GetValueOrDefault(w.Class) ?? [])
+                    .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+                    .Select(f => new { f.Class, uuid = lib.GameCommodities.ItemUuid(f.Class), f.Name, market = Market(f.Class) }),
+            });
+
+            // Colours of one set share every figure, so the page gets a row per
+            // set-and-figures with the pieces under it; a set whose figures
+            // changed between two editions is two rows, which is the truth.
+            var armour = armoury.Armour
+                .GroupBy(a => (a.Family, a.Slot, a.Weight, Macro: a.Resistances?.Macro ?? "", a.TemperatureMin, a.TemperatureMax,
+                    a.RadiationCapacity, a.RadiationDissipation, a.GForceResistance, a.CapacityMicroScu, a.EmSignature, a.IrSignature, a.MotionPenalty, a.ViewPenalty, a.Mass))
+                .Select(g =>
+                {
+                    var first = g.OrderBy(a => a.Name.Length).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase).First();
+                    var priced = g.OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase).Select(a => (a.Class, a.Name, Market: Priced(a.Class))).ToList();
+                    var cheapest = priced.Where(p => p.Market.Price is not null).OrderBy(p => p.Market.Price).FirstOrDefault();
+                    return new
+                    {
+                        first.Family, first.Slot, first.Weight, first.Kind, first.Manufacturer, first.Resistances, first.Protects,
+                        first.TemperatureMin, first.TemperatureMax, first.RadiationCapacity, first.RadiationDissipation, first.GForceResistance,
+                        first.CapacityMicroScu, first.EmSignature, first.IrSignature, first.MotionPenalty, first.ViewPenalty, first.Mass,
+                        name = first.Name,
+                        pieces = priced.Select(p => new { @class = p.Class, uuid = lib.GameCommodities.ItemUuid(p.Class), name = p.Name, market = new { price = p.Market.Price, shops = p.Market.Shops } }).ToList(),
+                        market = new { price = cheapest.Market.Price, shops = cheapest.Market.Shops ?? [] },
+                    };
+                })
+                .OrderBy(r => r.Slot, StringComparer.OrdinalIgnoreCase).ThenBy(r => r.Weight, StringComparer.OrdinalIgnoreCase).ThenBy(r => r.Family, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return Results.Ok(new
+            {
+                ready = armoury.Weapons.Count > 0 || armoury.Armour.Count > 0,
+                weapons,
+                armour,
+                itemPricesKnown = uex.IsEnabled,
+                // Pictures come from the wiki, and the wiki is asked only once the
+                // community dataset is on - the app's consent to talk to the network.
+                picturesKnown = lib.Community.IsEnabled,
+                counts = new { weapons = armoury.Weapons.Count, plain = weapons.Count(), armour = armoury.Armour.Count, sets = armour.Count },
+            });
+        });
+
+        // Does a load of crates fit a hull? The grids are the community dump's
+        // - one entry per grid the hull places, metres and the largest box
+        // each takes - the crates are the install's, and the packing is this
+        // app's, on the game's 1.25 m lattice, largest crate first. "Fits" is
+        // a packing found; "does not fit" is none found, which for a load
+        // within the volume is not proof, and the answer says which.
+        app.MapGet("/api/cargo/{className}", (string className, LogLibrary lib) =>
+        {
+            var ship = lib.Community.GarageShip(className);
+            if (ship is null) return Results.NotFound(new { message = "No such ship in the reference." });
+            return Results.Ok(new
+            {
+                ship.Class, ship.Name, ship.CargoScu,
+                gridsKnown = lib.Community.HasCargoGrids,
+                grids = ship.CargoGrids ?? [],
+                crates = Crates(lib),
+                cratesFromInstall = lib.GameCommodities.Crates.Count > 0,
+            });
+        });
+
+        app.MapPost("/api/cargo/fit", (CargoFitRequest request, LogLibrary lib) =>
+        {
+            if (!lib.Community.HasCargoGrids)
+                return Results.BadRequest(new { message = "The reference data predates cargo grids; refresh it in Settings." });
+
+            var load = new CargoLoad((request.Crates ?? new Dictionary<int, int>()).Where(c => c.Value > 0).ToDictionary(c => c.Key, c => c.Value));
+            var crates = Crates(lib);
+
+            // The asked ship in full, with every crate's place.
+            object? ship = null;
+            if (request.Ship is { Length: > 0 } && lib.Community.GarageShip(request.Ship) is { } asked)
+            {
+                var fit = CargoFit.Pack(asked.CargoGrids ?? [], load, crates);
+                ship = new
+                {
+                    asked.Class, asked.Name, asked.CargoScu,
+                    fit.Fits, fit.Left, fit.Reasons, fit.CapacityScu, fit.LoadScu, fit.PlacedScu,
+                    grids = fit.Grids.Select(g => new { g.Grid, cells = new { w = g.Cells.W, l = g.Cells.L, h = g.Cells.H }, g.Placed, g.UsedScu, g.RuleIgnored }),
+                };
+            }
+
+            // Every other hull, in one line each: yours first, then the smallest
+            // in the reference that takes it, so "what would carry this" has an
+            // answer without opening each ship.
+            var flown = lib.Stats().Ships
+                .Where(s => s.ClassName is not null)
+                .ToDictionary(s => s.ClassName!, s => s, StringComparer.OrdinalIgnoreCase);
+            var others = lib.Community.GarageShips.Values
+                .Where(s => s.CargoGrids is { Count: > 0 } && s.IsSpaceship)
+                .Select(s =>
+                {
+                    var fit = CargoFit.Pack(s.CargoGrids!, load, crates);
+                    flown.TryGetValue(s.Class, out var mine);
+                    return new
+                    {
+                        s.Class, s.Name, s.CargoScu, fit.Fits, fit.PlacedScu, fit.CapacityScu,
+                        flown = mine is not null, hours = mine is not null ? Math.Round(mine.EstimatedTime.TotalHours, 1) : 0,
+                    };
+                })
+                .OrderByDescending(s => s.flown).ThenByDescending(s => s.Fits).ThenBy(s => s.CargoScu).ThenBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return Results.Ok(new
+            {
+                ship,
+                load = new { crates = load.Crates, scu = load.TotalScu, count = load.Count },
+                yours = others.Where(s => s.flown).ToList(),
+                // The smallest hulls that take it, and no more than a dozen.
+                smallest = others.Where(s => !s.flown && s.Fits).Take(12).ToList(),
+                cratesFromInstall = lib.GameCommodities.Crates.Count > 0,
+            });
+        });
+
+        // A picture of a gun or a piece of armour, by the game's uuid: the
+        // game files hold only a 64-pixel loadout glyph for a gun and one
+        // generic icon per armour class, so the picture is the wiki's, fetched
+        // once and kept as the Garage keeps a cooler's. Only an item the
+        // Armoury lists is asked for, so the endpoint cannot be used to look
+        // up arbitrary ids, and only once the community dataset is on.
+        app.MapGet("/api/armoury/picture/{uuid}", async (string uuid, LogLibrary lib, PartPictures pictures, IHttpClientFactory httpFactory, HttpContext ctx) =>
+        {
+            if (!lib.Community.IsEnabled) return Results.NotFound();
+
+            var armoury = lib.GameCommodities.Armoury;
+            var name = armoury.Weapons.Select(w => (w.Class, w.Name)).Concat(armoury.Armour.Select(a => (a.Class, a.Name)))
+                .Where(i => string.Equals(lib.GameCommodities.ItemUuid(i.Class), uuid, StringComparison.OrdinalIgnoreCase))
+                .Select(i => i.Name)
+                .FirstOrDefault();
+            if (name is null) return Results.NotFound();
+
+            var picture = await pictures.GetItemAsync(httpFactory.CreateClient("community"), uuid, name, ctx.RequestAborted);
+            if (picture is null) return Results.NotFound();
+
+            ctx.Response.Headers.CacheControl = "private, max-age=86400";
+            return Results.File(picture.Bytes, picture.ContentType);
+        });
 
         // What the game says each place has. Separate from the service badges,
         // which are UEX's account of where you can actually trade: this is the
@@ -1070,20 +1517,34 @@ public static class ServerHost
                 : Results.BadRequest(new { problem = "That haul has not been collected yet." }));
 
         // What is owed to you right now, soonest first.
-        app.MapGet("/api/mining/pending", (MiningLogStore runs) =>
-            runs.Pending(DateTimeOffset.UtcNow).Select(run => new
+        // What a run waiting on a refinery might come back as, in aUEC: the
+        // SCU that went in at UEX's best refined price, then the station's
+        // bonus on top when the yields feed reports one for that ore there.
+        // Before the method's own yield, which nobody publishes - the feed
+        // rates a method 1 to 3 and the install names it and no more - and
+        // before whatever the refinery charged, so it is called a ceiling.
+        app.MapGet("/api/mining/pending", (MiningLogStore runs, UexData uex, UexFeeds feeds) =>
+            runs.Pending(DateTimeOffset.UtcNow).Select(run =>
             {
-                run.Id,
-                run.Place,
-                run.Resource,
-                run.Scu,
-                Stage = run.StageAt(DateTimeOffset.UtcNow),
-                run.Refinery,
+                var method = run.Refinery?.Method is { Length: > 0 } m
+                    ? feeds.RefineryMethods.FirstOrDefault(x => x.Name.Contains(m, StringComparison.OrdinalIgnoreCase) || m.Contains(x.Name, StringComparison.OrdinalIgnoreCase) || x.Code.Equals(m.Trim(), StringComparison.OrdinalIgnoreCase))
+                    : null;
+                return new
+                {
+                    run.Id,
+                    run.Place,
+                    run.Resource,
+                    run.Scu,
+                    Stage = run.StageAt(DateTimeOffset.UtcNow),
+                    run.Refinery,
+                    Estimate = RefineryEstimate(run, uex, feeds),
+                    Method = method,
 
-                // Said rather than computed on the page, so one build cannot
-                // word this differently from another.
-                Caveat = "The game keeps the refinery timer and logs nothing about it, "
-                    + "so this is the time you told us to expect.",
+                    // Said rather than computed on the page, so one build cannot
+                    // word this differently from another.
+                    Caveat = "The game keeps the refinery timer and logs nothing about it, "
+                        + "so this is the time you told us to expect.",
+                };
             }));
 
         app.MapDelete("/api/mining/log/{id}", (MiningLogStore runs, TombstoneStore deleted, string id) =>
@@ -2725,10 +3186,34 @@ public static class ServerHost
         // The newest Fleet Manager reading: where each ship was, the last time
         // the terminal was photographed. Nothing in the logs says where a
         // ship sits, so this is the only source.
-        app.MapGet("/api/screen/fleet", (ScreenReadingStore readings) =>
-            readings.LatestFleet() is { } s
-                ? Results.Ok(new { s.Shot, s.ShotAt, ships = s.Fleet!.Ships })
-                : Results.Ok(new { shot = (string?)null, shotAt = (DateTimeOffset?)null, ships = Array.Empty<FleetRow>() }));
+        // Each berth with the class behind the name and whether the logs ever
+        // saw it flown. A ship at the Fleet Manager the logs never flew has no
+        // card on the Fleet page - the cards are sorties - so this is how the
+        // page knows to give it one that says so. The Ironclad of 2026-09-15
+        // was in the terminal's list, in this reading, and nowhere on the page.
+        app.MapGet("/api/screen/fleet", (ScreenReadingStore readings, LogLibrary lib) =>
+        {
+            if (readings.LatestFleet() is not { } s)
+                return Results.Ok(new { shot = (string?)null, shotAt = (DateTimeOffset?)null, ships = Array.Empty<object>() });
+
+            var flown = lib.Stats().Ships.Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var byName = lib.GameCommodities.Vehicles.Values
+                .GroupBy(v => v.Name, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First().Class, StringComparer.OrdinalIgnoreCase);
+            foreach (var ship in lib.Community.Ships)
+                byName.TryAdd(ship.Value.Name, ship.Key);
+
+            return Results.Ok(new
+            {
+                s.Shot, s.ShotAt,
+                ships = s.Fleet!.Ships.Select(row => new
+                {
+                    row.Read, row.Ship, row.LooksLike, row.Location, row.State, row.Focus, row.Cargo,
+                    className = row.Ship is not null && byName.TryGetValue(row.Ship, out var cls) ? cls : null,
+                    flown = row.Ship is not null && flown.Contains(row.Ship),
+                }),
+            });
+        });
 
         app.MapDelete("/api/screen/readings", (ScreenReadingStore readings) =>
         {
@@ -4076,6 +4561,87 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
             ? []
             : [.. value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
 
+    /// <summary>One mining head on a hull: the port, its size, and the laser it ships with.</summary>
+    public sealed record MiningHead(string PortId, int Size, string? Stock);
+
+    /// <summary>A hull with mining heads.</summary>
+    public sealed record MiningShip(string Class, string Name, IReadOnlyList<MiningHead> Heads);
+
+    /// <summary>The crates the install sizes, or the table read from it on 2026-09-16 until the install is in.</summary>
+    static IReadOnlyList<CargoCrate> Crates(LogLibrary lib) =>
+        lib.GameCommodities.Crates.Count > 0 ? lib.GameCommodities.Crates : CargoFit.StandardCrates;
+
+    /// <summary>
+    /// A ceiling on what a refinery run comes back as: the SCU that went in at
+    /// UEX's best refined sell, and the station's bonus on top where the
+    /// yields feed reports one for that ore at that refinery. Null when UEX
+    /// has no price for the ore. The station is matched to the feed's
+    /// terminal loosely, one name containing the other, and not at all
+    /// otherwise - a bonus at the wrong station is worse than none.
+    /// </summary>
+    /// <summary>"Copper (Ore)", "Quantainium (Raw)", "Ore Iron" - the refined commodity's name, which is what UEX prices.</summary>
+    static string RefinedName(string name) => name
+        .Replace(" (Raw)", "", StringComparison.OrdinalIgnoreCase).Replace("Raw ", "", StringComparison.OrdinalIgnoreCase)
+        .Replace(" (Ore)", "", StringComparison.OrdinalIgnoreCase).Replace("Ore ", "", StringComparison.OrdinalIgnoreCase).Trim();
+
+    static object? RefineryEstimate(MiningRun run, UexData uex, UexFeeds feeds)
+    {
+        if (run.Scu <= 0 || string.IsNullOrWhiteSpace(run.Resource)) return null;
+        var refined = RefinedName(run.Resource);
+        var best = uex.Best(refined);
+        if (best is null || best.BestSell <= 0) return null;
+
+        var place = run.Refinery?.Place ?? "";
+        var bonus = place.Length >= 4
+            ? feeds.RefineryYields
+                .Where(y => RefinedName(y.Commodity).Equals(refined, StringComparison.OrdinalIgnoreCase)
+                    && (y.Terminal.Contains(place, StringComparison.OrdinalIgnoreCase) || place.Contains(y.Terminal, StringComparison.OrdinalIgnoreCase)))
+                .OrderByDescending(y => y.Yield)
+                .FirstOrDefault()
+            : null;
+
+        var gross = (decimal)run.Scu * best.BestSell;
+        return new
+        {
+            perScu = best.BestSell,
+            sellAt = best.BestSellTerminal,
+            gross,
+            bonusPercent = bonus?.Yield,
+            bonusAt = bonus?.Terminal,
+            withBonus = bonus is not null ? gross * (1 + (decimal)bonus.Yield / 100) : (decimal?)null,
+            bonusKnown = feeds.IsEnabled(UexFeeds.Refineries),
+        };
+    }
+
+    /// <summary>
+    /// The hulls that carry a mining head, from the community dataset's
+    /// loadout trees: a <c>WeaponMining</c> port anywhere in the tree. The
+    /// Prospector's sits under its arm's gimbal, the MOLE's three under its
+    /// cab turrets, the Golem's under its arm - the tree is walked, not
+    /// the top level. Variants (Alliance, Teach's) are their own hulls and
+    /// come out on their own.
+    /// </summary>
+    static IEnumerable<MiningShip> MiningShips(CommunityData community)
+    {
+        foreach (var ship in community.GarageShips.Values.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            var heads = new List<MiningHead>();
+            Walk(ship.Loadout);
+            if (heads.Count > 0) yield return new MiningShip(ship.Class, ship.Name, heads);
+
+            void Walk(IReadOnlyList<FitPort> ports)
+            {
+                foreach (var port in ports)
+                {
+                    if (string.Equals(port.Type, "WeaponMining", StringComparison.Ordinal)
+                        || (port.Class?.StartsWith("Mining_Laser_", StringComparison.OrdinalIgnoreCase) ?? false))
+                        heads.Add(new MiningHead(port.PortId, port.MaxSize, port.Class));
+                    Walk(port.Children);
+                }
+            }
+        }
+    }
+
     static IEnumerable<MiningPlace> MiningPlaces(LogLibrary lib, UexData uex)
     {
         var spawns = lib.GameCommodities.Spawns.Count > 0
@@ -4576,6 +5142,15 @@ public sealed record ReadingDismissRequest(string Shot, bool Dismissed = true);
 
 /// <summary>Which screenshot to put through the reader again.</summary>
 public sealed record ReadingRereadRequest(string Shot);
+
+/// <summary>Body of POST /api/mining/crack: the rock as the HUD scanned it, and the fit.</summary>
+public sealed record MiningCrackRequest(double MassKg, double Resistance, double Instability, List<MiningHeadRequest>? Heads, string? Gadget);
+
+/// <summary>A load to fit: crates by size, and the hull to draw it in, or none for the fleet answer alone.</summary>
+public sealed record CargoFitRequest(string? Ship, Dictionary<int, int>? Crates);
+
+/// <summary>One head of the fit: the laser's class and the module classes in its slots.</summary>
+public sealed record MiningHeadRequest(string Laser, List<string>? Modules);
 
 /// <summary>The pilot-owned details attached to an existing point of interest.</summary>
 /// <param name="Note">Why the point was kept; null leaves the note as it is, blank clears it.</param>

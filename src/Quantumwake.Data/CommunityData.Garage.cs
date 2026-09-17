@@ -25,6 +25,14 @@ public sealed partial class CommunityData
     /// </summary>
     public bool HasGarage => _shipBases.Count > 0 && _parts.Count > 0;
 
+    /// <summary>
+    /// Whether the ship digest carries cargo grids. A digest written before
+    /// 0.14.9 has the ships and not their grids - null, not empty - and the
+    /// cargo panel says "refresh the reference data" rather than showing a
+    /// hull with no hold.
+    /// </summary>
+    public bool HasCargoGrids => _shipBases.Values.Any(s => s.CargoGrids is not null);
+
     /// <summary>Every part with figures, by class name.</summary>
     public IReadOnlyDictionary<string, PartStats> Parts => _parts;
 
@@ -285,10 +293,39 @@ public sealed partial class CommunityData
                     Number(s, "Weaponry", "TurretDps"),
                     Number(s, "QuantumTravel", "Range"),
                     Num(s, "MassTotal") ?? 0),
-                Ports(loadout, parts));
+                Ports(loadout, parts),
+                Grids(s));
         }
 
         return result;
+
+        // The dump's CargoGrids block: one entry per grid the hull places,
+        // which is the count Game2.dcb cannot give (a grid record is a type,
+        // and the Spirit C1 places its one type twice). Metres, the SCU the
+        // dump credits it with, and the smallest and largest box it accepts.
+        // Summed over the block it equals the dump's own Cargo figure on every
+        // hull that has one (149 of 318 on 2026-09-16), which is the check.
+        static IReadOnlyList<CargoGrid> Grids(JsonElement ship)
+        {
+            if (!ship.TryGetProperty("CargoGrids", out var grids) || grids.ValueKind != JsonValueKind.Array)
+                return [];
+
+            var list = new List<CargoGrid>();
+            foreach (var g in grids.EnumerateArray())
+            {
+                var cls = Str(g, "Class");
+                if (cls is null) continue;
+                list.Add(new CargoGrid(
+                    cls,
+                    Str(g, "UUID"),
+                    Num(g, "X") ?? 0, Num(g, "Y") ?? 0, Num(g, "Z") ?? 0,
+                    Num(g, "SCU") ?? 0,
+                    new Vec3(Number(g, "MinSize", "X"), Number(g, "MinSize", "Y"), Number(g, "MinSize", "Z")),
+                    new Vec3(Number(g, "MaxSize", "X"), Number(g, "MaxSize", "Y"), Number(g, "MaxSize", "Z")),
+                    g.TryGetProperty("IsExternalContainer", out var ext) && ext.ValueKind == JsonValueKind.True));
+            }
+            return list;
+        }
 
         static IReadOnlyList<FitPort> Ports(JsonElement ports, IReadOnlyDictionary<string, PartStats> parts)
         {

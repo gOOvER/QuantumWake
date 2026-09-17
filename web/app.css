@@ -1923,12 +1923,23 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
    familiar inventory-screen centre without implying that we can inspect a
    live avatar; each attachment still has its own observable card beside it. */
 .loadout-character {
+  position: relative;
   border: 1px solid var(--rule-hot);
   background:
-    linear-gradient(90deg, rgba(53, 200, 240, .035), transparent 22%, transparent 78%, rgba(53, 200, 240, .035)),
+    linear-gradient(90deg, rgba(53, 200, 240, .07), transparent 22%, transparent 78%, rgba(53, 200, 240, .07)),
     linear-gradient(160deg, var(--panel), var(--deep));
   clip-path: var(--chamfer);
   overflow: hidden;
+}
+.loadout-character::before {
+  content: "PERSONAL ARMOURY";
+  position: absolute;
+  right: 16px;
+  top: 54px;
+  color: rgba(127, 228, 255, .13);
+  font: 700 23px var(--display);
+  letter-spacing: .18em;
+  pointer-events: none;
 }
 .loadout-character-head {
   display: flex;
@@ -1937,7 +1948,7 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   gap: 16px;
   padding: 11px 16px 10px;
   border-bottom: 1px solid var(--rule);
-  background: rgba(4, 10, 17, .45);
+  background: linear-gradient(90deg, rgba(6, 18, 29, .9), rgba(4, 10, 17, .45));
 }
 .loadout-character-head p { margin: 0; font-family: var(--mono); font-size: 10.5px; }
 .loadout-eyebrow {
@@ -1955,8 +1966,35 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   font-size: 12px;
   line-height: 1.55;
   border-bottom: 1px solid var(--rule);
-  background: rgba(4, 10, 17, .22);
+  background: linear-gradient(90deg, rgba(4, 10, 17, .7), transparent);
 }
+.loadout-readiness {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--rule);
+}
+.loadout-readiness-card {
+  min-width: 0;
+  min-height: 79px;
+  padding: 10px 13px;
+  background: linear-gradient(145deg, rgba(8, 23, 35, .94), rgba(4, 10, 17, .84));
+}
+.loadout-readiness-card:hover { background: linear-gradient(145deg, rgba(13, 37, 53, .98), rgba(4, 10, 17, .9)); }
+.loadout-readiness-label {
+  margin-bottom: 5px;
+  color: var(--dim);
+  font: 9px var(--mono);
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+.loadout-readiness-card strong,
+.loadout-readiness-card span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.loadout-readiness-card strong { color: var(--cyan-hot); font-size: 13px; font-weight: 500; }
+.loadout-readiness-card span { margin-top: 4px; color: var(--muted); font: 9.5px var(--mono); }
+.loadout-readiness-card.partial strong { color: var(--amber); }
+.loadout-readiness-card.complete strong { color: var(--green); }
 .loadout-sheet {
   display: grid;
   grid-template-columns: minmax(520px, 1.45fr) minmax(290px, .8fr);
@@ -1969,7 +2007,7 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   grid-template-columns: 132px minmax(290px, 1fr) 132px;
   gap: 0;
   min-width: 0;
-  padding: 17px;
+  padding: 19px 17px 17px;
   border-right: 1px solid var(--rule);
 }
 .loadout-equipment {
@@ -2025,8 +2063,9 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
      interactive markers need an escape path for the hover readout. */
   clip-path: none;
   background:
-    linear-gradient(145deg, rgba(53, 200, 240, .09), rgba(5, 13, 22, .86) 58%),
+    linear-gradient(145deg, rgba(53, 200, 240, .14), rgba(5, 13, 22, .86) 58%),
     rgba(5, 13, 22, .7);
+  box-shadow: inset 2px 0 0 rgba(53, 200, 240, .13);
 }
 .loadout-equipment-left .loadout-equip-slot {
   flex-direction: row-reverse;
@@ -2038,6 +2077,8 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   text-align: left;
   border-left-color: var(--cyan-deep);
 }
+.loadout-equip-head .slot-icon { color: var(--cyan-hot); }
+.loadout-equip-core .slot-icon { color: var(--cyan-hot); }
 .loadout-equip-slot::after {
   content: "";
   position: absolute;
@@ -2127,8 +2168,9 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   min-height: 492px;
   border-inline: 1px solid rgba(53, 200, 240, .16);
   background:
-    linear-gradient(90deg, transparent 49.6%, rgba(53, 200, 240, .10) 50%, transparent 50.4%),
-    repeating-linear-gradient(0deg, transparent 0 28px, rgba(53, 200, 240, .045) 28px 29px);
+    radial-gradient(ellipse 55% 48% at 50% 47%, rgba(53, 200, 240, .13), transparent 72%),
+    linear-gradient(90deg, transparent 49.6%, rgba(53, 200, 240, .16) 50%, transparent 50.4%),
+    repeating-linear-gradient(0deg, transparent 0 28px, rgba(53, 200, 240, .055) 28px 29px);
 }
 .loadout-figure::before,
 .loadout-figure::after {
@@ -2151,6 +2193,16 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   font-size: 9px;
   letter-spacing: .16em;
 }
+.loadout-figure-status {
+  position: absolute;
+  top: 47px;
+  padding: 3px 7px;
+  border-block: 1px solid rgba(53, 200, 240, .24);
+  color: var(--dim);
+  font: 8px var(--mono);
+  letter-spacing: .13em;
+}
+.loadout-figure-status b { color: var(--cyan-hot); font-size: 10px; }
 .loadout-pilot-frame {
   position: relative;
   display: grid;
@@ -2164,7 +2216,7 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   width: 100%;
   height: 100%;
   object-fit: contain;
-  filter: saturate(.86) contrast(1.05) drop-shadow(0 0 14px rgba(48, 205, 244, .16));
+  filter: saturate(.92) contrast(1.08) drop-shadow(0 0 18px rgba(48, 205, 244, .24));
 }
 /* The scan brackets are deliberately only an overlay: the art is an original
    display asset, while these still say which broad body regions the log saw. */
@@ -2224,7 +2276,7 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   z-index: 3;
   min-width: 0;
   padding: 17px;
-  background: rgba(3, 8, 14, .34);
+  background: linear-gradient(160deg, rgba(13, 21, 29, .75), rgba(3, 8, 14, .34));
 }
 .loadout-field-head {
   display: flex;
@@ -2234,6 +2286,8 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   padding: 0 0 10px;
   border-bottom: 1px solid var(--rule);
 }
+.loadout-field-head .loadout-eyebrow { color: var(--amber); }
+.loadout-field-head .group-meta { color: var(--muted); }
 .loadout-inventory-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2246,12 +2300,18 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   min-height: 108px;
   align-content: start;
   gap: 8px;
-  padding: 9px;
+  padding: 10px 9px 9px;
+  border-top-color: rgba(255, 171, 61, .38);
+  background: linear-gradient(155deg, rgba(255, 171, 61, .075), rgba(5, 13, 22, .78) 45%);
   /* Field-kit cards also carry a hover panel, so do not clip it to the tile. */
   clip-path: none;
 }
 .loadout-inventory-slot:hover,
-.loadout-inventory-slot:focus-visible { z-index: 5; }
+.loadout-inventory-slot:focus-visible {
+  z-index: 5;
+  border-color: var(--amber);
+  box-shadow: 0 0 0 1px rgba(255, 171, 61, .2), 0 0 16px rgba(255, 171, 61, .1);
+}
 .loadout-inventory-slot .loadout-item-inspect {
   top: calc(100% + 7px);
   width: min(218px, calc(100vw - 34px));
@@ -2271,6 +2331,7 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
 .loadout-inventory-slot .slot-when { grid-column: 1 / -1; margin-top: 0; }
 
 @media (max-width: 1050px) {
+  .loadout-readiness { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .loadout-sheet { grid-template-columns: 1fr; }
   .loadout-avatar-rig { border-right: 0; border-bottom: 1px solid var(--rule); }
   .loadout-field-kit { padding: 14px; }
@@ -2278,6 +2339,9 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
 }
 
 @media (max-width: 680px) {
+  .loadout-character::before { display: none; }
+  .loadout-readiness-card { min-height: 73px; padding: 9px 10px; }
+  .loadout-readiness-card strong { font-size: 11.5px; }
   .loadout-character-head { align-items: flex-start; flex-direction: column; gap: 4px; }
   .loadout-avatar-rig { grid-template-columns: 1fr 1fr; gap: 7px; padding: 10px; }
   .loadout-figure { grid-column: 1 / -1; grid-row: 1; min-height: 280px; border-block: 1px solid rgba(53, 200, 240, .16); }
@@ -2308,10 +2372,12 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
 }
 
 body.overlay .loadout-character { border: 0; background: transparent; clip-path: none; }
+body.overlay .loadout-character::before { display: none; }
 body.overlay .loadout-character-head,
 body.overlay .loadout-figure,
 body.overlay .loadout-field-head,
-body.overlay .loadout-overview { display: none; }
+body.overlay .loadout-overview,
+body.overlay .loadout-readiness { display: none; }
 body.overlay .loadout-sheet { display: block; }
 body.overlay .loadout-avatar-rig { display: block; padding: 0; border: 0; }
 body.overlay .loadout-equipment { gap: 6px; }
@@ -3733,14 +3799,22 @@ body.overlay .advice li { font-size: 10.5px; padding: 3px 0; }
 }
 .goal-form .search { flex: 1 1 9ch; min-width: 0; }
 
-/* Recording a haul, on the page that plans them. */
+/* Recording a haul, on the page that plans them. Inputs need names here: the
+   obvious five blanks are not obvious once somebody returns to the page mid-run. */
 .mining-form {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin: 10px 0 14px;
+  display: grid;
+  grid-template-columns: minmax(15ch, 1.4fr) minmax(13ch, 1.2fr) repeat(3, minmax(9ch, .7fr)) auto;
+  gap: 8px;
+  align-items: end;
+  margin: 12px 0 16px;
+  padding: 12px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--cyan-deep);
+  background: linear-gradient(115deg, rgba(14, 25, 38, .95), rgba(7, 12, 20, .82));
 }
-.mining-form .search { flex: 1 1 9ch; min-width: 0; }
+.mining-form label { display: grid; gap: 4px; min-width: 0; color: var(--dim); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; }
+.mining-form .search { width: 100%; min-width: 0; }
+.mining-form button { min-height: 31px; }
 
 /* A component the game defines but has not marked as shipped. */
 .not-ready { font-size: 10.5px; opacity: .75; }
@@ -3991,12 +4065,16 @@ body.overlay .toast {
 #kit-prepare-table td:last-child { width: 120px; }
 
 /* ---------- refining a haul ---------- */
+#mining-pending-list { display: grid; gap: 7px; }
 .mining-waiting {
-  display: flex;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, auto) minmax(150px, auto);
+  gap: 5px 16px;
   align-items: baseline;
-  padding: 5px 0;
-  border-bottom: 1px solid var(--rule);
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--cyan-deep);
+  background: linear-gradient(105deg, rgba(12, 31, 45, .54), rgba(5, 12, 19, .66));
   font-size: 12px;
 }
 
@@ -4005,8 +4083,9 @@ body.overlay .toast {
 /* The time sits right whichever state it is in. Hanging the alignment off the
    amber class put waiting hauls and overdue ones in different columns, which
    read as two kinds of row rather than one list. */
-.mining-waiting > :last-child { margin-left: auto; }
+.mining-waiting .mining-waiting-time { text-align: right; }
 .mining-waiting .want { color: var(--amber); }
+.mining-waiting-detail { grid-column: 1 / -1; color: var(--dim); font: 10px var(--mono); }
 
 /* A haul the app believes is due back. Amber because it is the app noticing
    your own estimate has passed, not the game telling it anything. */
@@ -4014,6 +4093,9 @@ body.overlay .toast {
 
 .mining-stage-form td { background: var(--panel-2); }
 .mining-stage-form .mining-form { padding: 6px 0; }
+.mining-stage-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.mining-stage-field > span { color: var(--dim); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; }
+.mining-stage-field .search { width: 100%; min-width: 0; }
 
 /* ---------- why this number ----------
  *
@@ -4198,6 +4280,24 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 .pin-note { font-size: 11.5px; line-height: 1.5; color: var(--text); white-space: pre-wrap; margin: 2px 0 4px; }
 @media (max-width: 720px) { .pin-fields { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 720px) { .log-overview { grid-template-columns: 1fr; } }
+
+/* ---- The Log page's second pane: what the scans read. ---- */
+.log-pane { display: none; }
+.log-pane.active { display: block; }
+#log-pane-files .log-history + .log-history { margin-top: 16px; }
+#scan-files-table td, #scan-runs-table td { white-space: nowrap; }
+.scan-file { font-family: var(--mono); font-size: 12px; }
+.scan-live { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px solid var(--cyan); border-radius: 3px; font: 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--cyan); vertical-align: middle; }
+.scan-state { font-family: var(--mono); font-size: 12px; }
+.scan-state.current { color: var(--green); }
+.scan-state.changed { color: var(--amber); }
+.scan-state.unread { color: var(--red); }
+.scan-state.gone { color: var(--muted); }
+.scan-state.parsing { color: var(--cyan); }
+#scan-runs-table tr.running td { color: var(--cyan); }
+#scan-files-table tr.gone td { color: var(--muted); }
+#scan-files-table tr.gone .scan-file { text-decoration: line-through; text-decoration-color: var(--muted); }
+.scan-forced { color: var(--amber); }
 
 /* ---- Points of interest: one card per mark, the note given the room the
    Log aside cannot spare. Two columns when the page is wide enough for the
@@ -4918,3 +5018,230 @@ body.overlay .ship-picture { display: none; }
 .shop-result { margin: 8px 0 0; padding: 8px 12px; border: 1px solid var(--cyan-deep); border-radius: 5px; font-size: 12.5px; color: var(--text); }
 .shop-result .muted { display: block; margin-top: 2px; }
 .shop-result a { color: var(--cyan); }
+
+/* ---------- mining workstation ---------- */
+.mining-view { --mining-glow: rgba(53, 200, 240, .12); }
+.mining-title { display: grid; gap: 2px; }
+.mining-kicker, .mining-overline { font: 9.5px var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--cyan); }
+.mining-heading-line { display: flex; align-items: center; gap: 8px; }
+.mining-title h2 { font-size: clamp(21px, 2vw, 28px); }
+.mining-workspace-status { margin: 1px 0 0; color: var(--muted); font: 10px var(--mono); letter-spacing: .04em; }
+.mining-workspace-icon { display: none; width: 17px; height: 17px; box-sizing: border-box; border: 1px solid var(--cyan); border-radius: 50%; background: linear-gradient(90deg, transparent 46%, var(--cyan) 46% 54%, transparent 54%), linear-gradient(transparent 46%, var(--cyan) 46% 54%, transparent 54%); box-shadow: 0 0 12px rgba(53, 200, 240, .5); }
+.mining-view > .section-bar[data-workspace-icon="fit"] .mining-workspace-icon { display: block; }
+
+/* A framed operational header gives this reference-heavy page an identity of
+   its own without competing with its tables. */
+.mining-view > .section-bar {
+  position: relative;
+  align-items: end;
+  padding: 15px 16px 14px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--cyan);
+  background:
+    linear-gradient(90deg, var(--mining-glow), transparent 38%),
+    linear-gradient(125deg, rgba(14, 25, 38, .98), rgba(7, 12, 20, .98));
+  clip-path: var(--chamfer);
+}
+.mining-view > .section-bar::after {
+  content: attr(data-workspace);
+  position: absolute;
+  right: 18px;
+  top: 9px;
+  color: var(--dim);
+  font: 9px var(--mono);
+  letter-spacing: .18em;
+  pointer-events: none;
+}
+.mining-view .controls { padding-top: 10px; }
+
+.subtabs#mining-tabs { gap: 8px; margin: 0 0 18px; padding: 0 2px; border: 0; }
+.subtabs#mining-tabs button {
+  flex: 1 1 190px;
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  min-height: 43px;
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--rule);
+  background: rgba(10, 18, 28, .72);
+  color: var(--muted);
+  text-align: left;
+  transition: border-color .14s, background .14s, color .14s, transform .14s;
+}
+.subtabs#mining-tabs button > span { color: var(--dim); font: 10px var(--mono); }
+.subtabs#mining-tabs button:hover { border-color: var(--cyan-deep); background: rgba(13, 39, 55, .48); transform: translateY(-1px); }
+.subtabs#mining-tabs button.active { color: var(--cyan-hot); border-color: var(--cyan-deep); border-left: 3px solid var(--cyan); background: linear-gradient(110deg, rgba(21, 80, 105, .38), rgba(9, 20, 31, .84)); }
+.subtabs#mining-tabs button.active > span { color: var(--cyan); }
+
+.mining-pane { animation: mining-pane-in 180ms ease-out; }
+.mining-brief { display: grid; grid-template-columns: 3px minmax(0, 1fr); gap: 12px; margin: 0 0 20px; padding: 12px 14px; border: 1px solid var(--rule); background: rgba(7, 12, 20, .62); }
+.mining-brief-mark { background: linear-gradient(var(--cyan), var(--cyan-deep)); box-shadow: 0 0 14px rgba(53, 200, 240, .35); }
+.mining-brief .caption { margin: 0; max-width: 122ch; line-height: 1.55; }
+.mining-salvage-brief {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  margin: 0 0 20px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 171, 61, .45);
+  border-left: 3px solid var(--amber);
+  background: linear-gradient(100deg, rgba(255, 171, 61, .09), rgba(7, 12, 20, .64));
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.mining-salvage-brief b { display: block; color: var(--text); margin-bottom: 2px; }
+.mining-salvage-mark { color: var(--amber); font: 9px var(--mono); letter-spacing: .16em; }
+.salvage-table th:nth-child(3), .salvage-table td:nth-child(3),
+.salvage-table th:nth-child(4), .salvage-table td:nth-child(4),
+.salvage-table th:nth-child(12), .salvage-table td:nth-child(12),
+.salvage-table th:nth-child(13), .salvage-table td:nth-child(13) { display: none; }
+.mining-section-head { display: flex; justify-content: space-between; gap: 16px; align-items: end; margin: 22px 0 8px; padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
+.mining-section-head h3 { margin: 3px 0 0; color: var(--text); }
+.mining-section-note { max-width: 34ch; color: var(--dim); font-size: 10.5px; line-height: 1.35; text-align: right; }
+.mining-section-head-secondary { margin-top: 26px; }
+.mining-explainer { max-width: 130ch; margin: 0 0 11px; line-height: 1.52; }
+.mining-table-wrap { box-shadow: 0 10px 22px rgba(0, 0, 0, .14); }
+#mining-places tbody tr:first-child { background: linear-gradient(90deg, rgba(53, 200, 240, .08), transparent 68%); }
+#mining-places tbody tr:first-child td:first-child { color: var(--cyan-hot); }
+
+/* ---------- can it be cracked? ---------- */
+.mining-crack-head { margin-top: 0; }
+.crack { margin: 12px 0 18px; display: grid; gap: 10px; }
+.crack-rock { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px; align-items: end; padding: 14px; border: 1px solid var(--rule); border-top: 2px solid var(--cyan-deep); background: linear-gradient(145deg, rgba(14, 25, 38, .98), rgba(6, 12, 19, .92)); }
+.crack-rock label { display: flex; flex-direction: column; gap: 4px; font-size: 9.5px; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; }
+.crack-rock .select, .crack-rock .search { min-width: 0; width: 100%; }
+.crack-rock .unit { position: absolute; right: 8px; bottom: 6px; font-size: 10px; color: var(--muted); pointer-events: none; }
+.crack-rock label:has(.unit) { position: relative; }
+.crack-heads { display: grid; gap: 7px; }
+.crack-fit-summary {
+  padding: 7px 10px;
+  border: 1px solid rgba(53, 200, 240, .22);
+  background: rgba(53, 200, 240, .045);
+  color: var(--cyan-hot);
+  font: 10px var(--mono);
+  letter-spacing: .08em;
+}
+.crack-head { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; padding: 9px 10px; border: 1px solid var(--rule); background: rgba(0, 0, 0, .22); }
+.crack-head-label { font-family: var(--mono); font-size: 10.5px; color: var(--cyan); min-width: 9ch; }
+.crack-head .crack-laser { flex: 1 1 26ch; min-width: 0; }
+.crack-head .crack-module { flex: 1 1 18ch; min-width: 0; }
+.crack-call { font-size: 13px; padding: 11px 12px; border-left: 3px solid var(--rule-hot); background: linear-gradient(90deg, rgba(14, 25, 38, .9), rgba(0, 0, 0, .18)); }
+.crack-call.good { border-left-color: var(--green); }
+.crack-call.good b { color: var(--green); }
+.crack-call.warn { border-left-color: var(--amber); }
+.crack-call.warn b { color: var(--amber); }
+.crack-call.bad { border-left-color: var(--red, #e06060); }
+.crack-call.bad b { color: var(--red, #e06060); }
+.crack-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 1px; border: 1px solid var(--rule); background: var(--rule); font-size: 11.5px; }
+.crack-facts > span { padding: 8px 10px; background: var(--deep); }
+.crack-facts .k { color: var(--muted); margin-right: 6px; }
+.crack-facts b { font-family: var(--mono); }
+.crack-notes { margin: 0; padding-left: 16px; font-size: 11px; color: var(--dim); line-height: 1.5; }
+#crack-matrix tr.current td { color: var(--text); font-weight: 600; }
+#crack-matrix td.crack-good { color: var(--green); }
+#crack-matrix td.crack-warn { color: var(--amber); }
+#crack-matrix td.crack-bad { color: var(--red, #e06060); }
+.crack-note { font-size: 11px; margin: 4px 0 0; line-height: 1.5; }
+.crack-deposit { margin-top: 4px; }
+.crack-noslots { font-size: 10.5px; }
+.crack-fittings { margin-top: 8px; padding: 10px 12px; border: 1px solid var(--rule); background: rgba(7, 12, 20, .55); }
+.crack-fittings summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+.crack-fittings h4 { margin: 12px 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+/* ---------- sub-tabs inside a view ---------- */
+.subtabs { display: flex; gap: 4px; margin: 4px 0 12px; border-bottom: 1px solid var(--rule); }
+.subtabs button { background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 6px 12px; font: inherit; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); cursor: pointer; }
+.subtabs button:hover { color: var(--text); }
+.subtabs button.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+.mining-pane { display: none; }
+.mining-pane.active { display: block; }
+@keyframes mining-pane-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (max-width: 850px) {
+  .mining-waiting { grid-template-columns: minmax(0, 1fr) auto; }
+  .mining-waiting .mining-waiting-time { grid-column: 1 / -1; text-align: left; }
+  .mining-view > .section-bar { align-items: start; }
+  .mining-view > .section-bar::after { display: none; }
+  .mining-view .controls { width: 100%; flex-wrap: wrap; }
+  .mining-view .controls .search { flex: 1 1 220px; }
+  .mining-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mining-form button { grid-column: span 2; }
+}
+@media (max-width: 560px) {
+  .subtabs#mining-tabs { display: grid; grid-template-columns: 1fr; }
+  .subtabs#mining-tabs button { min-height: 39px; }
+  .mining-section-head { align-items: start; flex-direction: column; gap: 5px; }
+  .mining-section-note { text-align: left; }
+  .crack-rock { grid-template-columns: 1fr; }
+  .mining-form { grid-template-columns: 1fr; }
+  .mining-form button { grid-column: auto; }
+  .mining-waiting { grid-template-columns: 1fr; gap: 4px; }
+  .mining-waiting .mining-waiting-time { grid-column: auto; }
+  .mining-salvage-brief { grid-template-columns: 1fr; gap: 5px; }
+}
+.ship-card.unflown { opacity: .92; }
+.ship-card.unflown .ship-name::after { content: " · never flown"; font-size: 10px; color: var(--muted); font-weight: 400; }
+
+/* ---------- armoury ---------- */
+.armoury-pane { display: none; }
+.armoury-pane.active { display: block; }
+.armoury-pane[hidden], #armoury-tabs[hidden] { display: none; }
+.armoury-filters { flex-wrap: wrap; margin: 0 0 8px; }
+#armoury-guns tbody tr, #armoury-armour tbody tr { cursor: pointer; }
+#armoury-guns tbody tr.open, #armoury-armour tbody tr.open { background: rgba(53, 200, 240, .09); }
+.armoury-modes { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; }
+.armoury-modes .armoury-when { color: var(--dim); }
+.armoury-kind { color: var(--muted); font-size: 11px; }
+/* width 0 with min-width 100%: fills the cell without widening the table past its own columns. */
+.armoury-detail { padding: 12px 14px; width: 0; min-width: 100%; box-sizing: border-box; white-space: normal; }
+.armoury-detail p { white-space: normal; }
+.armoury-detail h4 { margin: 10px 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.armoury-detail table { width: auto; min-width: 55%; }
+.armoury-finishes { display: flex; flex-wrap: wrap; gap: 6px; }
+.armoury-finish { border: 1px solid var(--rule); border-radius: 4px; padding: 3px 8px; font-size: 11.5px; }
+.armoury-finish .muted { margin-left: 6px; }
+#armoury-guns tbody tr.armoury-expand, #armoury-armour tbody tr.armoury-expand { cursor: default; background: var(--panel); }
+#armoury-guns tbody tr.armoury-expand:hover, #armoury-armour tbody tr.armoury-expand:hover { background: var(--panel); }
+.armoury-expand > td { padding: 0; border-left: 3px solid var(--cyan-deep); }
+.armoury-detail .panel-title { font-size: 14px; color: var(--text); }
+.armoury-detail .panel-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.armoury-picture { float: right; width: 280px; max-width: 40%; margin: 0 0 10px 16px; text-align: center; }
+.armoury-picture img { max-width: 100%; max-height: 220px; border: 1px solid var(--rule); border-radius: 4px; background: var(--deep); }
+.armoury-finish.clickable { cursor: pointer; }
+.armoury-finish.clickable:hover { border-color: var(--cyan-deep); }
+.armoury-detail::after { content: ""; display: block; clear: both; }
+
+/* ---------- cargo fit ---------- */
+.garage-cargo { margin: 14px 0 12px; padding: 12px 14px; border: 1px solid var(--rule-hot); background: linear-gradient(90deg, rgba(20, 55, 71, .3), rgba(4, 10, 17, .5)); }
+.garage-cargo h3 { margin: 2px 0 4px; font-size: 15px; }
+.garage-cargo-load { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 10px 0 8px; }
+.garage-cargo-crate { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.garage-cargo-crate input { width: 52px; padding: 3px 6px; font: inherit; color: var(--text); background: var(--deep); border: 1px solid var(--rule); border-radius: 4px; text-align: right; }
+.garage-cargo-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.garage-cargo-total { font-size: 12px; margin-left: 6px; }
+.garage-cargo-tools { display: flex; gap: 8px; margin-bottom: 8px; }
+.garage-cargo-verdict { margin: 6px 0 10px; font-size: 13px; }
+.garage-cargo-verdict.fits { color: var(--green); }
+.garage-cargo-verdict.no { color: var(--amber); }
+.garage-cargo-grids { display: flex; flex-wrap: wrap; gap: 14px 22px; }
+.garage-cargo-grid { display: flex; flex-direction: column; gap: 4px; max-width: 360px; }
+.garage-cargo-grid .small { white-space: normal; }
+.garage-cargo-grid-title { font-size: 12px; color: var(--text); }
+.garage-cargo-layers { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
+.garage-cargo-layer { display: flex; flex-direction: column; gap: 2px; }
+.garage-cargo-svg { display: block; border: 1px solid var(--rule-hot); background: var(--deep); }
+.garage-cargo-svg .cargo-floor { fill: rgba(53, 200, 240, .05); }
+.garage-cargo-svg .cargo-line { stroke: rgba(53, 200, 240, .18); stroke-width: 1; }
+.garage-cargo-svg .cargo-crate { stroke: rgba(0, 0, 0, .45); stroke-width: 1; opacity: .92; }
+.garage-cargo-svg .cargo-crate-upper { opacity: .55; }
+.garage-cargo-svg .cargo-label { font: 700 9px var(--mono); fill: #061018; pointer-events: none; }
+.garage-cargo-fleet h4 { margin: 12px 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.garage-cargo-ships { margin: 0; padding-left: 18px; font-size: 12.5px; }
+.garage-cargo-ships li.fits a { color: var(--green); }
+.garage-cargo-ships li.no a { color: var(--amber); }
+.mining-waiting .mining-estimate { flex: 0 0 100%; margin-left: 0; }
+.mining-waiting .time { margin-left: auto; }

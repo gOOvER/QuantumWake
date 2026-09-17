@@ -69,6 +69,22 @@ public partial class App : System.Windows.Application
 
         await StartServerAsync(e.Args);
 
+        // A copy whose server could not start is a second copy: the port is
+        // held by the one already running. It used to stay up anyway - tray,
+        // overlay, MFD frames and setup window of its own - and the two looked
+        // like one app. A layout saved in one copy's setup window moved the
+        // other copy's frames not at all, which read as "the MFD settings do
+        // not save"; that is how this was found. The second copy says so and
+        // stands down, and the first is opened in its place.
+        if (_server is null)
+        {
+            _tray?.Notify("Quantum Wake is already running - opening the one that is. This copy is closing.", OpenDashboard);
+            OpenDashboard();
+            await Task.Delay(TimeSpan.FromSeconds(4));
+            Quit();
+            return;
+        }
+
         var mfdRoot = _server?.Urls.FirstOrDefault() is { } address
             ? new UriBuilder(address) { Host = "127.0.0.1" }.Uri.AbsoluteUri
             : DashboardUrl;

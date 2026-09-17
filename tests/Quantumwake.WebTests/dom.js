@@ -277,8 +277,8 @@ const GROUPS = {
   'select.period': ['#map-window'],
   '#map-side button': ['#side-sell', '#side-buy'],
   '[data-stats-toggle]': ['#contracts-stats-toggle'],
-  '#tabs button': ['#test-tab-now', '#test-tab-about', '#test-tab-fleet', '#test-tab-garage'],
-  '.view': ['#view-now', '#view-about', '#view-help', '#view-fleet', '#view-garage'],
+  '#tabs button': ['#test-tab-now', '#test-tab-about', '#test-tab-fleet', '#test-tab-garage', '#test-tab-mining'],
+  '.view': ['#view-now', '#view-about', '#view-help', '#view-fleet', '#view-garage', '#view-mining'],
   '#tabs .tab-group': [],
   '#view-now .card[data-card]': [
     '#now-location-card', '#now-briefing-card', '#now-ship-card', '#now-session-card',
@@ -354,6 +354,7 @@ node('#test-tab-fleet').dataset.view = 'fleet';
 /* And the Garage, so that the Hangar and Fleet cards' button can be seen to
    land there rather than only to set the class it will show. */
 node('#test-tab-garage').dataset.view = 'garage';
+node('#test-tab-mining').dataset.view = 'mining';
 
 node('#side-sell').dataset.side = 'sell';
 node('#side-buy').dataset.side = 'buy';
