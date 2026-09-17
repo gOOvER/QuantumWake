@@ -78,7 +78,12 @@ public sealed record ControlCatalogue(
         {
             var mapName = (string?)map.Attribute("name") ?? "";
             if (mapName.Length == 0) continue;
-            maps.Add(new ActionMapInfo(mapName, Word((string?)map.Attribute("UILabel")) is { Length: > 0 } l ? l : mapName, Word((string?)map.Attribute("UICategory"))));
+            // A category with no string - ui_CCSeatGeneral has none on this
+            // install - is no category, not a raw key on a tab.
+            var categoryKey = (string?)map.Attribute("UICategory");
+            var category = Word(categoryKey);
+            if (category == (categoryKey ?? "").TrimStart('@')) category = "";
+            maps.Add(new ActionMapInfo(mapName, Word((string?)map.Attribute("UILabel")) is { Length: > 0 } l ? l : mapName, category));
 
             foreach (var action in map.Elements("action"))
             {

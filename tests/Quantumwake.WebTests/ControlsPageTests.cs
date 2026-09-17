@@ -137,6 +137,30 @@ public class ControlsPageTests
         Assert.Contains("Thrustmaster Warthog - Throttle", page.NodeText("#controls-picture-note"));
     }
 
+    /// <summary>
+    /// No picture: the Windows panel's numbered buttons stand in, to the
+    /// highest number the profile mentions rounded to a row, lit where
+    /// bound, with the hats as crosses and the axes as bars.
+    /// </summary>
+    [Fact]
+    public void Without_a_picture_the_numbered_grid_stands_in()
+    {
+        var page = Opened();
+        page.Do("controlsDevice = 'js4'; await renderControlsDevice();");
+
+        var grid = "__dom.node('#controls-svg')";
+        Assert.Equal(8, page.Count($"{grid}.querySelectorAll('.controls-grid-button').length"));
+        Assert.Equal(2, page.Count($"{grid}.querySelectorAll('.controls-grid-button').filter(n => n.classList.contains('bound')).length"));
+        Assert.Contains("to 8, the highest your profile mentions being 7", page.NodeText("#controls-svg"));
+        Assert.Contains("Eject", page.Text($"{grid}.querySelectorAll('.controls-grid-button').filter(n => n.classList.contains('bound'))[0].textContent"));
+        Assert.Equal(2, page.Count($"{grid}.querySelectorAll('.controls-grid-axis').length"));
+        Assert.Contains("Pitch", page.NodeText("#controls-svg"));
+        Assert.Contains("stand-in until a picture is chosen", page.NodeText("#controls-svg"));
+
+        // The table's rows still highlight the grid's cells.
+        Assert.Equal("button7", page.Text($"{grid}.querySelectorAll('.controls-grid-button').filter(n => n.classList.contains('bound'))[1].dataset.control"));
+    }
+
     [Fact]
     public void With_the_library_off_the_picture_slot_has_the_fetch_button_and_it_fetches()
     {

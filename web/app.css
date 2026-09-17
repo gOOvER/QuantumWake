@@ -5300,5 +5300,23 @@ td.armoury-cost { color: var(--amber); }
 @media (max-width: 900px) { .controls-device { grid-template-columns: 1fr; } }
 #controls-buttons { table-layout: fixed; width: 100%; }
 #controls-buttons th:first-child { width: 96px; }
-#controls-buttons th:nth-child(3) { width: 84px; }
+#controls-buttons th:nth-child(3) { width: 96px; }
+#controls-buttons td.num { white-space: normal; }
 #controls-buttons td { overflow-wrap: anywhere; }
+/* The stand-in grid: Windows' numbered buttons, lit where something is bound. */
+.controls-grid { padding: 6px 2px; }
+.controls-grid-title { margin: 8px 0 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.controls-grid-buttons { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; }
+.controls-grid-button { position: relative; aspect-ratio: 1; border-radius: 50%; border: 2px solid #5a2222; background: #2a0d0d; color: #7a5a5a; display: flex; align-items: center; justify-content: center; font: 700 13px var(--mono); }
+.controls-grid-button.bound { background: radial-gradient(circle at 35% 35%, #ff6a6a, #b30000 70%); border-color: #ff8a8a; color: #fff; box-shadow: 0 0 10px rgba(255, 60, 60, .45); }
+.controls-grid-button.lit { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.controls-grid-label { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 3px; width: 120%; font: 9px var(--sans, inherit); line-height: 1.1; color: var(--muted); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.controls-grid-buttons { row-gap: 22px; }
+.controls-grid-cross { display: grid; grid-template-columns: repeat(3, 34px); grid-template-rows: repeat(3, 34px); gap: 4px; }
+.controls-grid-cross .up { grid-column: 2; grid-row: 1; }
+.controls-grid-cross .left { grid-column: 1; grid-row: 2; }
+.controls-grid-cross .right { grid-column: 3; grid-row: 2; }
+.controls-grid-cross .down { grid-column: 2; grid-row: 3; }
+.controls-grid-axis { display: flex; gap: 10px; align-items: baseline; padding: 3px 0; border-top: 1px solid var(--rule); font-size: 12px; }
+.controls-grid-axis:first-of-type { border-top: 0; }
+.controls-grid-axis-name { font: 12px var(--mono); color: var(--cyan); min-width: 60px; }

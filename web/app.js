@@ -9231,7 +9231,7 @@ async function renderControlsPicture(device, bound) {
       });
       note.append(pick);
     }
-    return [];
+    return controlsDrawGrid(holder, device, bound);
   }
   note.textContent = `${device.template.name} · ${device.template.maker === 'yours' ? 'your own picture' : 'Joystick Diagrams'}`;
 
@@ -9246,6 +9246,131 @@ async function renderControlsPicture(device, bound) {
   }
 
   return controlsDrawSvg(holder, text, bound, device.product);
+}
+
+/**
+ * The stand-in for a stick nobody has drawn: the numbered buttons of the
+ * Windows game-controller panel, lit where something is bound, with the
+ * hats as crosses and the axes as bars. How many buttons the stick has is
+ * not known without the live read, so the grid runs to the highest number
+ * the profile mentions, rounded to a full row, and says so.
+ */
+function controlsDrawGrid(holder, device, bound) {
+  const controls = [];
+  const buttons = [...bound.keys()].map((c) => /^button(\d+)$/.exec(c)).filter(Boolean).map((m) => Number(m[1]));
+  const hats = [...new Set([...bound.keys()].map((c) => /^hat(\d+)_/.exec(c)).filter(Boolean).map((m) => Number(m[1])))];
+  const axes = [...bound.keys()].filter((c) => !/^(button|hat)/.test(c));
+  const highest = buttons.length ? Math.max(...buttons) : 0;
+  const count = Math.max(8, Math.ceil(highest / 8) * 8);
+
+  const grid = el('div', 'controls-grid');
+  grid.append(el('div', 'controls-grid-title', `Buttons · to ${count}, the highest your profile mentions being ${highest || 'none'}`));
+  const cells = el('div', 'controls-grid-buttons');
+  for (let i = 1; i <= count; i++) {
+    const control = `button${i}`;
+    controls.push(control);
+    const here = bound.get(control) || [];
+    const cell = el('div', `controls-grid-button${here.length ? ' bound' : ''}`, String(i));
+    cell.dataset.control = control;
+    cell.title = here.length ? here.map(controlsBindingWords).join(' / ') : 'nothing bound';
+    if (here.length) cell.append(el('span', 'controls-grid-label', here.map((b) => b.label).join(' / ')));
+    cells.append(cell);
+  }
+  grid.append(cells);
+
+  for (const hat of hats) {
+    const cross = el('div', 'controls-grid-hat');
+    cross.append(el('div', 'controls-grid-title', `Hat ${hat}`));
+    const pad = el('div', 'controls-grid-cross');
+    for (const dir of ['up', 'left', 'right', 'down']) {
+      const control = `hat${hat}_${dir}`;
+      controls.push(control);
+      const here = bound.get(control) || [];
+      const cell = el('div', `controls-grid-button ${dir}${here.length ? ' bound' : ''}`, { up: '▲', down: '▼', left: '◀', right: '▶' }[dir]);
+      cell.dataset.control = control;
+      cell.title = here.length ? here.map(controlsBindingWords).join(' / ') : 'nothing bound';
+      pad.append(cell);
+    }
+    cross.append(pad);
+    grid.append(cross);
+  }
+
+  if (axes.length) {
+    const bars = el('div', 'controls-grid-axes');
+    bars.append(el('div', 'controls-grid-title', 'Axes'));
+    for (const axis of axes) {
+      controls.push(axis);
+      const here = bound.get(axis) || [];
+      const bar = el('div', 'controls-grid-axis bound');
+      bar.dataset.control = axis;
+      bar.append(el('span', 'controls-grid-axis-name', axis));
+      bar.append(el('span', 'muted', here.map((b) => b.label).join(' / ')));
+      bars.append(bar);
+    }
+    grid.append(bars);
+  }
+
+  grid.append(el('p', 'muted small', 'A stand-in until a picture is chosen: the buttons as Windows numbers them, lit where your profile binds something. Only the ones the profile mentions are certain; the stick may have more.'));
+  holder.append(grid);
+  return controls;
+}
+
+/**
+ * Fits a name into the template's box. The boxes were drawn for a word or
+ * two; the font shrinks to what the width allows, and below a readable
+ * size the name is cut with an ellipsis instead - the table has it whole,
+ * and the full name is the hover.
+ */
+function controlsFitLabel(node, words) {
+  const isSvg = node.namespaceURI === 'http://www.w3.org/2000/svg';
+  // draw.io shows the HTML label inside a foreignObject when it can and the
+  // SVG text otherwise; the box width is the foreignObject's, or the rect
+  // beside the text.
+  // draw.io puts the box's width on an inline style a few divs up from the
+  // HTML label, and the box itself is a rect a few groups up from either.
+  let width = 0;
+  let height = 0;
+  if (!isSvg) {
+    for (let up = node, i = 0; up && i < 6; up = up.parentElement, i++) {
+      const w = parseFloat(up.style?.width);
+      if (w > 0) { width = w; break; }
+    }
+  }
+  for (let up = node.parentElement, i = 0; up && i < 8; up = up.parentElement, i++) {
+    const rect = [...up.children || []].find((c) => c.nodeName.toLowerCase() === 'rect');
+    if (rect) {
+      if (!width) width = Number(rect.getAttribute('width')) || 0;
+      height = Number(rect.getAttribute('height')) || 0;
+      break;
+    }
+  }
+  if (!width) width = 90;
+  const usable = Math.max(20, width - 8);
+  const perChar = 0.56;
+  // SVG text cannot wrap; an HTML label can take a second line when the box is tall enough.
+  const maxLines = !isSvg && height >= 22 ? 2 : 1;
+  const linesAt = (size) => Math.ceil((words.length * perChar * size) / usable);
+  let size = 10;
+  while (size > 6.5 && linesAt(size) > maxLines) size -= 0.5;
+  let text = words;
+  if (linesAt(size) > maxLines) {
+    const chars = Math.max(4, Math.floor((usable * maxLines) / (perChar * size)) - 1);
+    if (chars < words.length) text = `${words.slice(0, chars).trimEnd()}…`;
+  }
+  node.textContent = text;
+  const px = `${Math.round(size * 10) / 10}px`;
+  if (isSvg) {
+    node.setAttribute('font-size', px);
+    const title = node.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'title');
+    title.textContent = words;
+    node.append(title);
+  } else {
+    node.style.fontSize = px;
+    node.style.lineHeight = '1.1';
+    node.style.whiteSpace = 'normal';
+    node.style.overflowWrap = 'anywhere';
+    node.title = words;
+  }
 }
 
 /** Writes the bindings into a template's placeholders; the part a test can drive with a string. */
@@ -9266,11 +9391,7 @@ function controlsDrawSvg(holder, svgText, bound, deviceName) {
     node.setAttribute('data-control', control);
     node.classList?.add('controls-slot');
     if (here.length) {
-      // The template's boxes were drawn for a word or two; a long name is
-      // cut with an ellipsis and set smaller, and the table has it whole.
-      const words = here.map(controlsBindingWords).join(' / ');
-      node.textContent = words.length > 22 ? `${words.slice(0, 21).trimEnd()}…` : words;
-      if (words.length > 12) node.setAttribute('font-size', words.length > 18 ? '7px' : '8px');
+      controlsFitLabel(node, here.map(controlsBindingWords).join(' / '));
       node.classList?.add('bound');
     } else {
       node.textContent = '—';

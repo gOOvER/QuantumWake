@@ -365,7 +365,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.1
+### 0.15.2
 
 - **A Controls page, under Settings: your sticks and what is bound to
   them.** Read from the game's own keybinding profile — every joystick it
@@ -384,7 +384,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   *Pictures*), kept, and credited; a stick the
   library knows (Warthog, T.16000M, X52, X56, VKB Gladiator) gets its
   picture on its own, any other is yours to pick, and a folder of your own
-  SVGs in the same convention works too.
+  SVGs in the same convention works too. A stick with no picture gets the
+  Windows game-controller panel's numbered buttons instead, lit where
+  something is bound, with the hats and axes beside them.
 
 - **Every version of your keybindings is kept.** The game rewrites its
   profile whenever a binding changes and keeps no history; Quantum Wake
