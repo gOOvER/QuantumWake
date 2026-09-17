@@ -365,7 +365,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.0
+### 0.15.1
 
 - **A Controls page, under Settings: your sticks and what is bound to
   them.** Read from the game's own keybinding profile — every joystick it
@@ -380,7 +380,8 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   Warthog, X52/X55/X56, T.16000M, VKB, T.Flight), it can be shown beside
   yours. The pictures come from [Joystick Diagrams](https://github.com/Rexeh/joystick-diagrams)'
   template library — 45 sticks, throttles and panels — fetched only once
-  you turn that on under *Pictures*, kept, and credited; a stick the
+  you press *Fetch the pictures* where the picture would be (or under
+  *Pictures*), kept, and credited; a stick the
   library knows (Warthog, T.16000M, X52, X56, VKB Gladiator) gets its
   picture on its own, any other is yours to pick, and a folder of your own
   SVGs in the same convention works too.

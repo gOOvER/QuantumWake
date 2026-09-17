@@ -119,15 +119,39 @@ public class ControlsPageTests
         Assert.DoesNotContain("Eject", throttle);
     }
 
+    /// <summary>
+    /// The fix is where the gap is: with the library off, the picture slot
+    /// offers to fetch it; with it on and no match, a picker of the library.
+    /// </summary>
     [Fact]
-    public void A_stick_without_a_picture_says_why_and_one_with_names_its_source()
+    public void A_stick_without_a_picture_offers_the_fix_in_place_and_one_with_names_its_source()
     {
         var page = Opened();
         page.Do("controlsDevice = 'js4'; await renderControlsDevice();");
-        Assert.Contains("No picture matched to this stick", page.NodeText("#controls-picture-note"));
+        var note = page.NodeText("#controls-picture-note");
+        Assert.Contains("No picture matched to this stick", note);
+        Assert.Equal(1, page.Count("__dom.node('#controls-picture-note').querySelectorAll('select').length"));
+        Assert.Contains("VKB-Sim Gladiator NXT R", page.Text("__dom.node('#controls-picture-note').querySelectorAll('select')[0].descendants().map(n => n.textContent).join('|')"));
 
         page.Do("controlsDevice = 'js2'; await renderControlsDevice();");
         Assert.Contains("Thrustmaster Warthog - Throttle", page.NodeText("#controls-picture-note"));
+    }
+
+    [Fact]
+    public void With_the_library_off_the_picture_slot_has_the_fetch_button_and_it_fetches()
+    {
+        var page = new Page();
+        page.Serve("/api/controls", Model.Replace("\"enabled\":true", "\"enabled\":false").Replace("\"available\":[{", "\"available\":[],\"was\":[{"));
+        page.Serve("/api/controls/backups", "[]");
+        page.Serve("/api/controls/templates/enable", """{"enabled":true,"templates":45}""");
+        page.Do("showControlsPane('devices'); await loadControls(); controlsDevice = 'js4'; await renderControlsDevice();");
+
+        var note = page.NodeText("#controls-picture-note");
+        Assert.Contains("the library is off", note);
+        Assert.Contains("Fetch the pictures", note);
+
+        page.Do("__dom.node('#controls-picture-note').querySelectorAll('button')[0].click();");
+        Assert.Contains("POST /api/controls/templates/enable", page.Fetched());
     }
 
     [Theory]

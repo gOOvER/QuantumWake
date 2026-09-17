@@ -9203,9 +9203,34 @@ async function renderControlsPicture(device, bound) {
   const note = $('#controls-picture-note');
   holder.textContent = '';
   if (!device.template) {
-    note.textContent = controlsModel.templates?.enabled
-      ? 'No picture matched to this stick. Pick one under Pictures - the library has 45, and any of them can be assigned.'
-      : 'No picture: the picture library is off. Turn it on under Pictures, or point it at your own.';
+    // The fix is offered where the gap is: fetch the library from here, or
+    // pick a picture from here, rather than a pointer to another pane.
+    note.textContent = '';
+    const t = controlsModel.templates || {};
+    if (!t.enabled && !(t.available || []).length) {
+      note.append(el('span', null, 'No picture yet: the library is off. '));
+      const fetchButton = el('button', 'ghost small', 'Fetch the pictures');
+      fetchButton.type = 'button';
+      fetchButton.title = 'Joystick Diagrams\' template library, 45 sticks, throttles and panels - fetched from GitHub and kept';
+      fetchButton.addEventListener('click', () => controlsFetchLibrary(fetchButton));
+      note.append(fetchButton);
+    } else {
+      note.append(el('span', null, 'No picture matched to this stick. '));
+      const pick = el('select', 'select');
+      pick.append(new Option('Pick one…', ''));
+      let maker = null;
+      let group = null;
+      for (const x of t.available || []) {
+        if (x.maker !== maker) { maker = x.maker; group = el('optgroup'); group.label = maker || 'Library'; pick.append(group); }
+        group.append(new Option(x.name, x.key));
+      }
+      pick.addEventListener('change', async () => {
+        if (!pick.value) return;
+        await fetch('/api/controls/templates/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guid: device.guid, key: pick.value }) });
+        await loadControls();
+      });
+      note.append(pick);
+    }
     return [];
   }
   note.textContent = `${device.template.name} · ${device.template.maker === 'yours' ? 'your own picture' : 'Joystick Diagrams'}`;
@@ -9540,18 +9565,24 @@ function renderControlsPictures() {
   }
 }
 
-$('#controls-templates-enable')?.addEventListener('click', async (e) => {
-  const button = e.currentTarget;
+/** Turns the library on and reloads; the button that asked is disabled while it happens. */
+async function controlsFetchLibrary(button) {
   button.disabled = true;
+  button.textContent = 'Fetching…';
   try {
     await getJson2('/api/controls/templates/enable');
     await loadControls();
   } catch (err) {
-    $('#controls-templates-status').textContent = `could not fetch the library: ${err.message}`;
-  } finally {
+    button.textContent = 'Fetch the pictures';
     button.disabled = false;
+    const status = $('#controls-templates-status');
+    if (status) status.textContent = `could not fetch the library: ${err.message}`;
+    const note = $('#controls-picture-note');
+    if (note) note.append(el('span', 'muted', ` Could not fetch the library: ${err.message}`));
   }
-});
+}
+
+$('#controls-templates-enable')?.addEventListener('click', (e) => controlsFetchLibrary(e.currentTarget));
 
 $('#controls-templates-disable')?.addEventListener('click', async () => {
   await getJson2('/api/controls/templates/disable');
