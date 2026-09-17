@@ -129,6 +129,12 @@ public static class ServerHost
         // Reads each screenshot as it lands, while the pilot has asked for that.
         // Idle otherwise: it checks the setting, not the folder.
         builder.Services.AddHostedService<ScreenWatchService>();
+
+        // The keybinding profile, kept whenever the game rewrites it, and the
+        // stick pictures the Controls page draws bindings on.
+        builder.Services.AddSingleton<ControlsStore>();
+        builder.Services.AddSingleton<JoystickTemplates>();
+        builder.Services.AddHostedService<ControlsWatchService>();
         builder.Services.AddSingleton<KitStore>();
         builder.Services.AddSingleton<ExportBuilder>();
         builder.Services.AddSingleton<ImportStore>();
@@ -661,6 +667,8 @@ public static class ServerHost
         // copy on disk is the one summarised, and the runs themselves. The Log
         // page's answer to "did it actually read my logs, and which ones".
         app.MapGet("/api/scan/history", (LogLibrary lib) => ScanHistory.Build(install, lib.Store));
+
+        ControlsEndpoints.Map(app, install);
 
         app.MapGet("/api/now", (LiveSessionService live) => live.Current);
 
