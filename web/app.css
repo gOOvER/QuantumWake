@@ -5196,6 +5196,12 @@ body.overlay .ship-picture { display: none; }
 .armoury-modes { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; }
 .armoury-modes .armoury-when { color: var(--dim); }
 .armoury-kind { color: var(--muted); font-size: 11px; }
+/* One chip per figure an attachment changes; green when the change helps, amber when it costs. */
+.armoury-effect { display: inline-block; margin: 1px 6px 1px 0; padding: 0 5px; border: 1px solid var(--rule-hot); border-radius: 3px; font: 11px var(--mono); color: var(--text); white-space: nowrap; }
+.armoury-effect.gain { color: var(--green); border-color: #1f5c3d; }
+.armoury-effect.cost { color: var(--amber); border-color: #5c4a1f; }
+#armoury-pane-kit h3.spaced { margin-top: 18px; }
+#armoury-pane-kit h3.spaced:first-child { margin-top: 4px; }
 /* width 0 with min-width 100%: fills the cell without widening the table past its own columns. */
 .armoury-detail { padding: 12px 14px; width: 0; min-width: 100%; box-sizing: border-box; white-space: normal; }
 .armoury-detail p { white-space: normal; }

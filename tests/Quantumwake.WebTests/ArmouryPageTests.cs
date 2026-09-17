@@ -262,6 +262,158 @@ public class ArmouryPageTests
         Assert.Equal("/api/armoury/picture/66666666-7777-8888-9999-000000000000", page.Text($"{set}.querySelectorAll('.armoury-picture')[0].querySelectorAll('img')[0].src"));
     }
 
+    private const string Kit = """
+        "melee":[
+          {"class":"ksar_melee_01","uuid":"aaaa","name":"Sawtooth Combat Knife","manufacturer":"Kastak Arms","mass":1,
+           "slash":{"physical":30,"total":30,"dominant":"physical"},"stab":{"physical":30,"total":30,"dominant":"physical"},"impulse":20,"config":"KnifeMeleeCombat",
+           "market":{"price":220,"shops":[{"terminal":"Guns Rod's Fuel","place":"Rod's Fuel & Supplies","system":"Pyro","price":220}]},
+           "finishes":[{"class":"ksar_melee_01_brown01","uuid":"bbbb","name":"Sawtooth \"Sirocco\" Combat Knife","market":{"price":null,"shops":[]}}]},
+          {"class":"banu_melee_03","uuid":"cccc","name":"Sizi Knife","manufacturer":"Banu","mass":1,
+           "slash":{"physical":30,"total":30,"dominant":"physical"},"stab":{"physical":30,"total":30,"dominant":"physical"},"impulse":20,"config":"KnifeMeleeCombat",
+           "market":{"price":null,"shops":[]},"finishes":[]}],
+        "throwables":[
+          {"class":"behr_gren_frag_01","uuid":"dddd","name":"MK-4 Frag Grenade","manufacturer":"Behring","mass":0.4,"trigger":"timer","fuseSeconds":5,
+           "blast":{"damage":{"physical":120,"total":120,"dominant":"physical"},"radius":4,"outerRadius":5.5},"pressure":280,"hazard":null,
+           "market":{"price":300,"shops":[{"terminal":"Guns Rod's Fuel","place":"Rod's Fuel & Supplies","system":"Pyro","price":300}]},"finishes":[]},
+          {"class":"ksar_gren_frag_01","uuid":"eeee","name":"Scorch Plasma Grenade","manufacturer":"Kastak Arms","mass":0.4,"trigger":"impact","fuseSeconds":0,
+           "blast":{"damage":{"thermal":2,"total":2,"dominant":"thermal"},"radius":4,"outerRadius":5.5},"pressure":5,
+           "hazard":{"perHit":{"thermal":10,"total":10,"dominant":"thermal"},"periodSeconds":0.4,"radius":4.25},
+           "market":{"price":null,"shops":[]},"finishes":[]}],
+        "attachments":[
+          {"class":"arma_barrel_supp_s1","uuid":"ffff","name":"Tacit Suppressor1","kind":"Barrel","family":"Suppressor","size":1,"manufacturer":"ArmaMod","mass":0.1,
+           "effect":{"damage":0.92,"fireRate":1,"spread":1,"recoilStrength":1,"recoilTime":1,"sound":0.66,"heat":1,"ammoCost":1,"chargeTime":1,"projectileSpeed":1,"pellets":0,"burstShots":0,"zoom":0,"secondZoom":0,"zoomTime":1,"zeroingMax":0,"zeroingStep":0},
+           "unchanged":false,"market":{"price":1200,"shops":[{"terminal":"Guns Rod's Fuel","place":"Rod's Fuel & Supplies","system":"Pyro","price":1200}]},
+           "finishes":[{"class":"arma_barrel_supp_s1_firerats01","uuid":"gggg","name":"Tacit \"Scorched\" Suppressor1","market":{"price":null,"shops":[]}}]},
+          {"class":"behr_optics_tsco_x4_s2","uuid":"hhhh","name":"EE04 (4x Telescopic)","kind":"Sight","family":"Telescopic","size":2,"manufacturer":"Behring","mass":0.1,
+           "effect":{"damage":1,"fireRate":1,"spread":1,"recoilStrength":1,"recoilTime":1,"sound":1,"heat":1,"ammoCost":1,"chargeTime":1,"projectileSpeed":1,"pellets":0,"burstShots":0,"zoom":4,"secondZoom":6,"zoomTime":1.25,"zeroingMax":500,"zeroingStep":100},
+           "unchanged":false,"market":{"price":null,"shops":[]},"finishes":[]},
+          {"class":"nvtc_ubarrel_flsh_s1","uuid":"iiii","name":"FieldLite Flashlight","kind":"Underbarrel","family":"Flashlight","size":1,"manufacturer":"NV-TAC","mass":0.1,
+           "effect":{"damage":1,"fireRate":1,"spread":1,"recoilStrength":1,"recoilTime":1,"sound":1,"heat":1,"ammoCost":1,"chargeTime":1,"projectileSpeed":1,"pellets":0,"burstShots":0,"zoom":0,"secondZoom":0,"zoomTime":1,"zeroingMax":0,"zeroingStep":0},
+           "unchanged":true,"market":{"price":null,"shops":[]},"finishes":[]}],
+        "meleeConfigs":1,
+        """;
+
+    /// <summary>The model with the third tab's lists spliced in beside the guns and armour.</summary>
+    private static string WithKit(string model) => model.Replace("\"armour\":[", Kit + "\"armour\":[");
+
+    private static Page KitOpened()
+    {
+        var page = new Page();
+        page.Serve("/api/armoury", WithKit(Model));
+        page.Do("await loadArmoury(); showArmouryPane('kit');");
+        return page;
+    }
+
+    private static string Active(Page page, string id) =>
+        page.Text($"__dom.node('#{id}').classList.contains('active') ? 'on' : 'off'");
+
+    [Fact]
+    public void The_third_tab_holds_attachments_grenades_and_knives_and_is_remembered()
+    {
+        var page = KitOpened();
+
+        Assert.Equal("on", Active(page, "armoury-pane-kit"));
+        Assert.Equal("off", Active(page, "armoury-pane-guns"));
+        Assert.Equal("kit", page.Text("localStorage.getItem('qw-armoury-pane')"));
+
+        var attachments = page.NodeText("#armoury-attachments tbody");
+        Assert.Contains("Tacit Suppressor1", attachments);
+        Assert.Contains("×0.92 damage", attachments);
+        Assert.Contains("×0.66 sound", attachments);
+        Assert.Contains("EE04 (4x Telescopic)", attachments);
+        Assert.Contains("×4 / ×6 zoom", attachments);
+        Assert.Contains("zero to 500 m by 100", attachments);
+        Assert.Contains("1,200 aUEC", attachments);
+
+        var grenades = page.NodeText("#armoury-grenades tbody");
+        Assert.Contains("MK-4 Frag Grenade", grenades);
+        Assert.Contains("5 s fuse", grenades);
+        Assert.Contains("120 ballistic", grenades);
+        Assert.Contains("4–5.5 m", grenades);
+        Assert.Contains("impact", grenades);
+        Assert.Contains("10 thermal every 0.4 s within 4.25 m", grenades);
+
+        var knives = page.NodeText("#armoury-knives tbody");
+        Assert.Contains("Sawtooth Combat Knife", knives);
+        Assert.Contains("Sizi Knife", knives);
+        Assert.Contains("220 aUEC", knives);
+    }
+
+    /// <summary>
+    /// A column of identical 30s would read as a comparison. The one table
+    /// every knife shares is said once above them instead.
+    /// </summary>
+    [Fact]
+    public void Every_knife_sharing_one_table_is_said_once_above_the_knives()
+    {
+        var note = KitOpened().NodeText("#armoury-knife-note");
+
+        Assert.Contains("one melee table, KnifeMeleeCombat", note);
+        Assert.Contains("30 ballistic a slash, 30 ballistic a stab", note);
+        Assert.Contains("nothing the files put a number on", note);
+    }
+
+    [Fact]
+    public void A_flashlight_says_it_changes_nothing_rather_than_showing_a_blank()
+    {
+        var row = KitOpened().Text("__dom.node('#armoury-attachments tbody').children[2].textContent");
+
+        Assert.Contains("FieldLite Flashlight", row);
+        Assert.Contains("nothing the files put a number on", row);
+    }
+
+    /// <summary>The sound cut is a gain and the damage cut a cost; the chip colours say which.</summary>
+    [Fact]
+    public void An_effect_that_helps_and_one_that_costs_are_told_apart()
+    {
+        var page = KitOpened();
+        var chips = "__dom.node('#armoury-attachments tbody').children[0].querySelectorAll('.armoury-effect')";
+
+        Assert.Equal(2, page.Count($"{chips}.length"));
+        Assert.True(page.Truth($"{chips}[0].classList.contains('cost')"));
+        Assert.True(page.Truth($"{chips}[1].classList.contains('gain')"));
+    }
+
+    [Fact]
+    public void The_slot_filter_and_the_search_box_narrow_the_attachments()
+    {
+        var page = KitOpened();
+
+        page.Do("__dom.node('#armoury-kit-slot').value = 'Sight'; renderArmouryKit();");
+        Assert.Equal(1, page.Count("__dom.node('#armoury-attachments tbody').children.length"));
+        Assert.Contains("1 of 3 attachments", page.NodeText("#armoury-kit-count"));
+
+        page.Do("__dom.node('#armoury-kit-slot').value = ''; __dom.node('#armoury-search').value = 'scorch'; renderArmouryKit();");
+        Assert.Equal(0, page.Count("__dom.node('#armoury-attachments tbody').children.length"));
+        Assert.Contains("Scorch Plasma Grenade", page.NodeText("#armoury-grenades tbody"));
+        Assert.DoesNotContain("MK-4", page.NodeText("#armoury-grenades tbody"));
+    }
+
+    [Fact]
+    public void A_knife_opens_to_its_finishes_with_their_prices()
+    {
+        var page = KitOpened();
+
+        page.Do("__dom.node('#armoury-knives tbody').children[0].click();");
+        var detail = page.Text("__dom.node('#armoury-knives tbody').children[1].textContent");
+
+        Assert.Contains("Finishes (1)", detail);
+        Assert.Contains("Sirocco", detail);
+        Assert.Contains("no terminal recorded", detail);
+    }
+
+    [Fact]
+    public void A_model_from_before_the_third_tab_still_draws_the_first_two()
+    {
+        var page = new Page();
+        page.Serve("/api/armoury", Model);
+        page.Do("await loadArmoury(); showArmouryPane('kit');");
+
+        Assert.Contains("no knife", page.NodeText("#armoury-knife-note"));
+        Assert.Contains("no grenade", page.NodeText("#armoury-grenades tbody"));
+        Assert.Contains("0 of 0 attachments", page.NodeText("#armoury-kit-count"));
+    }
+
     [Fact]
     public void Without_the_community_dataset_the_picture_says_what_it_needs()
     {

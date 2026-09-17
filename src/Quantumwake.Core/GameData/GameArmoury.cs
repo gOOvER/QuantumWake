@@ -169,10 +169,131 @@ public sealed record ArmourPiece(
     double ViewPenalty,
     double Mass);
 
-/// <summary>Everything the install says about what a pilot wears and carries.</summary>
-public sealed record GameArmouryData(List<PersonalWeapon> Weapons, List<ArmourPiece> Armour)
+/// <summary>
+/// A knife. The blade's figures come from a <c>MeleeCombatConfig</c> record the
+/// knife points at, and on this install every knife but the three gun-game
+/// variants points at the same one - which is the finding, and the page says
+/// it rather than printing 30 down a column.
+/// </summary>
+/// <param name="Slash">One slash's damage.</param>
+/// <param name="Stab">One stab's damage.</param>
+/// <param name="Impulse">The push a hit gives, in the game's own unit.</param>
+/// <param name="Config">The record the figures come from - <c>KnifeMeleeCombat</c>.</param>
+public sealed record MeleeWeapon(
+    string Class,
+    string Name,
+    string Manufacturer,
+    double Mass,
+    DamageKinds Slash,
+    DamageKinds Stab,
+    double Impulse,
+    string Config,
+    string? BaseClass = null);
+
+/// <summary>A lingering area a grenade leaves: so much damage every so often within a radius.</summary>
+public sealed record Hazard(DamageKinds PerHit, double PeriodSeconds, double Radius);
+
+/// <summary>
+/// A grenade. What sets it off is a trigger on its triggerable-devices
+/// component - a timer with a duration, or impact - and what it does is the
+/// explosion behaviour behind that trigger; a grenade that leaves something
+/// behind spawns a hazard-zone entity, read here as <see cref="Hazard"/>.
+/// </summary>
+/// <param name="Trigger">"timer" or "impact".</param>
+/// <param name="FuseSeconds">The timer's duration; 0 on impact.</param>
+/// <param name="Blast">The explosion, or null when the grenade only leaves a zone.</param>
+/// <param name="Pressure">The blast's pressure figure, the game's own unit; what throws things.</param>
+public sealed record Throwable(
+    string Class,
+    string Name,
+    string Manufacturer,
+    double Mass,
+    string Trigger,
+    double FuseSeconds,
+    Explosion? Blast,
+    double Pressure,
+    Hazard? Hazard,
+    string? BaseClass = null);
+
+/// <summary>
+/// What an attachment does to the gun it sits on: multipliers on the gun's
+/// own figures, 1 being no change. Read from the <c>SWeaponStats</c> block on
+/// the attachment's <c>SWeaponModifierComponentParams</c>.
+/// </summary>
+/// <param name="Damage">On every hit.</param>
+/// <param name="FireRate">On the cyclic rate.</param>
+/// <param name="Spread">On the cone, at rest and firing; a suppressor widens it, a laser narrows it.</param>
+/// <param name="RecoilStrength">On the kick.</param>
+/// <param name="RecoilTime">On how long the kick lasts.</param>
+/// <param name="Sound">On how far a shot is heard.</param>
+/// <param name="Heat">On the heat a shot makes.</param>
+/// <param name="AmmoCost">On rounds per shot.</param>
+/// <param name="ChargeTime">On a charged mode's charge.</param>
+/// <param name="ProjectileSpeed">On the round's speed.</param>
+/// <param name="Pellets">Added to a shot's pellets; negative takes them away.</param>
+/// <param name="BurstShots">Added to a burst's shots.</param>
+/// <param name="Zoom">A sight's magnification; 0 for no sight.</param>
+/// <param name="SecondZoom">The sight's second magnification, for one that switches; 0 when it has none.</param>
+/// <param name="ZoomTime">On how long aiming down it takes.</param>
+/// <param name="ZeroingMax">Metres the sight can be zeroed out to; 0 when it cannot.</param>
+/// <param name="ZeroingStep">Metres per zeroing click.</param>
+public sealed record AttachmentEffect(
+    double Damage = 1,
+    double FireRate = 1,
+    double Spread = 1,
+    double RecoilStrength = 1,
+    double RecoilTime = 1,
+    double Sound = 1,
+    double Heat = 1,
+    double AmmoCost = 1,
+    double ChargeTime = 1,
+    double ProjectileSpeed = 1,
+    int Pellets = 0,
+    int BurstShots = 0,
+    double Zoom = 0,
+    double SecondZoom = 0,
+    double ZoomTime = 1,
+    double ZeroingMax = 0,
+    double ZeroingStep = 0)
 {
-    public static readonly GameArmouryData Empty = new([], []);
+    public static readonly AttachmentEffect None = new();
+
+    /// <summary>True when the block changes nothing the page can show - a flashlight.</summary>
+    public bool IsNone => this == None;
+}
+
+/// <summary>
+/// A sight, a barrel piece or an underbarrel piece for a personal weapon.
+/// </summary>
+/// <param name="Kind">Sight, Barrel or Underbarrel - the slot it goes in.</param>
+/// <param name="Family">What it is within the slot: Suppressor, Compensator, Stabilizer, Telescopic, Holographic, Reflex, Monitor, Laser pointer, Flashlight.</param>
+/// <param name="Size">The slot size it takes, 1 to 3.</param>
+public sealed record WeaponAttachment(
+    string Class,
+    string Name,
+    string Kind,
+    string Family,
+    int Size,
+    string Manufacturer,
+    double Mass,
+    AttachmentEffect Effect,
+    string? BaseClass = null);
+
+/// <summary>Everything the install says about what a pilot wears and carries.</summary>
+public sealed record GameArmouryData(
+    List<PersonalWeapon> Weapons,
+    List<ArmourPiece> Armour,
+    List<MeleeWeapon>? Melee = null,
+    List<Throwable>? Throwables = null,
+    List<WeaponAttachment>? Attachments = null)
+{
+    public static readonly GameArmouryData Empty = new([], [], [], [], []);
+
+    // The three came later than the two, and a cache written before them
+    // deserialises with nulls; empty lists keep every caller simple.
+    public List<MeleeWeapon> Melee { get; init; } = Melee ?? [];
+    public List<Throwable> Throwables { get; init; } = Throwables ?? [];
+    public List<WeaponAttachment> Attachments { get; init; } = Attachments ?? [];
 }
 
 /// <summary>
@@ -215,10 +336,14 @@ public static class GameArmoury
 
     public static GameArmouryData Read(DataCore core, IReadOnlyDictionary<string, string> text, IReadOnlyDictionary<string, GameItem> facts)
     {
-        var data = new GameArmouryData([], []);
+        var data = new GameArmouryData([], [], [], [], []);
 
         var attach = core.StructIndexOf("SAttachableComponentParams");
         var weapon = core.StructIndexOf("SCItemWeaponComponentParams");
+        var melee = core.StructIndexOf("SMeleeWeaponComponentParams");
+        var devices = core.StructIndexOf("EntityComponentTriggerableDevicesParams");
+        var hazard = core.StructIndexOf("HazardComponentParams");
+        var modifier = core.StructIndexOf("SWeaponModifierComponentParams");
         var ammoContainer = core.StructIndexOf("SAmmoContainerComponentParams");
         var suit = core.StructIndexOf("SCItemSuitArmorParams");
         var helmet = core.StructIndexOf("SCItemSuitHelmetParams");
@@ -241,7 +366,19 @@ public static class GameArmoury
 
             if (item.Type.Equals("WeaponPersonal", StringComparison.OrdinalIgnoreCase))
             {
-                if (Weapon(core, text, record, cls, item, byId, weapon, ammoContainer, purchasable, physics) is { } gun) data.Weapons.Add(gun);
+                if (item.SubType.Equals("Knife", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (Knife(core, record, cls, item, byId, melee, physics) is { } knife) data.Melee.Add(knife);
+                }
+                else if (item.SubType.Equals("Grenade", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (Grenade(core, record, cls, item, byId, devices, hazard, physics) is { } grenade) data.Throwables.Add(grenade);
+                }
+                else if (Weapon(core, text, record, cls, item, byId, weapon, ammoContainer, purchasable, physics) is { } gun) data.Weapons.Add(gun);
+            }
+            else if (item.Type.Equals("WeaponAttachment", StringComparison.OrdinalIgnoreCase))
+            {
+                if (Attachment(core, record, cls, item, modifier, physics) is { } piece) data.Attachments.Add(piece);
             }
             else if (item.Type.StartsWith("Char_Armor_", StringComparison.OrdinalIgnoreCase))
             {
@@ -281,9 +418,280 @@ public static class GameArmoury
             if (twin is not null) data.Weapons[i] = w with { BaseClass = twin.Class };
         }
 
+        // Knives and attachments have finishes the way guns do - the Sawtooth
+        // "Sirocco" is ksar_melee_01_brown01 - and the same prefix rule finds them.
+        // The name has to agree as well as the class: arma_barrel_stab_s1_02 is
+        // the Escalate beside arma_barrel_stab_s1's Emod, a different barrel
+        // with different figures, where ksar_melee_01_brown01 is the Sawtooth
+        // "Sirocco", the Sawtooth in brown.
+        var knives = data.Melee.Select(m => (m.Class, m.Name)).ToList();
+        for (var i = 0; i < data.Melee.Count; i++)
+            if (BaseOf(data.Melee[i].Class, data.Melee[i].Name, knives) is { } b) data.Melee[i] = data.Melee[i] with { BaseClass = b };
+        var pieces = data.Attachments.Select(a => (a.Class, a.Name)).ToList();
+        for (var i = 0; i < data.Attachments.Count; i++)
+            if (BaseOf(data.Attachments[i].Class, data.Attachments[i].Name, pieces) is { } b) data.Attachments[i] = data.Attachments[i] with { BaseClass = b };
+
         data.Weapons.Sort((a, b) => string.Compare(a.Kind, b.Kind, StringComparison.OrdinalIgnoreCase) is var k && k != 0 ? k : string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
         data.Armour.Sort((a, b) => string.Compare(a.Slot, b.Slot, StringComparison.OrdinalIgnoreCase) is var s && s != 0 ? s : string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+        data.Melee.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+        data.Throwables.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+        data.Attachments.Sort((a, b) => string.Compare(a.Kind, b.Kind, StringComparison.OrdinalIgnoreCase) is var k && k != 0 ? k
+            : a.Size != b.Size ? a.Size.CompareTo(b.Size) : string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
         return data;
+    }
+
+    /// <summary>
+    /// The longest other class this one extends with an underscore and is named
+    /// as, quoted finish aside, or null: a finish's plain item.
+    /// </summary>
+    private static string? BaseOf(string cls, string name, IEnumerable<(string Class, string Name)> items)
+    {
+        var stem = Unquoted(name);
+        string? best = null;
+        foreach (var (candidate, candidateName) in items)
+        {
+            if (candidate.Length >= cls.Length || !cls.StartsWith(candidate + "_", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!string.Equals(Unquoted(candidateName), stem, StringComparison.OrdinalIgnoreCase)) continue;
+            if (best is null || candidate.Length > best.Length) best = candidate;
+        }
+        return best;
+    }
+
+    /// <summary>The same things the gun reader leaves out: templates, test rigs, the developers' folder, the spawners.</summary>
+    private static bool Scaffolding(DataRecord record, string cls) =>
+        cls.Contains("template", StringComparison.OrdinalIgnoreCase) || cls.Contains("_test", StringComparison.OrdinalIgnoreCase)
+        || cls.Contains("_reference", StringComparison.OrdinalIgnoreCase) || cls.Contains("_toy_", StringComparison.OrdinalIgnoreCase)
+        || cls.StartsWith("EntitySpawner", StringComparison.OrdinalIgnoreCase)
+        || record.FileName.Contains("/dev/", StringComparison.OrdinalIgnoreCase);
+
+    private static MeleeWeapon? Knife(
+        DataCore core, DataRecord record, string cls, GameItem item,
+        IReadOnlyDictionary<Guid, DataRecord> byId, int melee, int physics)
+    {
+        if (melee < 0 || Scaffolding(record, cls)) return null;
+
+        long meleeAt = -1;
+        double mass = 0;
+        foreach (var component in core.PointerArray(record, "Components"))
+        {
+            var at = core.InstanceAt(component);
+            if (component.StructIndex == melee) meleeAt = at;
+            else if (component.StructIndex == physics) mass = Mass(core, at, physics);
+        }
+        if (meleeAt < 0) return null;
+
+        // The blade's figures are on a MeleeCombatConfig record the knife
+        // points at, as an array of attack categories - BladeSlash, BladeStab -
+        // each with an inline DamageInfo.
+        if (core.ReferenceAt(meleeAt, melee, "meleeCombatConfig") is not { } id || !byId.TryGetValue(id, out var config)) return null;
+        var configAt = core.InstanceAt(config, config.VariantIndex);
+        var slash = DamageKinds.None;
+        var stab = DamageKinds.None;
+        double impulse = 0;
+        foreach (var category in core.ClassArrayAt(configAt, config.StructIndex, "attackCategoryParams"))
+        {
+            var at = core.InstanceAt(category);
+            var s = category.StructIndex;
+            var damage = InlineDamage(core, at, s, "damageInfo");
+            var action = core.EnumAt(at, s, "actionCategory") ?? "";
+            if (action.Contains("Slash", StringComparison.OrdinalIgnoreCase)) slash = damage;
+            else if (action.Contains("Stab", StringComparison.OrdinalIgnoreCase)) stab = damage;
+            impulse = Math.Max(impulse, R(core.SingleAt(at, s, "attackImpulse")));
+        }
+        if (slash.IsEmpty && stab.IsEmpty) return null;
+
+        var configName = config.Name.Contains('.') ? config.Name[(config.Name.LastIndexOf('.') + 1)..] : config.Name;
+        return new MeleeWeapon(cls, item.Name, item.Manufacturer, mass, slash, stab, impulse, configName);
+    }
+
+    private static Throwable? Grenade(
+        DataCore core, DataRecord record, string cls, GameItem item,
+        IReadOnlyDictionary<Guid, DataRecord> byId, int devices, int hazard, int physics)
+    {
+        if (devices < 0 || Scaffolding(record, cls)) return null;
+
+        long devicesAt = -1;
+        double mass = 0;
+        foreach (var component in core.PointerArray(record, "Components"))
+        {
+            var at = core.InstanceAt(component);
+            if (component.StructIndex == devices) devicesAt = at;
+            else if (component.StructIndex == physics) mass = Mass(core, at, physics);
+        }
+        // A glowstick is filed as a grenade and has no triggers: it is not one.
+        if (devicesAt < 0) return null;
+
+        var trigger = "";
+        double fuse = 0, pressure = 0;
+        Explosion? blast = null;
+        Hazard? zone = null;
+        foreach (var pointer in core.PointerArrayAt(devicesAt, devices, "triggers"))
+        {
+            var at = core.InstanceAt(pointer);
+            var s = pointer.StructIndex;
+            var kind = core.StructName(s);
+            if (core.PointerAt(at, s, "behavior") is not { } behaviour) continue;
+            var bat = core.InstanceAt(behaviour);
+            var bs = behaviour.StructIndex;
+            var doing = core.StructName(bs);
+
+            if (doing.Contains("Explosion", StringComparison.OrdinalIgnoreCase)
+                && GameMining.Nested(core, bat, bs, "explosionParams") is { } explosion)
+            {
+                var damage = Damage(core, core.PointerAt(explosion.At, explosion.StructIndex, "damage"));
+                blast = new Explosion(damage, R(core.SingleAt(explosion.At, explosion.StructIndex, "minRadius")), R(core.SingleAt(explosion.At, explosion.StructIndex, "maxRadius")));
+                pressure = R(core.SingleAt(explosion.At, explosion.StructIndex, "pressure"));
+                // The trigger in front of the explosion is what sets the grenade off.
+                trigger = kind.Contains("Timer", StringComparison.OrdinalIgnoreCase) ? "timer"
+                    : kind.Contains("Impact", StringComparison.OrdinalIgnoreCase) ? "impact" : "";
+                if (trigger == "timer") fuse = R(core.SingleAt(at, s, "duration"));
+            }
+            else if (doing.Contains("SpawnEntity", StringComparison.OrdinalIgnoreCase)
+                && core.ReferenceAt(bat, bs, "entityToSpawn") is { } spawnId && byId.TryGetValue(spawnId, out var spawned))
+            {
+                zone = HazardOf(core, spawned, hazard);
+            }
+        }
+        // A blast of nothing - the plasma grenade's 2 thermal is a fuse, not a
+        // weapon - still counts when a zone follows it; a grenade with neither
+        // is a flare.
+        if (blast is null && zone is null) return null;
+        if (blast is { Damage.IsEmpty: true }) blast = null;
+
+        return new Throwable(cls, item.Name, item.Manufacturer, mass, trigger, fuse, blast, pressure, zone);
+    }
+
+    /// <summary>The damaging area a spawned entity is, or null when it is not one.</summary>
+    private static Hazard? HazardOf(DataCore core, DataRecord spawned, int hazard)
+    {
+        if (hazard < 0) return null;
+        foreach (var component in core.PointerArray(spawned, "Components"))
+        {
+            if (component.StructIndex != hazard) continue;
+            var at = core.InstanceAt(component);
+            var perHit = Damage(core, core.PointerAt(at, hazard, "damagePerHit"));
+            if (perHit.IsEmpty) return null;
+            var period = R(core.SingleAt(at, hazard, "damagePeriod"));
+            double radius = 0;
+            if (core.PointerAt(at, hazard, "hazardAreaShape") is { } shape)
+                radius = R(core.SingleAt(core.InstanceAt(shape), shape.StructIndex, "radius"));
+            return new Hazard(perHit, period, radius);
+        }
+        return null;
+    }
+
+    private static WeaponAttachment? Attachment(DataCore core, DataRecord record, string cls, GameItem item, int modifier, int physics)
+    {
+        // Sights, barrels and underbarrel pieces; the rest of the type is a
+        // gun's own internals - firing mechanism, power array, ventilation -
+        // and the ship-weapon barrels, which live outside weapon_modifier/.
+        var kind = item.SubType switch
+        {
+            "IronSight" => "Sight",
+            "Barrel" => "Barrel",
+            "BottomAttachment" => "Underbarrel",
+            _ => null,
+        };
+        if (kind is null || modifier < 0 || Scaffolding(record, cls)) return null;
+        if (!record.FileName.Contains("/weapon_modifier/", StringComparison.OrdinalIgnoreCase)) return null;
+        // The binoculars carry a fake optic so they can be aimed, and a mount
+        // wears a sight for the hologram; neither goes on a rifle.
+        if (cls.Contains("FakeOptic", StringComparison.OrdinalIgnoreCase) || cls.StartsWith("weaponMount_", StringComparison.OrdinalIgnoreCase)) return null;
+
+        long modifierAt = -1;
+        double mass = 0;
+        foreach (var component in core.PointerArray(record, "Components"))
+        {
+            var at = core.InstanceAt(component);
+            if (component.StructIndex == modifier) modifierAt = at;
+            else if (component.StructIndex == physics) mass = Mass(core, at, physics);
+        }
+        if (modifierAt < 0) return null;
+
+        var effect = AttachmentEffect.None;
+        if (GameMining.Nested(core, modifierAt, modifier, "modifier") is { } block
+            && GameMining.Nested(core, block.At, block.StructIndex, "weaponStats") is { } stats)
+        {
+            var (at, s) = stats;
+            double M(string name) => R(core.SingleAt(at, s, name), 1);
+            double zoom = 0, secondZoom = 0, zoomTime = 1, spread = 1, recoilStrength = 1, recoilTime = 1;
+            if (GameMining.Nested(core, at, s, "aimModifier") is { } aim)
+            {
+                zoom = R(core.SingleAt(aim.At, aim.StructIndex, "zoomScale"));
+                secondZoom = R(core.SingleAt(aim.At, aim.StructIndex, "secondZoomScale"));
+                zoomTime = R(core.SingleAt(aim.At, aim.StructIndex, "zoomTimeScale"), 1);
+            }
+            // The spread block scales the cone at rest and while firing by the
+            // same factor on every attachment on this install; one number says it.
+            if (GameMining.Nested(core, at, s, "spreadModifier") is { } cone)
+                spread = R(core.SingleAt(cone.At, cone.StructIndex, "attackMultiplier"), 1);
+            if (GameMining.Nested(core, at, s, "recoilModifier") is { } kick)
+            {
+                recoilStrength = R(core.SingleAt(kick.At, kick.StructIndex, "fireRecoilStrengthMultiplier"), 1);
+                recoilTime = R(core.SingleAt(kick.At, kick.StructIndex, "fireRecoilTimeMultiplier"), 1);
+            }
+            double zeroMax = 0, zeroStep = 0;
+            if (core.PointerAt(modifierAt, modifier, "zeroingParams") is { } zeroing)
+            {
+                var zat = core.InstanceAt(zeroing);
+                zeroMax = R(core.SingleAt(zat, zeroing.StructIndex, "maxRange"));
+                zeroStep = R(core.SingleAt(zat, zeroing.StructIndex, "rangeIncrement"));
+            }
+            // Only a sight magnifies; a barrel's block carries a 1 that means
+            // nothing. A sight's second zoom is one only when it differs from
+            // the first and is more than none.
+            if (kind != "Sight") { zoom = 0; secondZoom = 0; }
+            else { zoom = Math.Max(zoom, 1); if (secondZoom <= 1 || secondZoom == zoom) secondZoom = 0; }
+            effect = new AttachmentEffect(
+                Damage: M("damageMultiplier"), FireRate: M("fireRateMultiplier"), Spread: spread,
+                RecoilStrength: recoilStrength, RecoilTime: recoilTime, Sound: M("soundRadiusMultiplier"),
+                Heat: M("heatGenerationMultiplier"), AmmoCost: M("ammoCostMultiplier"), ChargeTime: M("chargeTimeMultiplier"),
+                ProjectileSpeed: M("projectileSpeedMultiplier"),
+                Pellets: core.Int32At(at, s, "pellets") ?? 0, BurstShots: core.Int32At(at, s, "burstShots") ?? 0,
+                Zoom: zoom, SecondZoom: secondZoom, ZoomTime: zoomTime,
+                ZeroingMax: zeroMax, ZeroingStep: zeroStep);
+        }
+
+        return new WeaponAttachment(cls, item.Name, kind, AttachmentFamily(cls, item.Name, kind), item.Size, item.Manufacturer, mass, effect);
+    }
+
+    /// <summary>
+    /// What an attachment is within its slot, from the class token - <c>supp</c>,
+    /// <c>comp</c>, <c>stab</c>, <c>tsco</c>, <c>holo</c>, <c>rdot</c>, <c>disp</c>,
+    /// <c>lasr</c>, <c>flsh</c> - with the display name's bracketed word as the fallback.
+    /// </summary>
+    public static string AttachmentFamily(string cls, string name, string kind)
+    {
+        var lower = cls.ToLowerInvariant();
+        if (lower.Contains("_supp_")) return "Suppressor";
+        if (lower.Contains("_comp_")) return "Compensator";
+        if (lower.Contains("_stab_")) return "Stabilizer";
+        if (lower.Contains("_flhd_")) return "Flash hider";
+        if (lower.Contains("_tsco_")) return "Telescopic";
+        if (lower.Contains("_holo_")) return "Holographic";
+        if (lower.Contains("_rdot_")) return "Reflex";
+        if (lower.Contains("_disp_")) return "Monitor";
+        if (lower.Contains("_lasr_")) return "Laser pointer";
+        if (lower.Contains("_flsh_")) return "Flashlight";
+        var open = name.IndexOf('(');
+        var close = open >= 0 ? name.IndexOf(')', open) : -1;
+        if (open >= 0 && close > open)
+        {
+            var inside = name[(open + 1)..close];
+            var space = inside.IndexOf(' ');
+            if (space > 0) return inside[(space + 1)..].Trim();
+        }
+        return kind;
+    }
+
+    /// <summary>A DamageInfo written inline in its parent rather than pointed at.</summary>
+    private static DamageKinds InlineDamage(DataCore core, long at, int s, string name)
+    {
+        if (core.PointerAt(at, s, name) is { } pointer) return Damage(core, pointer);
+        var (fat, field) = core.FieldAt(at, s, name);
+        if (fat < 0 || field is null) return DamageKinds.None;
+        double F(string n) => R(core.SingleAt(fat, field.StructIndex, n));
+        return new DamageKinds(F("DamagePhysical"), F("DamageEnergy"), F("DamageDistortion"), F("DamageThermal"), F("DamageBiochemical"), F("DamageStun"));
     }
 
     private static PersonalWeapon? Weapon(

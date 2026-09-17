@@ -226,6 +226,46 @@ if (args.Any(a => a.StartsWith("--armoury", StringComparison.OrdinalIgnoreCase))
             Console.WriteLine($"      {Mode(m),-80} {Armoury.DamagePerSecond(w, m),7:0} dps  {Armoury.DamagePerMagazine(w, m),7:0}/mag  empties in {Armoury.SecondsToEmpty(w, m),5:0.#}s");
     }
 
+    var knives = armoury.Melee.Where(k => all || k.BaseClass is null).ToList();
+    Console.WriteLine($"\n{armoury.Melee.Count} knives, {armoury.Melee.Count(k => k.BaseClass is null)} plain, on {armoury.Melee.Select(k => k.Config).Distinct().Count()} melee config(s): {string.Join(", ", armoury.Melee.GroupBy(k => k.Config).Select(g => $"{g.Key} ×{g.Count()}"))}");
+    foreach (var k in knives)
+        Console.WriteLine($"  {k.Name,-38} slash {Kinds(k.Slash),-14} stab {Kinds(k.Stab),-14} impulse {k.Impulse:0.#} {k.Mass:0.##}kg"
+            + (armoury.Melee.Count(o => o.BaseClass == k.Class) is var f && f > 0 ? $"  +{f} finishes" : "") + (k.BaseClass is not null ? $"  finish of {k.BaseClass}" : "")
+            + $"  [{k.Class}] {k.Manufacturer}");
+
+    Console.WriteLine($"\n{armoury.Throwables.Count} grenades");
+    foreach (var g in armoury.Throwables)
+        Console.WriteLine($"  {g.Name,-38} {g.Trigger}{(g.FuseSeconds > 0 ? $" {g.FuseSeconds:0.#}s" : "")}"
+            + (g.Blast is { } b ? $"  blast {Kinds(b.Damage)} over {b.Radius:0.#}-{b.OuterRadius:0.#}m pressure {g.Pressure:0}" : "  no blast")
+            + (g.Hazard is { } h ? $"  then {Kinds(h.PerHit)} every {h.PeriodSeconds:0.##}s within {h.Radius:0.##}m" : "")
+            + $"  {g.Mass:0.##}kg [{g.Class}] {g.Manufacturer}");
+
+    static string Effect(AttachmentEffect e) => string.Join("  ", new[]
+    {
+        e.Zoom > 0 ? $"zoom ×{e.Zoom:0.#}" + (e.SecondZoom > 0 ? $"/×{e.SecondZoom:0.#}" : "") : null,
+        e.ZeroingMax > 0 ? $"zero to {e.ZeroingMax:0}m by {e.ZeroingStep:0}" : null,
+        e.ZoomTime != 1 ? $"ads time ×{e.ZoomTime:0.##}" : null,
+        e.Damage != 1 ? $"damage ×{e.Damage:0.###}" : null,
+        e.FireRate != 1 ? $"rate ×{e.FireRate:0.###}" : null,
+        e.Spread != 1 ? $"spread ×{e.Spread:0.###}" : null,
+        e.RecoilStrength != 1 ? $"recoil ×{e.RecoilStrength:0.###}" : null,
+        e.RecoilTime != 1 ? $"recoil time ×{e.RecoilTime:0.###}" : null,
+        e.Sound != 1 ? $"sound ×{e.Sound:0.###}" : null,
+        e.Heat != 1 ? $"heat ×{e.Heat:0.###}" : null,
+        e.AmmoCost != 1 ? $"ammo ×{e.AmmoCost:0.###}" : null,
+        e.ChargeTime != 1 ? $"charge ×{e.ChargeTime:0.###}" : null,
+        e.ProjectileSpeed != 1 ? $"speed ×{e.ProjectileSpeed:0.###}" : null,
+        e.Pellets != 0 ? $"pellets {e.Pellets:+0;-0}" : null,
+        e.BurstShots != 0 ? $"burst {e.BurstShots:+0;-0}" : null,
+    }.Where(s => s is not null));
+
+    var attachments = armoury.Attachments.Where(a => all || a.BaseClass is null).ToList();
+    Console.WriteLine($"\n{armoury.Attachments.Count} attachments, {armoury.Attachments.Count(a => a.BaseClass is null)} plain: {string.Join(", ", armoury.Attachments.Where(a => a.BaseClass is null).GroupBy(a => a.Kind).Select(g => $"{g.Count()} {g.Key.ToLowerInvariant()}"))}");
+    foreach (var a in attachments)
+        Console.WriteLine($"  {a.Name,-38} {a.Kind,-11} {a.Family,-13} S{a.Size} {a.Mass,4:0.##}kg  {(a.Effect.IsNone ? "changes nothing the files put a number on" : Effect(a.Effect))}"
+            + (armoury.Attachments.Count(o => o.BaseClass == a.Class) is var f && f > 0 ? $"  +{f} finishes" : "") + (a.BaseClass is not null ? $"  finish of {a.BaseClass}" : "")
+            + $"  [{a.Class}] {a.Manufacturer}");
+
     Console.WriteLine($"\n{armoury.Armour.Count} pieces of armour");
     foreach (var group in armoury.Armour.GroupBy(a => a.Resistances?.Macro ?? "(none)").OrderBy(g => g.Key))
     {

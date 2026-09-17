@@ -1339,16 +1339,56 @@ public static class ServerHost
                 .OrderBy(r => r.Slot, StringComparer.OrdinalIgnoreCase).ThenBy(r => r.Weight, StringComparer.OrdinalIgnoreCase).ThenBy(r => r.Family, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
+            // Knives, grenades and attachments: the same finish rule as guns,
+            // the plain item priced at the cheapest of its finishes that UEX
+            // files under the same name.
+            (object Market, List<object> Finishes) Family<T>(string cls, string name, IEnumerable<T> all, Func<T, string> classOf, Func<T, string> nameOf, Func<T, string?> baseOf)
+            {
+                var finishes = all.Where(x => baseOf(x) == cls).OrderBy(nameOf, StringComparer.OrdinalIgnoreCase).ToList();
+                var priced = new[] { (cls, name) }.Concat(finishes.Select(f => (classOf(f), nameOf(f)))).Where(x => x.Item2 == name)
+                    .Select(x => Priced(x.Item1)).Where(p => p.Price is not null).OrderBy(p => p.Price).FirstOrDefault();
+                object market = priced == default ? new { price = (decimal?)null, shops = new List<object>() } : new { price = priced.Price, shops = priced.Shops };
+                return (market, finishes.Select(f => (object)new { @class = classOf(f), uuid = lib.GameCommodities.ItemUuid(classOf(f)), name = nameOf(f), market = Market(classOf(f)) }).ToList());
+            }
+
+            var melee = armoury.Melee.Where(k => k.BaseClass is null).Select(k =>
+            {
+                var (market, finishes) = Family(k.Class, k.Name, armoury.Melee, x => x.Class, x => x.Name, x => x.BaseClass);
+                return new { k.Class, uuid = lib.GameCommodities.ItemUuid(k.Class), k.Name, k.Manufacturer, k.Mass, k.Slash, k.Stab, k.Impulse, k.Config, market, finishes };
+            }).ToList();
+
+            var throwables = armoury.Throwables.Where(g => g.BaseClass is null).Select(g =>
+            {
+                var (market, finishes) = Family(g.Class, g.Name, armoury.Throwables, x => x.Class, x => x.Name, x => x.BaseClass);
+                return new { g.Class, uuid = lib.GameCommodities.ItemUuid(g.Class), g.Name, g.Manufacturer, g.Mass, g.Trigger, g.FuseSeconds, g.Blast, g.Pressure, g.Hazard, market, finishes };
+            }).ToList();
+
+            var attachments = armoury.Attachments.Where(a => a.BaseClass is null).Select(a =>
+            {
+                var (market, finishes) = Family(a.Class, a.Name, armoury.Attachments, x => x.Class, x => x.Name, x => x.BaseClass);
+                return new { a.Class, uuid = lib.GameCommodities.ItemUuid(a.Class), a.Name, a.Kind, a.Family, a.Size, a.Manufacturer, a.Mass, a.Effect, unchanged = a.Effect.IsNone, market, finishes };
+            }).ToList();
+
             return Results.Ok(new
             {
                 ready = armoury.Weapons.Count > 0 || armoury.Armour.Count > 0,
                 weapons,
                 armour,
+                melee,
+                throwables,
+                attachments,
+                // One melee config shared by every knife is the finding the
+                // page states above the table; more than one means it cannot.
+                meleeConfigs = armoury.Melee.Where(k => k.BaseClass is null).Select(k => k.Config).Distinct().Count(),
                 itemPricesKnown = uex.IsEnabled,
                 // Pictures come from the wiki, and the wiki is asked only once the
                 // community dataset is on - the app's consent to talk to the network.
                 picturesKnown = lib.Community.IsEnabled,
-                counts = new { weapons = armoury.Weapons.Count, plain = weapons.Count(), armour = armoury.Armour.Count, sets = armour.Count },
+                counts = new
+                {
+                    weapons = armoury.Weapons.Count, plain = weapons.Count(), armour = armoury.Armour.Count, sets = armour.Count,
+                    melee = armoury.Melee.Count, throwables = armoury.Throwables.Count, attachments = armoury.Attachments.Count,
+                },
             });
         });
 

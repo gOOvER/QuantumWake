@@ -5502,16 +5502,17 @@ let armouryPane = 'guns';
 let armouryOpenGun = null;
 let armouryOpenSet = null;
 
+const ARMOURY_PANES = ['guns', 'armour', 'kit'];
 try {
   const kept = localStorage.getItem('qw-armoury-pane');
-  if (kept === 'guns' || kept === 'armour') armouryPane = kept;
+  if (ARMOURY_PANES.includes(kept)) armouryPane = kept;
 } catch { /* a private window has no memory, which is fine */ }
 
 function showArmouryPane(name) {
-  if (name !== 'guns' && name !== 'armour') name = 'guns';
+  if (!ARMOURY_PANES.includes(name)) name = 'guns';
   armouryPane = name;
   try { localStorage.setItem('qw-armoury-pane', name); } catch { /* as above */ }
-  for (const id of ['#armoury-pane-guns', '#armoury-pane-armour']) {
+  for (const id of ['#armoury-pane-guns', '#armoury-pane-armour', '#armoury-pane-kit']) {
     const pane = $(id);
     if (pane) pane.classList.toggle('active', id === `#armoury-pane-${name}`);
   }
@@ -5532,7 +5533,7 @@ async function loadArmoury() {
     armouryModel = null;
   }
 
-  const panes = [$('#armoury-pane-guns'), $('#armoury-pane-armour'), $('#armoury-tabs')];
+  const panes = [$('#armoury-pane-guns'), $('#armoury-pane-armour'), $('#armoury-pane-kit'), $('#armoury-tabs')];
   if (!armouryModel?.ready) {
     for (const p of panes) if (p) p.hidden = true;
     if (unready) {
@@ -5573,7 +5574,178 @@ async function loadArmoury() {
   showArmouryPane(armouryPane);
   renderArmouryGuns();
   renderArmouryArmour();
+  renderArmouryKit();
 }
+
+/* ---------- attachments, grenades, knives ---------- */
+
+/**
+ * An attachment's effect as words: only what the files change, each as the
+ * multiplier written, so ×0.66 sound and ×1.2 spread read as the trade they
+ * are. A sight leads with its zoom, since that is what it is for.
+ */
+function armouryEffectWords(e) {
+  if (!e) return [];
+  const words = [];
+  const mul = (value, word, better) => {
+    if (value == null || value === 1) return;
+    const span = el('span', `armoury-effect ${(better === 'low' ? value < 1 : better === 'high' ? value > 1 : true) ? 'gain' : 'cost'}`, `×${Math.round(value * 1000) / 1000} ${word}`);
+    words.push(span);
+  };
+  if (e.zoom > 0) words.push(el('span', 'armoury-effect gain', `×${e.zoom}${e.secondZoom > 0 ? ` / ×${e.secondZoom}` : ''} zoom`));
+  if (e.zeroingMax > 0) words.push(el('span', 'armoury-effect', `zero to ${fmtInt(e.zeroingMax)} m by ${fmtInt(e.zeroingStep)}`));
+  mul(e.damage, 'damage', 'high');
+  mul(e.fireRate, 'rate', 'high');
+  mul(e.spread, 'spread', 'low');
+  mul(e.recoilStrength, 'recoil', 'low');
+  mul(e.recoilTime, 'recoil time', 'low');
+  mul(e.sound, 'sound', 'low');
+  mul(e.heat, 'heat', 'low');
+  mul(e.ammoCost, 'ammo per shot', 'low');
+  mul(e.chargeTime, 'charge time', 'low');
+  mul(e.projectileSpeed, 'projectile speed', 'high');
+  mul(e.zoomTime, 'aim-down time', 'low');
+  if (e.pellets) words.push(el('span', `armoury-effect ${e.pellets > 0 ? 'gain' : 'cost'}`, `${e.pellets > 0 ? '+' : ''}${e.pellets} pellets`));
+  if (e.burstShots) words.push(el('span', `armoury-effect ${e.burstShots > 0 ? 'gain' : 'cost'}`, `${e.burstShots > 0 ? '+' : ''}${e.burstShots} burst shots`));
+  return words;
+}
+
+/** The finishes of one item, with their prices, under the row that was clicked. */
+function armouryFinishRows(item, noun) {
+  const inner = el('div', 'armoury-detail');
+  inner.append(el('div', 'panel-title', item.name));
+  inner.append(el('h4', null, `Finishes${item.finishes?.length ? ` (${item.finishes.length})` : ''}`));
+  if (!item.finishes?.length) inner.append(el('p', 'muted small', `The plain ${noun} only.`));
+  else {
+    const list = el('div', 'armoury-finishes');
+    for (const f of item.finishes) {
+      const chip = el('span', 'armoury-finish', f.name);
+      chip.append(el('span', 'muted', f.market?.price ? `${fmtInt(f.market.price)} aUEC · ${armouryWhere(f.market)}` : 'no terminal recorded'));
+      list.append(chip);
+    }
+    inner.append(list);
+    inner.append(el('p', 'muted small', `A finish is the same ${noun} in another colour: same figures, its own price.`));
+  }
+  return inner;
+}
+
+let armouryOpenKit = null;
+
+function renderArmouryKit() {
+  if (!armouryModel?.ready) return;
+  const q = ($('#armoury-search')?.value || '').trim().toLowerCase();
+  const matches = (text) => !q || text.toLowerCase().includes(q);
+  const priceCells = (tr, market) => {
+    tr.append(el('td', 'num', armouryPrice(market)));
+    tr.append(el('td', 'muted', armouryWhere(market)));
+  };
+  const open = (tr, key, detail, columns) => {
+    tr.dataset.class = key;
+    if (armouryOpenKit === key) tr.classList.add('open');
+    tr.addEventListener('click', () => { armouryOpenKit = armouryOpenKit === key ? null : key; renderArmouryKit(); });
+    return armouryOpenKit === key ? armouryExpansion(detail(), columns) : null;
+  };
+
+  // Attachments, by slot then size then name, as the install sorts them.
+  const slot = $('#armoury-kit-slot')?.value || '';
+  const size = $('#armoury-kit-size')?.value || '';
+  const priced = $('#armoury-kit-priced')?.checked;
+  const attachments = (armouryModel.attachments || []).filter((a) =>
+    (!slot || a.kind === slot) && (!size || String(a.size) === size) && (!priced || a.market?.price)
+    && matches(`${a.name} ${a.kind} ${a.family} ${a.manufacturer}`));
+  const aBody = $('#armoury-attachments tbody');
+  if (aBody) {
+    aBody.textContent = '';
+    for (const a of attachments) {
+      const tr = el('tr');
+      const name = el('td', null, a.name);
+      name.append(el('div', 'armoury-kind', [a.family, a.manufacturer].filter(Boolean).join(' · ')));
+      tr.append(name);
+      tr.append(el('td', null, a.kind));
+      tr.append(el('td', 'num', String(a.size)));
+      const does = el('td');
+      const words = armouryEffectWords(a.effect);
+      if (words.length) for (const w of words) does.append(w);
+      else does.append(el('span', 'muted', 'nothing the files put a number on'));
+      tr.append(does);
+      tr.append(el('td', 'num', a.finishes?.length ? String(a.finishes.length) : '—'));
+      priceCells(tr, a.market);
+      const expansion = open(tr, `a:${a.class}`, () => armouryFinishRows(a, 'attachment'), 7);
+      aBody.append(tr);
+      if (expansion) aBody.append(expansion);
+    }
+  }
+  const count = $('#armoury-kit-count');
+  if (count) {
+    const c = armouryModel.counts || {};
+    count.textContent = `${attachments.length} of ${(armouryModel.attachments || []).length} attachments; the install describes ${c.attachments ?? '?'} counting every finish. `
+      + (armouryModel.itemPricesKnown ? `UEX prices ${(armouryModel.attachments || []).filter((a) => a.market?.price).length} of them.` : 'Prices need UEX, in Settings.');
+  }
+
+  // Grenades: what sets it off, what it does, what it leaves.
+  const gBody = $('#armoury-grenades tbody');
+  if (gBody) {
+    gBody.textContent = '';
+    const grenades = (armouryModel.throwables || []).filter((g) => matches(`${g.name} ${g.manufacturer}`));
+    if (!grenades.length) {
+      const td = el('td', 'muted', q ? 'No grenade matches.' : 'The install describes no grenade with a blast.');
+      td.colSpan = 9;
+      const tr = el('tr');
+      tr.append(td);
+      gBody.append(tr);
+    }
+    for (const g of grenades) {
+      const tr = el('tr');
+      const name = el('td', null, g.name);
+      if (g.manufacturer) name.append(el('div', 'armoury-kind', g.manufacturer));
+      tr.append(name);
+      tr.append(el('td', null, g.trigger === 'timer' ? `${g.fuseSeconds} s fuse` : g.trigger === 'impact' ? 'impact' : '—'));
+      tr.append(el('td', null, g.blast ? armouryHit(g.blast.damage) : 'none'));
+      tr.append(el('td', 'num', g.blast ? `${g.blast.radius}–${g.blast.outerRadius} m` : '—'));
+      tr.append(el('td', 'num', g.pressure > 0 ? fmtInt(g.pressure) : '—'));
+      tr.append(el('td', null, g.hazard
+        ? `${armouryHit(g.hazard.perHit)} every ${g.hazard.periodSeconds} s within ${g.hazard.radius} m`
+        : 'nothing'));
+      tr.append(el('td', 'num', g.mass ? String(g.mass) : '—'));
+      priceCells(tr, g.market);
+      gBody.append(tr);
+    }
+  }
+
+  // Knives, with the finding said once above the table rather than down a column.
+  const knives = (armouryModel.melee || []).filter((k) => matches(`${k.name} ${k.manufacturer}`));
+  const note = $('#armoury-knife-note');
+  if (note) {
+    const all = armouryModel.melee || [];
+    const first = all[0];
+    note.textContent = !all.length ? 'The install describes no knife.'
+      : armouryModel.meleeConfigs === 1 && first
+        ? `Every knife the install sells reads from one melee table, ${first.config}: ${armouryHit(first.slash)} a slash, ${armouryHit(first.stab)} a stab. They differ in look, maker and price, and in nothing the files put a number on.`
+        : `The knives read from ${armouryModel.meleeConfigs} melee tables, so their figures differ; each row is its own.`;
+  }
+  const kBody = $('#armoury-knives tbody');
+  if (kBody) {
+    kBody.textContent = '';
+    for (const k of knives) {
+      const tr = el('tr');
+      const name = el('td', null, k.name);
+      if (k.manufacturer) name.append(el('div', 'armoury-kind', k.manufacturer));
+      tr.append(name);
+      tr.append(el('td', 'num', armouryHit(k.slash)));
+      tr.append(el('td', 'num', armouryHit(k.stab)));
+      tr.append(el('td', 'num', k.impulse ? String(k.impulse) : '—'));
+      tr.append(el('td', 'num', k.mass ? String(k.mass) : '—'));
+      tr.append(el('td', 'num', k.finishes?.length ? String(k.finishes.length) : '—'));
+      priceCells(tr, k.market);
+      const expansion = open(tr, `k:${k.class}`, () => armouryFinishRows(k, 'knife'), 8);
+      kBody.append(tr);
+      if (expansion) kBody.append(expansion);
+    }
+  }
+}
+
+for (const id of ['#armoury-kit-slot', '#armoury-kit-size', '#armoury-kit-priced'])
+  $(id)?.addEventListener('change', renderArmouryKit);
 
 /** A detail row under the one clicked, spanning the table, so the figures open where the eye is. */
 function armouryExpansion(inner, columns) {
@@ -5940,7 +6112,7 @@ for (const id of ['#armoury-gun-kind', '#armoury-gun-damage', '#armoury-gun-sort
   $(id)?.addEventListener('change', renderArmouryGuns);
 for (const id of ['#armoury-armour-slot', '#armoury-armour-weight', '#armoury-armour-sort', '#armoury-armour-priced'])
   $(id)?.addEventListener('change', renderArmouryArmour);
-onInput('#armoury-search', () => { renderArmouryGuns(); renderArmouryArmour(); });
+onInput('#armoury-search', () => { renderArmouryGuns(); renderArmouryArmour(); renderArmouryKit(); });
 
 
 /* ---------- crafting blueprints ---------- */
