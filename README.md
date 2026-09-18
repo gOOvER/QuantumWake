@@ -365,12 +365,22 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.10
+### 0.15.11
+
+- **Long action names stay inside their box on a stick's picture.** A name
+  the box could not hold on two lines — *Landing System (Toggle)* on the
+  throttle's button 26 — was left at full size and spilled a third line out
+  of the bottom of the box. Names are now measured word by word, the way a
+  browser breaks them, and shrunk until they fit; a name is only cut short
+  when a single word is wider than the box.
+
+- **"Take off" is now "unbind".** It removes what is on a control; on a page
+  about flying, the old wording read like the other thing.
 
 - **The Controls table no longer writes one column over another.** A long
   action name in *Bound to* ran straight under the *Change* column instead of
   wrapping inside its own — every row in the table wraps now, and the search
-  box and *take off* share a line rather than stacking three deep.
+  box and *unbind* share a line rather than stacking three deep.
 
 - **Controls pictures no longer repeat or collide with their device name.**
   Diagram labels now use the SVG's modern rich-text layer only, and the

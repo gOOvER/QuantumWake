@@ -9510,31 +9510,57 @@ function controlsFitLabel(node, words) {
   // draw.io puts the box's width on an inline style a few divs up from the
   // HTML label, and the box itself is a rect a few groups up from either.
   let width = 0;
-  let height = 0;
   if (!isSvg) {
     for (let up = node, i = 0; up && i < 6; up = up.parentElement, i++) {
       const w = parseFloat(up.style?.width);
       if (w > 0) { width = w; break; }
     }
   }
+  // The walk can reach past the label's own box to the diagram's background -
+  // 827x1168 on the Warthog throttle - and a "box" that size makes every label
+  // look like it fits, so an SVG label never shrank at all. A label box is a
+  // small part of the drawing; anything above a third of it is not one.
+  const root = node.closest?.('svg') || node.ownerSVGElement || null;
+  const diagram = root
+    ? Number(root.getAttribute('width')) || Number((root.getAttribute('viewBox') || '').split(/[\s,]+/)[2]) || 0
+    : 0;
   for (let up = node.parentElement, i = 0; up && i < 8; up = up.parentElement, i++) {
     const rect = [...up.children || []].find((c) => c.nodeName.toLowerCase() === 'rect');
-    if (rect) {
-      if (!width) width = Number(rect.getAttribute('width')) || 0;
-      height = Number(rect.getAttribute('height')) || 0;
-      break;
-    }
+    if (!rect) continue;
+    const w = Number(rect.getAttribute('width')) || 0;
+    if (diagram && w > diagram / 3) break;
+    if (!width) width = w;
+    break;
   }
   if (!width) width = 90;
   const usable = Math.max(20, width - 8);
   const perChar = 0.56;
   // SVG text cannot wrap; an HTML label can take a second line when the box is tall enough.
-  const maxLines = !isSvg && height >= 22 ? 2 : 1;
-  const linesAt = (size) => Math.ceil((words.length * perChar * size) / usable);
+  // An HTML label wraps and an SVG text cannot, and that is the whole of it.
+  // The box's own height is not reachable: draw.io leaves it off the label and
+  // the walk upwards finds the diagram's background rect instead, so reading a
+  // height there once said every box was 1168 tall.
+  const maxLines = isSvg ? 1 : 2;
+  // Dividing the whole string by the line width says "Landing System (Toggle)"
+  // is two lines in 70px. A browser cannot break a word, so it is three, and
+  // the third spilled out of the box. Pack word by word the way one does.
+  const fits = (size) => {
+    const em = perChar * size;
+    let lines = 1;
+    let run = 0;
+    for (const word of String(words).split(/\s+/).filter(Boolean)) {
+      const w = word.length * em;
+      if (w > usable) return false; // a word wider than the line spills whatever we do
+      if (!run) run = w;
+      else if (run + em + w <= usable) run += em + w;
+      else { lines++; run = w; }
+    }
+    return lines <= maxLines;
+  };
   let size = 10;
-  while (size > 6.5 && linesAt(size) > maxLines) size -= 0.5;
+  while (size > 6.5 && !fits(size)) size -= 0.5;
   let text = words;
-  if (linesAt(size) > maxLines) {
+  if (!fits(size)) {
     const chars = Math.max(4, Math.floor((usable * maxLines) / (perChar * size)) - 1);
     if (chars < words.length) text = `${words.slice(0, chars).trimEnd()}…`;
   }
@@ -9760,7 +9786,7 @@ function renderControlsPending() {
     const li = el('li');
     const stick = sticks.get(ControlInput_deviceKey(c.input));
     const where = `${stick ? stick.product : ControlInput_deviceKey(c.input)} ${c.input.replace(/^[a-z]{2}\d+_/, '').replace('_', ' ')}`;
-    li.append(el('span', null, c.remove ? `${c.label}: take off ${where}` : `${where} → ${c.label}${c.activationMode ? ` (${controlsModeWord(c.activationMode)})` : ''}`));
+    li.append(el('span', null, c.remove ? `${c.label}: unbind from ${where}` : `${where} → ${c.label}${c.activationMode ? ` (${controlsModeWord(c.activationMode)})` : ''}`));
     if (!c.remove) {
       // The game flags two actions on one control in the same group; say so before it does.
       const also = (controlsModel?.profile?.bindings || []).filter((b) => b.input.raw.toLowerCase() === c.input.toLowerCase() && b.actionMap === c.actionMap && b.action !== c.action);
@@ -9930,9 +9956,9 @@ function controlsActionPicker(current, choose) {
   }, 150));
   wrap.append(search, results);
   if (current?.length) {
-    const remove = el('button', 'ghost small controls-action-remove', 'take off');
+    const remove = el('button', 'ghost small controls-action-remove', 'unbind');
     remove.type = 'button';
-    remove.title = 'Stage removal of every action now bound to this control';
+    remove.title = 'Unbind everything now on this control';
     remove.addEventListener('click', () => choose('__remove__'));
     wrap.append(remove);
   }

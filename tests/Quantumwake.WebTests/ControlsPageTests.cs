@@ -335,7 +335,7 @@ public class ControlsPageTests
         // Eject taken off button 4, from the Actions pane.
         page.Do("{ renderControlsActions(); const ejectRow = __dom.node('#controls-actions tbody').children.find(tr => tr.textContent.includes('Eject')); ejectRow.querySelectorAll('button')[0].click(); }");
         Assert.Contains("2 changes to apply", page.NodeText("#controls-pending-title"));
-        Assert.Contains("Eject: take off Joystick - HOTAS Warthog button4", page.NodeText("#controls-pending-list"));
+        Assert.Contains("Eject: unbind from Joystick - HOTAS Warthog button4", page.NodeText("#controls-pending-list"));
 
         // Staging a second action on the same control replaces the first, not adds.
         page.Do("controlsStage({actionMap:'seat_general', action:'v_light_amplification_toggle', input:'js4_button6', label:'Light amplification'});");
@@ -624,8 +624,97 @@ public class ControlsPageTests
         page.Do("controlsDevice = 'js4'; await renderControlsDevice();");
 
         // button4 carries Eject; button6 carries nothing, so there is nothing
-        // to take off and no button offering to.
+        // to unbind and no button offering to.
         Assert.Equal(1, page.Count("__dom.node('#controls-buttons tbody').children.find(tr => tr.dataset.control === 'button4').querySelectorAll('.controls-action-remove').length"));
         Assert.Equal(0, page.Count("__dom.node('#controls-buttons tbody').children.find(tr => tr.dataset.control === 'button6').querySelectorAll('.controls-action-remove').length"));
+    }
+
+    // controlsFitLabel: the action name shrunk to sit inside the box drawn on
+    // the stick's picture. It is pinned with a fake node rather than a drawn
+    // SVG because what matters is the arithmetic, and the arithmetic is what
+    // went wrong - "Landing System (Toggle)" rendered three lines and spilled
+    // out of the bottom of button 26 on the Warthog throttle.
+    private static Page Fitter()
+    {
+        var page = new Page();
+        page.Do("""
+            globalThis.__label = (text, width) => {
+              const node = { namespaceURI: 'http://www.w3.org/1999/xhtml', style: { width: width + 'px' }, parentElement: null, textContent: '' };
+              controlsFitLabel(node, text);
+              return node;
+            };
+            globalThis.__size = (text, width) => parseFloat(__label(text, width).style.fontSize);
+            """);
+        return page;
+    }
+
+    [Fact]
+    public void A_label_that_fits_on_one_line_is_left_at_full_size()
+    {
+        var page = Fitter();
+
+        Assert.Equal(10, page.Number("__size('Autoland', 78)"));
+        Assert.Equal("Autoland", page.Text("__label('Autoland', 78).textContent"));
+    }
+
+    [Fact]
+    public void A_label_whose_words_will_not_share_a_line_is_shrunk_until_they_do()
+    {
+        var page = Fitter();
+
+        // The bug: dividing 23 characters by a 70px line says two lines, so
+        // this was left at 10px and wrapped to three. No word here can be
+        // broken, so it has to come down.
+        Assert.True(page.Number("__size('Landing System (Toggle)', 78)") < 10,
+            "a label that cannot pack into two lines at 10px must shrink");
+        // ...and only as far as it needs to; the floor is 6.5.
+        Assert.True(page.Number("__size('Landing System (Toggle)', 78)") >= 7);
+    }
+
+    [Fact]
+    public void Shrinking_is_preferred_to_cutting_the_name_short()
+    {
+        var page = Fitter();
+
+        // An ellipsis loses which action it is; a smaller font does not. The
+        // name survives whole whenever two lines can hold it.
+        Assert.DoesNotContain("…", page.Text("__label('Landing System (Toggle)', 78).textContent"));
+        Assert.Equal("Landing System (Toggle)", page.Text("__label('Landing System (Toggle)', 78).textContent"));
+        Assert.DoesNotContain("…", page.Text("__label('Activate Ping (Hold & Release)', 78).textContent"));
+    }
+
+    [Fact]
+    public void The_split_is_on_whitespace_not_on_a_letter()
+    {
+        var page = Fitter();
+
+        // Guards a regex that lost its backslash and split on the letter "s":
+        // it made "Landing System (Toggle)" look like two short words that fit
+        // and left it at full size, while labels with no lowercase s shrank.
+        // Two labels of the same length, one with an s and one without, must
+        // be treated the same.
+        var withS = page.Number("__size('Master System Toggle', 78)");
+        var without = page.Number("__size('Maxter Rextem Toggle', 78)");
+        Assert.Equal(without, withS);
+    }
+
+    [Fact]
+    public void A_word_too_long_for_the_line_is_cut_rather_than_left_to_spill()
+    {
+        var page = Fitter();
+
+        // Nothing can wrap a single word, so once the floor is reached the
+        // only honest answer is to cut it and keep the full name in the table.
+        var text = page.Text("__label('Countermeasure_Decoy_Panic_Sequence', 60).textContent");
+        Assert.Contains("…", text);
+        Assert.Equal(6.5, page.Number("__size('Countermeasure_Decoy_Panic_Sequence', 60)"));
+    }
+
+    [Fact]
+    public void A_narrow_box_shrinks_a_label_further_than_a_wide_one()
+    {
+        var page = Fitter();
+
+        Assert.True(page.Number("__size('Set Master Mode to SCM', 48)") < page.Number("__size('Set Master Mode to SCM', 110)"));
     }
 }
