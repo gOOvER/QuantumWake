@@ -9591,12 +9591,18 @@ function controlsDrawGrid(holder, device, bound) {
   const highest = buttons.length ? Math.max(...buttons) : 0;
   // The live read knows the true count; without it, the highest number the
   // profile mentions, rounded to a row.
+  //
+  // But the floor of 8 was a joystick talking. A rudder has three axes and no
+  // buttons at all, and the stand-in drew it eight empty ones and put its
+  // pedals underneath as a footnote - the same wrong shape the Virpil picture
+  // gave it. Nothing bound and nothing read means no button grid: the axes are
+  // the device, so they are all it draws.
   const live = controlsLiveDevice(device);
-  const count = live ? live.buttonCount : Math.max(8, Math.ceil(highest / 8) * 8);
+  const count = live ? live.buttonCount : (buttons.length ? Math.max(8, Math.ceil(highest / 8) * 8) : 0);
   const liveHats = live ? live.hatCount : 0;
 
   const grid = el('div', 'controls-grid');
-  grid.append(el('div', 'controls-grid-title', live
+  if (count > 0) grid.append(el('div', 'controls-grid-title', live
     ? `Buttons · ${count}, as Windows reports the stick`
     : `Buttons · to ${count}, the highest your profile mentions being ${highest || 'none'}`));
   const cells = el('div', 'controls-grid-buttons');
@@ -9610,7 +9616,7 @@ function controlsDrawGrid(holder, device, bound) {
     if (here.length) cell.append(el('span', 'controls-grid-label', here.map((b) => b.label).join(' / ')));
     cells.append(cell);
   }
-  grid.append(cells);
+  if (count > 0) grid.append(cells);
 
   for (let h = 1; h <= liveHats; h++) if (!hats.includes(h)) hats.push(h);
   hats.sort((a, b) => a - b);
@@ -9646,11 +9652,28 @@ function controlsDrawGrid(holder, device, bound) {
     grid.append(bars);
   }
 
-  grid.append(el('p', 'muted small', live
-    ? 'A stand-in until a picture is chosen: the buttons as Windows numbers them, red where your profile binds something, outlined while pressed.'
-    : 'A stand-in until a picture is chosen: the buttons as Windows numbers them, lit where your profile binds something. Only the ones the profile mentions are certain; the stick may have more.'));
+  grid.append(el('p', 'muted small', controlsGridWords(count, axes.length, live)));
   holder.append(grid);
   return controls;
+}
+
+/**
+ * What the stand-in is, in a sentence that matches what it actually drew.
+ * A rudder gets no button grid, so telling it the buttons are numbered as
+ * Windows numbers them would be describing a thing that is not on the page.
+ */
+function controlsGridWords(buttons, axes, live) {
+  if (!buttons && axes)
+    return live
+      ? 'A stand-in until a picture is chosen. Windows reports no buttons on this device, so its axes are all there is to draw.'
+      : 'A stand-in until a picture is chosen. Nothing on this device is bound to a button - only axes - so only its axes are drawn. The live read would say whether it has buttons nobody has used.';
+  if (!buttons && !axes)
+    return live
+      ? 'Windows reports no buttons and no axes on this device.'
+      : 'Nothing in your profile binds anything on this device, and the sticks cannot be read here, so there is nothing to draw yet.';
+  return live
+    ? 'A stand-in until a picture is chosen: the buttons as Windows numbers them, red where your profile binds something, outlined while pressed.'
+    : 'A stand-in until a picture is chosen: the buttons as Windows numbers them, lit where your profile binds something. Only the ones the profile mentions are certain; the stick may have more.';
 }
 
 /**

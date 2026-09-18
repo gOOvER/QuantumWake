@@ -926,4 +926,76 @@ public class ControlsPageTests
         Assert.Contains("has not been read yet", page.NodeText("#controls-check-note"));
         Assert.Equal("", page.NodeText("#controls-check-counts"));
     }
+
+    // The stand-in for a stick nobody has drawn. It had a floor of eight
+    // buttons, which was a joystick talking: a pendular rudder has three axes
+    // and no buttons, and got eight empty ones with its pedals underneath as a
+    // footnote - the same wrong shape the Virpil picture gave it.
+    private const string Rudder = """
+        {"ready":true,"profilePath":"C:\SC\actionmaps.xml","profileFound":true,"problem":null,
+         "profile":{"name":"default","label":null,
+          "devices":[
+           {"key":"js3","type":"joystick","instance":3,"product":"T-Pendular-Rudder","guid":"{B68F044F-0000-0000-0000-504944564944}","usb":{"vendor":1103,"product":46735},
+            "deadzones":{},"curves":[],"bindings":3,"template":null,"layouts":[]}],
+          "bindings":[
+           {"actionMap":"spaceship_movement","action":"v_roll","input":{"raw":"js3_z","device":"js","instance":3,"kind":"axis","index":0,"name":"z","control":"z","label":"z axis","deviceKey":"js3","modifiers":[]},"activationMode":"","multiTap":null,"label":"Roll","description":"","map":"Flight - Movement","category":"FLIGHT","known":true},
+           {"actionMap":"vehicle_ground","action":"v_drive_forward","input":{"raw":"js3_x","device":"js","instance":3,"kind":"axis","index":0,"name":"x","control":"x","label":"x axis","deviceKey":"js3","modifiers":[]},"activationMode":"","multiTap":null,"label":"Drive Forward","description":"","map":"Ground Vehicle","category":"","known":true},
+           {"actionMap":"vehicle_ground","action":"v_drive_back","input":{"raw":"js3_y","device":"js","instance":3,"kind":"axis","index":0,"name":"y","control":"y","label":"y axis","deviceKey":"js3","modifiers":[]},"activationMode":"","multiTap":null,"label":"Drive Backward","description":"","map":"Ground Vehicle","category":"","known":true}]},
+         "catalogue":{"maps":[],"actions":[]},"layouts":[],
+         "templates":{"enabled":true,"fetchedAt":null,"folder":null,"project":"x","available":[],"assignments":{}},
+         "backups":null,"backupCount":0}
+        """;
+
+    private static Page Rudderless()
+    {
+        var page = new Page();
+        page.Serve("/api/controls", Rudder);
+        page.Serve("/api/controls/backups", "[]");
+        page.Do("showControlsPane('devices'); await loadControls(); controlsDevice = 'js3'; await renderControlsDevice();");
+        return page;
+    }
+
+    [Fact]
+    public void A_device_with_no_buttons_is_not_drawn_eight_of_them()
+    {
+        var page = Rudderless();
+
+        Assert.Equal(0, page.Count("__dom.node('#controls-svg').querySelectorAll('.controls-grid-button').length"));
+        Assert.DoesNotContain("Buttons", page.NodeText("#controls-svg"));
+    }
+
+    [Fact]
+    public void Its_axes_are_all_it_draws_and_they_are_all_there()
+    {
+        var page = Rudderless();
+
+        Assert.Equal(3, page.Count("__dom.node('#controls-svg').querySelectorAll('.controls-grid-axis').length"));
+        Assert.Contains("Axes", page.NodeText("#controls-svg"));
+        Assert.Contains("Roll", page.NodeText("#controls-svg"));
+        Assert.Contains("Drive Forward", page.NodeText("#controls-svg"));
+    }
+
+    [Fact]
+    public void The_words_underneath_describe_what_was_drawn_and_not_a_joystick()
+    {
+        var page = Rudderless();
+        var words = page.NodeText("#controls-svg");
+
+        Assert.Contains("only axes", words);
+        // It cannot know whether the device has buttons nobody bound, and says so.
+        Assert.Contains("live read", words);
+        Assert.DoesNotContain("as Windows numbers them", words);
+    }
+
+    [Fact]
+    public void A_stick_that_does_have_buttons_still_gets_its_grid()
+    {
+        // The floor is a joystick talking, but on a joystick it is right: a
+        // profile mentioning button 3 says nothing about buttons 4 to 8.
+        var page = Opened();
+        page.Do("controlsDevice = 'js4'; await renderControlsDevice();");
+
+        Assert.True(page.Count("__dom.node('#controls-svg').querySelectorAll('.controls-grid-button').length") >= 8);
+        Assert.Contains("as Windows numbers them", page.NodeText("#controls-svg"));
+    }
 }

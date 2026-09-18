@@ -365,7 +365,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.14
+### 0.15.15
+
+- **A stick with no picture is drawn as what it is, not as a joystick.** The
+  stand-in always started with at least eight numbered buttons, which was a
+  joystick talking: a pendular rudder has three axes and no buttons, and got
+  eight empty ones with its pedals underneath as a footnote. Nothing bound to
+  a button and nothing to read from the device means no button grid at all —
+  the axes are the device, so the axes are what it draws, and the line
+  underneath says so instead of describing buttons that are not there.
 
 - **A Check tab: is anything missing from your sticks?** Your profile against
   the reference layouts the game ships for your exact hardware. Each thing it
