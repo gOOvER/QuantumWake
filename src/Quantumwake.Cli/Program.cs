@@ -140,6 +140,73 @@ if (args.Contains("--mining"))
 // disintegrates to and how fast. What is NOT here, and why, is in
 // docs/salvage.md: a hull's own yield needs its surface area and volume,
 // which are geometry the DataCore does not hold.
+// Every action the game can bind, with its defaults and, if the profile
+// rebinds it, what this install has on it. --keys=md writes the reference
+// document (docs/keybindings-<version>.md is one of these).
+if (args.Any(a => a.StartsWith("--keys", StringComparison.OrdinalIgnoreCase)))
+{
+    var markdown = args.Contains("--keys=md", StringComparer.OrdinalIgnoreCase);
+    var cache = Path.Combine(Path.GetDirectoryName(SessionStore.DatabasePathFor(install.RootPath))!, "commodities.json");
+    var game = GameCommodities.Load(install.RootPath, cache);
+    var catalogue = game.Controls.Catalogue;
+    var profilePath = Path.Combine(install.RootPath, "user", "client", "0", "Profiles", "default", "actionmaps.xml");
+    var profile = File.Exists(profilePath) ? Quantumwake.Core.Controls.ControlProfile.Parse(File.ReadAllBytes(profilePath)) : null;
+    var mine = (profile?.Bindings ?? []).ToLookup(b => (b.ActionMap, b.Action));
+    var sticks = (profile?.Joysticks ?? []).ToDictionary(d => d.Key, d => d.Product ?? d.Key);
+    string Mine(Quantumwake.Core.Controls.ControlBinding b) =>
+        b.Input.Kind == Quantumwake.Core.Controls.InputKind.None ? $"{b.Input.DeviceKey} cleared"
+        : b.Input.IsJoystick ? $"{sticks.GetValueOrDefault(b.Input.DeviceKey, b.Input.DeviceKey)} {b.Input.Label}"
+        : b.Input.Label;
+    static string Dash(string s) => s.Length == 0 ? "—" : s;
+    static string Cell(string s) => s.Replace("|", "\\|");
+
+    if (markdown)
+    {
+        // The archive does not say its version; the live log's session does.
+        var version = install.HasGameLog && LogLibrary.BuildSession(install.GameLogPath).GameVersion is { Length: > 0 } v
+            ? $"Alpha {v}" : "this install";
+        Console.WriteLine($"# Star Citizen keybindings, {version}");
+        Console.WriteLine();
+        Console.WriteLine($"Every action the game can bind - {catalogue.Actions.Count} in {catalogue.ActionMaps.Count} groups - read from");
+        Console.WriteLine("`Data\\Libs\\Config\\defaultProfile.xml` in this install's archive and labelled from its");
+        Console.WriteLine("own strings, with the default input per device kind and how the action fires.");
+        Console.WriteLine("A dash is bindable but unbound by default. Generated on " + DateTime.Now.ToString("yyyy-MM-dd") + " by");
+        Console.WriteLine("`dotnet run --project src\\Quantumwake.Cli -c Release -- --keys=md > docs\\keybindings.md`;");
+        Console.WriteLine("regenerate after a patch and diff. `--keys` alone prints the same with this install's");
+        Console.WriteLine("own bindings beside each action.");
+        Console.WriteLine();
+        foreach (var map in catalogue.ActionMaps)
+        {
+            var actions = catalogue.Actions.Where(a => a.ActionMap == map.Name).ToList();
+            if (actions.Count == 0) continue;
+            Console.WriteLine($"## {map.Label}{(map.Category.Length > 0 ? $" · {map.Category}" : "")}");
+            Console.WriteLine();
+            Console.WriteLine($"`{map.Name}` · {actions.Count} actions");
+            Console.WriteLine();
+            Console.WriteLine("| Action | Id | Keyboard | Mouse | Gamepad | Joystick | Fires |");
+            Console.WriteLine("| --- | --- | --- | --- | --- | --- | --- |");
+            foreach (var a in actions)
+                Console.WriteLine($"| {Cell(a.Label)} | `{a.Name}` | {Cell(Dash(a.Keyboard))} | {Cell(Dash(a.Mouse))} | {Cell(Dash(a.Gamepad))} | {Cell(Dash(a.Joystick))} | {Dash(a.ActivationMode)} |");
+            Console.WriteLine();
+        }
+        return 0;
+    }
+
+    Console.WriteLine($"{catalogue.Actions.Count} actions in {catalogue.ActionMaps.Count} groups; profile {(profile is null ? "none" : $"{profile.Bindings.Count} rebinds on {sticks.Count} sticks")}");
+    foreach (var map in catalogue.ActionMaps)
+    {
+        var actions = catalogue.Actions.Where(a => a.ActionMap == map.Name).ToList();
+        if (actions.Count == 0) continue;
+        Console.WriteLine($"\n{map.Label}{(map.Category.Length > 0 ? $" [{map.Category}]" : "")}  ({map.Name})");
+        foreach (var a in actions)
+        {
+            var yours = mine[(map.Name, a.Name)].Select(Mine).ToList();
+            Console.WriteLine($"  {a.Label,-46} kb {Dash(a.Keyboard),-14} js {Dash(a.Joystick),-10} gp {Dash(a.Gamepad),-12} {a.ActivationMode,-18}{(yours.Count > 0 ? "  YOURS: " + string.Join(", ", yours) : "")}");
+        }
+    }
+    return 0;
+}
+
 if (args.Contains("--salvage", StringComparer.OrdinalIgnoreCase))
 {
     var cache = Path.Combine(Path.GetDirectoryName(SessionStore.DatabasePathFor(install.RootPath))!, "commodities.json");

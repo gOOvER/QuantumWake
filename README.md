@@ -365,7 +365,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.4
+### 0.15.5
 
 - **A Controls page, under Settings: your sticks and what is bound to
   them.** Read from the game's own keybinding profile — every joystick it
@@ -416,7 +416,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   written the way a restore is: into the profile with the game closed,
   after keeping it as it was; as an import file for the keybinding screen
   with the game open. The activation mode (tap, hold…) stays the action's
-  own for now.
+  own for now. The whole list of what the game can bind is in
+  `docs/keybindings.md` (1,103 actions with their defaults, for Alpha 4.10),
+  and `--keys` in the CLI prints it with your own bindings beside each.
 
 ### 0.14.17
 
