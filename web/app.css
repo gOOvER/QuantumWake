@@ -5307,8 +5307,11 @@ td.armoury-cost { color: var(--amber); }
 #controls-buttons { table-layout: fixed; width: 100%; }
 #controls-buttons th:first-child { width: 96px; }
 #controls-buttons th:nth-child(3) { width: 96px; }
-#controls-buttons td.num { white-space: normal; }
-#controls-buttons td { overflow-wrap: anywhere; }
+/* tbody td is nowrap, so a long action label ran straight under the Change
+   column rather than wrapping inside its own. The whole table wraps; the
+   control name is the one thing worth keeping on one line. */
+#controls-buttons td { white-space: normal; overflow-wrap: anywhere; vertical-align: top; }
+#controls-buttons td.controls-control { white-space: nowrap; }
 /* The stand-in grid: Windows' numbered buttons, lit where something is bound. */
 .controls-grid { padding: 6px 2px; }
 .controls-grid-title { margin: 8px 0 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
@@ -5337,9 +5340,9 @@ td.armoury-cost { color: var(--amber); }
 .controls-pending-list { margin: 6px 0; padding-left: 18px; font-size: 12.5px; line-height: 1.6; }
 .controls-pending-list .ghost.small { margin-left: 8px; }
 .controls-warn { color: var(--amber); }
-.controls-action-picker { display: grid; gap: 4px; min-width: 190px; }
-.controls-action-search { width: 100%; max-width: 280px; font-size: 11px; }
-.controls-action-results { display: grid; width: min(340px, 100%); max-height: 210px; overflow-y: auto; border: 1px solid var(--rule); background: var(--deep); }
+.controls-action-picker { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 8px; align-items: start; min-width: 190px; margin-bottom: 7px; }
+.controls-action-search { grid-area: 1 / 1; width: 100%; max-width: 280px; font-size: 11px; }
+.controls-action-results { grid-area: 2 / 1 / auto / -1; display: grid; width: min(340px, 100%); max-height: 210px; overflow-y: auto; border: 1px solid var(--rule); background: var(--deep); }
 .controls-action-results[hidden] { display: none; }
 .controls-action-results.muted { display: block; padding: 5px 7px; }
 .controls-action-result { display: grid; gap: 1px; padding: 5px 7px; border: 0; border-top: 1px solid var(--rule); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
@@ -5352,7 +5355,7 @@ td.armoury-cost { color: var(--amber); }
 .controls-action-group:hover, .controls-action-group:focus-visible { background: rgba(53, 200, 240, .12); outline: none; }
 .controls-action-back { padding: 4px 7px; border: 0; border-bottom: 1px solid var(--rule); background: var(--panel); color: var(--muted); font: 10px var(--mono); text-align: left; cursor: pointer; position: sticky; top: 0; }
 .controls-action-back:hover, .controls-action-back:focus-visible { color: var(--text); outline: none; }
-.controls-action-remove { justify-self: start; }
+.controls-action-remove { grid-area: 1 / 2; justify-self: start; white-space: nowrap; }
 .controls-input-pick .select { font-size: 11px; margin-right: 4px; }
 .controls-bind-cell { white-space: nowrap; }
 .controls-bind-cell .ghost.small { margin: 1px 4px 1px 0; }
@@ -5363,5 +5366,5 @@ td.armoury-cost { color: var(--amber); }
 .controls-picture div.controls-slot.lit { color: #ff8a00 !important; font-weight: 700; }
 .controls-live { min-height: 1.4em; color: var(--cyan); }
 .controls-change { white-space: normal; vertical-align: top; }
-.controls-mode-pick { max-width: 110px; font-size: 11px; margin-left: 4px; }
+.controls-mode-pick { max-width: 110px; font-size: 11px; }
 .controls-axis-live { font: 11px var(--mono); margin-left: 6px; }

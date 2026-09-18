@@ -365,7 +365,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.9
+### 0.15.10
+
+- **The Controls table no longer writes one column over another.** A long
+  action name in *Bound to* ran straight under the *Change* column instead of
+  wrapping inside its own — every row in the table wraps now, and the search
+  box and *take off* share a line rather than stacking three deep.
 
 - **Controls pictures no longer repeat or collide with their device name.**
   Diagram labels now use the SVG's modern rich-text layer only, and the
