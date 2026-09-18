@@ -717,4 +717,94 @@ public class ControlsPageTests
 
         Assert.True(page.Number("__size('Set Master Mode to SCM', 48)") < page.Number("__size('Set Master Mode to SCM', 110)"));
     }
+
+    // A picture is chosen by hand, and nothing stopped a rudder being given a
+    // joystick: a Virpil grip drew thirty empty buttons over a
+    // T-Pendular-Rudder that binds three axes and no button at all. The
+    // library has no pedals in it, so for that stick there is no right picture
+    // and the page has to say so rather than draw a confident wrong one.
+    private static Page Misfit()
+    {
+        var page = new Page();
+        page.Do("""
+            globalThis.__bound = (...controls) => new Map(controls.map((c) => [c, []]));
+            globalThis.__buttons = (n) => Array.from({ length: n }, (_, i) => 'button' + (i + 1));
+            globalThis.__say = (device, drawn, bound, live) => controlsPictureMisfit(device, drawn, bound, live) || '';
+            """);
+        return page;
+    }
+
+    [Fact]
+    public void A_picture_of_the_right_stick_says_nothing()
+    {
+        var page = Misfit();
+
+        // The throttle's own picture over the throttle: 32 buttons drawn, 32
+        // reported. Nothing to say.
+        Assert.Equal("", page.Text("__say({ product: 'Throttle - HOTAS Warthog' }, __buttons(32), __bound('button1', 'z'), { buttonCount: 32 })"));
+    }
+
+    [Fact]
+    public void The_live_count_settles_it_when_the_stick_has_no_buttons_at_all()
+    {
+        var page = Misfit();
+
+        var said = page.Text("__say({ product: 'T-Pendular-Rudder' }, __buttons(30), __bound('x', 'y', 'z'), { buttonCount: 0 })");
+        Assert.Contains("30 buttons", said);
+        Assert.Contains("T-Pendular-Rudder", said);
+        Assert.Contains("reports none", said);
+        // Certain, so it is stated as a fact rather than a doubt.
+        Assert.DoesNotContain("may be", said);
+    }
+
+    [Fact]
+    public void A_picture_with_more_buttons_than_the_stick_has_says_which_way_round()
+    {
+        var page = Misfit();
+
+        var said = page.Text("__say({ product: 'T.16000M' }, __buttons(30), __bound('button1'), { buttonCount: 16 })");
+        Assert.Contains("30 buttons", said);
+        Assert.Contains("16", said);
+    }
+
+    [Fact]
+    public void Without_the_live_read_an_axis_only_stick_is_doubted_not_declared()
+    {
+        var page = Misfit();
+
+        var said = page.Text("__say({ product: 'T-Pendular-Rudder' }, __buttons(30), __bound('x', 'y', 'z'), null)");
+        Assert.Contains("3 axes", said);
+        // A stick can carry buttons nobody has bound, so the profile alone
+        // cannot prove it - and the page names what would.
+        Assert.Contains("may be", said);
+        Assert.Contains("live read", said);
+    }
+
+    [Fact]
+    public void One_axis_is_called_an_axis_and_not_an_axes()
+    {
+        var page = Misfit();
+
+        Assert.Contains("only 1 axis.", page.Text("__say({ product: 'Pedals' }, __buttons(30), __bound('z'), null)"));
+    }
+
+    [Fact]
+    public void A_stick_with_buttons_bound_is_left_alone_without_the_live_read()
+    {
+        var page = Misfit();
+
+        // The profile proves nothing here: a button is bound, so the picture
+        // is plausible and a warning would be noise.
+        Assert.Equal("", page.Text("__say({ product: 'Joystick - HOTAS Warthog' }, __buttons(30), __bound('button7', 'x'), null)"));
+    }
+
+    [Fact]
+    public void A_picture_that_draws_no_buttons_is_never_doubted()
+    {
+        var page = Misfit();
+
+        // A pedals or throttle template naming only axes cannot be wrong this
+        // way, whatever the stick reports.
+        Assert.Equal("", page.Text("__say({ product: 'T-Pendular-Rudder' }, ['x', 'y', 'z'], __bound('x', 'y', 'z'), { buttonCount: 0 })"));
+    }
 }

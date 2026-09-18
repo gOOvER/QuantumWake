@@ -9416,7 +9416,55 @@ async function renderControlsPicture(device, bound) {
     return [];
   }
 
-  return controlsDrawSvg(holder, text, bound, device.product);
+  const drawn = controlsDrawSvg(holder, text, bound, device.product);
+  const misfit = controlsPictureMisfit(device, drawn, bound, controlsLiveDevice(device));
+  if (misfit) {
+    const warn = el('div', 'controls-picture-misfit');
+    warn.append(el('span', null, misfit + ' '));
+    const drop = el('button', 'ghost small', 'take the picture off');
+    drop.type = 'button';
+    drop.title = "Draw the numbered grid from this stick's own counts instead";
+    drop.addEventListener('click', async () => {
+      await fetch('/api/controls/templates/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guid: device.guid, key: '' }) });
+      await loadControls();
+    });
+    warn.append(drop);
+    note.append(warn);
+  }
+  return drawn;
+}
+
+/**
+ * Whether the picture is of this stick at all, in words, or null when
+ * nothing says otherwise.
+ *
+ * A picture is chosen by hand and nothing stopped a rudder being given a
+ * joystick: a Virpil grip drew thirty empty buttons over a T-Pendular-Rudder,
+ * whose profile binds three axes and no button at all, and the page said only
+ * which picture it was. The library has no pedals in it, so for that stick
+ * there is no right answer and the app should say so rather than draw a
+ * confident wrong one.
+ *
+ * The live counts settle it when they are there. Without them the profile is
+ * the only witness and it can only ever be a doubt - a stick can carry buttons
+ * nobody has bound - so the wording stays a doubt and names what would settle it.
+ */
+function controlsPictureMisfit(device, drawn, bound, live) {
+  const named = (drawn || []).filter((c) => /^button\d+$/.test(c)).length;
+  if (!named) return null;
+  const product = device.product || 'this stick';
+  if (live && Number.isFinite(live.buttonCount)) {
+    if (live.buttonCount === 0)
+      return `This picture draws ${named} buttons and ${product} reports none, so it is a picture of a different device.`;
+    if (named > live.buttonCount)
+      return `This picture draws ${named} buttons and ${product} reports ${live.buttonCount}, so some of it belongs to a different device.`;
+    return null;
+  }
+  const keys = [...(bound?.keys?.() || [])];
+  const buttons = keys.filter((c) => /^button\d+$/.test(c)).length;
+  const axes = keys.filter((c) => !/^(button|hat)/.test(c)).length;
+  if (buttons || !axes) return null;
+  return `This picture draws ${named} buttons, and nothing on ${product} is bound to a button - only ${axes} ${axes === 1 ? 'axis' : 'axes'}. It may be a picture of a different device; the live read would say for certain.`;
 }
 
 /**

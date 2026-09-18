@@ -365,7 +365,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.12
+### 0.15.13
+
+- **A stick wearing the wrong picture now says so.** Pictures are picked by
+  hand and nothing checked the pick: a pendular rudder — three axes, no
+  buttons — was given a Virpil joystick and drew 31 empty buttons over it
+  without comment. The page now compares the picture against the stick and
+  says when they disagree, with a button to take the picture off and go back
+  to the numbered grid. With the live read it is stated as fact; without it,
+  as a doubt, because a stick can carry buttons nobody has bound.
 
 - **Exported keybindings now land under a name the game will actually load.**
   The game lists a profile only when its file is named
