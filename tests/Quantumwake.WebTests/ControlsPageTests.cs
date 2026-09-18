@@ -1045,4 +1045,107 @@ public class ControlsPageTests
             "X axis,Y axis,Z axis",
             page.Text("[...__dom.node('#controls-svg').querySelectorAll('.controls-axis-gauge-name')].map(n => n.textContent).join(',')"));
     }
+
+    // The curve editor. An exponent is not a thing anyone has an intuition
+    // for, so the number has to be reachable by dragging, nameable by a chip,
+    // and readable as what it does at the stick.
+    private static Page Curves()
+    {
+        var page = Opened();
+        page.Do("controlsDevice = 'js4'; await renderControlsDevice();");
+        return page;
+    }
+
+    private static string CurveRow(string axis) =>
+        $"[...__dom.node('#controls-axes').querySelectorAll('tr')].find(t => t.dataset.axis === '{axis}')";
+
+    [Fact]
+    public void The_curve_can_be_dragged_and_the_number_follows()
+    {
+        var page = Curves();
+        page.Do($"{{ const r = {CurveRow("y")}; const s = r.querySelector('.controls-curve-slider'); s.value = '2.2'; s.listeners.input[0](); }}");
+
+        Assert.Equal("2.2", page.Text($"{CurveRow("y")}.querySelector('.controls-exponent').value"));
+    }
+
+    [Fact]
+    public void Typing_a_number_moves_the_slider_back()
+    {
+        var page = Curves();
+        page.Do($"{{ const r = {CurveRow("y")}; const e = r.querySelector('.controls-exponent'); e.value = '0.8'; e.listeners.input[0](); }}");
+
+        Assert.Equal("0.8", page.Text($"{CurveRow("y")}.querySelector('.controls-curve-slider').value"));
+    }
+
+    [Fact]
+    public void A_number_past_what_the_slider_covers_is_kept_rather_than_clamped()
+    {
+        var page = Curves();
+        // The game allows up to 5; the slider stops at 3 because past that is
+        // not a curve anyone flies. Typing it must still work.
+        page.Do($"{{ const r = {CurveRow("y")}; const e = r.querySelector('.controls-exponent'); e.value = '4.5'; e.listeners.input[0](); }}");
+
+        Assert.Equal("4.5", page.Text($"{CurveRow("y")}.querySelector('.controls-exponent').value"));
+    }
+
+    [Fact]
+    public void A_preset_sets_both_and_lights_up()
+    {
+        var page = Curves();
+        page.Do($"{{ const r = {CurveRow("y")}; [...r.querySelectorAll('.controls-curve-preset')].find(c => c.textContent === 'softer').listeners.click[0](); }}");
+
+        Assert.Equal("1.8", page.Text($"{CurveRow("y")}.querySelector('.controls-exponent').value"));
+        Assert.Equal("1.8", page.Text($"{CurveRow("y")}.querySelector('.controls-curve-slider').value"));
+        Assert.True(page.Truth($"[...{CurveRow("y")}.querySelectorAll('.controls-curve-preset')].find(c => c.textContent === 'softer').classList.contains('on')"));
+    }
+
+    [Fact]
+    public void Only_the_matching_preset_is_lit()
+    {
+        var page = Curves();
+        page.Do($"{{ const r = {CurveRow("y")}; const e = r.querySelector('.controls-exponent'); e.value = '1.8'; e.listeners.input[0](); }}");
+
+        Assert.Equal(1, page.Count($"[...{CurveRow("y")}.querySelectorAll('.controls-curve-preset')].filter(c => c.classList.contains('on')).length"));
+    }
+
+    [Fact]
+    public void The_curve_says_what_it_does_at_the_stick()
+    {
+        var page = Curves();
+        page.Do($"{{ const r = {CurveRow("y")}; const e = r.querySelector('.controls-exponent'); e.value = '2'; e.listeners.input[0](); }}");
+
+        // Squared: half a push is a quarter of the output. That sentence is the
+        // whole point of the feature.
+        Assert.Contains("Half a push gives 25%", page.Text($"{CurveRow("y")}.querySelector('.controls-curve-words').textContent"));
+    }
+
+    [Fact]
+    public void A_straight_curve_says_so_in_words_rather_than_in_percentages()
+    {
+        var page = Curves();
+        page.Do($"{{ const r = {CurveRow("y")}; const e = r.querySelector('.controls-exponent'); e.value = '1'; e.listeners.input[0](); }}");
+
+        Assert.Contains("Straight through", page.Text($"{CurveRow("y")}.querySelector('.controls-curve-words').textContent"));
+    }
+
+    [Fact]
+    public void The_dead_zone_is_counted_in_what_the_curve_promises()
+    {
+        var page = Curves();
+        page.Do($"{{ const r = {CurveRow("y")}; const e = r.querySelector('.controls-exponent'); e.value = '1'; const d = r.querySelector('.controls-deadzone'); d.value = '20'; d.listeners.input[0](); }}");
+
+        // Straight, but a fifth of the travel does nothing: half a push is
+        // (0.5-0.2)/0.8, not 50. A reading that ignored the dead zone
+        // would be wrong by exactly what the pilot just set. 37 and not 38
+        // because 0.5-0.2 lands a hair under 0.3 in binary floating point.
+        Assert.Contains("37%", page.Text($"{CurveRow("y")}.querySelector('.controls-curve-words').textContent"));
+    }
+
+    [Fact]
+    public void The_dot_on_the_curve_is_parked_off_the_picture_until_something_reads_the_axis()
+    {
+        var page = Curves();
+
+        Assert.Equal("-10", page.Text($"{CurveRow("y")}.querySelector('.controls-curve-dot').getAttribute('cx')"));
+    }
 }

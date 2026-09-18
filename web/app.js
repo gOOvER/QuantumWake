@@ -9231,15 +9231,41 @@ function renderControlsAxes(device, bound) {
     drives.append(el('div', 'armoury-kind', r.group ? r.group.replace(/^flight_/, '').replace(/_/g, ' ') : 'no curve group: the game keeps no curve for this action'));
     tr.append(drives);
 
-    const curveCell = el('td', 'num');
+    // An exponent is not a thing anyone has an intuition for. The slider is
+    // the handle, the presets are the answers most people want, and the line
+    // underneath says what the number does in the only terms that matter:
+    // how much you get for half a push.
+    const curveCell = el('td', 'controls-curve-cell');
     const exponent = el('input', 'controls-exponent');
     exponent.type = 'number';
     exponent.min = '0.2';
     exponent.max = '5';
     exponent.step = '0.05';
-    exponent.value = String(curve.exponent ?? 1);
+    exponent.value = String(Math.round((curve.exponent ?? 1) * 100) / 100);
     exponent.disabled = !r.group;
-    curveCell.append(exponent);
+
+    const slider = el('input', 'controls-curve-slider');
+    slider.type = 'range';
+    slider.min = '0.4';
+    slider.max = '3';
+    slider.step = '0.05';
+    slider.value = String(Math.min(3, Math.max(0.4, Number(exponent.value) || 1)));
+    slider.disabled = !r.group;
+    slider.title = 'Drag for a softer or sharper centre; the box beside it takes anything the game allows';
+
+    const presets = el('div', 'controls-curve-presets');
+    for (const [name, value] of CONTROLS_CURVE_PRESETS) {
+      const chip = el('button', 'controls-curve-preset', name);
+      chip.type = 'button';
+      chip.dataset.value = String(value);
+      chip.disabled = !r.group;
+      presets.append(chip);
+    }
+
+    const words = el('div', 'controls-curve-words muted');
+    const handle = el('div', 'controls-curve-handle');
+    handle.append(slider, exponent);
+    curveCell.append(handle, presets, words);
     tr.append(curveCell);
 
     const invertCell = el('td');
@@ -9266,13 +9292,32 @@ function renderControlsAxes(device, bound) {
     tr.append(dzCell);
 
     const preview = el('td');
-    const svg = controlsCurvePreview(Number(exponent.value), invert.checked, Number(dz.value) / 100);
-    preview.append(svg);
+    // The chart gets its own holder so redrawing is a replaceChildren on it
+    // rather than a replaceChild against the cell's first node: the live
+    // reading sits in the same cell and would be counted.
+    const chart = el('div', 'controls-curve-holder');
+    chart.append(controlsCurvePreview(Number(exponent.value), invert.checked, Number(dz.value) / 100));
+    preview.append(chart);
     preview.append(el('span', 'controls-axis-live muted'));
-    const redraw = () => preview.replaceChild(controlsCurvePreview(Number(exponent.value) || 1, invert.checked, (Number(dz.value) || 0) / 100), preview.firstChild);
-    exponent.addEventListener('input', redraw);
+    const redraw = () => {
+      const e = Number(exponent.value) || 1;
+      const zone = (Number(dz.value) || 0) / 100;
+      chart.replaceChildren(controlsCurvePreview(e, invert.checked, zone));
+      words.textContent = controlsCurveWords(e, zone);
+      for (const chip of presets.querySelectorAll('.controls-curve-preset'))
+        chip.classList.toggle('on', Math.abs(Number(chip.dataset.value) - e) < 0.026);
+    };
+    slider.addEventListener('input', () => { exponent.value = slider.value; redraw(); });
+    exponent.addEventListener('input', () => {
+      const e = Number(exponent.value);
+      if (e >= 0.4 && e <= 3) slider.value = String(e);
+      redraw();
+    });
+    for (const chip of presets.querySelectorAll('.controls-curve-preset'))
+      chip.addEventListener('click', () => { exponent.value = chip.dataset.value; slider.value = chip.dataset.value; redraw(); });
     invert.addEventListener('change', redraw);
     dz.addEventListener('input', redraw);
+    redraw();
     tr.append(preview);
     body.append(tr);
   }
@@ -9292,6 +9337,37 @@ function renderControlsAxes(device, bound) {
 }
 
 /** A small graph of output against input for a curve, with the dead zone as a flat start. */
+/**
+ * The curves worth having, in the app's words rather than the game's.
+ * Below 1 the centre is sharper and the ends softer, which is what a pilot
+ * flying with a short-throw stick asks for; above 1 is the usual fine-control
+ * trade, more room around centre paid for at the stops.
+ */
+const CONTROLS_CURVE_PRESETS = [
+  ['sharper', 0.7],
+  ['straight', 1],
+  ['soft', 1.3],
+  ['softer', 1.8],
+  ['very soft', 2.5],
+];
+
+/**
+ * What an exponent does, in the only terms that mean anything at the stick:
+ * how far the ship goes for half a push, and for most of one. The dead zone
+ * is in it because it moves both, and a reading that ignored it would be
+ * wrong by exactly the amount the pilot just set.
+ */
+function controlsCurveWords(exponent, deadzone) {
+  const out = (x) => {
+    const past = Math.max(0, x - deadzone) / Math.max(0.0001, 1 - deadzone);
+    return Math.round(Math.pow(past, exponent > 0 ? exponent : 1) * 100);
+  };
+  const half = out(0.5);
+  const most = out(0.8);
+  if (Math.abs(exponent - 1) < 0.026 && !deadzone) return 'Straight through: half a push is half the output.';
+  return `Half a push gives ${half}%, four fifths gives ${most}%.`;
+}
+
 function controlsCurvePreview(exponent, inverted, deadzone) {
   const ns = 'http://www.w3.org/2000/svg';
   const make = (tag) => (typeof document.createElementNS === 'function' ? document.createElementNS(ns, tag) : el(tag));
@@ -9314,6 +9390,15 @@ function controlsCurvePreview(exponent, inverted, deadzone) {
   line.setAttribute('points', points.join(' '));
   line.setAttribute('class', 'controls-curve-line');
   svg.append(line);
+  // Where the axis is now, once something is reading it. Pushing the pedal
+  // and watching the dot climb the curve is the whole explanation of what an
+  // exponent does, and it needs no words at all.
+  const dot = make('circle');
+  dot.setAttribute('r', '3.5');
+  dot.setAttribute('class', 'controls-curve-dot');
+  dot.setAttribute('cx', '-10');
+  dot.setAttribute('cy', '-10');
+  svg.append(dot);
   return svg;
 }
 
@@ -9973,6 +10058,20 @@ function paintControlsLive() {
     if (!meter) continue;
     const value = reading(tr.dataset.axis);
     meter.textContent = value == null ? '' : value.toFixed(2);
+    const dot = tr.querySelector('.controls-curve-dot');
+    if (dot) {
+      // The preview draws one half; the curve is symmetric, so how far the
+      // axis is from centre is all it needs.
+      const away = value == null ? null : Math.min(1, Math.abs(value));
+      const e = Number(tr.querySelector('.controls-exponent')?.value) || 1;
+      const zone = (Number(tr.querySelector('.controls-deadzone')?.value) || 0) / 100;
+      if (away == null) { dot.setAttribute('cx', '-10'); dot.setAttribute('cy', '-10'); }
+      else {
+        const past = Math.max(0, away - zone) / Math.max(0.0001, 1 - zone);
+        dot.setAttribute('cx', (away * 64).toFixed(1));
+        dot.setAttribute('cy', (64 - Math.pow(past, e > 0 ? e : 1) * 64).toFixed(1));
+      }
+    }
   }
   // ...and the needle on the stand-in's gauges, when there is no picture.
   for (const row of $('#controls-svg')?.querySelectorAll?.('.controls-axis-gauge') || []) {

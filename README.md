@@ -365,7 +365,17 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.16
+### 0.15.17
+
+- **Setting a curve no longer means knowing what an exponent is.** Drag a
+  slider instead of typing `1.35`, or take one of five named curves —
+  *sharper, straight, soft, softer, very soft* — and the one you are on lights
+  up. Underneath, the number is translated into the only terms that matter at
+  the stick: *"Half a push gives 29%, four fifths gives 67%."* The dead zone
+  you have set is counted in that, because it moves both. The preview is
+  bigger, and with the tray app reading your sticks a dot rides the curve as
+  you push the axis — which explains what a curve does without any words at
+  all.
 
 - **Axes are drawn, not listed.** Every axis on a stick without a picture now
   gets a gauge — a track with its centre marked, the dead zone you have set
