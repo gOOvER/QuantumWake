@@ -365,7 +365,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.6
+### 0.15.7
+
+- **A clearer Controls workspace.** The profile summary now anchors the page,
+  every connected stick shares a tidy responsive rail, and the active stick is
+  easier to find at a glance. Its picture and bindings now read as one focused
+  workspace without changing how any binding is read, staged, or applied.
 
 - **A Controls page, under Settings: your sticks and what is bound to
   them.** Read from the game's own keybinding profile — every joystick it
