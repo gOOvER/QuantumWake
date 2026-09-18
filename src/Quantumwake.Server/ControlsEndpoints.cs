@@ -266,6 +266,53 @@ public static class ControlsEndpoints
             return Results.Ok(new { how, name, mappings, changed = changes.Count, command = $"pp_rebindkeys {name}" });
         });
 
+        // The sticks as Windows sees them this instant, matched to the profile
+        // by product GUID, with what is pressed: the page polls this while the
+        // Sticks pane is open and lights the picture. Under the bare server
+        // there is nothing to read, and it says so.
+        app.MapGet("/api/controls/live", (IJoystickReader joysticks, LogLibrary lib) =>
+        {
+            if (!joysticks.Available)
+                return Results.Ok(new { available = false, reason = "The dashboard is running under the bare server; the sticks are read by QuantumWake.exe.", devices = Array.Empty<object>() });
+
+            var devices = joysticks.Devices();
+            var readings = joysticks.Read().ToDictionary(r => r.Id);
+            // The profile's line for each product, so a reading can say which
+            // js number it is - and a stick the profile has no line for is
+            // shown as new. Two of one product cannot be told apart here; the
+            // page says so for those.
+            ControlProfile? profile = null;
+            if (install is not null && File.Exists(ControlsWatchService.ProfilePath(install)))
+            {
+                try { profile = ControlProfile.Parse(File.ReadAllBytes(ControlsWatchService.ProfilePath(install))); }
+                catch (Exception e) when (e is InvalidDataException or System.Xml.XmlException or IOException) { profile = null; }
+            }
+            var byGuid = (profile?.Joysticks ?? []).Where(d => d.Guid is not null).ToLookup(d => d.Guid!, StringComparer.OrdinalIgnoreCase);
+
+            return Results.Ok(new
+            {
+                available = true,
+                devices = devices.Select(d =>
+                {
+                    var matches = byGuid[d.Guid].ToList();
+                    var reading = readings.GetValueOrDefault(d.Id);
+                    return new
+                    {
+                        d.Id, d.Guid, vendorId = d.Vendor, productId = d.Product, d.Name, buttonCount = d.Buttons, axisCount = d.Axes, hatCount = d.Hats,
+                        keys = matches.Select(m => m.Key).ToList(),
+                        product = matches.FirstOrDefault()?.Product,
+                        ambiguous = matches.Count > 1,
+                        pressed = reading?.Buttons ?? [],
+                        hats = reading?.Hats ?? [],
+                        axes = reading?.Axes ?? [],
+                    };
+                }),
+                // Sticks the profile names that are not plugged in now.
+                missing = (profile?.Joysticks ?? []).Where(p => p.Guid is not null && !devices.Any(d => string.Equals(d.Guid, p.Guid, StringComparison.OrdinalIgnoreCase)))
+                    .Select(p => new { p.Key, p.Product, p.Guid }),
+            });
+        });
+
         // One kept version, read against the catalogue like the live one.
         app.MapGet("/api/controls/backups/{id}", (string id, LogLibrary lib, ControlsStore store, JoystickTemplates templates) =>
         {
@@ -447,4 +494,12 @@ public static class ControlsEndpoints
     public sealed record AxesRequest(int Instance, List<CurveRequest>? Curves, Dictionary<string, double>? Deadzones, string? How, string? Name);
     public sealed record FolderRequest(string? Folder);
     public sealed record AssignRequest(string? Guid, string? Key);
+}
+
+/// <summary>The bare server's answer: no sticks to read, and it says so.</summary>
+public sealed class NoJoysticks : IJoystickReader
+{
+    public bool Available => false;
+    public IReadOnlyList<JoystickDevice> Devices() => [];
+    public IReadOnlyList<JoystickReading> Read() => [];
 }

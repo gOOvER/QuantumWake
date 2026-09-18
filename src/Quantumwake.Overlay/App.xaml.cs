@@ -155,10 +155,12 @@ public partial class App : System.Windows.Application
             // screen panel says so rather than failing when pressed.
             var screen = new WindowsScreenReader();
 
+            var joysticks = new WindowsJoystickReader();
             _server = ServerHost.Build(
                 args,
                 screen.Available ? screen : null,
-                new WindowsClipboardReader(OnUiThread));
+                new WindowsClipboardReader(OnUiThread),
+                joysticks.Available ? joysticks : null);
             await _server.StartAsync();
 
             // Whatever the last update left behind. Done here rather than at the

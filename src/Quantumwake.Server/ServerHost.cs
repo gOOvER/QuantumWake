@@ -34,7 +34,8 @@ public static class ServerHost
     public static WebApplication Build(
         string[] args,
         IScreenReader? screen = null,
-        IClipboardReader? clipboard = null)
+        IClipboardReader? clipboard = null,
+        IJoystickReader? joysticks = null)
     {
 
         // Quantumwake server.
@@ -133,6 +134,8 @@ public static class ServerHost
         // The keybinding profile, kept whenever the game rewrites it, and the
         // stick pictures the Controls page draws bindings on.
         builder.Services.AddSingleton<ControlsStore>();
+        // The sticks as Windows sees them, from the host; the bare server has none.
+        builder.Services.AddSingleton<IJoystickReader>(joysticks ?? new NoJoysticks());
         builder.Services.AddSingleton<JoystickTemplates>();
         builder.Services.AddHostedService<ControlsWatchService>();
         builder.Services.AddSingleton<KitStore>();

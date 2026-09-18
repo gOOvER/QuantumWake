@@ -8935,6 +8935,7 @@ $('#screen-log-refresh')?.addEventListener('click', () => {
 let controlsModel = null;
 let controlsPane = 'devices';
 let controlsDevice = null;
+try { controlsDevice = localStorage.getItem('qw-controls-stick') || null; } catch { /* fine */ }
 let controlsBackups = [];
 let controlsDiffPick = [];
 let controlsExportSource = null;
@@ -8953,6 +8954,7 @@ function showControlsPane(name) {
   for (const button of $('#controls-tabs')?.querySelectorAll('button') || [])
     button.classList.toggle('active', button.dataset.pane === name);
   if (name === 'backups') loadControlsBackups().catch(() => {});
+  if (name === 'devices' && controlsModel?.ready) controlsLiveStart(); else controlsLiveStop();
 }
 
 $('#controls-tabs')?.addEventListener('click', (e) => {
@@ -9028,7 +9030,11 @@ function renderControlsDevices() {
     button.append(el('span', 'controls-stick-key', d.key));
     button.append(el('span', 'controls-stick-name', d.product));
     button.append(el('span', 'controls-stick-count muted', `${d.bindings} bound`));
-    button.addEventListener('click', () => { controlsDevice = d.key; renderControlsDevices(); });
+    button.addEventListener('click', () => {
+      controlsDevice = d.key;
+      try { localStorage.setItem('qw-controls-stick', d.key); } catch { /* fine */ }
+      renderControlsDevices();
+    });
     strip.append(button);
   }
   renderControlsDevice();
@@ -9155,9 +9161,10 @@ async function renderControlsDevice() {
       ref.textContent = there.length ? there.map(controlsBindingWords).join(', ') : '—';
       tr.append(ref);
     }
-    // Change: give the control an action, or take its binding off.
-    const change = el('td');
+    // Change: give the control an action, with a mode if wanted, or take its binding off.
+    const change = el('td', 'controls-change');
     const pick = controlsActionPicker(here);
+    const mode = controlsModePicker();
     pick.addEventListener('change', () => {
       if (!pick.value) return;
       const input = `${device.key}_${control}`;
@@ -9166,11 +9173,11 @@ async function renderControlsDevice() {
       } else {
         const [actionMap, action] = pick.value.split('/');
         const info = controlsModel.catalogue.actions.find((a) => a.actionMap === actionMap && a.name === action);
-        controlsStage({ actionMap, action, input, label: info?.label || action });
+        controlsStage({ actionMap, action, input, label: info?.label || action, activationMode: mode.value || null });
       }
       pick.value = '';
     });
-    change.append(pick);
+    change.append(pick, mode);
     tr.append(change);
     tr.addEventListener('mouseenter', () => controlsHighlight(control, true));
     tr.addEventListener('mouseleave', () => controlsHighlight(control, false));
@@ -9265,6 +9272,7 @@ function renderControlsAxes(device, bound) {
     const preview = el('td');
     const svg = controlsCurvePreview(Number(exponent.value), invert.checked, Number(dz.value) / 100);
     preview.append(svg);
+    preview.append(el('span', 'controls-axis-live muted'));
     const redraw = () => preview.replaceChild(controlsCurvePreview(Number(exponent.value) || 1, invert.checked, (Number(dz.value) || 0) / 100), preview.firstChild);
     exponent.addEventListener('input', redraw);
     invert.addEventListener('change', redraw);
@@ -9429,10 +9437,16 @@ function controlsDrawGrid(holder, device, bound) {
   const hats = [...new Set([...bound.keys()].map((c) => /^hat(\d+)_/.exec(c)).filter(Boolean).map((m) => Number(m[1])))];
   const axes = [...bound.keys()].filter((c) => !/^(button|hat)/.test(c));
   const highest = buttons.length ? Math.max(...buttons) : 0;
-  const count = Math.max(8, Math.ceil(highest / 8) * 8);
+  // The live read knows the true count; without it, the highest number the
+  // profile mentions, rounded to a row.
+  const live = controlsLiveDevice(device);
+  const count = live ? live.buttonCount : Math.max(8, Math.ceil(highest / 8) * 8);
+  const liveHats = live ? live.hatCount : 0;
 
   const grid = el('div', 'controls-grid');
-  grid.append(el('div', 'controls-grid-title', `Buttons · to ${count}, the highest your profile mentions being ${highest || 'none'}`));
+  grid.append(el('div', 'controls-grid-title', live
+    ? `Buttons · ${count}, as Windows reports the stick`
+    : `Buttons · to ${count}, the highest your profile mentions being ${highest || 'none'}`));
   const cells = el('div', 'controls-grid-buttons');
   for (let i = 1; i <= count; i++) {
     const control = `button${i}`;
@@ -9446,6 +9460,8 @@ function controlsDrawGrid(holder, device, bound) {
   }
   grid.append(cells);
 
+  for (let h = 1; h <= liveHats; h++) if (!hats.includes(h)) hats.push(h);
+  hats.sort((a, b) => a - b);
   for (const hat of hats) {
     const cross = el('div', 'controls-grid-hat');
     cross.append(el('div', 'controls-grid-title', `Hat ${hat}`));
@@ -9478,7 +9494,9 @@ function controlsDrawGrid(holder, device, bound) {
     grid.append(bars);
   }
 
-  grid.append(el('p', 'muted small', 'A stand-in until a picture is chosen: the buttons as Windows numbers them, lit where your profile binds something. Only the ones the profile mentions are certain; the stick may have more.'));
+  grid.append(el('p', 'muted small', live
+    ? 'A stand-in until a picture is chosen: the buttons as Windows numbers them, red where your profile binds something, outlined while pressed.'
+    : 'A stand-in until a picture is chosen: the buttons as Windows numbers them, lit where your profile binds something. Only the ones the profile mentions are certain; the stick may have more.'));
   holder.append(grid);
   return controls;
 }
@@ -9574,8 +9592,110 @@ function controlsDrawSvg(holder, svgText, bound, deviceName) {
 }
 
 function controlsHighlight(control, on) {
-  for (const node of $('#controls-svg')?.querySelectorAll?.(`[data-control="${control}"]`) || [])
-    node.classList?.toggle('lit', on);
+  // By class then by data attribute, rather than an attribute selector: the
+  // grid cells and the template's labels both carry the class, and the
+  // test harness has no attribute selectors.
+  const holder = $('#controls-svg');
+  for (const cls of ['.controls-grid-button', '.controls-slot', '.controls-grid-axis'])
+    for (const node of holder?.querySelectorAll?.(cls) || [])
+      if ((node.dataset?.control ?? node.getAttribute?.('data-control')) === control) node.classList?.toggle('lit', on);
+  for (const tr of $('#controls-buttons tbody')?.children || [])
+    if (tr.dataset?.control === control) tr.classList?.toggle('lit', on);
+}
+
+/* ---------- the live read ---------- */
+
+/**
+ * While the Sticks pane is open, the sticks are read ten times a second
+ * and whatever is pressed lights on the picture and in the table. Under
+ * the bare server there is nothing to read, and the pane says so once.
+ * The read is matched to the open stick by product GUID; two sticks of
+ * one product cannot be told apart and the pane says that too.
+ */
+let controlsLive = null;
+let controlsLiveTimer = null;
+let controlsLiveLit = new Set();
+
+function controlsLiveWanted() {
+  return controlsPane === 'devices' && $('#view-controls')?.classList.contains('active') && !!controlsModel?.ready;
+}
+
+async function controlsLiveTick() {
+  if (!controlsLiveWanted()) { controlsLiveStop(); return; }
+  try {
+    controlsLive = await getJson('/api/controls/live');
+  } catch {
+    controlsLive = null;
+  }
+  paintControlsLive();
+  if (controlsLiveWanted()) controlsLiveTimer = setTimeout(controlsLiveTick, controlsLive?.available ? 100 : 5000);
+}
+
+function controlsLiveStart() {
+  if (controlsLiveTimer) return;
+  controlsLiveTimer = setTimeout(controlsLiveTick, 0);
+}
+
+function controlsLiveStop() {
+  if (controlsLiveTimer) clearTimeout(controlsLiveTimer);
+  controlsLiveTimer = null;
+  for (const control of controlsLiveLit) controlsHighlight(control, false);
+  controlsLiveLit = new Set();
+}
+
+/** The live device for the open stick, or null; two of one product is ambiguous and reads as none. */
+function controlsLiveDevice(device) {
+  if (!controlsLive?.available || !device?.guid) return null;
+  const same = (controlsLive.devices || []).filter((d) => d.guid && d.guid.toLowerCase() === device.guid.toLowerCase());
+  return same.length === 1 ? same[0] : null;
+}
+
+/** What a reading says is active on a stick, as the game's control names. */
+function controlsLiveControls(reading) {
+  const controls = [];
+  for (const b of reading.pressed || []) controls.push(`button${b}`);
+  (reading.hats || []).forEach((h, i) => {
+    if (!h) return;
+    for (const dir of h.split('-')) controls.push(`hat${i + 1}_${dir}`);
+  });
+  return controls;
+}
+
+function paintControlsLive() {
+  const note = $('#controls-live-note');
+  const device = controlsSticks().find((d) => d.key === controlsDevice);
+  if (!note) return;
+  if (!controlsLive) { note.textContent = ''; return; }
+  if (!controlsLive.available) {
+    note.textContent = controlsLive.reason || 'The sticks cannot be read here.';
+    return;
+  }
+  const live = controlsLiveDevice(device);
+  const twins = device?.guid ? (controlsLive.devices || []).filter((d) => d.guid?.toLowerCase() === device.guid.toLowerCase()).length : 0;
+  if (!live) {
+    note.textContent = twins > 1
+      ? `Two of this product are plugged in; Windows cannot say which is ${device.key}, so nothing is lit.`
+      : device?.guid ? 'This stick is not plugged in right now.' : '';
+    for (const control of controlsLiveLit) controlsHighlight(control, false);
+    controlsLiveLit = new Set();
+    return;
+  }
+  const active = new Set(controlsLiveControls(live));
+  const words = [...active].map(controlsControlLabel);
+  note.textContent = `Live · ${live.buttonCount} buttons, ${live.axisCount} axes, ${live.hatCount} hat${live.hatCount === 1 ? '' : 's'} · ${words.length ? `pressed: ${words.join(', ')}` : 'press a button to see it'}`;
+  for (const control of controlsLiveLit) if (!active.has(control)) controlsHighlight(control, false);
+  for (const control of active) if (!controlsLiveLit.has(control)) controlsHighlight(control, true);
+  controlsLiveLit = active;
+  // Axis values, on the editor's rows.
+  const names = ['x', 'y', 'z', 'rotx', 'roty', 'rotz', 'slider1', 'slider2'];
+  for (const tr of $('#controls-axes')?.querySelectorAll?.('tr') || []) {
+    if (!tr.dataset?.axis) continue;
+    const meter = tr.querySelector('.controls-axis-live');
+    if (!meter) continue;
+    const i = names.indexOf(tr.dataset.axis);
+    const value = i >= 0 && i < (live.axes || []).length ? live.axes[i] : null;
+    meter.textContent = value == null ? '' : value.toFixed(2);
+  }
 }
 
 /* ---------- changing bindings ---------- */
@@ -9625,7 +9745,7 @@ function renderControlsPending() {
     const li = el('li');
     const stick = sticks.get(ControlInput_deviceKey(c.input));
     const where = `${stick ? stick.product : ControlInput_deviceKey(c.input)} ${c.input.replace(/^[a-z]{2}\d+_/, '').replace('_', ' ')}`;
-    li.append(el('span', null, c.remove ? `${c.label}: take off ${where}` : `${where} → ${c.label}`));
+    li.append(el('span', null, c.remove ? `${c.label}: take off ${where}` : `${where} → ${c.label}${c.activationMode ? ` (${controlsModeWord(c.activationMode)})` : ''}`));
     if (!c.remove) {
       // The game flags two actions on one control in the same group; say so before it does.
       const also = (controlsModel?.profile?.bindings || []).filter((b) => b.input.raw.toLowerCase() === c.input.toLowerCase() && b.actionMap === c.actionMap && b.action !== c.action);
@@ -9654,7 +9774,7 @@ async function controlsApplyBindings(button) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        changes: controlsPending.map((c) => ({ actionMap: c.actionMap, action: c.action, input: c.input, remove: !!c.remove })),
+        changes: controlsPending.map((c) => ({ actionMap: c.actionMap, action: c.action, input: c.input, remove: !!c.remove, activationMode: c.activationMode || null })),
         how: controlsModel?.gameRunning ? 'export' : 'live',
       }),
     });
@@ -9677,6 +9797,16 @@ async function controlsApplyBindings(button) {
 
 $('#controls-pending-apply')?.addEventListener('click', (e) => controlsApplyBindings(e.currentTarget));
 $('#controls-pending-discard')?.addEventListener('click', () => { controlsPending = []; renderControlsPending(); });
+
+/** The modes a binding can be given; blank keeps the action's own. */
+const CONTROLS_MODES = [['', 'the action\'s own'], ['tap', 'tap'], ['press', 'press'], ['hold', 'hold'], ['double_tap', 'double tap'], ['delayed_press', 'long press'], ['delayed_press_long', 'longer press']];
+
+function controlsModePicker() {
+  const select = el('select', 'select controls-mode-pick');
+  select.title = 'How the binding fires; the action\'s own unless you say';
+  for (const [value, label] of CONTROLS_MODES) select.append(new Option(label, value));
+  return select;
+}
 
 /** A select of every action the game can bind, by group, with "keep" and "take off" first. */
 function controlsActionPicker(current) {
@@ -9789,15 +9919,17 @@ function renderControlsActions() {
         add.addEventListener('click', () => {
           add.hidden = true;
           const picker = controlsInputPicker();
+          const mode = controlsModePicker();
           const ok = el('button', 'ghost small', 'Stage');
           ok.type = 'button';
           ok.addEventListener('click', () => {
-            controlsStage({ actionMap: map.name, action: a.name, input: picker.value(), label: a.label });
+            controlsStage({ actionMap: map.name, action: a.name, input: picker.value(), label: a.label, activationMode: mode.value || null });
             picker.remove();
+            mode.remove();
             ok.remove();
             add.hidden = false;
           });
-          bind.append(picker, ok);
+          bind.append(picker, mode, ok);
         });
         bind.append(add);
       }

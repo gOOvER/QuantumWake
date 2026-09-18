@@ -5335,3 +5335,12 @@ td.armoury-cost { color: var(--amber); }
 .controls-input-pick .select { font-size: 11px; margin-right: 4px; }
 .controls-bind-cell { white-space: nowrap; }
 .controls-bind-cell .ghost.small { margin: 1px 4px 1px 0; }
+/* The live read: the pressed control on the picture and in the table. */
+#controls-buttons tr.lit td { background: rgba(0, 200, 255, .12); }
+#controls-buttons tr.lit td.controls-control { color: var(--cyan-hot, var(--cyan)); }
+.controls-picture .controls-slot.lit { fill: #ff8a00; }
+.controls-picture div.controls-slot.lit { color: #ff8a00 !important; font-weight: 700; }
+.controls-live { min-height: 1.4em; color: var(--cyan); }
+.controls-change { white-space: nowrap; }
+.controls-mode-pick { max-width: 110px; font-size: 11px; margin-left: 4px; }
+.controls-axis-live { font: 11px var(--mono); margin-left: 6px; }

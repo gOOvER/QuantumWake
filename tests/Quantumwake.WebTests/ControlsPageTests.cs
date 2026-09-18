@@ -357,6 +357,57 @@ public class ControlsPageTests
         Assert.True(page.Truth("__dom.node('#controls-pending').hidden"));
     }
 
+    /// <summary>
+    /// The live read: a pressed button lights its row and the grid's cell,
+    /// the note names it and the stick's true counts, and a stick that is
+    /// not plugged in says so rather than lighting nothing quietly.
+    /// </summary>
+    [Fact]
+    public void A_pressed_button_lights_the_row_and_the_grid_and_the_counts_come_from_windows()
+    {
+        var page = Opened();
+        page.Serve("/api/controls/live", """
+            {"available":true,"devices":[
+              {"id":"a","guid":"{0402044F-0000-0000-0000-504944564944}","vendorId":1103,"productId":1026,"name":"HID-compliant game controller","buttonCount":19,"axisCount":2,"hatCount":1,"keys":["js4"],"product":"Joystick - HOTAS Warthog","ambiguous":false,"pressed":[7],"hats":["up"],"axes":[0.25,-0.5]}],
+             "missing":[{"key":"js2","product":"Throttle - HOTAS Warthog","guid":"{0404044F-0000-0000-0000-504944564944}"}]}
+            """);
+        page.Do("__dom.node('#view-controls').classList.add('active'); controlsDevice = 'js4'; await controlsLiveTick(); controlsLiveStop(); await renderControlsDevice(); paintControlsLive();");
+
+        var note = page.NodeText("#controls-live-note");
+        Assert.Contains("Live · 19 buttons, 2 axes, 1 hat", note);
+        Assert.Contains("pressed: Button 7, Hat 1 up", note);
+        Assert.True(page.Truth("__dom.node('#controls-buttons tbody').children.find(tr => tr.dataset.control === 'button7').classList.contains('lit')"));
+        Assert.False(page.Truth("__dom.node('#controls-buttons tbody').children.find(tr => tr.dataset.control === 'button4').classList.contains('lit')"));
+        // The grid runs to Windows' count now, not a guess, and has the hat.
+        Assert.Contains("Buttons · 19, as Windows reports the stick", page.NodeText("#controls-svg"));
+        Assert.Equal(19 + 4, page.Count("__dom.node('#controls-svg').querySelectorAll('.controls-grid-button').length"));
+        Assert.True(page.Truth("__dom.node('#controls-svg').querySelectorAll('.controls-grid-button').find(n => n.dataset.control === 'button7').classList.contains('lit')"));
+
+        page.Do("controlsDevice = 'js2'; await renderControlsDevice(); paintControlsLive();");
+        Assert.Contains("not plugged in right now", page.NodeText("#controls-live-note"));
+    }
+
+    [Fact]
+    public void Under_the_bare_server_the_live_note_says_who_reads_the_sticks()
+    {
+        var page = Opened();
+        page.Serve("/api/controls/live", """{"available":false,"reason":"The dashboard is running under the bare server; the sticks are read by QuantumWake.exe.","devices":[]}""");
+        page.Do("__dom.node('#view-controls').classList.add('active'); await controlsLiveTick(); controlsLiveStop();");
+        Assert.Contains("read by QuantumWake.exe", page.NodeText("#controls-live-note"));
+    }
+
+    [Fact]
+    public void A_staged_binding_carries_the_mode_it_was_given()
+    {
+        var page = Opened();
+        page.Serve("/api/controls/bindings", """{"how":"live","changed":1}""");
+        page.Do("controlsDevice = 'js4'; await renderControlsDevice(); controlsPending = []; { const r6 = __dom.node('#controls-buttons tbody').children.find(tr => tr.dataset.control === 'button6'); r6.querySelector('.controls-mode-pick').value = 'hold'; const p6 = r6.querySelector('.controls-action-pick'); p6.value = 'seat_general/v_self_destruct'; p6.listeners.change[0](); }");
+
+        Assert.Contains("button6 → Self destruct (hold)", page.NodeText("#controls-pending-list"));
+        page.Do("await controlsApplyBindings(__dom.node('#controls-pending-apply'));");
+        Assert.Contains("\"activationMode\":\"hold\"", page.BodyOf("/api/controls/bindings"));
+    }
+
     [Fact]
     public void With_the_game_running_the_apply_becomes_an_import_file()
     {
