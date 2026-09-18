@@ -259,5 +259,34 @@ The reading half, as planned above, on branch `controls`:
 
 Since then (0.15.3, 0.15.4): download and add-from-file for the backups, a restore over the live profile with the game closed (the profile kept first; an export re-framed by `ControlsExport.ToLive`), an axes editor (`ControlsExport.ApplyAxes` - exponent and invert per option group on the stick's options line, dead zone per axis on deviceoptions), and binding changes (`ControlsExport.ApplyBindings` - one binding per device per action, a removal falls back to the game's default). Both write the two ways a restore does: `POST /api/controls/axes` and `/api/controls/bindings` with `how: live|export`.
 
-Not built yet: the live half (`RawGameController` in the tray host, the
-pressed button lit on the picture), and the pilot-taught picture.
+## Built: the live half (0.15.6)
+
+The two open questions above are answered, both on this machine on
+2026-09-17: the tray process reads every stick with no foreground window,
+and the throttle's latched switches came through at rest.
+
+- `IJoystickReader` (Data) is the seam; `WindowsJoystickReader` (Ocr,
+  over `Windows.Gaming.Input.RawGameController`) is the implementation,
+  handed to the server by the tray app the way the screen reader is. The
+  bare server answers `available: false` and says who does read the
+  sticks, rather than reporting no devices.
+- Buttons are numbered from 1 because that is how the game writes them
+  (`js2_button11`); the API counts from 0. An axis is reported 0..1 with
+  0.5 at rest and re-centred to -1..1, which is the world a curve preview
+  draws in. The product GUID composes from the vendor and product ids -
+  checked against this install's six devices, every one matched.
+- `GET /api/controls/live` is polled ten times a second while the Sticks
+  pane is open and nowhere else; it backs off to once every five seconds
+  when nothing can be read. A pressed button lights on the picture and in
+  the table, the note names what is down, and the fallback grid takes the
+  stick's true button, axis and switch counts instead of guessing.
+- A stick the profile knows but that is not plugged in says so. Two of
+  one product cannot be told apart - the GUID is per product, not per
+  device - so a duplicated pair reads as neither, deliberately, rather
+  than lighting the wrong picture.
+- The pickers carry an activation mode (`hold`, `double_tap`, the six the
+  game accepts, or the action's own).
+
+Not built yet: the pilot-taught picture - a stick with no community
+template whose boxes the pilot places once, the way the inventory tile
+portfolio is meant to work.

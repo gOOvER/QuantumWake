@@ -9620,6 +9620,11 @@ let controlsLiveTimer = null;
 let controlsLiveLit = new Set();
 
 function controlsLiveWanted() {
+  // Ten reads a second is cheap to look at and not cheap to leave running: a
+  // second-screen dashboard gets left open, and a hidden tab cannot show a lit
+  // button to anyone. document.hidden is read defensively - the WebTests' stub
+  // document has no visibility to report, and a missing one means visible.
+  if (typeof document !== 'undefined' && document.hidden === true) return false;
   return controlsPane === 'devices' && $('#view-controls')?.classList.contains('active') && !!controlsModel?.ready;
 }
 
@@ -9638,6 +9643,13 @@ function controlsLiveStart() {
   if (controlsLiveTimer) return;
   controlsLiveTimer = setTimeout(controlsLiveTick, 0);
 }
+
+// Hiding the tab stops the poll, so showing it again has to start one: the
+// tick that noticed the tab was hidden cleared the timer on its way out and
+// nothing else on the page is watching for it to come back.
+document.addEventListener?.('visibilitychange', () => {
+  if (controlsLiveWanted()) controlsLiveStart(); else controlsLiveStop();
+});
 
 function controlsLiveStop() {
   if (controlsLiveTimer) clearTimeout(controlsLiveTimer);
@@ -9815,60 +9827,107 @@ function controlsModePicker() {
  * A narrow, searchable action finder. Rendering every game action in every
  * control row made a six-stick profile a forest of tens of thousands of
  * options; only matching actions are rendered here, when the pilot asks.
+ *
+ * Search alone was not enough: it answers "where is Self destruct" but not
+ * "what can I put here", and the grouped select it replaced did answer the
+ * second. So an empty box browses - the maps first, then one map's actions -
+ * and two letters switches to searching across all of them.
  */
 function controlsActionPicker(current, choose) {
   const wrap = el('div', 'controls-action-picker');
   const search = el('input', 'search controls-action-search');
   search.type = 'search';
-  search.placeholder = 'Find action (2+ letters)…';
+  search.placeholder = 'Find action, or browse…';
   search.autocomplete = 'off';
   search.spellcheck = false;
-  search.title = 'Type at least two letters to find an action';
+  search.title = 'Type at least two letters to search, or open the box to browse by group';
   const results = el('div', 'controls-action-results');
   results.hidden = true;
   const maps = new Map((controlsModel?.catalogue?.maps || []).map((map) => [map.name, map]));
   const actions = controlsModel?.catalogue?.actions || [];
+  // Which map is being browsed, when nothing is typed; null is the map list.
+  let group = null;
+
+  const mapLabel = (map, fallback) => `${map?.label || fallback}${map?.category ? ` · ${map.category}` : ''}`;
+
+  const close = () => {
+    group = null;
+    results.textContent = '';
+    results.className = 'controls-action-results';
+    results.hidden = true;
+  };
+
+  const actionRow = (action) => {
+    const map = maps.get(action.actionMap);
+    const button = el('button', 'controls-action-result');
+    button.type = 'button';
+    button.append(el('span', 'controls-action-result-label', action.label));
+    button.append(el('span', 'controls-action-result-map', mapLabel(map, action.actionMap)));
+    button.addEventListener('click', () => { choose(action); search.value = ''; close(); });
+    return button;
+  };
+
   const render = () => {
     const query = search.value.trim().toLowerCase();
     results.textContent = '';
-    if (query.length < 2) {
-      results.hidden = true;
-      return;
-    }
-    results.hidden = false;
-    const matches = actions.filter((action) => {
-      const map = maps.get(action.actionMap);
-      return `${action.label} ${action.name} ${map?.label || ''} ${map?.category || ''}`.toLowerCase().includes(query);
-    }).slice(0, 12);
-    if (!matches.length) {
-      results.className = 'controls-action-results muted small';
-      results.textContent = 'No action matches that search.';
-      return;
-    }
     results.className = 'controls-action-results';
-    for (const action of matches) {
-      const map = maps.get(action.actionMap);
-      const button = el('button', 'controls-action-result');
+    results.hidden = false;
+
+    if (query.length >= 2) {
+      const matches = actions.filter((action) => {
+        const map = maps.get(action.actionMap);
+        return `${action.label} ${action.name} ${map?.label || ''} ${map?.category || ''}`.toLowerCase().includes(query);
+      }).slice(0, 12);
+      if (!matches.length) {
+        results.className = 'controls-action-results muted small';
+        results.textContent = 'No action matches that search.';
+        return;
+      }
+      for (const action of matches) results.append(actionRow(action));
+      return;
+    }
+
+    // Nothing typed: browse. One map's actions if one is open, else the maps.
+    if (group) {
+      const back = el('button', 'controls-action-back', `‹ all groups`);
+      back.type = 'button';
+      back.addEventListener('click', () => { group = null; render(); search.focus(); });
+      results.append(back);
+      const map = maps.get(group);
+      const mine = actions.filter((a) => a.actionMap === group);
+      if (!mine.length) results.append(el('div', 'muted small', `${mapLabel(map, group)} binds nothing.`));
+      for (const action of mine) results.append(actionRow(action));
+      return;
+    }
+
+    const groups = [...maps.values()].filter((map) => actions.some((a) => a.actionMap === map.name));
+    if (!groups.length) { close(); return; }
+    for (const map of groups) {
+      const count = actions.filter((a) => a.actionMap === map.name).length;
+      const button = el('button', 'controls-action-group');
       button.type = 'button';
-      button.append(el('span', 'controls-action-result-label', action.label));
-      button.append(el('span', 'controls-action-result-map', `${map?.label || action.actionMap}${map?.category ? ` · ${map.category}` : ''}`));
-      button.addEventListener('click', () => {
-        choose(action);
-        search.value = '';
-        results.className = 'controls-action-results';
-        results.textContent = '';
-        results.hidden = true;
-      });
+      button.append(el('span', 'controls-action-result-label', mapLabel(map, map.name)));
+      button.append(el('span', 'controls-action-result-map', `${count} action${count === 1 ? '' : 's'}`));
+      button.addEventListener('click', () => { group = map.name; render(); });
       results.append(button);
     }
   };
+
   search.addEventListener('input', render);
   search.addEventListener('focus', render);
   search.addEventListener('keydown', (event) => {
+    // Escape closes the list rather than clearing the row, which is what a
+    // search input does by itself and would lose a half-typed query.
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); return; }
     if (event.key !== 'Enter') return;
     const first = results.querySelector('.controls-action-result');
     if (first) { event.preventDefault(); first.click(); }
   });
+  // A list left open over the row below it is read as that row's. The blur is
+  // deferred because it lands before the click that chose an action.
+  search.addEventListener('blur', () => setTimeout(() => {
+    if (!wrap.contains(document.activeElement)) close();
+  }, 150));
   wrap.append(search, results);
   if (current?.length) {
     const remove = el('button', 'ghost small controls-action-remove', 'take off');

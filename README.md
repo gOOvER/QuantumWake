@@ -365,15 +365,25 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.8
+### 0.15.9
 
 - **Controls pictures no longer repeat or collide with their device name.**
   Diagram labels now use the SVG's modern rich-text layer only, and the
   device subtitle is fitted to the space its template provides.
 
-- **Assigning an action is now searchable.** Type two letters in a control's
-  *Find action* field to see a short, category-labelled match list instead of
-  scrolling through every action the game knows.
+- **Help now answers the questions the Controls page raises.** Six new
+  entries under *Sticks and keybindings*: where the bindings are read from,
+  what is backed up before anything is written, why writing is refused while
+  the game is running and what it offers instead, how to fix every binding
+  landing on the wrong stick after a re-plug, why a button might not light
+  up, and where the pictures come from.
+
+- **Assigning an action is now searchable — and browsable.** Type two
+  letters in a control's *Find action* field for a short, group-labelled
+  match list; the search reads the group name too, so the area you remember
+  finds the action you do not. Leave it empty and the same box lists the
+  groups, with a count each, to open and read through — which is what the
+  old every-action list was good for. Escape closes it.
 
 - **A clearer Controls workspace.** The profile summary now anchors the page,
   every connected stick shares a tidy responsive rail, and the active stick is

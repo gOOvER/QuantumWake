@@ -3619,6 +3619,36 @@
       </section>
 
       <section class="help-section">
+      <h3>Sticks and keybindings</h3>
+      <div class="faq">
+        <details class="faq-item">
+          <summary>Where does the Controls page get my bindings from?</summary>
+          <p>From the game's own keybinding profile, <code>user\client\0\Profiles\default\actionmaps.xml</code> — the file the keybinding screen writes. Settings → <b>Controls</b> reads it against the catalogue of every action the game can bind and shows each stick with its bindings drawn on a picture of it. Nothing is guessed: a control with nothing on it is blank, not empty-looking.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Is it going to break my keybindings?</summary>
+          <p>It keeps a copy before it writes, and it keeps one whenever the game writes too — the app looks at the profile every five seconds and files any version it has not seen under the app's own folder, named by time and content. <b>Backups</b> lists them, shows what changed between any two, and restores one. So the state you are in now is already saved before you change anything, and nothing is written into the game folder except the profile itself.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Why does it refuse to write while the game is running?</summary>
+          <p>Star Citizen reads the profile at start and rewrites it in play, so anything written underneath a running game is overwritten and lost. With the game open the app offers the other route instead: it writes an import file into <code>user\client\0\controls\mappings\</code> and tells you the console command — <code>pp_rebindkeys yourname</code> — so the change loads from the keybinding screen without a restart. Close the game and the same change writes straight to the profile.</p>
+        </details>
+        <details class="faq-item">
+          <summary>My sticks swapped and every binding is on the wrong one. Can that be fixed?</summary>
+          <p>Yes, and it is the reason the page exists. The game stores a binding against a stick's <i>number</i>, not its name — <code>js2_button11</code> — and that number is the order Windows enumerated the devices in, which can change when something is unplugged or a USB port is reused. Restoring or exporting a version lets you say which number each stick has become, and every input and options line moves with it, chords included.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Why is nothing lighting up when I press a button?</summary>
+          <p>The live reading comes from the tray app, not the dashboard server, because reading a controller needs the Windows side of the app. If the page says so in the note under the sticks, you are on the bare server — start QuantumWake from the tray instead. A stick the profile knows but that is unplugged says that too. One case it deliberately refuses: two of the same product, because the id the game stores names the product, not the device, and lighting the wrong picture would be worse than lighting none.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Where do the pictures of the sticks come from?</summary>
+          <p>From <a href="https://github.com/Rexeh/joystick-diagrams" target="_blank" rel="noopener">Joystick Diagrams</a>, an open-source project with templates for 45 sticks, throttles and panels. They are fetched only if you ask, on the <b>Pictures</b> pane, and kept in the app's folder — nothing is bundled, and no feed is turned on by anything else you switch on. A stick with no template gets a numbered grid built from its real button, axis and switch counts, and you can add your own picture for it.</p>
+        </details>
+      </div>
+      </section>
+
+      <section class="help-section">
       <h3>Sharing and backups</h3>
       <div class="faq">
         <details class="faq-item">

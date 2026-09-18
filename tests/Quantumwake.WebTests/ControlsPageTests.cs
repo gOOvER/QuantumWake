@@ -481,4 +481,151 @@ public class ControlsPageTests
         Assert.False(page.Truth("__dom.node('#controls-unready').hidden"));
         Assert.True(page.Truth("__dom.node('#controls-pane-devices').hidden"));
     }
+
+    // The action finder: a searchable, browsable replacement for the select
+    // that used to carry every action the game knows in every control row.
+    // Six sticks made that tens of thousands of options; these pin the two
+    // ways in - typing, and opening the box with nothing typed - and the
+    // threshold between them.
+    private static Page WithPicker()
+    {
+        var page = Opened();
+        page.Do("""
+            controlsDevice = 'js4'; await renderControlsDevice();
+            globalThis.__row = __dom.node('#controls-buttons tbody').children.find(tr => tr.dataset.control === 'button6');
+            globalThis.__find = __row.querySelector('.controls-action-search');
+            globalThis.__list = __row.querySelector('.controls-action-results');
+            globalThis.__type = (text) => { __find.value = text; __find.listeners.input[0](); };
+            globalThis.__press = (key) => __find.listeners.keydown[0]({ key, preventDefault() {}, stopPropagation() {} });
+            """);
+        return page;
+    }
+
+    [Fact]
+    public void One_letter_is_not_a_search_so_the_box_still_browses()
+    {
+        var page = WithPicker();
+        page.Do("__type('s');");
+
+        // Two letters is the threshold; below it nothing is matched, and the
+        // box shows the groups rather than going blank.
+        Assert.Equal(0, page.Count("__row.querySelectorAll('.controls-action-result').length"));
+        Assert.Equal(3, page.Count("__row.querySelectorAll('.controls-action-group').length"));
+        Assert.False(page.Truth("__list.hidden"));
+    }
+
+    [Fact]
+    public void Two_letters_matches_actions_and_names_the_group_each_is_in()
+    {
+        var page = WithPicker();
+        page.Do("__type('eje');");
+
+        Assert.Equal(1, page.Count("__row.querySelectorAll('.controls-action-result').length"));
+        Assert.Contains("Eject", page.Text("__row.querySelector('.controls-action-result').textContent"));
+        // The group is on the row too: two actions can share a label, and the
+        // map is what tells them apart.
+        Assert.Contains("Seat - General", page.Text("__row.querySelector('.controls-action-result').textContent"));
+    }
+
+    [Fact]
+    public void A_search_matches_the_group_as_well_as_the_action()
+    {
+        var page = WithPicker();
+        page.Do("__type('targeting');");
+
+        // "Cycle Lock - Hostiles - Forward" carries none of that word; the map
+        // it lives in does, which is how a pilot who knows the area but not
+        // the name finds it.
+        Assert.Equal(1, page.Count("__row.querySelectorAll('.controls-action-result').length"));
+        Assert.Contains("Cycle Lock", page.Text("__row.querySelector('.controls-action-result').textContent"));
+    }
+
+    [Fact]
+    public void A_search_that_matches_nothing_says_so_rather_than_emptying()
+    {
+        var page = WithPicker();
+        page.Do("__type('quantum drive spool');");
+
+        Assert.Equal(0, page.Count("__row.querySelectorAll('.controls-action-result').length"));
+        Assert.False(page.Truth("__list.hidden"));
+        Assert.Contains("No action matches", page.Text("__list.textContent"));
+    }
+
+    [Fact]
+    public void An_empty_box_browses_the_groups_and_counts_what_is_in_each()
+    {
+        var page = WithPicker();
+        page.Do("__find.listeners.focus[0]();");
+
+        Assert.Equal(3, page.Count("__row.querySelectorAll('.controls-action-group').length"));
+        // Flight - Movement holds four of the fixture's eight actions.
+        Assert.Contains("4 actions", page.Text("[...__row.querySelectorAll('.controls-action-group')].find(b => b.textContent.includes('Flight - Movement')).textContent"));
+    }
+
+    [Fact]
+    public void Opening_a_group_lists_its_actions_and_offers_the_way_back()
+    {
+        var page = WithPicker();
+        page.Do("""
+            __find.listeners.focus[0]();
+            [...__row.querySelectorAll('.controls-action-group')].find(b => b.textContent.includes('Flight - Targeting')).listeners.click[0]();
+            """);
+
+        Assert.Equal(1, page.Count("__row.querySelectorAll('.controls-action-result').length"));
+        Assert.Equal(1, page.Count("__row.querySelectorAll('.controls-action-back').length"));
+        Assert.Equal(0, page.Count("__row.querySelectorAll('.controls-action-group').length"));
+
+        page.Do("__row.querySelector('.controls-action-back').listeners.click[0]();");
+        Assert.Equal(3, page.Count("__row.querySelectorAll('.controls-action-group').length"));
+    }
+
+    [Fact]
+    public void An_action_chosen_while_browsing_stages_the_same_change_as_one_searched()
+    {
+        var page = WithPicker();
+        page.Do("""
+            controlsPending = [];
+            __find.listeners.focus[0]();
+            [...__row.querySelectorAll('.controls-action-group')].find(b => b.textContent.includes('Flight - Targeting')).listeners.click[0]();
+            __row.querySelector('.controls-action-result').listeners.click[0]();
+            """);
+
+        Assert.Contains("button6 → Cycle Lock - Hostiles - Forward", page.NodeText("#controls-pending-list"));
+        // Choosing closes the list and empties the box, so the row is ready
+        // for the next one rather than still showing the last answer.
+        Assert.True(page.Truth("__list.hidden"));
+        Assert.Equal("", page.Text("__find.value"));
+    }
+
+    [Fact]
+    public void Escape_closes_the_list_without_staging_anything()
+    {
+        var page = WithPicker();
+        page.Do("controlsPending = []; __type('eje'); __press('Escape');");
+
+        Assert.True(page.Truth("__list.hidden"));
+        Assert.Equal(0, page.Count("__row.querySelectorAll('.controls-action-result').length"));
+        Assert.True(page.Truth("__dom.node('#controls-pending').hidden"));
+    }
+
+    [Fact]
+    public void Enter_takes_the_first_match()
+    {
+        var page = WithPicker();
+        page.Do("controlsPending = []; __type('eje'); __press('Enter');");
+
+        Assert.Contains("button6 → Eject", page.NodeText("#controls-pending-list"));
+    }
+
+    [Fact]
+    public void The_take_off_button_is_only_on_a_control_that_has_something_on_it()
+    {
+        var page = Opened();
+        page.Do("controlsDevice = 'js4'; await renderControlsDevice();");
+
+        // button4 carries Eject; button6 carries nothing, so there is nothing
+        // to take off and no button offering to.
+        Assert.Equal(1, page.Count("__dom.node('#controls-buttons tbody').children.find(tr => tr.dataset.control === 'button4').querySelectorAll('.controls-action-remove').length"));
+        Assert.Equal(0, page.Count("__dom.node('#controls-buttons tbody').children.find(tr => tr.dataset.control === 'button6').querySelectorAll('.controls-action-remove').length"));
+    }
 }
