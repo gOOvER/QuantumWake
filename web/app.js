@@ -9163,19 +9163,14 @@ async function renderControlsDevice() {
     }
     // Change: give the control an action, with a mode if wanted, or take its binding off.
     const change = el('td', 'controls-change');
-    const pick = controlsActionPicker(here);
     const mode = controlsModePicker();
-    pick.addEventListener('change', () => {
-      if (!pick.value) return;
+    const pick = controlsActionPicker(here, (choice) => {
       const input = `${device.key}_${control}`;
-      if (pick.value === '__remove__') {
+      if (choice === '__remove__') {
         for (const b of here) controlsStage({ actionMap: b.actionMap, action: b.action, input: b.input.raw, remove: true, label: b.label });
       } else {
-        const [actionMap, action] = pick.value.split('/');
-        const info = controlsModel.catalogue.actions.find((a) => a.actionMap === actionMap && a.name === action);
-        controlsStage({ actionMap, action, input, label: info?.label || action, activationMode: mode.value || null });
+        controlsStage({ actionMap: choice.actionMap, action: choice.name, input, label: choice.label, activationMode: mode.value || null });
       }
-      pick.value = '';
     });
     change.append(pick, mode);
     tr.append(change);
@@ -9566,10 +9561,18 @@ function controlsDrawSvg(holder, svgText, bound, deviceName) {
   const parsed = new DOMParser().parseFromString(svgText, 'image/svg+xml');
   const svg = parsed.documentElement;
   if (!svg || svg.nodeName.toLowerCase() !== 'svg') return [];
+  // draw.io exports both the rich HTML label and a plain SVG fallback in each
+  // switch. A browser that can render foreignObject must see only the rich
+  // label: rewriting both puts two copies of a long device name in one box.
+  for (const choice of svg.querySelectorAll('switch')) {
+    if (!choice.querySelector('foreignObject')) continue;
+    for (const fallback of [...choice.children])
+      if (fallback.nodeName.toLowerCase() === 'text') fallback.remove();
+  }
   const controls = [];
   const texts = [...svg.querySelectorAll('text, tspan, div, span')].filter((n) => !n.children.length || n.nodeName.toLowerCase() === 'text');
   for (const node of texts) {
-    if (String(node.textContent).trim() === 'TEMPLATE_NAME') { node.textContent = deviceName || ''; continue; }
+    if (String(node.textContent).trim() === 'TEMPLATE_NAME') { controlsFitLabel(node, deviceName || ''); continue; }
     const control = controlsPlaceholderToControl(node.textContent);
     if (!control) continue;
     if (!controls.includes(control)) controls.push(control);
@@ -9808,20 +9811,73 @@ function controlsModePicker() {
   return select;
 }
 
-/** A select of every action the game can bind, by group, with "keep" and "take off" first. */
-function controlsActionPicker(current) {
-  const select = el('select', 'select controls-action-pick');
-  select.append(new Option('…', ''));
-  if (current?.length) select.append(new Option('take off', '__remove__'));
-  const maps = controlsModel?.catalogue?.maps || [];
-  for (const map of maps) {
-    const group = el('optgroup');
-    group.label = map.category ? `${map.label} · ${map.category}` : map.label;
-    for (const a of (controlsModel?.catalogue?.actions || []).filter((x) => x.actionMap === map.name))
-      group.append(new Option(a.label, `${map.name}/${a.name}`));
-    select.append(group);
+/**
+ * A narrow, searchable action finder. Rendering every game action in every
+ * control row made a six-stick profile a forest of tens of thousands of
+ * options; only matching actions are rendered here, when the pilot asks.
+ */
+function controlsActionPicker(current, choose) {
+  const wrap = el('div', 'controls-action-picker');
+  const search = el('input', 'search controls-action-search');
+  search.type = 'search';
+  search.placeholder = 'Find action (2+ letters)…';
+  search.autocomplete = 'off';
+  search.spellcheck = false;
+  search.title = 'Type at least two letters to find an action';
+  const results = el('div', 'controls-action-results');
+  results.hidden = true;
+  const maps = new Map((controlsModel?.catalogue?.maps || []).map((map) => [map.name, map]));
+  const actions = controlsModel?.catalogue?.actions || [];
+  const render = () => {
+    const query = search.value.trim().toLowerCase();
+    results.textContent = '';
+    if (query.length < 2) {
+      results.hidden = true;
+      return;
+    }
+    results.hidden = false;
+    const matches = actions.filter((action) => {
+      const map = maps.get(action.actionMap);
+      return `${action.label} ${action.name} ${map?.label || ''} ${map?.category || ''}`.toLowerCase().includes(query);
+    }).slice(0, 12);
+    if (!matches.length) {
+      results.className = 'controls-action-results muted small';
+      results.textContent = 'No action matches that search.';
+      return;
+    }
+    results.className = 'controls-action-results';
+    for (const action of matches) {
+      const map = maps.get(action.actionMap);
+      const button = el('button', 'controls-action-result');
+      button.type = 'button';
+      button.append(el('span', 'controls-action-result-label', action.label));
+      button.append(el('span', 'controls-action-result-map', `${map?.label || action.actionMap}${map?.category ? ` · ${map.category}` : ''}`));
+      button.addEventListener('click', () => {
+        choose(action);
+        search.value = '';
+        results.className = 'controls-action-results';
+        results.textContent = '';
+        results.hidden = true;
+      });
+      results.append(button);
+    }
+  };
+  search.addEventListener('input', render);
+  search.addEventListener('focus', render);
+  search.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    const first = results.querySelector('.controls-action-result');
+    if (first) { event.preventDefault(); first.click(); }
+  });
+  wrap.append(search, results);
+  if (current?.length) {
+    const remove = el('button', 'ghost small controls-action-remove', 'take off');
+    remove.type = 'button';
+    remove.title = 'Stage removal of every action now bound to this control';
+    remove.addEventListener('click', () => choose('__remove__'));
+    wrap.append(remove);
   }
-  return select;
+  return wrap;
 }
 
 /** A stick and one of its controls, composed into the input the game writes. */

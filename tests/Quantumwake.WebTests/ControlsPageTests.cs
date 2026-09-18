@@ -327,7 +327,7 @@ public class ControlsPageTests
         Assert.True(page.Truth("__dom.node('#controls-pending').hidden"));
 
         // Button 6 (nothing on it) gets Self destruct, from the stick's table.
-        page.Do("{ const row14 = __dom.node('#controls-buttons tbody').children.find(tr => tr.dataset.control === 'button6'); const pick14 = row14.querySelector('.controls-action-pick'); pick14.value = 'seat_general/v_self_destruct'; pick14.listeners.change[0](); }");
+        page.Do("{ const row14 = __dom.node('#controls-buttons tbody').children.find(tr => tr.dataset.control === 'button6'); const search14 = row14.querySelector('.controls-action-search'); search14.value = 'self destruct'; search14.listeners.input[0](); row14.querySelectorAll('.controls-action-result').find(b => b.textContent.includes('Self destruct')).click(); }");
         Assert.False(page.Truth("__dom.node('#controls-pending').hidden"));
         Assert.Contains("1 change to apply", page.NodeText("#controls-pending-title"));
         Assert.Contains("Joystick - HOTAS Warthog button6 → Self destruct", page.NodeText("#controls-pending-list"));
@@ -401,7 +401,7 @@ public class ControlsPageTests
     {
         var page = Opened();
         page.Serve("/api/controls/bindings", """{"how":"live","changed":1}""");
-        page.Do("controlsDevice = 'js4'; await renderControlsDevice(); controlsPending = []; { const r6 = __dom.node('#controls-buttons tbody').children.find(tr => tr.dataset.control === 'button6'); r6.querySelector('.controls-mode-pick').value = 'hold'; const p6 = r6.querySelector('.controls-action-pick'); p6.value = 'seat_general/v_self_destruct'; p6.listeners.change[0](); }");
+        page.Do("controlsDevice = 'js4'; await renderControlsDevice(); controlsPending = []; { const r6 = __dom.node('#controls-buttons tbody').children.find(tr => tr.dataset.control === 'button6'); r6.querySelector('.controls-mode-pick').value = 'hold'; const search = r6.querySelector('.controls-action-search'); search.value = 'self destruct'; search.listeners.input[0](); r6.querySelectorAll('.controls-action-result').find(b => b.textContent.includes('Self destruct')).click(); }");
 
         Assert.Contains("button6 → Self destruct (hold)", page.NodeText("#controls-pending-list"));
         page.Do("await controlsApplyBindings(__dom.node('#controls-pending-apply'));");

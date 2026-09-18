@@ -365,7 +365,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.7
+### 0.15.8
+
+- **Controls pictures no longer repeat or collide with their device name.**
+  Diagram labels now use the SVG's modern rich-text layer only, and the
+  device subtitle is fitted to the space its template provides.
+
+- **Assigning an action is now searchable.** Type two letters in a control's
+  *Find action* field to see a short, category-labelled match list instead of
+  scrolling through every action the game knows.
 
 - **A clearer Controls workspace.** The profile summary now anchors the page,
   every connected stick shares a tidy responsive rail, and the active stick is
