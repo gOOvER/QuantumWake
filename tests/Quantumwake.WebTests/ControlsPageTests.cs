@@ -807,4 +807,123 @@ public class ControlsPageTests
         // way, whatever the stick reports.
         Assert.Equal("", page.Text("__say({ product: 'T-Pendular-Rudder' }, ['x', 'y', 'z'], __bound('x', 'y', 'z'), { buttonCount: 0 })"));
     }
+
+    // The Check pane. The counts matter as much as the list: "0 missing" out
+    // of 119 looked at is an answer, and "0 missing" out of nothing is a bug,
+    // and the two are indistinguishable without them.
+    private const string Check = """
+        {"ready":true,
+         "counts":{"reference":119,"bound":85,"cleared":8,"undefined":22,"dismissed":0,"gaps":2},
+         "sources":["layout_hotas_warthog.xml","layout_hotas_warthog_pedals.xml"],
+         "names":{"layout_hotas_warthog.xml":"Thrustmaster Warthog HOTAS (no rudder pedals)",
+                  "layout_hotas_warthog_pedals.xml":"Thrustmaster Warthog HOTAS with rudder pedals"},
+         "gaps":[
+          {"deviceKey":"js4","product":"Joystick - HOTAS Warthog","actionMap":"spaceship_targeting_advanced","action":"v_target_cycle_all_back",
+           "label":"Cycle Lock - All - Back","map":"Vehicles - Target Cycling","suggested":"js4_button10","source":"layout_hotas_warthog.xml","weight":7},
+          {"deviceKey":"js2","product":"Throttle - HOTAS Warthog","actionMap":"turret_advanced","action":"turret_gyrostabilization",
+           "label":"Turret Gyro Stabilization (Toggle)","map":"Turret Advanced","suggested":"js2_button8","source":"layout_hotas_warthog.xml","weight":3}]}
+        """;
+
+    private static Page Checked(string json = Check)
+    {
+        var page = Opened();
+        page.Serve("/api/controls/check", json);
+        page.Do("showControlsPane('check'); await loadControlsCheck();");
+        return page;
+    }
+
+    [Fact]
+    public void The_check_counts_everything_it_put_aside_not_only_what_is_left()
+    {
+        var page = Checked();
+        var counts = page.NodeText("#controls-check-counts");
+
+        // Without these a list of two reads as a check that barely ran.
+        Assert.Contains("119", counts);
+        Assert.Contains("85", counts);
+        Assert.Contains("8", counts);
+        Assert.Contains("22", counts);
+        Assert.Contains("2", counts);
+        Assert.Contains("renamed since", counts);
+    }
+
+    [Fact]
+    public void The_check_names_the_layouts_it_measured_against()
+    {
+        var page = Checked();
+
+        // The resolved name, not the @ui_input_ string key behind it.
+        Assert.Contains("Thrustmaster Warthog HOTAS (no rudder pedals)", page.NodeText("#controls-check-note"));
+        Assert.DoesNotContain("@ui_input", page.NodeText("#controls-check-note"));
+    }
+
+    [Fact]
+    public void Each_gap_says_what_it_is_which_stick_and_where_the_game_puts_it()
+    {
+        var page = Checked();
+        var list = page.NodeText("#controls-check-list");
+
+        Assert.Contains("Cycle Lock - All - Back", list);
+        Assert.Contains("Joystick - HOTAS Warthog", list);
+        // js4_button10 is for the file; a pilot reads "button 10".
+        Assert.Contains("button 10", list);
+        Assert.DoesNotContain("js4_button10", list);
+    }
+
+    [Fact]
+    public void Staging_a_suggestion_puts_it_in_the_same_pending_list_as_any_other_change()
+    {
+        var page = Checked();
+        page.Do("controlsPending = []; __dom.node('#controls-check-list').querySelectorAll('button').find(b => b.textContent.includes('stage it')).listeners.click[0]();");
+
+        Assert.False(page.Truth("__dom.node('#controls-pending').hidden"));
+        Assert.Contains("button10 → Cycle Lock - All - Back", page.NodeText("#controls-pending-list"));
+    }
+
+    [Fact]
+    public void Nothing_missing_says_so_and_still_shows_what_was_looked_at()
+    {
+        var page = Checked("""
+            {"ready":true,"counts":{"reference":119,"bound":93,"cleared":8,"undefined":22,"dismissed":0,"gaps":0},
+             "sources":["layout_hotas_warthog.xml"],"names":{"layout_hotas_warthog.xml":"Thrustmaster Warthog HOTAS (no rudder pedals)"},"gaps":[]}
+            """);
+
+        Assert.Contains("Nothing missing", page.NodeText("#controls-check-list"));
+        // An all-clear that cannot show its working is not an all-clear.
+        Assert.Contains("119", page.NodeText("#controls-check-counts"));
+    }
+
+    [Fact]
+    public void A_stick_the_game_ships_no_layout_for_is_told_apart_from_a_clean_bill()
+    {
+        var page = Checked("""
+            {"ready":true,"counts":{"reference":0,"bound":0,"cleared":0,"undefined":0,"dismissed":0,"gaps":0},
+             "sources":[],"names":{},"gaps":[]}
+            """);
+
+        // "Nothing missing" would be a lie here: nothing was checked.
+        Assert.Contains("no reference layout", page.NodeText("#controls-check-note"));
+        Assert.DoesNotContain("Nothing missing", page.NodeText("#controls-check-list"));
+    }
+
+    [Fact]
+    public void The_way_back_from_dismissing_everything_is_offered_only_once_something_is_dismissed()
+    {
+        Assert.True(Checked().Truth("__dom.node('#controls-check-again').hidden"));
+
+        var page = Checked("""
+            {"ready":true,"counts":{"reference":119,"bound":85,"cleared":8,"undefined":22,"dismissed":2,"gaps":0},
+             "sources":["layout_hotas_warthog.xml"],"names":{"layout_hotas_warthog.xml":"Warthog"},"gaps":[]}
+            """);
+        Assert.False(page.Truth("__dom.node('#controls-check-again').hidden"));
+    }
+
+    [Fact]
+    public void Before_the_profile_is_read_the_check_says_why_rather_than_nothing()
+    {
+        var page = Checked("""{"ready":false,"reason":"The game's keybinding profile has not been read yet."}""");
+
+        Assert.Contains("has not been read yet", page.NodeText("#controls-check-note"));
+        Assert.Equal("", page.NodeText("#controls-check-counts"));
+    }
 }

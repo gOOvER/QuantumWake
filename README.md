@@ -365,7 +365,24 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.13
+### 0.15.14
+
+- **A Check tab: is anything missing from your sticks?** Your profile against
+  the reference layouts the game ships for your exact hardware. Each thing it
+  finds can be staged with one click, into the same pending list as any other
+  change, or dismissed for good. It shows its working — how many bindings it
+  looked at, how many you already have, how many you took off on purpose —
+  because "nothing missing" out of 119 is an answer and "nothing missing" out
+  of nothing is a bug.
+
+  Three things stand between a useful list and a useless one, and on this
+  install they take 119 bindings down to 2. Defaults you cleared yourself are
+  not missing. Actions the game has **renamed** are not missing either — the
+  shipped layouts are stale, and 22 of them name actions this patch no longer
+  has. And a suggestion you say no to stays said no to.
+
+- **"Beside it" is now "Compare with the game's own layout".** Same control,
+  a name that says what it does.
 
 - **A stick wearing the wrong picture now says so.** Pictures are picked by
   hand and nothing checked the pick: a pendular rudder — three axes, no

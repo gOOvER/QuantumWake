@@ -2628,6 +2628,7 @@
       <button type="button" data-pane="actions">Actions</button>
       <button type="button" data-pane="backups">Backups</button>
       <button type="button" data-pane="pictures">Pictures</button>
+      <button type="button" data-pane="check">Check</button>
     </nav>
 
     <!-- One stick at a time: its picture with the bindings written on, and
@@ -2646,8 +2647,8 @@
             <span class="muted" id="controls-device-note"></span>
           </div>
           <div class="controls-compare">
-            <label class="muted" for="controls-layout">Beside it</label>
-            <select id="controls-layout" class="select" title="One of the layouts the game ships for this stick"></select>
+            <label class="muted" for="controls-layout">Compare with the game's own layout</label>
+            <select id="controls-layout" class="select" title="Show what the game's own reference layout for this stick binds, in a column beside yours"></select>
           </div>
           <div class="table-wrap">
             <table id="controls-buttons">
@@ -2785,6 +2786,22 @@
         <p class="muted">Matched by the stick's USB ids where the library has a picture for it; pick one yourself
           for anything else, or a different one.</p>
         <div id="controls-assign"></div>
+      </div>
+    </div>
+
+    <!-- What the sticks are missing against the layouts the game ships for
+         them, after the three things that make a plain diff useless. -->
+    <div class="controls-pane" id="controls-pane-check">
+      <div class="option-block">
+        <div class="option-head">
+          <h3>Is anything missing?</h3>
+          <button type="button" class="ghost small" id="controls-check-again" hidden>Ask again about the ones I dismissed</button>
+        </div>
+        <p class="muted">Your profile against the reference layouts the game ships for your sticks &mdash; its own
+          recommendation, for your exact hardware, from this patch's files. Nothing is sent anywhere.</p>
+        <p class="muted small" id="controls-check-note"></p>
+        <div class="controls-check-counts" id="controls-check-counts"></div>
+        <div id="controls-check-list"></div>
       </div>
     </div>
   </section>

@@ -8939,7 +8939,7 @@ try { controlsDevice = localStorage.getItem('qw-controls-stick') || null; } catc
 let controlsBackups = [];
 let controlsDiffPick = [];
 let controlsExportSource = null;
-const CONTROLS_PANES = ['devices', 'actions', 'backups', 'pictures'];
+const CONTROLS_PANES = ['devices', 'actions', 'backups', 'pictures', 'check'];
 
 try {
   const kept = localStorage.getItem('qw-controls-pane');
@@ -8954,6 +8954,7 @@ function showControlsPane(name) {
   for (const button of $('#controls-tabs')?.querySelectorAll('button') || [])
     button.classList.toggle('active', button.dataset.pane === name);
   if (name === 'backups') loadControlsBackups().catch(() => {});
+  if (name === 'check') loadControlsCheck().catch(() => {});
   if (name === 'devices' && controlsModel?.ready) controlsLiveStart(); else controlsLiveStop();
 }
 
@@ -9432,6 +9433,114 @@ async function renderControlsPicture(device, bound) {
     note.append(warn);
   }
   return drawn;
+}
+
+/**
+ * The check: what the sticks are missing against the layouts the game ships
+ * for them.
+ *
+ * The counts are shown even - especially - when the list is empty, because
+ * "nothing missing" out of 119 reference bindings is an answer and "nothing
+ * missing" out of nothing is a bug, and the two look identical otherwise.
+ */
+async function loadControlsCheck() {
+  const list = $('#controls-check-list');
+  const counts = $('#controls-check-counts');
+  const note = $('#controls-check-note');
+  const again = $('#controls-check-again');
+  if (!list) return;
+  list.textContent = '';
+  counts.textContent = '';
+  note.textContent = 'Reading the profile…';
+
+  let result;
+  try { result = await getJson('/api/controls/check'); }
+  catch { note.textContent = 'The check could not be run.'; return; }
+
+  if (!result.ready) { note.textContent = result.reason || 'Not ready.'; return; }
+
+  const c = result.counts || {};
+  const names = result.names || {};
+  const against = (result.sources || []).map((f) => names[f] || f);
+  note.textContent = against.length
+    ? `Against ${against.join(' and ')}.`
+    : 'The game ships no reference layout for any stick in your profile, so there is nothing to check against.';
+
+  for (const [label, value, why] of [
+    ['looked at', c.reference, 'bindings in the game’s own layouts for your sticks'],
+    ['already bound', c.bound, 'you have these, wherever you put them'],
+    ['you took off', c.cleared, 'defaults you cleared on purpose, so not missing'],
+    ['renamed since', c.undefined, 'the layout names actions this patch no longer has'],
+    ['dismissed', c.dismissed, 'you said no to these'],
+    ['missing', c.gaps, 'the rest'],
+  ]) {
+    if (value === undefined) continue;
+    const cell = el('div', `controls-check-count${label === 'missing' && value > 0 ? ' hot' : ''}`);
+    cell.append(el('b', null, String(value)));
+    cell.append(el('span', null, label));
+    cell.title = why;
+    counts.append(cell);
+  }
+
+  again.hidden = !(c.dismissed > 0);
+
+  if (!(result.gaps || []).length) {
+    list.append(el('p', 'muted', against.length
+      ? 'Nothing missing. Every binding the game recommends for your sticks is either already on them or one you took off yourself.'
+      : 'Nothing to report.'));
+    return;
+  }
+
+  for (const gap of result.gaps) {
+    const row = el('div', 'controls-check-row');
+    const head = el('div', 'controls-check-what');
+    head.append(el('b', null, gap.label));
+    head.append(el('span', 'armoury-kind', ` ${gap.map}`));
+    row.append(head);
+    row.append(el('div', 'controls-check-where', `${gap.product || gap.deviceKey} · the game puts it on ${controlsInputWords(gap.suggested)}`));
+
+    const doing = el('div', 'controls-check-do');
+    const add = el('button', 'ghost small', 'stage it');
+    add.type = 'button';
+    add.title = 'Add it to the pending changes, to apply with everything else';
+    add.addEventListener('click', () => {
+      controlsStage({ actionMap: gap.actionMap, action: gap.action, input: gap.suggested, label: gap.label });
+      add.disabled = true;
+      add.textContent = 'staged';
+    });
+    doing.append(add);
+
+    const no = el('label', 'controls-check-no');
+    const box = el('input');
+    box.type = 'checkbox';
+    box.addEventListener('change', async () => {
+      await fetch('/api/controls/check/dismiss', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: `${gap.deviceKey}/${gap.actionMap}/${gap.action}`, dismissed: box.checked }),
+      });
+      await loadControlsCheck();
+    });
+    no.append(box, el('span', null, 'I do not want this'));
+    doing.append(no);
+    row.append(doing);
+    list.append(row);
+  }
+}
+
+$('#controls-check-again')?.addEventListener('click', async () => {
+  await fetch('/api/controls/check/ask-again', { method: 'POST' });
+  await loadControlsCheck();
+});
+
+/** An input as the game writes it, in words a pilot reads: js4_button10 -> button 10. */
+function controlsInputWords(raw) {
+  const m = /^(?:js|kb|mo|gp)\d*_(.*)$/.exec(String(raw || ''));
+  const control = m ? m[1] : String(raw || '');
+  const button = /^button(\d+)$/.exec(control);
+  if (button) return `button ${button[1]}`;
+  const hat = /^hat(\d+)_(\w+)$/.exec(control);
+  if (hat) return `hat ${hat[1]} ${hat[2]}`;
+  return control || 'nothing';
 }
 
 /**

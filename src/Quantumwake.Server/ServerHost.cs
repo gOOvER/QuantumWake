@@ -137,6 +137,7 @@ public static class ServerHost
         // The sticks as Windows sees them, from the host; the bare server has none.
         builder.Services.AddSingleton<IJoystickReader>(joysticks ?? new NoJoysticks());
         builder.Services.AddSingleton<JoystickTemplates>();
+        builder.Services.AddSingleton<ControlsDismissals>();
         builder.Services.AddHostedService<ControlsWatchService>();
         builder.Services.AddSingleton<KitStore>();
         builder.Services.AddSingleton<ExportBuilder>();

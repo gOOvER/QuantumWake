@@ -429,6 +429,54 @@ public static class ControlsEndpoints
         });
 
         // A reference layout the game ships, read against the catalogue.
+        // What the sticks are missing, against the layouts the game ships for
+        // them. The three filters live in ControlsCheck; this only feeds it and
+        // reports the counts, because a list of one has to be readable as a
+        // list of one rather than as a check that did not run.
+        app.MapGet("/api/controls/check", (LogLibrary lib, ControlsDismissals dismissals) =>
+        {
+            if (install is null || !File.Exists(ControlsWatchService.ProfilePath(install)))
+                return Results.Ok(new { ready = false, reason = "The game's keybinding profile has not been read yet." });
+
+            ControlProfile mine;
+            try { mine = ControlProfile.Parse(File.ReadAllBytes(ControlsWatchService.ProfilePath(install))); }
+            catch (Exception e) when (e is InvalidDataException or System.Xml.XmlException or IOException)
+            { return Results.Ok(new { ready = false, reason = "The keybinding profile could not be read." }); }
+
+            var controls = lib.GameCommodities.Controls;
+            var references = controls.Layouts
+                .Select(l => (Source: l.File, Profile: l.Profile))
+                .ToList();
+
+            var result = ControlsCheck.Against(mine, references, controls.Catalogue, dismissals.Keys);
+            return Results.Ok(new
+            {
+                ready = true,
+                result.Gaps,
+                result.Counts,
+                result.Sources,
+                names = result.Sources.ToDictionary(
+                    f => f,
+                    f => controls.Layouts.FirstOrDefault(l => l.File == f)?.Profile.Name
+                         ?? f),
+            });
+        });
+
+        // Saying no is a preference, so it is a POST that stores a flag and
+        // nothing else; the check is recomputed on the next read.
+        app.MapPost("/api/controls/check/dismiss", (DismissRequest body, ControlsDismissals dismissals) =>
+        {
+            if (string.IsNullOrWhiteSpace(body.Key)) return Results.BadRequest(new { message = "No suggestion named." });
+            dismissals.Set(body.Key, body.Dismissed);
+            return Results.Ok(new { body.Key, body.Dismissed, dismissed = dismissals.Keys.Count });
+        });
+
+        app.MapPost("/api/controls/check/ask-again", (ControlsDismissals dismissals) =>
+        {
+            dismissals.Clear();
+            return Results.Ok(new { dismissed = 0 });
+        });
+
         app.MapGet("/api/controls/layouts/{file}", (string file, LogLibrary lib, JoystickTemplates templates) =>
         {
             var controls = lib.GameCommodities.Controls;
@@ -487,6 +535,9 @@ public static class ControlsEndpoints
     }
 
     public sealed record ExportRequest(string? Source, string? Name, Dictionary<string, int>? Retarget, bool Install = false);
+
+/// <summary>One suggestion the pilot is saying no to, or taking the no back on.</summary>
+public sealed record DismissRequest(string? Key, bool Dismissed);
     public sealed record RestoreRequest(string? Source);
     public sealed record BindingChangeRequest(string? ActionMap, string? Action, string? Input, bool Remove = false, string? ActivationMode = null);
     public sealed record BindingsRequest(List<BindingChangeRequest>? Changes, string? How, string? Name);
