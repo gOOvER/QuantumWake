@@ -5346,6 +5346,22 @@ td.armoury-cost { color: var(--amber); }
 .controls-grid-axis { display: flex; gap: 10px; align-items: baseline; padding: 3px 0; border-top: 1px solid var(--rule); font-size: 12px; }
 .controls-grid-axis:first-of-type { border-top: 0; }
 .controls-grid-axis-name { font: 12px var(--mono); color: var(--cyan); min-width: 60px; }
+/* An axis drawn rather than listed. A rudder is three axes and nothing else,
+   so the old two-column list of names was the whole of its picture. */
+.controls-axis-gauge { display: grid; grid-template-columns: 82px minmax(110px, 1fr) minmax(0, 1fr); gap: 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--rule); font-size: 12px; }
+.controls-axis-gauge:first-of-type { border-top: 0; }
+.controls-axis-gauge-name { font: 11px var(--mono); color: var(--muted); letter-spacing: .04em; }
+.controls-axis-gauge.bound .controls-axis-gauge-name { color: var(--cyan); }
+.controls-axis-gauge-what { min-width: 0; overflow-wrap: anywhere; }
+.controls-axis-track { position: relative; height: 20px; border: 1px solid var(--rule); background: repeating-linear-gradient(90deg, rgba(53, 200, 240, .05) 0 1px, transparent 1px 10%), linear-gradient(180deg, rgba(8, 28, 38, .85), rgba(12, 40, 54, .3)); }
+.controls-axis-gauge.bound .controls-axis-track { border-color: var(--cyan-deep); }
+.controls-axis-centre { position: absolute; top: -3px; bottom: -3px; left: 50%; width: 1px; background: var(--cyan-deep); }
+.controls-axis-track::before, .controls-axis-track::after { content: ""; position: absolute; top: 3px; bottom: 3px; width: 2px; background: var(--rule-hot); }
+.controls-axis-track::before { left: 2px; }
+.controls-axis-track::after { right: 2px; }
+.controls-axis-dead { position: absolute; top: 0; bottom: 0; background: rgba(255, 171, 61, .22); border-left: 1px solid rgba(255, 171, 61, .5); border-right: 1px solid rgba(255, 171, 61, .5); }
+.controls-axis-needle { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #ff8a00; box-shadow: 0 0 6px rgba(255, 138, 0, .8); }
+.controls-axis-needle[hidden] { display: none; }
 .controls-backup-actions { white-space: nowrap; }
 .controls-backup-actions .ghost + .ghost { margin-left: 5px; }
 .controls-axes-table { width: auto; min-width: 70%; margin-top: 6px; }

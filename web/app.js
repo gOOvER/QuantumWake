@@ -9637,17 +9637,22 @@ function controlsDrawGrid(holder, device, bound) {
     grid.append(cross);
   }
 
-  if (axes.length) {
+  // The live read knows every axis the device has; without it only the bound
+  // ones are known to exist, so the two lists are unioned rather than one
+  // replacing the other.
+  const shown = [...axes];
+  if (live) for (const name of CONTROLS_AXIS_ORDER.slice(0, live.axisCount || 0))
+    if (!shown.includes(name)) shown.push(name);
+  shown.sort((a, b) => CONTROLS_AXIS_ORDER.indexOf(a) - CONTROLS_AXIS_ORDER.indexOf(b));
+
+  if (shown.length) {
     const bars = el('div', 'controls-grid-axes');
-    bars.append(el('div', 'controls-grid-title', 'Axes'));
-    for (const axis of axes) {
+    bars.append(el('div', 'controls-grid-title', live
+      ? `Axes · ${live.axisCount}, as Windows reports the device`
+      : `Axes · ${shown.length} your profile binds`));
+    for (const axis of shown) {
       controls.push(axis);
-      const here = bound.get(axis) || [];
-      const bar = el('div', 'controls-grid-axis bound');
-      bar.dataset.control = axis;
-      bar.append(el('span', 'controls-grid-axis-name', axis));
-      bar.append(el('span', 'muted', here.map((b) => b.label).join(' / ')));
-      bars.append(bar);
+      bars.append(controlsAxisGauge(device, axis, bound.get(axis) || []));
     }
     grid.append(bars);
   }
@@ -9674,6 +9679,55 @@ function controlsGridWords(buttons, axes, live) {
   return live
     ? 'A stand-in until a picture is chosen: the buttons as Windows numbers them, red where your profile binds something, outlined while pressed.'
     : 'A stand-in until a picture is chosen: the buttons as Windows numbers them, lit where your profile binds something. Only the ones the profile mentions are certain; the stick may have more.';
+}
+
+/** The order Windows reports axes in, which is how a live reading is indexed. */
+const CONTROLS_AXIS_ORDER = ['x', 'y', 'z', 'rotx', 'roty', 'rotz', 'slider1', 'slider2'];
+
+/** An axis in words: the game's name is terse and the same for every device. */
+function controlsAxisWords(axis) {
+  const rot = /^rot([xyz])$/.exec(axis);
+  if (rot) return `rotation ${rot[1].toUpperCase()}`;
+  const slider = /^slider(\d+)$/.exec(axis);
+  if (slider) return `slider ${slider[1]}`;
+  return /^[xyz]$/.test(axis) ? `${axis.toUpperCase()} axis` : axis;
+}
+
+/**
+ * One axis drawn rather than listed: a track with its centre marked, the
+ * dead zone the profile sets shaded around it, and a needle the live read
+ * moves.
+ *
+ * A rudder is three axes and nothing else, so a two-column list of names was
+ * the whole of its picture, and it read as a table of contents for a page
+ * that was not there. This is the same information as a shape, and it costs
+ * a joystick nothing - its axes were drawn the same flat way.
+ */
+function controlsAxisGauge(device, axis, here) {
+  const row = el('div', `controls-axis-gauge${here.length ? ' bound' : ''}`);
+  row.dataset.control = axis;
+  row.append(el('div', 'controls-axis-gauge-name', controlsAxisWords(axis)));
+
+  const track = el('div', 'controls-axis-track');
+  const dead = Number(device.deadzones?.[axis]) || 0;
+  if (dead > 0) {
+    // The game's dead zone is a fraction of the half-travel either side of
+    // centre, which is why it is drawn from the middle outwards both ways.
+    const band = el('div', 'controls-axis-dead');
+    band.style.left = `${Math.max(0, 50 - dead * 50)}%`;
+    band.style.width = `${Math.min(100, dead * 100)}%`;
+    band.title = `dead zone ${Math.round(dead * 1000) / 10}%`;
+    track.append(band);
+  }
+  track.append(el('div', 'controls-axis-centre'));
+  const needle = el('div', 'controls-axis-needle');
+  needle.hidden = true;
+  track.append(needle);
+  row.append(track);
+
+  row.append(el('div', `controls-axis-gauge-what${here.length ? '' : ' muted'}`,
+    here.length ? here.map((b) => b.label).join(' / ') : 'nothing bound'));
+  return row;
 }
 
 /**
@@ -9908,14 +9962,25 @@ function paintControlsLive() {
   for (const control of active) if (!controlsLiveLit.has(control)) controlsHighlight(control, true);
   controlsLiveLit = active;
   // Axis values, on the editor's rows.
-  const names = ['x', 'y', 'z', 'rotx', 'roty', 'rotz', 'slider1', 'slider2'];
+  const names = CONTROLS_AXIS_ORDER;
+  const reading = (axis) => {
+    const i = names.indexOf(axis);
+    return i >= 0 && i < (live.axes || []).length ? live.axes[i] : null;
+  };
   for (const tr of $('#controls-axes')?.querySelectorAll?.('tr') || []) {
     if (!tr.dataset?.axis) continue;
     const meter = tr.querySelector('.controls-axis-live');
     if (!meter) continue;
-    const i = names.indexOf(tr.dataset.axis);
-    const value = i >= 0 && i < (live.axes || []).length ? live.axes[i] : null;
+    const value = reading(tr.dataset.axis);
     meter.textContent = value == null ? '' : value.toFixed(2);
+  }
+  // ...and the needle on the stand-in's gauges, when there is no picture.
+  for (const row of $('#controls-svg')?.querySelectorAll?.('.controls-axis-gauge') || []) {
+    const needle = row.querySelector('.controls-axis-needle');
+    if (!needle) continue;
+    const value = reading(row.dataset?.control);
+    needle.hidden = value == null;
+    if (value != null) needle.style.left = `${Math.min(100, Math.max(0, (value + 1) * 50))}%`;
   }
 }
 

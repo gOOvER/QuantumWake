@@ -154,7 +154,7 @@ public class ControlsPageTests
         Assert.Equal(2, page.Count($"{grid}.querySelectorAll('.controls-grid-button').filter(n => n.classList.contains('bound')).length"));
         Assert.Contains("to 8, the highest your profile mentions being 7", page.NodeText("#controls-svg"));
         Assert.Contains("Eject", page.Text($"{grid}.querySelectorAll('.controls-grid-button').filter(n => n.classList.contains('bound'))[0].textContent"));
-        Assert.Equal(2, page.Count($"{grid}.querySelectorAll('.controls-grid-axis').length"));
+        Assert.Equal(2, page.Count($"{grid}.querySelectorAll('.controls-axis-gauge').length"));
         Assert.Contains("Pitch", page.NodeText("#controls-svg"));
         Assert.Contains("stand-in until a picture is chosen", page.NodeText("#controls-svg"));
 
@@ -969,7 +969,7 @@ public class ControlsPageTests
     {
         var page = Rudderless();
 
-        Assert.Equal(3, page.Count("__dom.node('#controls-svg').querySelectorAll('.controls-grid-axis').length"));
+        Assert.Equal(3, page.Count("__dom.node('#controls-svg').querySelectorAll('.controls-axis-gauge').length"));
         Assert.Contains("Axes", page.NodeText("#controls-svg"));
         Assert.Contains("Roll", page.NodeText("#controls-svg"));
         Assert.Contains("Drive Forward", page.NodeText("#controls-svg"));
@@ -997,5 +997,52 @@ public class ControlsPageTests
 
         Assert.True(page.Count("__dom.node('#controls-svg').querySelectorAll('.controls-grid-button').length") >= 8);
         Assert.Contains("as Windows numbers them", page.NodeText("#controls-svg"));
+    }
+
+    [Fact]
+    public void An_axis_is_drawn_as_a_gauge_with_its_action_beside_it()
+    {
+        var page = Rudderless();
+
+        Assert.Equal(3, page.Count("__dom.node('#controls-svg').querySelectorAll('.controls-axis-gauge').length"));
+        Assert.Equal(3, page.Count("__dom.node('#controls-svg').querySelectorAll('.controls-axis-track').length"));
+        // The game's name for an axis is one letter; a gauge can afford words.
+        Assert.Contains("Z axis", page.NodeText("#controls-svg"));
+        Assert.Contains("Roll", page.NodeText("#controls-svg"));
+    }
+
+    [Fact]
+    public void An_axis_with_a_dead_zone_shows_it_and_one_without_does_not()
+    {
+        var page = new Page();
+        page.Serve("/api/controls", Rudder.Replace("\"deadzones\":{}", "\"deadzones\":{\"z\":0.1}"));
+        page.Serve("/api/controls/backups", "[]");
+        page.Do("showControlsPane('devices'); await loadControls(); controlsDevice = 'js3'; await renderControlsDevice();");
+
+        // One band, on the one axis that sets one - not three faint ones.
+        Assert.Equal(1, page.Count("__dom.node('#controls-svg').querySelectorAll('.controls-axis-dead').length"));
+    }
+
+    [Fact]
+    public void The_needle_stays_hidden_until_there_is_something_to_read()
+    {
+        var page = Rudderless();
+
+        // Every gauge has one, and none of them is showing: a needle parked at
+        // centre would read as "the axis is centred" rather than "not read".
+        Assert.Equal(3, page.Count("__dom.node('#controls-svg').querySelectorAll('.controls-axis-needle').length"));
+        Assert.True(page.Truth("[...__dom.node('#controls-svg').querySelectorAll('.controls-axis-needle')].every(n => n.hidden)"));
+    }
+
+    [Fact]
+    public void Axes_are_named_in_the_order_windows_reports_them()
+    {
+        var page = Rudderless();
+
+        // The profile mentions them z, x, y; the gauge column is the device's
+        // own order, so it reads the way the device is wired.
+        Assert.Equal(
+            "X axis,Y axis,Z axis",
+            page.Text("[...__dom.node('#controls-svg').querySelectorAll('.controls-axis-gauge-name')].map(n => n.textContent).join(',')"));
     }
 }

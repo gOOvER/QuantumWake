@@ -365,7 +365,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.15
+### 0.15.16
+
+- **Axes are drawn, not listed.** Every axis on a stick without a picture now
+  gets a gauge — a track with its centre marked, the dead zone you have set
+  shaded around it, and a needle that follows the axis when the tray app is
+  reading your sticks. A rudder is three axes and nothing else, so a
+  two-column list of letters was the whole of its picture; this is the same
+  information with a shape. It costs a joystick nothing, and with the sticks
+  live it shows every axis the device has rather than only the ones you have
+  bound.
 
 - **A stick with no picture is drawn as what it is, not as a joystick.** The
   stand-in always started with at least eight numbered buttons, which was a
