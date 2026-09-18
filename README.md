@@ -365,7 +365,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.11
+### 0.15.12
+
+- **Exported keybindings now land under a name the game will actually load.**
+  The game lists a profile only when its file is named
+  `layout_<name>_exported.xml`, and takes that whole filename at the console.
+  The app wrote `<name>.xml` and printed `pp_rebindkeys <name>`, so every
+  export made while the game was running — which is the route the app takes
+  *because* the game is running — went somewhere the game never looks, and
+  nothing said so. The file and the command now match the game's own
+  convention.
 
 - **Long action names stay inside their box on a stick's picture.** A name
   the box could not hold on two lines — *Landing System (Toggle)* on the

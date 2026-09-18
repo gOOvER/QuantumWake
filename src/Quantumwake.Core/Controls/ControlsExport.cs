@@ -254,6 +254,28 @@ public static class ControlsExport
     /// A file name the game accepts: letters, digits, dash and underscore;
     /// the profile is then <c>pp_rebindkeys &lt;name&gt;</c> at the console.
     /// </summary>
+    /// <summary>
+    /// The filename the game will list and <c>pp_rebindkeys</c> will load.
+    /// </summary>
+    /// <remarks>
+    /// The game's own export writes <c>layout_&lt;name&gt;_exported.xml</c> - the one
+    /// file in this install's mappings folder is <c>layout_nick_exported.xml</c> - and
+    /// the console command is given that filename, not a bare name. A profile written
+    /// under any other name sits in the folder and is never listed, which fails
+    /// silently: the app reported it had written one and printed a command that finds
+    /// nothing. A name that already carries the prefix or the suffix keeps them rather
+    /// than growing a second pair.
+    /// </remarks>
+    public static string MappingFileName(string name)
+    {
+        var safe = SafeName(name);
+        if (safe.StartsWith("layout_", StringComparison.OrdinalIgnoreCase)) safe = safe["layout_".Length..];
+        if (safe.EndsWith("_exported", StringComparison.OrdinalIgnoreCase)) safe = safe[..^"_exported".Length];
+        safe = safe.Trim('_');
+        if (safe.Length == 0) safe = "quantumwake";
+        return $"layout_{safe}_exported.xml";
+    }
+
     public static string SafeName(string name)
     {
         var chars = name.Trim().Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' ? c : '_').ToArray();

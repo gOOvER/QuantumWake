@@ -221,10 +221,10 @@ public static class ControlsEndpoints
 
             var name = ControlsExport.SafeName(body.Name ?? "quantumwake-axes");
             var export = ControlsExport.Build(changed, name);
-            var mappings = Path.Combine(ControlsWatchService.MappingsFolder(install), name + ".xml");
+            var mappings = Path.Combine(ControlsWatchService.MappingsFolder(install), ControlsExport.MappingFileName(name));
             Directory.CreateDirectory(ControlsWatchService.MappingsFolder(install));
             File.WriteAllText(mappings, export.ToString(), new UTF8Encoding(false));
-            return Results.Ok(new { how, name, mappings, command = $"pp_rebindkeys {name}" });
+            return Results.Ok(new { how, name, mappings, command = $"pp_rebindkeys {ControlsExport.MappingFileName(name)}" });
         });
 
         // Bindings changed - a control given an action, or taken off one -
@@ -260,10 +260,10 @@ public static class ControlsEndpoints
 
             var name = ControlsExport.SafeName(body.Name ?? "quantumwake-bindings");
             var export = ControlsExport.Build(changed, name);
-            var mappings = Path.Combine(ControlsWatchService.MappingsFolder(install), name + ".xml");
+            var mappings = Path.Combine(ControlsWatchService.MappingsFolder(install), ControlsExport.MappingFileName(name));
             Directory.CreateDirectory(ControlsWatchService.MappingsFolder(install));
             File.WriteAllText(mappings, export.ToString(), new UTF8Encoding(false));
-            return Results.Ok(new { how, name, mappings, changed = changes.Count, command = $"pp_rebindkeys {name}" });
+            return Results.Ok(new { how, name, mappings, changed = changes.Count, command = $"pp_rebindkeys {ControlsExport.MappingFileName(name)}" });
         });
 
         // The sticks as Windows sees them this instant, matched to the profile
@@ -362,19 +362,19 @@ public static class ControlsEndpoints
 
             var folder = Quantumwake.Core.AppPaths.In("controls", "exports");
             Directory.CreateDirectory(folder);
-            var path = Path.Combine(folder, name + ".xml");
+            var path = Path.Combine(folder, ControlsExport.MappingFileName(name));
             File.WriteAllText(path, export.ToString(), new UTF8Encoding(false));
 
             var installed = false;
             string? mappings = null;
             if (body.Install && install is not null)
             {
-                mappings = Path.Combine(ControlsWatchService.MappingsFolder(install), name + ".xml");
+                mappings = Path.Combine(ControlsWatchService.MappingsFolder(install), ControlsExport.MappingFileName(name));
                 Directory.CreateDirectory(ControlsWatchService.MappingsFolder(install));
                 File.Copy(path, mappings, overwrite: true);
                 installed = true;
             }
-            return Results.Ok(new { name, path, installed, mappings, command = $"pp_rebindkeys {name}" });
+            return Results.Ok(new { name, path, installed, mappings, command = $"pp_rebindkeys {ControlsExport.MappingFileName(name)}" });
         });
 
         // The template feed: opt-in, like every other.
