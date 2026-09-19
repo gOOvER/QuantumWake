@@ -161,6 +161,43 @@ public class ScreenAppsTests
         Assert.Equal("DRAK_Ironclad", page.Text("garageClass"));
     }
 
+    /// <summary>
+    /// Fitting a ship opens the Vehicle Loadout Manager, not a flight log. A
+    /// named fit is still evidence the hull belongs in the Fleet roster, so a
+    /// later Fleet Manager photograph that omits it must not make it vanish.
+    /// </summary>
+    [Fact]
+    public void A_photographed_fit_without_a_flight_stays_in_the_fleet_roster()
+    {
+        var page = new Page();
+        page.Serve("/api/screen/fittings", """
+            [{"shot":"ScreenShot-2026-09-19_15-06-58-AAA.jpg","shotAt":"2026-09-19T19:06:58Z",
+              "ship":"Origin 315p","className":"ORIG_315p","scope":null,"fittings":[]}]
+            """);
+        page.Serve("/api/screen/fleet", """{"shot":null,"shotAt":null,"ships":[]}""");
+        page.Serve("/api/fleet/paints/ORIG_315p", "[]");
+        page.Do("""
+            libraryStats = { fleetSize: 1, fleetHistory: [], ships: [
+              {name:'Drake Corsair', className:'DRAK_Corsair', sorties:4,
+               estimatedTime:'02:00:00', lastFlown:'2026-09-18T00:00:00Z', reference:{isSpaceship:true}}
+            ]};
+            photographedFleetShips = [];
+            renderFleet(libraryStats);
+            await renderFleetFittings();
+            """);
+
+        Assert.Equal(1, Convert.ToInt32(page.Eval("photographedFleetShips.length")));
+        Assert.Equal("Drake Corsair|Origin 315p", page.Text("fleetRoster(libraryStats).map(ship => ship.name).join('|')"));
+        var roster = page.NodeText("#fleet-ships");
+        Assert.Contains("315p", roster);
+        Assert.Contains("fit photographed", roster);
+        Assert.Contains("no flights logged", roster);
+        Assert.Contains("2 of 2", page.NodeText("#fleet-summary"));
+
+        var card = "__dom.node('#fleet-ships').descendants().find(n => n.classList.contains('ship-card') && n.textContent.includes('315p'))";
+        Assert.True(page.Truth($"{card}.descendants().find(n => n.classList.contains('ship-compare')).disabled"));
+    }
+
     [Fact]
     public void With_no_fleet_photographed_the_berths_stay_hidden()
     {

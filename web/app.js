@@ -8820,6 +8820,18 @@ async function renderFleetFittings() {
     ships = [];
   }
 
+  photographedFleetShips = ships
+    .filter((ship) => ship.ship)
+    .map((ship) => ({
+      name: ship.ship,
+      className: ship.className || '',
+      sorties: 0,
+      estimatedTime: '00:00:00',
+      lastFlown: null,
+      photographedAt: ship.shotAt
+    }));
+  if (libraryStats) renderFleet(libraryStats);
+
   grid.textContent = '';
   const any = ships.length > 0;
   if (title) title.hidden = !any;
@@ -13894,6 +13906,27 @@ function componentClassChip(componentClass) {
   return chip;
 }
 
+/**
+ * A stealth label needs a measured meaning. The game no longer consistently
+ * classifies components as "Stealth", so mark the quietest compatible choice
+ * only when the installed data gives both of its signatures and the choices
+ * actually differ.
+ */
+function stealthPickChip(part, choices) {
+  const score = (candidate) => Number.isFinite(candidate?.em) && Number.isFinite(candidate?.ir)
+    ? candidate.em + candidate.ir : null;
+  const scores = choices.map(score).filter((value) => value !== null);
+  const here = score(part);
+  if (here === null || scores.length < 2) return null;
+
+  const lowest = Math.min(...scores);
+  if (here !== lowest || !scores.some((value) => value > lowest)) return null;
+
+  const chip = el('span', 'chip stealth', 'Stealth pick');
+  chip.title = 'Lowest combined EM + IR among the compatible parts shown; lower signatures are quieter.';
+  return chip;
+}
+
 /** A route is useful only when its kind is stated: a shop and a recipe answer different plans. */
 function acquisitionChip(kind, text, title) {
   const chip = el('span', `acquisition ${kind}`, text);
@@ -14167,6 +14200,8 @@ function renderBenchPanel() {
     name.append(partChip(part));
     const componentClass = componentClassChip(option.componentClass);
     if (componentClass) name.append(componentClass);
+    const stealth = stealthPickChip(part, garageOptions.options.map((choice) => choice.part));
+    if (stealth) name.append(stealth);
     const pip = pipChip(part, fittedPart);
     if (pip) name.append(pip);
     mid.append(name);
@@ -18469,19 +18504,35 @@ const money = (n) => `${Math.round(Number(n) || 0).toLocaleString()} aUEC`;
 /* Kept so the filter controls can re-render without another fetch. */
 let libraryStats = null;
 
+/* A named Vehicle Loadout Manager reading proves that this hull was available
+ * to fit, even when the log never saw it leave a pad. Keep that evidence in
+ * the Fleet roster rather than letting a later Fleet Manager photograph make
+ * the hull disappear. It is deliberately separate from libraryStats: the
+ * latter is the flight-log aggregate and must not acquire invented sorties. */
+let photographedFleetShips = [];
+
+function fleetRoster(stats) {
+  const known = new Set((stats?.ships || []).map((ship) => ship.name.toLowerCase()));
+  return [
+    ...(stats?.ships || []),
+    ...photographedFleetShips.filter((ship) => !known.has(ship.name.toLowerCase()))
+  ];
+}
+
 function renderFleet(stats) {
   libraryStats = stats;
+  const roster = fleetRoster(stats);
 
   // Unticked ships are not owned - a rental, or since sold - so every total
   // ignores them. Flight time and sorties still count: those happened.
-  const owned = stats.ships.filter((s) => !excludedShips.has(s.name));
+  const owned = roster.filter((s) => !excludedShips.has(s.name));
 
   // The game's entitlement count bundles ships and ground vehicles into one
   // number and never names them, so it is labelled as its own thing rather
   // than pretending to agree with the ticked roster.
   const fleetTiles = [
     ['Owned per game*', stats.fleetSize ?? '—'],
-    ['Roster ticked', `${owned.length} of ${stats.ships.length}`],
+    ['Roster ticked', `${owned.length} of ${roster.length}`],
     ['Total flights', owned.reduce((sum, s) => sum + s.sorties, 0)],
     ['Time aboard', `~${duration(owned.reduce((sum, s) => sum + toSeconds(s.estimatedTime), 0))}`],
   ];
@@ -18550,7 +18601,9 @@ function toggleShipPreview(ship, card) {
   }
   if (!body) return;
 
-  const preview = el('div', 'ship-preview', `${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'} · ~${duration(toSeconds(ship.estimatedTime))} aboard · last flown ${relative(ship.lastFlown)}.`);
+  const preview = el('div', 'ship-preview', ship.photographedAt
+    ? `fit photographed ${relative(ship.photographedAt)} · no flights logged.`
+    : `${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'} · ~${duration(toSeconds(ship.estimatedTime))} aboard · last flown ${relative(ship.lastFlown)}.`);
   body.append(preview);
 
   hangarPreviewFor(ship).then((sized) => {
@@ -18582,7 +18635,8 @@ function renderFleetShips() {
   // Unticked ships stay on the page, struck through - this is where the tick
   // lives, so hiding them would make the choice irreversible. They sort to
   // the back and count for nothing.
-  const ships = libraryStats.ships.filter((s) => {
+  const roster = fleetRoster(libraryStats);
+  const ships = roster.filter((s) => {
     const grounded = s.reference && !s.reference.isSpaceship;
     if (term && !s.name.toLowerCase().includes(term)) return false;
     if (cutoff && new Date(s.lastFlown).getTime() < cutoff) return false;
@@ -18602,7 +18656,7 @@ function renderFleetShips() {
 
   if (!ships.length) {
     grid.append(el('p', 'muted',
-      libraryStats.ships.length ? 'No ships match that filter.' : 'No ships recorded yet.'));
+      roster.length ? 'No ships match that filter.' : 'No ships recorded yet.'));
     return;
   }
 
@@ -18681,7 +18735,9 @@ function renderFleetShips() {
     if (seconds > 0) stat.append(el('span', 'note-inline', ` · ~${duration(seconds)}`));
 
     body.append(stat);
-    body.append(el('div', 'ship-seen', `last flown ${relative(ship.lastFlown)}`));
+    body.append(el('div', 'ship-seen', ship.photographedAt
+      ? `fit photographed ${relative(ship.photographedAt)} · no flights logged`
+      : `last flown ${relative(ship.lastFlown)}`));
 
     const statuses = el('div', 'ship-status');
     if (favouriteShips.has(ship.name)) statuses.append(el('span', 'ship-status-mark favourite', '★ favourite'));
@@ -18739,9 +18795,11 @@ function renderFleetShips() {
 
     const compare = el('button', hangarComparison.has(ship.name) ? 'ghost tiny ship-compare active' : 'ghost tiny ship-compare', hangarComparison.has(ship.name) ? 'Selected to compare' : 'Compare');
     compare.type = 'button';
-    compare.disabled = off;
+    compare.disabled = off || !!ship.photographedAt;
     compare.title = off
       ? 'Tick this ship as owned before comparing it in Hangar'
+      : ship.photographedAt
+        ? 'A photographed fit has no flight or size record to compare in Hangar'
       : 'Select this ship and one other, then compare them in Hangar';
     compare.addEventListener('click', () => {
       if (hangarComparison.has(ship.name)) hangarComparison.delete(ship.name);

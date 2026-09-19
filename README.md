@@ -365,7 +365,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.18
+### 0.15.19
+
+- **A fitted ship stays in Fleet.** Opening a Vehicle Loadout Manager now keeps
+  its named hull on the Fleet roster even if it has no logged flight or is
+  absent from a later Fleet Manager photo. It is marked as a photographed fit,
+  with no invented flight time.
+- **The quietest compatible part is marked in Garage.** A *Stealth pick* chip
+  identifies the lowest combined EM and IR option for the selected port, when
+  the installed data can measure a real difference.
 
 - **Controls has a flight-controls checklist.** Keep your own important
   actions together, see which do not have a joystick assignment, and compare

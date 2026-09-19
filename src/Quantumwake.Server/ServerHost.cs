@@ -3254,15 +3254,19 @@ public static class ServerHost
 
         // The newest loadout read for each ship, for the fleet page - dated,
         // because a screenshot is a moment and never a state.
-        app.MapGet("/api/screen/fittings", (ScreenReadingStore readings) =>
-            Results.Ok(readings.LatestLoadouts().Select(s => new
+        app.MapGet("/api/screen/fittings", (ScreenReadingStore readings, LogLibrary lib) =>
+        {
+            var byName = VehicleClasses(lib);
+            return Results.Ok(readings.LatestLoadouts().Select(s => new
             {
                 s.Shot,
                 s.ShotAt,
                 ship = s.Loadout!.Ship,
+                className = byName.GetValueOrDefault(s.Loadout.Ship!),
                 s.Loadout.Scope,
                 s.Loadout.Fittings,
-            })));
+            }));
+        });
 
         // The newest Fleet Manager reading: where each ship was, the last time
         // the terminal was photographed. Nothing in the logs says where a
@@ -3278,11 +3282,7 @@ public static class ServerHost
                 return Results.Ok(new { shot = (string?)null, shotAt = (DateTimeOffset?)null, ships = Array.Empty<object>() });
 
             var flown = lib.Stats().Ships.Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var byName = lib.GameCommodities.Vehicles.Values
-                .GroupBy(v => v.Name, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(g => g.Key, g => g.First().Class, StringComparer.OrdinalIgnoreCase);
-            foreach (var ship in lib.Community.Ships)
-                byName.TryAdd(ship.Value.Name, ship.Key);
+            var byName = VehicleClasses(lib);
 
             return Results.Ok(new
             {
@@ -4319,6 +4319,19 @@ static WipeScope ScopeOf(List<string>? covers)
             scope |= one;
 
     return scope == WipeScope.None ? WipeScope.Everything : scope;
+}
+
+/// <summary>The game's class id for each display name this install can resolve.</summary>
+static Dictionary<string, string> VehicleClasses(LogLibrary lib)
+{
+    var byName = lib.GameCommodities.Vehicles.Values
+        .GroupBy(v => v.Name, StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(g => g.Key, g => g.First().Class, StringComparer.OrdinalIgnoreCase);
+
+    foreach (var ship in lib.Community.Ships)
+        byName.TryAdd(ship.Value.Name, ship.Key);
+
+    return byName;
 }
 
 /// <summary>

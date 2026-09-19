@@ -4978,6 +4978,7 @@ body.overlay .ship-picture { display: none; }
 .candidate .c-act .state { font-size: 11px; color: var(--cyan); letter-spacing: .08em; text-transform: uppercase; }
 .chip.count { border-color: var(--cyan-deep); color: var(--cyan); }
 .chip.pip { border-color: rgba(235, 174, 71, .7); color: var(--amber); }
+.chip.stealth { border-color: #a989e8; color: #c9adff; }
 
 /* ---------- saved builds ---------- */
 
