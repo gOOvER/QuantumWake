@@ -8940,11 +8940,22 @@ let controlsBackups = [];
 let controlsDiffPick = [];
 let controlsExportSource = null;
 const CONTROLS_PANES = ['devices', 'actions', 'backups', 'pictures', 'check'];
+let controlsChecklistPins = [];
 
 try {
   const kept = localStorage.getItem('qw-controls-pane');
   if (CONTROLS_PANES.includes(kept)) controlsPane = kept;
 } catch { /* a private window has no memory, which is fine */ }
+
+try {
+  const kept = JSON.parse(localStorage.getItem('qw-controls-checklist-pins') || '[]');
+  if (Array.isArray(kept)) controlsChecklistPins = kept.filter((p) => p && p.actionMap && p.action);
+} catch { /* an older or private browser starts with an empty checklist */ }
+
+function controlsSaveChecklistPins() {
+  try { localStorage.setItem('qw-controls-checklist-pins', JSON.stringify(controlsChecklistPins)); }
+  catch { /* the checklist remains useful for this visit when storage is off */ }
+}
 
 function showControlsPane(name) {
   if (!CONTROLS_PANES.includes(name)) name = 'devices';
@@ -9521,8 +9532,9 @@ async function renderControlsPicture(device, bound) {
 }
 
 /**
- * The check: what the sticks are missing against the layouts the game ships
- * for them.
+ * The checklist holds two different promises apart: the actions a pilot says
+ * matter, and defaults the game recommends for this hardware. Calling both
+ * "mandatory" would make a pilot's preference sound like a game requirement.
  *
  * The counts are shown even - especially - when the list is empty, because
  * "nothing missing" out of 119 reference bindings is an answer and "nothing
@@ -9551,16 +9563,26 @@ async function loadControlsCheck() {
     ? `Against ${against.join(' and ')}.`
     : 'The game ships no reference layout for any stick in your profile, so there is nothing to check against.';
 
-  for (const [label, value, why] of [
-    ['looked at', c.reference, 'bindings in the game’s own layouts for your sticks'],
-    ['already bound', c.bound, 'you have these, wherever you put them'],
-    ['you took off', c.cleared, 'defaults you cleared on purpose, so not missing'],
-    ['renamed since', c.undefined, 'the layout names actions this patch no longer has'],
-    ['dismissed', c.dismissed, 'you said no to these'],
-    ['missing', c.gaps, 'the rest'],
+  const pins = controlsChecklistPins.map((pin) => {
+    const action = controlsModel?.catalogue?.actions?.find((a) => a.actionMap === pin.actionMap && a.name === pin.action);
+    const map = controlsModel?.catalogue?.maps?.find((m) => m.name === pin.actionMap);
+    const bindings = (controlsModel?.profile?.bindings || []).filter((b) => b.actionMap === pin.actionMap && b.action === pin.action && b.input?.device === 'js' && b.input.kind !== 'none');
+    return { ...pin, label: action?.label || pin.label || pin.action, map: map?.label || pin.map || pin.actionMap, bindings };
+  });
+  const pinGaps = pins.filter((pin) => !pin.bindings.length);
+  const gaps = result.gaps || [];
+
+  for (const [label, value, why, hot] of [
+    ['important to you', pins.length, 'actions you chose to keep in view', false],
+    ['important unassigned', pinGaps.length, 'important actions with no joystick binding', pinGaps.length > 0],
+    ['game defaults missing', gaps.length, 'actions in the game’s layout that your profile does not bind', gaps.length > 0],
+    ['already bound', c.bound, 'game-layout defaults you have somewhere on your sticks', false],
+    ['you took off', c.cleared, 'defaults you cleared on purpose, so they are not suggestions', false],
+    ['renamed since', c.undefined, 'layout actions this patch no longer knows by that name', false],
+    ['layouts checked', c.reference, 'bindings in the game’s own layouts for your sticks', false],
   ]) {
     if (value === undefined) continue;
-    const cell = el('div', `controls-check-count${label === 'missing' && value > 0 ? ' hot' : ''}`);
+    const cell = el('div', `controls-check-count${hot ? ' hot' : ''}`);
     cell.append(el('b', null, String(value)));
     cell.append(el('span', null, label));
     cell.title = why;
@@ -9569,14 +9591,71 @@ async function loadControlsCheck() {
 
   again.hidden = !(c.dismissed > 0);
 
-  if (!(result.gaps || []).length) {
-    list.append(el('p', 'muted', against.length
-      ? 'Nothing missing. Every binding the game recommends for your sticks is either already on them or one you took off yourself.'
-      : 'Nothing to report.'));
-    return;
+  const dashboard = el('div', 'controls-check-dashboard');
+  const important = el('section', 'controls-check-section controls-check-important');
+  important.append(el('h4', null, 'Important to you'));
+  important.append(el('p', 'muted small', 'Choose the actions you want to find quickly. They stay here with their joystick status.'));
+  const add = controlsActionPicker([], (action) => {
+    if (!controlsChecklistPins.some((pin) => pin.actionMap === action.actionMap && pin.action === action.name)) {
+      controlsChecklistPins.push({ actionMap: action.actionMap, action: action.name, label: action.label });
+      controlsSaveChecklistPins();
+    }
+    loadControlsCheck().catch(() => {});
+  });
+  add.classList.add('controls-check-add');
+  important.append(add);
+  const importantList = el('div', 'controls-check-important-list');
+  if (!pins.length) {
+    importantList.append(el('p', 'muted small', 'No important actions chosen yet. Search or browse above to add one.'));
   }
+  for (const pin of pins) {
+    const row = el('div', `controls-check-priority-row${pin.bindings.length ? '' : ' unassigned'}`);
+    const head = el('div', 'controls-check-what');
+    head.append(el('b', null, pin.label));
+    head.append(el('span', 'armoury-kind', ` ${pin.map}`));
+    row.append(head);
+    const status = pin.bindings.length
+      ? pin.bindings.map((b) => `${controlsSticks().find((d) => d.key === b.input.deviceKey)?.product || b.input.deviceKey} · ${controlsInputWords(b.input.raw)}`).join(', ')
+      : 'Not assigned to a joystick';
+    row.append(el('div', `controls-check-where${pin.bindings.length ? '' : ' controls-check-unassigned'}`, status));
+    const doing = el('div', 'controls-check-do');
+    if (!pin.bindings.length) {
+      const assign = el('button', 'ghost small', 'find it');
+      assign.type = 'button';
+      assign.title = 'Open the Actions page filtered to this action';
+      assign.addEventListener('click', () => {
+        const search = $('#controls-search');
+        if (search) search.value = pin.label;
+        renderControlsActions();
+        showControlsPane('actions');
+      });
+      doing.append(assign);
+    }
+    const remove = el('button', 'ghost small', 'remove');
+    remove.type = 'button';
+    remove.title = 'Remove this action from your important-controls list';
+    remove.addEventListener('click', () => {
+      controlsChecklistPins = controlsChecklistPins.filter((p) => !(p.actionMap === pin.actionMap && p.action === pin.action));
+      controlsSaveChecklistPins();
+      loadControlsCheck().catch(() => {});
+    });
+    doing.append(remove);
+    row.append(doing);
+    importantList.append(row);
+  }
+  important.append(importantList);
+  dashboard.append(important);
 
-  for (const gap of result.gaps) {
+  const defaults = el('section', 'controls-check-section controls-check-defaults');
+  defaults.append(el('h4', null, 'Game-recommended defaults'));
+  defaults.append(el('p', 'muted small', against.length
+    ? 'The game puts these on your hardware in its own layout. Stage only the ones you want.'
+    : 'The game ships no reference layout for your sticks, so there is nothing to compare.'));
+  const defaultsList = el('div', 'controls-check-defaults-list');
+  if (!gaps.length && against.length) {
+    defaultsList.append(el('p', 'muted small', 'Nothing missing. Every default the game recommends is either assigned or one you removed on purpose.'));
+  }
+  for (const gap of gaps) {
     const row = el('div', 'controls-check-row');
     const head = el('div', 'controls-check-what');
     head.append(el('b', null, gap.label));
@@ -9608,8 +9687,11 @@ async function loadControlsCheck() {
     no.append(box, el('span', null, 'I do not want this'));
     doing.append(no);
     row.append(doing);
-    list.append(row);
+    defaultsList.append(row);
   }
+  defaults.append(defaultsList);
+  dashboard.append(defaults);
+  list.append(dashboard);
 }
 
 $('#controls-check-again')?.addEventListener('click', async () => {

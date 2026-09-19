@@ -871,6 +871,19 @@ public class ControlsPageTests
     }
 
     [Fact]
+    public void The_checklist_keeps_a_pilots_important_action_and_calls_out_when_it_has_no_joystick_binding()
+    {
+        var page = Checked();
+        page.Do("controlsChecklistPins = [{actionMap:'seat_general', action:'v_self_destruct', label:'Self destruct'}]; await loadControlsCheck();");
+
+        var list = page.NodeText("#controls-check-list");
+        Assert.Contains("Important to you", list);
+        Assert.Contains("Self destruct", list);
+        Assert.Contains("Not assigned to a joystick", list);
+        Assert.Contains("find it", list);
+    }
+
+    [Fact]
     public void Staging_a_suggestion_puts_it_in_the_same_pending_list_as_any_other_change()
     {
         var page = Checked();

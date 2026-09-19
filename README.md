@@ -365,7 +365,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.17
+### 0.15.18
+
+- **Controls has a flight-controls checklist.** Keep your own important
+  actions together, see which do not have a joystick assignment, and compare
+  them with the defaults the game recommends for your exact hardware.
 
 - **Setting a curve no longer means knowing what an exponent is.** Drag a
   slider instead of typing `1.35`, or take one of five named curves —
