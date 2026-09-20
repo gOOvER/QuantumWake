@@ -2517,6 +2517,14 @@ public static class ServerHost
                 var lines = job.Items.Select(item =>
                 {
                     var where = HeldWhere(held, item.Name);
+                    var inventorySighting = where.Count > 0 || worn.Contains(item.Name);
+
+                    // A stash log says only that this part was once visible in
+                    // an inventory. It never records putting it onto another
+                    // ship, so using that sighting to close a Garage fit can
+                    // turn "buy a second one" into "nothing to buy". Keep a
+                    // Garage line open until the pilot resolves it instead.
+                    var needsLoosePart = !ShoppingAvailability.CountsInventorySighting(job.Source);
 
                     // Where to get what is missing: a commodity has a cheapest
                     // terminal, an item has a shop.
@@ -2541,9 +2549,10 @@ public static class ServerHost
                         item.Name,
                         item.Needed,
                         item.Unit,
-                        have = where.Count > 0 || worn.Contains(item.Name),
+                        have = inventorySighting && !needsLoosePart,
                         where,
-                        wornNow = worn.Contains(item.Name),
+                        wornNow = worn.Contains(item.Name) && !needsLoosePart,
+                        inventoryUnconfirmed = inventorySighting && needsLoosePart,
                         buyPrice,
                         buyAt
                     };

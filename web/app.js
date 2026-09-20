@@ -15369,7 +15369,13 @@ function jobLines(job) {
     // Where it is, or where to buy what is missing.
     const whereCell = el('td', 'muted');
 
-    if (item.wornNow) {
+    if (item.inventoryUnconfirmed) {
+      whereCell.append(el('span', 'note-inline', 'seen in inventory — not counted'));
+      if (item.where.length) {
+        whereCell.append(document.createTextNode(' · '));
+        whereCell.append(placeLink(item.where[0]));
+      }
+    } else if (item.wornNow) {
       whereCell.textContent = 'worn now';
     } else if (item.where.length) {
       whereCell.append(placeLink(item.where[0]));

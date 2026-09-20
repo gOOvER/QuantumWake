@@ -365,7 +365,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.20
+### 0.15.21
+
+- **A component merely seen in inventory does not close a Garage list.** The
+  logs never say when a ship part was fitted elsewhere, so a Garage list now
+  keeps that purchase open and says *seen in inventory — not counted*. A stash
+  sighting is not proof that a loose spare remains.
 
 - **Shopping starts with fewer stops.** Making a run from a list now groups
   what its known sellers can supply into a stop-efficient route before showing
