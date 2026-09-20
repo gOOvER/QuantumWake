@@ -365,7 +365,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.19
+### 0.15.20
+
+- **Shopping starts with fewer stops.** Making a run from a list now groups
+  what its known sellers can supply into a stop-efficient route before showing
+  the choices. It breaks equal coverage ties by price, and every counter stays
+  selectable when a different route suits the flight better.
 
 - **A fitted ship stays in Fleet.** Opening a Vehicle Loadout Manager now keeps
   its named hull on the Fleet roster even if it has no logged flight or is

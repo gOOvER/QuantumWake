@@ -22424,11 +22424,14 @@ function sellerLabel(seller, item) {
 }
 
 /**
- * Turns what a list is still missing into a run, asking where to buy each thing.
+ * Turns what a list is still missing into a run, grouping its purchases into
+ * a stop-efficient route from the sellers we know.
  *
  * One stop per terminal rather than per item, because a trip is a sequence of
- * places: three things bought at Area18 is one landing. Anything with no known
- * seller is shown and left off rather than quietly dropped.
+ * places: three things bought at Area18 is one landing. Prices decide between
+ * equally useful counters; they do not add a landing just to save a little.
+ * Anything with no known seller is shown and left off rather than quietly
+ * dropped.
  */
 async function planShoppingTrip(job, card) {
   card.querySelectorAll('.trip-chooser').forEach((n) => n.remove());
@@ -22449,8 +22452,8 @@ async function planShoppingTrip(job, card) {
 
   const head = el('div', 'chooser-head');
   head.append(el('span', null, destination
-    ? `Where to buy — ${destination.name} first`
-    : 'Where to buy — one stop per terminal'));
+    ? `Where to buy — ${destination.name} first, fewest stops after`
+    : 'Where to buy — optimised for fewer stops'));
   chooser.append(head);
 
   const rows = el('div', 'chooser-rows');
@@ -22488,6 +22491,52 @@ async function planShoppingTrip(job, card) {
    * is built from the one answer either of them wrote.
    */
   const stops = [];
+
+  // A quoted stock figure below the list's quantity cannot fill that line.
+  // When every quote is short we still show the alternatives, because the
+  // player may decide a partial purchase is useful; otherwise a full seller
+  // is the only one allowed into the automatic route.
+  const suppliesAt = (sellers, item, terminal) => {
+    const here = sellers.filter((seller) => seller.terminal === terminal);
+    if (!here.length) return false;
+    return here.some((seller) => !shortStock(seller, item))
+      || !sellers.some((seller) => !shortStock(seller, item));
+  };
+
+  // A practical set cover: take the counter that supplies the most remaining
+  // lines, then use the price of just those lines to settle a tie. It is kept
+  // deliberately local to this chooser, because stock and a pilot's manual
+  // selections are live UI facts rather than data worth persisting on a job.
+  const optimiseStops = () => {
+    stops.length = 0;
+    const left = new Set(options.filter((o) => o.sellers.length).map((o) => o.item.name));
+
+    while (left.size) {
+      const best = [...new Map(options.flatMap(({ item, sellers }) => sellers.map((seller) => [seller.terminal, seller]))).values()]
+        .map((seller) => ({
+          seller,
+          covers: options.filter(({ item, sellers }) => left.has(item.name)
+            && suppliesAt(sellers, item, seller.terminal)),
+        }))
+        .filter((counter) => counter.covers.length)
+        .sort((a, b) => Number(atSameStop(b.seller, destination)) - Number(atSameStop(a.seller, destination))
+          || b.covers.length - a.covers.length
+          || a.covers.reduce((sum, { item, sellers }) => {
+            const seller = sellers.find((candidate) => candidate.terminal === a.seller.terminal);
+            return sum + (seller?.price || 0) * Math.max(1, item.needed);
+          }, 0) - b.covers.reduce((sum, { item, sellers }) => {
+            const seller = sellers.find((candidate) => candidate.terminal === b.seller.terminal);
+            return sum + (seller?.price || 0) * Math.max(1, item.needed);
+          }, 0)
+          || a.seller.terminal.localeCompare(b.seller.terminal))[0];
+
+      if (!best) break;
+      stops.push(best.seller.terminal);
+      best.covers.forEach(({ item }) => left.delete(item.name));
+    }
+
+    assignFromStops();
+  };
 
   const renderItems = () => {
     rows.textContent = '';
@@ -22567,45 +22616,21 @@ async function planShoppingTrip(job, card) {
       // there regardless, so what it can supply is the first question.
       .sort((a, b) => Number(b.chosen) - Number(a.chosen)
         || b.supplies.length - a.supplies.length
-        || a.cost - b.cost)
-      .slice(0, 20);
+        || a.cost - b.cost);
 
     if (!ranked.length) {
       rows.append(el('div', 'muted', 'Nothing on this list has a known seller.'));
       return;
     }
 
-    // The default plan buys each thing wherever it is cheapest, which is one
-    // landing per thing. Fuel and time cost more than the difference, so the
-    // panel offers the other answer outright.
+    // The plan starts stop-efficient. This button returns to that answer after
+    // the pilot has ticked counters by hand.
     const fewest = el('div', 'chooser-actions');
-    const pack = el('button', 'ghost', 'Fewest stops');
-    pack.title = 'Cover the list with as few landings as possible';
+    const pack = el('button', 'ghost', 'Optimise stops');
+    pack.title = 'Re-group the list into a stop-efficient route';
 
     pack.addEventListener('click', () => {
-      stops.length = 0;
-
-      const left = new Set(options.filter((o) => o.sellers.length).map((o) => o.item.name));
-
-      while (left.size) {
-        // Most of what is still missing, and the cheapest of those.
-        const best = ranked
-          .map((counter) => ({
-            counter,
-            covers: counter.supplies.filter((s) => left.has(s.item.name)),
-          }))
-          .filter((c) => c.covers.length)
-          .sort((a, b) => b.covers.length - a.covers.length
-            || a.covers.reduce((sum, s) => sum + s.seller.price * Math.max(1, s.item.needed), 0)
-             - b.covers.reduce((sum, s) => sum + s.seller.price * Math.max(1, s.item.needed), 0))[0];
-
-        if (!best) break;
-
-        stops.push(best.counter.seller.terminal);
-        best.covers.forEach((s) => left.delete(s.item.name));
-      }
-
-      assignFromStops();
+      optimiseStops();
       renderLocations();
       retally();
     });
@@ -22676,7 +22701,7 @@ async function planShoppingTrip(job, card) {
 
     for (const terminal of stops)
       for (const { item, sellers } of options)
-        if (!chosen.get(item.name) && sellers.some((s) => s.terminal === terminal))
+        if (!chosen.get(item.name) && suppliesAt(sellers, item, terminal))
           chosen.set(item.name, terminal);
   };
 
@@ -22709,6 +22734,10 @@ async function planShoppingTrip(job, card) {
 
   head.append(views);
 
+  // Do this before the first item rows render, so their selects already show
+  // the grouped route instead of briefly saying every line wants its cheapest
+  // counter.
+  optimiseStops();
   renderItems();
   retally();
 

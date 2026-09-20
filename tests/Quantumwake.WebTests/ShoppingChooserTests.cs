@@ -122,6 +122,30 @@ public class ShoppingChooserTests
             page.Text($"{SelectIn(0)}.value"));
     }
 
+    /// <summary>
+    /// The cheapest seller of each line used to make this a two-stop run. A
+    /// counter that can serve both is one landing, so the chooser starts there
+    /// and leaves the cheaper individual picks available for an intentional
+    /// change.
+    /// </summary>
+    [Fact]
+    public void The_initial_plan_groups_lines_at_a_single_counter()
+    {
+        var page = WithSellers();
+        page.Serve("/api/shopping/sellers?name=Agricium", """
+            {"name":"Agricium","kind":"commodity","sellers":[
+              {"kind":"commodity","terminal":"Endgame","placeId":"","security":"lawless","system":"Pyro","price":6840,"scu":67},
+              {"kind":"commodity","terminal":"ArcCorp 056","placeId":"","security":"unknown","price":7200,"scu":900}
+            ]}
+            """);
+
+        OpenChooser(page, includeUnknown: false);
+
+        Assert.Equal("ArcCorp 056", page.Text($"{SelectIn(0)}.value"));
+        Assert.Equal("ArcCorp 056", page.Text($"{SelectIn(1)}.value"));
+        Assert.Equal("1 stop", page.Text("__dom.node('#test-card').byClass('chooser-foot')[0].children[0].textContent"));
+    }
+
     [Fact]
     public void Something_with_no_seller_is_shown_rather_than_dropped()
     {

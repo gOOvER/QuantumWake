@@ -186,9 +186,11 @@ current panel.
    data (`builds.json`, `IStamped`, in the backup like the rest). Reopen it,
    compare two builds side by side, revert to stock.
 5. **Shop for it.** *Add to shopping list* turns the changed parts into a job
-   of kind `list`, one line per part, and proposes the destination that sells
-   the most of them (or the cheapest total when one shop has them all). From
-   there it is the existing flow: Now page, overlay, MFD List page.
+   of kind `list`, one line per part, and proposes the counter that covers the
+   most of them. When the pilot makes a run from that list, Shopping groups all
+   known sellers into a stop-efficient starting route; the pilot can still
+   choose another counter for any line. From there it is the existing flow:
+   Now page, overlay, MFD List page.
 
 ## Storage, API, digest
 
