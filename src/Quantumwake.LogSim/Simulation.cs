@@ -66,22 +66,26 @@ internal static class Fixtures
         ("DRAK", "Clipper")
     ];
 
-    public static readonly (string Generator, string Contract)[] Contracts =
+    /// <summary>
+    /// Archetype and the title the toast shows for it, paired: the title is
+    /// what the mobiGlas prints, and for the Red Wind hauls it names the
+    /// destination the way the StarStrings mod does, which is what the
+    /// hauling plan reads.
+    /// </summary>
+    public static readonly (string Generator, string Contract, string Title)[] Contracts =
     [
-        ("Covalex_RecoverCargo", "Covalex_Stanton_VeryHard_RecoverCargo"),
-        ("Ling_RecoverCargo", "Ling_Stanton_VeryEasy_RecoverCargo"),
-        ("RedWind_RecoverCargo", "RedWind_Stanton_Easy_RecoverCargo"),
-        ("FTL_Courier", "FTL_Courier_Stanton_AmmoCrate_Rank0_2"),
-        ("EchhartSecurity", "EchhartSecurity_Stanton_VeryEasy_RecoverCargo"),
-        ("HaulCargo", "HaulCargo_AToB_Interstellar_Bulk_DistSp_Dia_FresFoo_Gol_Aphor")
-    ];
-
-    public static readonly string[] ContractTitles =
-    [
-        "Bulk Covalex Shipment Needs Recovering",
-        "Small Covalex Shipment Needs Recovering",
-        "Cargo Retrieval Required",
-        "Urgent Delivery Contract"
+        ("Covalex_RecoverCargo", "Covalex_Stanton_VeryHard_RecoverCargo", "Bulk Covalex Shipment Needs Recovering"),
+        ("Ling_RecoverCargo", "Ling_Stanton_VeryEasy_RecoverCargo", "Small Covalex Shipment Needs Recovering"),
+        ("RedWind_RecoverCargo", "RedWind_Stanton_Easy_RecoverCargo", "Cargo Retrieval Required"),
+        ("FTL_Courier", "FTL_Courier_Stanton_AmmoCrate_Rank0_2", "Urgent Delivery Contract"),
+        ("EchhartSecurity", "EchhartSecurity_Stanton_VeryEasy_RecoverCargo", "Cargo Retrieval Required"),
+        ("HaulCargo", "HaulCargo_AToB_Interstellar_Bulk_DistSp_Dia_FresFoo_Gol_Aphor", "Junior Rank - Direct Small Cargo Haul"),
+        ("RedWind_CargoHauling", "RedWind_Pyro_SmallGrade_Solar_CFP_TradepostToStation_Aluminum_CargoHauling_Multi3ToSingle",
+            "Junior | Stellar Small Haul | to Stanton Gateway <EM4>[50/200/250/500/1000/2000/4000 Rep]</EM4>"),
+        ("RedWind_CargoHauling", "RedWind_Pyro_SmallGrade_Solar_CFP_TradepostToStation_Copper_CargoHauling_Multi2ToSingle",
+            "Junior | Stellar Small Haul | to Ruin Station <EM4>[50/200/250/500/1000/2000/4000 Rep]</EM4>"),
+        ("RedWind_CargoHauling", "RedWind_Pyro_SupplyGrade_RegionA_CFP_StationToTradepost_Carbon_CargoHauling_AtoB_Intro",
+            "Rookie | <EM3>DIRECT</EM3> Small Haul | Ruin Station > Checkmate <EM4>[BP]*</EM4>"),
     ];
 
     public static readonly string[] Npcs =
@@ -212,13 +216,13 @@ internal sealed class Simulation
         if (_random.NextDouble() < 0.6)
         {
             Advance(20, 90);
-            var (generator, contract) = Pick(Fixtures.Contracts);
+            var (generator, contract, title) = Pick(Fixtures.Contracts);
             var missionId = Guid.NewGuid().ToString();
 
             _log.ContractMarker(_now, missionId, generator, contract, Guid.NewGuid().ToString());
             _log.Notification(
                 _now.AddSeconds(1),
-                $"Contract Accepted:  {Pick(Fixtures.ContractTitles)}: ",
+                $"Contract Accepted:  {title}: ",
                 _notificationId++,
                 missionId);
         }

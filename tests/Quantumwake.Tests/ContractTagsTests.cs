@@ -54,6 +54,9 @@ public class ContractTagsTests
         "Salvager Needed (Med. Supply of RMC / UCM)")]
     [InlineData("ENTRY LVL. COURIER NEEDED IN STANTON: ", "ENTRY LVL. COURIER NEEDED IN STANTON")]
     [InlineData("Plain Title", "Plain Title")]
+    // The Red Wind hauls carry the whole ladder, which is a tag and not a number.
+    [InlineData("Junior | Stellar Small Haul | to Stanton Gateway <EM4>[50/200/250/500/1000/2000/4000 Rep]</EM4>: ",
+        "Junior | Stellar Small Haul | to Stanton Gateway")]
     public void The_name_survives_the_tags_coming_off(string title, string expected)
     {
         Assert.Equal(expected, ContractTags.Clean(title));

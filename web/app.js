@@ -861,6 +861,25 @@ function recentScreenDisagreement(state) {
   return `${differs.subject}: ${differs.note || differs.belief || differs.claim}`;
 }
 
+/**
+ * The contract worth leading with. A hauling contract that names where it
+ * goes leads with that, and points at Shopping, where the run is planned;
+ * several hauls open say so, because one destination is not the picture.
+ */
+function contractFocus(contracts) {
+  const hauls = contracts.filter((c) => c.hauling);
+
+  if (hauls.length) {
+    const ends = [...new Set(hauls.map((c) => c.delivery).filter(Boolean))];
+    const detail = hauls.length === 1
+      ? (hauls[0].delivery ? `Deliver to ${hauls[0].delivery}` : hauls[0].name)
+      : `${hauls.length} hauls open${ends.length ? ` — to ${ends.join(', ')}` : ''}`;
+    return { title: hauls.length === 1 ? 'Hauling' : 'Hauling run', detail, view: 'jobs', action: 'Plan the run' };
+  }
+
+  return { title: 'Active contract', detail: contracts[0].name || 'Open contract', view: 'contracts', action: 'Contracts' };
+}
+
 /** The one decision worth leading the hub with, before the configurable cards. */
 function renderNowFocus(state, briefing = pilotBriefing) {
   const strip = $('#now-focus');
@@ -876,7 +895,7 @@ function renderNowFocus(state, briefing = pilotBriefing) {
   if (state?.travelling) focus = { title: 'In quantum', detail: state.travellingTo || 'Destination not identified', view: 'map', action: 'Map' };
   else if (differing) focus = { title: 'Screenshot differs from the logs', detail: differing, view: 'log', action: 'Log' };
   else if (nextStop) focus = { title: 'Next stop', detail: nextStop.place || briefing.tripTitle || 'Tracked flight plan', view: 'map', action: 'Map' };
-  else if (state?.contracts?.length) focus = { title: 'Active contract', detail: state.contracts[0].name || 'Open contract', view: 'contracts', action: 'Contracts' };
+  else if (state?.contracts?.length) focus = contractFocus(state.contracts);
   else if (state?.location) focus = { title: 'At location', detail: state.location, view: 'map', action: 'Map' };
 
   strip.hidden = !focus;
@@ -15339,8 +15358,12 @@ async function loadJobContracts() {
   }
 
   let rows = [];
+  let plan = null;
   try {
-    rows = await getJson('/api/contracts?days=2');
+    [rows, plan] = await Promise.all([
+      getJson('/api/contracts?days=2'),
+      getJson('/api/haul/plan').catch(() => null),
+    ]);
   } catch { /* nothing to show */ }
 
   // This session only: anything taken before it started belongs to the past.
@@ -15348,20 +15371,25 @@ async function loadJobContracts() {
   const open = rows.filter((c) =>
     c.outcome === 'InProgress' && new Date(c.at).getTime() >= since);
 
-  if (!open.length) {
+  if (!open.length && !plan?.contracts?.length) {
     host.append(el('p', 'muted', 'No contract open in this session.'));
     return;
   }
 
-  for (const contract of open) {
+  if (plan?.contracts?.length) renderHaulPlan(host, plan);
+
+  // Everything that is not a haul keeps its plain card; the hauls are on
+  // the run above, with their legs.
+  for (const contract of open.filter((c) => !c.hauling)) {
     const card = el('article', 'job-card');
 
     const head = el('div', 'job-head');
-    head.append(el('b', null, `${contract.issuer} · ${contract.type}`));
+    head.append(el('b', null, contract.name || `${contract.issuer} · ${contract.type}`));
     if (contract.difficulty) head.append(el('span', 'job-kind', contract.difficulty));
     card.append(head);
 
-    const sub = [contract.system, `taken ${relative(contract.at)}`].filter(Boolean).join(' · ');
+    const sub = [contract.issuer, contract.type, contract.system, `taken ${relative(contract.at)}`]
+      .filter(Boolean).join(' · ');
     card.append(el('div', 'muted', sub));
 
     if (contract.steps > 0) {
@@ -15371,6 +15399,129 @@ async function loadJobContracts() {
 
     host.append(card);
   }
+}
+
+/**
+ * Every open hauling contract on one route: what each one is known to
+ * want, from its title or from a screenshot of its card, then the stops in
+ * an order the pilot can rewrite once it is a flight plan.
+ *
+ * What the plan cannot see is said in words next to the thing it cannot see,
+ * because a route with a pickup silently missing is worse than no route.
+ */
+function renderHaulPlan(host, plan) {
+  const section = el('div', 'haul-plan');
+  section.append(el('h3', 'spaced', 'Hauling run'));
+
+  const read = plan.contracts.filter((c) => c.source === 'screenshot').length;
+  const summary = [
+    `${plan.contracts.length} contract${plan.contracts.length === 1 ? '' : 's'}`,
+    `${read} with the card read`,
+    plan.knownScu > 0
+      ? `${plan.knownScu} SCU${read < plan.contracts.length ? ' known (a floor)' : ''}`
+      : null,
+    plan.ship && plan.shipScu ? `${plan.ship} holds ${plan.shipScu} SCU` : null,
+  ].filter(Boolean).join(' · ');
+  section.append(el('p', 'muted caption', summary));
+
+  if (plan.knownScu > 0 && plan.shipScu && plan.knownScu > plan.shipScu) {
+    section.append(el('p', 'outward caption',
+      `${plan.knownScu} SCU is more than the ${plan.ship} holds — two trips, or another hull.`));
+  }
+
+  for (const c of plan.contracts) {
+    const card = el('article', 'job-card haul-contract');
+
+    const head = el('div', 'job-head');
+    head.append(el('b', null, c.title));
+    const source = c.source === 'screenshot' ? 'card read' : c.source === 'title' ? 'title only' : 'unread';
+    head.append(el('span', 'job-kind', source));
+    if (c.commodity) head.append(el('span', 'muted', c.commodity));
+    card.append(head);
+
+    if (c.legs.length) {
+      const legs = el('ul', 'haul-legs');
+      for (const leg of c.legs) {
+        const from = leg.pickup
+          ? `${leg.pickup}${leg.pickupBody ? ` (${leg.pickupBody})` : ''}`
+          : 'pickup not known';
+        const to = leg.delivery
+          ? `${leg.delivery}${leg.deliveryBody ? ` (${leg.deliveryBody})` : ''}`
+          : 'drop-off not known';
+        const scu = leg.scu != null ? ` · ${leg.scuDone || 0}/${leg.scu} SCU` : '';
+        legs.append(el('li', leg.pickup && leg.delivery ? null : 'muted', `${from} → ${to}${scu}`));
+      }
+      card.append(legs);
+    }
+
+    if (c.pickups > 0 || c.deliveries > 0) {
+      const bits = [];
+      if (c.pickups > 0) bits.push(`${c.pickupsDone} of ${c.pickups} pickup${c.pickups === 1 ? '' : 's'} done`);
+      if (c.deliveries > 0) bits.push(`${c.deliveriesDone} of ${c.deliveries} drop-off${c.deliveries === 1 ? '' : 's'} done`);
+      card.append(el('div', 'muted haul-progress', bits.join(' · ')));
+    }
+
+    if (c.note) card.append(el('div', 'muted haul-note', c.note));
+    if (c.shot) card.append(el('div', 'muted haul-note', `read from ${c.shot}`));
+
+    section.append(card);
+  }
+
+  if (plan.stops.length) {
+    const table = el('table', 'job-items haul-stops');
+    const body = el('tbody');
+
+    plan.stops.forEach((stop, i) => {
+      const tr = el('tr', 'have');
+      tr.append(el('td', 'job-mark', String(i + 1)));
+
+      const where = el('td');
+      where.append(el('b', null, stop.place));
+      if (stop.body) where.append(el('span', 'muted', ` · ${stop.body}`));
+      if (!stop.placeId) where.append(el('span', 'muted', ' · not on the map'));
+      tr.append(where);
+
+      const what = el('td');
+      for (const a of stop.actions) {
+        const scu = a.scu != null ? `${a.scu} SCU ` : '';
+        what.append(el('div', a.kind === 'load' ? 'haul-load' : 'haul-unload',
+          `${a.kind} ${scu}${a.commodity || 'cargo'} — ${a.contractTitle}${a.note ? ` (${a.note})` : ''}`));
+      }
+      if (stop.note) what.append(el('div', 'muted', stop.note));
+      tr.append(what);
+
+      body.append(tr);
+    });
+
+    table.append(body);
+    section.append(table);
+
+    const actions = el('div', 'haul-actions');
+    const make = el('button', 'ghost haul-make', 'Make it the flight plan');
+    make.title = 'Write these stops into a tracked flight plan, with the loads and unloads at each';
+    make.addEventListener('click', async () => {
+      make.disabled = true;
+      try {
+        const result = await fetch('/api/haul/plan/trip', { method: 'POST' }).then((r) => r.json());
+        if (result?.id) {
+          make.textContent = `✓ ${result.title} — ${result.stops} stops, tracked`;
+          if (typeof loadTrips === 'function') loadTrips().catch(() => {});
+        } else {
+          make.textContent = result?.message || 'could not plan';
+          make.disabled = false;
+        }
+      } catch {
+        make.textContent = 'failed';
+        make.disabled = false;
+      }
+    });
+    actions.append(make);
+    section.append(actions);
+  }
+
+  for (const note of plan.notes || []) section.append(el('p', 'muted caption', note));
+
+  host.append(section);
 }
 
 /**

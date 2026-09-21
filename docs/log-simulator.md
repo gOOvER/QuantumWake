@@ -69,6 +69,7 @@ show. They write one completed `LIVE\Game.log` and print their expected facts.
 | `party-lifecycle` | Connect, lead, disconnect, reconnect, ignore chatter, then disband |
 | `contract-complete` | Two visible mission steps completed, followed by a blueprint |
 | `contract-abandoned` | One visible objective progresses and is then withdrawn |
+| `hauling-run` | Three Red Wind hauls accepted with the text mod's titles, one pickup done, left open — the only scenario that does not log out, since contracts are dropped at logout |
 | `loadout-swap` | Equip a complete character kit, repeat armour, and change a held weapon |
 | `stash-browse` | Browse two location inventories and one personal inventory |
 | `fleet-growth` | Observe changing entitlement counts and retain the largest fleet |

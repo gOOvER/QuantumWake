@@ -62,7 +62,10 @@ be shown as accepted → in progress → completed or abandoned, with a completi
 rate and a time-to-complete.
 
 `<CMissionLogEntry::UpdateActiveObjective>` carries the same objective ids with
-UI display text, useful for naming individual objectives.
+UI display text - but checked on 21 Sep 2026 across 4,867 such lines, every one
+is a template (`Go to ~mission(Location)`) or a combat line, and no hauling
+step ever carries text. Naming a hauling objective needs the mobiGlas; see
+[hauling.md](hauling.md).
 
 **Suggested change:** upgrade the Contracts view from a list of names to a
 funnel with outcomes.

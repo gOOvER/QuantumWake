@@ -3448,6 +3448,71 @@ public static class ServerHost
         app.MapPost("/api/runs/settings", (RunSettingsStore settings, int? days) =>
             Results.Ok(settings.Save(days)));
 
+        // Every open hauling contract on one route. The logs give the
+        // contracts and, with the text mod, one end of most; a Contracts-app
+        // screenshot of a card gives that card's every leg. The plan says
+        // which contract got which, and what a screenshot would still add.
+        // Session-only, like the Jobs page's contract list: a contract from a
+        // session that has ended is a ghost.
+        app.MapGet("/api/haul/plan", (LiveSessionService live, ScreenReadingStore readings, LogLibrary lib) =>
+        {
+            var now = live.Current;
+            var plan = now.InGame
+                ? HaulPlanner.Plan(live.LiveSummary.Contracts, readings.ContractFrames(), name => ResolvePlace(lib, name))
+                : new HaulPlan([], [], 0, []);
+
+            // The ship's hold, when the live feed knows the ship and the
+            // reference knows the hull - so the SCU floor can be read against
+            // something. A ship the reference does not carry gets no number.
+            double? hold = null;
+            if (now.Ship is { Length: > 0 } ship
+                && VehicleClasses(lib).TryGetValue(ship, out var cls)
+                && lib.Community.GarageShip(cls) is { CargoScu: > 0 } hull)
+                hold = hull.CargoScu;
+
+            return Results.Ok(new
+            {
+                now.InGame,
+                now.Ship,
+                shipScu = hold,
+                plan.Contracts,
+                plan.Stops,
+                plan.KnownScu,
+                plan.Notes,
+            });
+        });
+
+        // The plan written into a flight plan - tracked, because Add tracks a
+        // new plan and Track would toggle it off again - so the Now page
+        // and the overlay lead with the next stop. Each stop's loads and
+        // unloads become the stop's actions, with the SCU where the screen
+        // printed one; the pilot can reorder the stops from there.
+        app.MapPost("/api/haul/plan/trip", (LiveSessionService live, ScreenReadingStore readings, LogLibrary lib, TripStore trips) =>
+        {
+            if (!live.Current.InGame)
+                return Results.BadRequest(new { message = "No session running, so no contracts to plan." });
+
+            var plan = HaulPlanner.Plan(live.LiveSummary.Contracts, readings.ContractFrames(), name => ResolvePlace(lib, name));
+
+            if (plan.Stops.Count == 0)
+                return Results.BadRequest(new { message = "Nothing to plan: no open hauling contract names a place yet." });
+
+            var title = $"Hauling run · {plan.Contracts.Count} contract{(plan.Contracts.Count == 1 ? "" : "s")}";
+            var trip = trips.Add(title, plan.Stops.Select(s => new TripStop("", s.PlaceId, s.Place, s.Note, false, null)));
+
+            for (var i = 0; i < plan.Stops.Count && i < trip.Stops.Count; i++)
+            {
+                foreach (var action in plan.Stops[i].Actions)
+                {
+                    var what = action.Commodity ?? "cargo";
+                    var text = $"{what} — {action.ContractTitle}{(action.Note is null ? "" : $" ({action.Note})")}";
+                    trips.AddAction(trip.Id, trip.Stops[i].Id, action.Kind, text, action.Scu, action.Scu is null ? null : "SCU");
+                }
+            }
+
+            return Results.Ok(new { trip.Id, trip.Title, stops = trip.Stops.Count });
+        });
+
         app.MapPost("/api/trips", (TripStore trips, TripRequest body) =>
             Results.Ok(trips.Add(body.Title, body.Stops)));
 
@@ -4357,6 +4422,16 @@ static WipeScope ScopeOf(List<string>? covers)
 }
 
 /// <summary>The game's class id for each display name this install can resolve.</summary>
+/// <summary>
+/// A place the contract text names, on the map - or null, and the stop keeps
+/// its name. The atlas is the places the logs have seen visited, resolved the
+/// way a price terminal is: by the place whose name the text contains.
+/// </summary>
+static ResolvedPlace? ResolvePlace(LogLibrary lib, string name) =>
+    lib.Terminals.Resolve(name) is { } place
+        ? new ResolvedPlace(place.RawId, place.Name, place.Body, place.System)
+        : null;
+
 static Dictionary<string, string> VehicleClasses(LogLibrary lib)
 {
     var byName = lib.GameCommodities.Vehicles.Values

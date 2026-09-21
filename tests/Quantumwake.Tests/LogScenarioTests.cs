@@ -29,6 +29,7 @@ public sealed class LogScenarioTests
         "party-lifecycle",
         "contract-complete",
         "contract-abandoned",
+        "hauling-run",
         "loadout-swap",
         "stash-browse",
         "fleet-growth",
@@ -210,6 +211,26 @@ public sealed class LogScenarioTests
             Assert.Equal(ContractOutcome.Abandoned, contract.Outcome);
             Assert.Equal(1, contract.Steps);
             Assert.Equal(0, contract.StepsDone);
+        });
+    }
+
+
+    /// <summary>The hauler's session: three open cards, each carrying the title the mobiGlas showed, and steps counted by end.</summary>
+    [Fact]
+    public void Hauling_run_leaves_three_titled_contracts_open_with_steps_by_kind()
+    {
+        WithScenario("hauling-run", (_, session) =>
+        {
+            Assert.Equal(3, session.Contracts.Count);
+            Assert.All(session.Contracts, c => Assert.True(HaulingContract.IsHauling(c.Raw)));
+            Assert.All(session.Contracts, c => Assert.Null(c.CompletedAt));
+
+            var routes = session.Contracts.Select(c => HaulingContract.RouteFromTitle(c.Title)).ToList();
+            Assert.Equal(["Stanton Gateway", "Ruin Station", "Checkmate"], routes.Select(r => r!.Delivery));
+            Assert.Equal("Ruin Station", routes[2]!.Pickup);
+
+            var aluminum = session.Contracts[0];
+            Assert.Equal((3, 1, 1, 0), (aluminum.Pickups, aluminum.PickupsDone, aluminum.Deliveries, aluminum.DeliveriesDone));
         });
     }
 

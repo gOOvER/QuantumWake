@@ -1,0 +1,212 @@
+using Quantumwake.Core.State;
+using Quantumwake.Data;
+
+namespace Quantumwake.Tests;
+
+/// <summary>
+/// Every open hauling contract on one route, from the logs and from
+/// whatever Contracts-app frames have been taken.
+/// </summary>
+public class HaulPlannerTests
+{
+    private static readonly DateTimeOffset T0 = new(2026, 9, 9, 1, 0, 0, TimeSpan.Zero);
+
+    private static ContractRecord Contract(string mission, string raw, string? title, int minutes = 0,
+        ContractOutcome outcome = ContractOutcome.InProgress) =>
+        new(T0.AddMinutes(minutes), raw, ContractNameParser.Parse(raw).DisplayName, "Red Wind", "Pyro", null, "Cargo Hauling", false)
+        {
+            MissionId = mission,
+            Title = title,
+            Outcome = outcome,
+        };
+
+    private const string Multi3Aluminum = "RedWind_Pyro_SmallGrade_Solar_CFP_TradepostToStation_Aluminum_CargoHauling_Multi3ToSingle";
+    private const string Multi2Copper = "RedWind_Pyro_SmallGrade_Solar_CFP_TradepostToStation_Copper_CargoHauling_Multi2ToSingle";
+    private const string DirectCarbon = "RedWind_Pyro_SupplyGrade_RegionA_CFP_StationToTradepost_Carbon_CargoHauling_AtoB_Intro";
+
+    private static ScreenSighting Frame(string shot, int minutes, ScreenTextLine[] lines)
+    {
+        var frame = ScreenFrames.Read(lines, [], []);
+        return new ScreenSighting(shot, T0.AddMinutes(minutes), frame.Kind, "", [], null, null, null, null, [], 0, Contracts: frame.Contracts);
+    }
+
+    /// <summary>An atlas that knows the Pyro stations and nothing on the ground.</summary>
+    private static ResolvedPlace? Atlas(string name) => name switch
+    {
+        "Stanton Gateway" => new("Pyro_StantonGateway", "Stanton Gateway", "Pyro Jump", "Pyro"),
+        "Ruin Station" => new("Pyro_RuinStation", "Ruin Station", "Pyro VI", "Pyro"),
+        "Checkmate" => new("Pyro_Checkmate", "Checkmate", "Pyro IV", "Pyro"),
+        _ => null,
+    };
+
+    [Fact]
+    public void A_photographed_card_gives_its_legs_and_the_rest_say_what_is_missing()
+    {
+        var plan = HaulPlanner.Plan(
+            [
+                Contract("m1", Multi3Aluminum, "Junior | Stellar Small Haul | to Stanton Gateway <EM4>[50 Rep]</EM4>"),
+                Contract("m2", Multi2Copper, "Junior | Stellar Small Haul | to Ruin Station <EM4>[50 Rep]</EM4>", 1),
+                Contract("m3", DirectCarbon, "Junior Rank - Direct Small Cargo Haul", 2),
+            ],
+            [Frame("ScreenShot-2026-09-08_21-48-31-84A.jpg", 48, ScreenAppFixtures.Contracts)],
+            Atlas);
+
+        Assert.Equal(3, plan.Contracts.Count);
+
+        var read = plan.Contracts[0];
+        Assert.Equal("screenshot", read.Source);
+        Assert.Equal("ScreenShot-2026-09-08_21-48-31-84A.jpg", read.Shot);
+        Assert.Equal(3, read.Legs.Count);
+        Assert.Equal(18, read.Scu);
+        Assert.Null(read.Note);
+
+        var titled = plan.Contracts[1];
+        Assert.Equal("title", titled.Source);
+        var leg = Assert.Single(titled.Legs);
+        Assert.Equal(("Ruin Station", null), (leg.Delivery, leg.Pickup));
+        Assert.Equal("2 pickups, places unknown until this card is photographed", titled.Note);
+
+        var blind = plan.Contracts[2];
+        Assert.Equal("none", blind.Source);
+        Assert.Empty(blind.Legs);
+        Assert.Contains("only a screenshot", blind.Note);
+
+        Assert.Equal(18, plan.KnownScu);
+        Assert.Contains(plan.Notes, n => n.StartsWith("2 of 3 contracts have no screenshot"));
+        Assert.Contains(plan.Notes, n => n.Contains("floor"));
+    }
+
+    [Fact]
+    public void The_route_collects_everything_before_it_delivers_and_groups_a_body()
+    {
+        var plan = HaulPlanner.Plan(
+            [
+                Contract("m1", Multi3Aluminum, "Junior | Stellar Small Haul | to Stanton Gateway"),
+                Contract("m2", Multi2Copper, "Junior | Stellar Small Haul | to Ruin Station", 1),
+            ],
+            [Frame("a.jpg", 48, ScreenAppFixtures.Contracts)],
+            Atlas);
+
+        var places = plan.Stops.Select(s => s.Place).ToList();
+
+        // Three sources, then the two destinations; the sources are on three
+        // bodies so their order is by what there is to do, and both deliveries
+        // come after every pickup.
+        Assert.Equal(5, plan.Stops.Count);
+        Assert.Equal(["Ashland", "Fallow Field", "The Golden Riviera"], places.Take(3).Order());
+        Assert.Contains("Stanton Gateway", places.Skip(3));
+        Assert.Contains("Ruin Station", places.Skip(3));
+
+        var gateway = plan.Stops.Single(s => s.Place == "Stanton Gateway");
+        var unload = Assert.Single(gateway.Actions);
+        Assert.Equal(("unload", "Aluminum", 18), (unload.Kind, unload.Commodity, unload.Scu));
+        Assert.Equal("Pyro_StantonGateway", gateway.PlaceId);
+
+        var fallow = plan.Stops.Single(s => s.Place == "Fallow Field");
+        Assert.Equal("Pyro IV", fallow.Body);
+        Assert.Equal("", fallow.PlaceId);
+        Assert.Contains(plan.Notes, n => n.StartsWith("Not on the map yet: Fallow Field, Ashland, The Golden Riviera"));
+    }
+
+    /// <summary>Two cards with one title: the cargo tells which frame is whose, and one frame is not spent twice.</summary>
+    [Fact]
+    public void A_frame_goes_to_the_contract_whose_cargo_it_shows()
+    {
+        var copperCard = ScreenAppFixtures.Contracts
+            .Select(l => new ScreenTextLine(l.Text.Replace("Aluminum", "Copper"), l.Left, l.Top, l.Height))
+            .Where(l => !l.Text.Contains("Golden Riviera"))
+            .ToArray();
+
+        var plan = HaulPlanner.Plan(
+            [
+                Contract("m1", Multi2Copper, "Junior | Stellar Small Haul | to Stanton Gateway"),
+                Contract("m2", Multi3Aluminum, "Junior | Stellar Small Haul | to Stanton Gateway", 1),
+                Contract("m3", Multi3Aluminum, "Junior | Stellar Small Haul | to Stanton Gateway", 2),
+            ],
+            [
+                Frame("copper.jpg", 40, copperCard),
+                Frame("aluminum.jpg", 48, ScreenAppFixtures.Contracts),
+            ],
+            Atlas);
+
+        Assert.Equal("copper.jpg", plan.Contracts[0].Shot);
+        Assert.Equal("aluminum.jpg", plan.Contracts[1].Shot);
+
+        // The third card has no frame of its own. The aluminium frame fits it
+        // as well as it fits the second, so it is reused - and flagged.
+        Assert.Equal("aluminum.jpg", plan.Contracts[2].Shot);
+        Assert.Contains("also matched another card", plan.Contracts[2].Note);
+        Assert.Null(plan.Contracts[1].Note);
+    }
+
+    [Fact]
+    public void A_frame_from_before_the_contract_was_taken_does_not_count()
+    {
+        var plan = HaulPlanner.Plan(
+            [Contract("m1", Multi3Aluminum, "Junior | Stellar Small Haul | to Stanton Gateway", 60)],
+            [Frame("a.jpg", 48, ScreenAppFixtures.Contracts)],
+            Atlas);
+
+        Assert.Equal("title", plan.Contracts[0].Source);
+    }
+
+    /// <summary>A place that is one contract's source and another's destination is visited for the pickup first, then again to deliver.</summary>
+    [Fact]
+    public void A_place_that_is_both_ends_gets_a_second_visit_for_the_delivery()
+    {
+        var plan = HaulPlanner.Plan(
+            [
+                Contract("m1", DirectCarbon, "Rookie | DIRECT Small Haul | Checkmate > Ruin Station"),
+                Contract("m2", DirectCarbon, "Rookie | DIRECT Small Haul | Ruin Station > Checkmate", 1),
+            ],
+            [],
+            Atlas);
+
+        var places = plan.Stops.Select(s => s.Place).ToList();
+
+        Assert.Equal(3, plan.Stops.Count);
+        Assert.Equal(places[0], places[2]);
+        Assert.NotNull(plan.Stops[0].Note);
+        Assert.Single(plan.Stops[0].Actions, a => a.Kind == "load");
+        Assert.Single(plan.Stops[2].Actions, a => a.Kind == "unload");
+    }
+
+    [Fact]
+    public void Closed_contracts_and_salvage_bounties_are_not_on_the_run()
+    {
+        var plan = HaulPlanner.Plan(
+            [
+                Contract("m1", Multi3Aluminum, "Junior | Stellar Small Haul | to Stanton Gateway", 0, ContractOutcome.Completed),
+                Contract("m2", "Covalex_Stanton_Hard_RecoverCargo", "Large Covalex Shipment Needs Recovering", 1),
+            ],
+            [],
+            Atlas);
+
+        Assert.Empty(plan.Contracts);
+        Assert.Empty(plan.Stops);
+    }
+
+    /// <summary>
+    /// A contract whose pickups the plan cannot see still has to be loaded
+    /// somewhere, so its delivery goes after every pickup the plan can see,
+    /// and says why; two visits to one place in a row are one stop.
+    /// </summary>
+    [Fact]
+    public void A_delivery_with_unseen_pickups_comes_after_every_known_pickup()
+    {
+        var plan = HaulPlanner.Plan(
+            [
+                Contract("m1", Multi2Copper, "Junior | Stellar Small Haul | to Ruin Station"),
+                Contract("m2", DirectCarbon, "Rookie | DIRECT Small Haul | Ruin Station > Checkmate", 1),
+            ],
+            [],
+            Atlas);
+
+        Assert.Equal(["Ruin Station", "Checkmate"], plan.Stops.Select(s => s.Place));
+
+        var ruin = plan.Stops[0];
+        Assert.Equal(["load", "unload"], ruin.Actions.Select(a => a.Kind));
+        Assert.Equal("after its pickups, which are not on this plan", ruin.Actions[1].Note);
+        Assert.Null(ruin.Note);
+    }
+}

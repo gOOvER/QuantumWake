@@ -365,7 +365,26 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.25
+### 0.15.26
+
+- **Every open hauling contract on one route.** Shopping now has a *Hauling
+  run* under the session's contracts: each haul with where it goes, where its
+  cargo is collected and how much, then the stops in an order — every pickup
+  before any delivery, stops on the same moon together, a place that is both
+  ends visited twice — and a button that writes it into a tracked flight plan
+  with a load or unload at every stop. The logs give the destination (with
+  the StarStrings text mod: *Junior | Stellar Small Haul | to Stanton
+  Gateway*), the cargo and how many pickups there are; a screenshot of the
+  card on the Contracts app's Accepted tab gives every leg with its SCU and
+  which moon each pickup is on. One screenshot per card, and the plan says
+  how many are still to take. What it cannot see it says in words — *3
+  pickups, places unknown until this card is photographed* — and the SCU
+  total is called a floor until every card has been read. The Now page leads
+  with the destination when a haul is open.
+
+- **Pickups and drop-offs counted apart.** A hauling contract now reads *2 of
+  3 pickups done · 0 of 1 drop-off done* rather than *2 of 4 objectives*,
+  from the journal's own naming of its steps.
 
 - **Contracts read as the game names them.** The Contracts and Jobs pages,
   the Now page and the screenshot checks now show the title the mobiGlas

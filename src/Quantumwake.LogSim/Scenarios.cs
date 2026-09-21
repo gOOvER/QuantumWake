@@ -1,10 +1,15 @@
 ﻿namespace Quantumwake.LogSim;
 
 /// <summary>A reproducible log story and the facts it is expected to produce.</summary>
+/// <param name="StaysInGame">
+/// True for a story that ends with the pilot still in the world - open
+/// contracts are dropped at logout, so a scenario about them cannot log out.
+/// </param>
 public sealed record ScenarioDefinition(
     string Name,
     string Description,
-    IReadOnlyList<string> ExpectedFacts);
+    IReadOnlyList<string> ExpectedFacts,
+    bool StaysInGame = false);
 
 /// <summary>Named scenarios intended for parser, API, and UI regression testing.</summary>
 public static class ScenarioCatalogue
@@ -47,6 +52,10 @@ public static class ScenarioCatalogue
         new("contract-abandoned",
             "Accept a contract, begin its visible objective, and withdraw it.",
             ["1 abandoned contract", "1 visible step", "0 completed steps"]),
+        new("hauling-run",
+            "Accept three Red Wind hauls with the text mod's titles, load one pickup, and leave them open.",
+            ["3 open hauling contracts", "titles name Stanton Gateway, Ruin Station and Ruin Station > Checkmate", "1 of 3 pickups done on the Aluminum haul"],
+            StaysInGame: true),
         new("loadout-swap",
             "Equip a full kit, refresh the undersuit, and swap a held weapon.",
             ["11 attachment records", "8 current equipment cards", "repeat armour collapsed"]),
@@ -102,6 +111,7 @@ public static class ScenarioRunner
         "party-lifecycle",
         "contract-complete",
         "contract-abandoned",
+        "hauling-run",
         "loadout-swap",
         "stash-browse",
         "fleet-growth",
@@ -131,7 +141,8 @@ public static class ScenarioRunner
             RunBody(scenario.Name, context);
         }
 
-        context.End();
+        if (!scenario.StaysInGame)
+            context.End();
     }
 
     private static void RunBody(string name, ScenarioContext context)
@@ -173,6 +184,9 @@ public static class ScenarioRunner
                 break;
             case "contract-abandoned":
                 ContractAbandoned(context);
+                break;
+            case "hauling-run":
+                HaulingRun(context);
                 break;
             case "loadout-swap":
                 LoadoutSwap(context);
@@ -355,6 +369,45 @@ public static class ScenarioRunner
         c.Log.MissionEnded(c.Now, mission, "MISSION_STATE_COMPLETED", "Complete");
         c.Advance(5);
         c.Notify("Received Blueprint: Omnisky IX");
+    }
+
+    /// <summary>
+    /// What a hauler's session looks like with three cards open: the toast
+    /// and the marker 20 ms apart, sharing the mission id, and a journal
+    /// that names its steps pickup_ and dropoff_. Left open on purpose - the
+    /// plan is for contracts still to fly.
+    /// </summary>
+    private static void HaulingRun(ScenarioContext c)
+    {
+        const string aluminum = "31111111-2222-3333-4444-555555555555";
+        const string copper = "32111111-2222-3333-4444-555555555555";
+        const string carbon = "33111111-2222-3333-4444-555555555555";
+
+        c.Log.ContractMarker(c.Now, aluminum, "RedWind_CargoHauling",
+            "RedWind_Pyro_SmallGrade_Solar_CFP_TradepostToStation_Aluminum_CargoHauling_Multi3ToSingle",
+            "caaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "79999999-8888-7777-6666-555555555555");
+        c.Notify("Contract Accepted:  Junior | Stellar Small Haul | to Stanton Gateway <EM4>[50/200/250/500/1000/2000/4000 Rep]</EM4>: ", aluminum);
+        c.Advance(12);
+
+        c.Log.ContractMarker(c.Now, copper, "RedWind_CargoHauling",
+            "RedWind_Pyro_SmallGrade_Solar_CFP_TradepostToStation_Copper_CargoHauling_Multi2ToSingle",
+            "cbaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "78999999-8888-7777-6666-555555555555");
+        c.Notify("Contract Accepted:  Junior | Stellar Small Haul | to Ruin Station <EM4>[50/200/250/500/1000/2000/4000 Rep]</EM4>: ", copper);
+        c.Advance(9);
+
+        c.Log.ContractMarker(c.Now, carbon, "RedWind_CargoHauling",
+            "RedWind_Pyro_SupplyGrade_RegionA_CFP_StationToTradepost_Carbon_CargoHauling_AtoB_Intro",
+            "ccaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "77999999-8888-7777-6666-555555555555");
+        c.Notify("Contract Accepted:  Rookie | <EM3>DIRECT</EM3> Small Haul | Ruin Station > Checkmate <EM4>[BP]*</EM4>: ", carbon);
+        c.Advance(600);
+
+        c.Log.MissionObjective(c.Now, aluminum, "pickup_c196979f-d685-4dd9-bf23-880fa8bfb6e0_0", "MISSION_OBJECTIVE_STATE_INPROGRESS");
+        c.Advance(240);
+        c.Log.MissionObjective(c.Now, aluminum, "pickup_c196979f-d685-4dd9-bf23-880fa8bfb6e0_0", "MISSION_OBJECTIVE_STATE_COMPLETED");
+        c.Log.MissionObjective(c.Now, aluminum, "pickup_c196979f-d685-4dd9-bf23-880fa8bfb6e0_1", "MISSION_OBJECTIVE_STATE_INPROGRESS");
+        c.Log.MissionObjective(c.Now, aluminum, "pickup_c196979f-d685-4dd9-bf23-880fa8bfb6e0_2", "MISSION_OBJECTIVE_STATE_INPROGRESS");
+        c.Log.MissionObjective(c.Now, aluminum, "dropoff_c196979f-d685-4dd9-bf23-880fa8bfb6e0_0", "MISSION_OBJECTIVE_STATE_INPROGRESS");
+        c.Advance(30);
     }
 
     private static void ContractAbandoned(ScenarioContext c)
