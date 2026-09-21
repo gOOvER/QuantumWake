@@ -365,7 +365,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.24
+### 0.15.25
 
 - **Contracts read as the game names them.** The Contracts and Jobs pages,
   the Now page and the screenshot checks now show the title the mobiGlas

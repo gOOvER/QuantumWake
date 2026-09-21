@@ -691,6 +691,15 @@ static int Screen(string linesFile, string installRoot, string? catalogueQuery)
             Console.WriteLine($"  card     {card.Title}  [{card.Reward ?? "?"}]  {card.Issuer ?? "(issuer not read)"}");
         Console.WriteLine($"Selected  : {contracts.SelectedTitle}  reward {contracts.SelectedReward}  by {contracts.SelectedIssuer}");
         foreach (var o in contracts.Objectives) Console.WriteLine($"  objective {o}");
+        foreach (var s in contracts.Steps ?? [])
+            Console.WriteLine($"  {new string(' ', s.Depth * 2)}step {s.Kind,-8} {s.Commodity ?? "-",-22} {(s.Kind == "collect" ? "from" : "to"),-4} {s.Place ?? "-"}{(s.Body is null ? "" : $" ({s.Body})")}{(s.Total is null ? "" : $"  {s.Done}/{s.Total} SCU")}");
+        foreach (var site in contracts.PickupSites ?? [])
+            Console.WriteLine($"  pickup site {site.Place}{(site.Body is null ? "" : $" on {site.Body}")}");
+        var (legs, deliveries) = HaulLegs.From(contracts);
+        foreach (var leg in legs)
+            Console.WriteLine($"  leg  {leg.Pickup ?? "?"}{(leg.PickupBody is null ? "" : $" ({leg.PickupBody})")} -> {leg.Delivery ?? "?"}{(leg.DeliveryBody is null ? "" : $" ({leg.DeliveryBody})")}  {leg.Commodity ?? "?"}  {(leg.Scu is null ? "share not printed" : $"{leg.ScuDone}/{leg.Scu} SCU")}");
+        foreach (var d in deliveries)
+            Console.WriteLine($"  total {d.ScuDone}/{d.Scu} SCU of {d.Commodity ?? "?"} to {d.Place}");
     }
 
     if (frame.Fleet is { } fleet)
