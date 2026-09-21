@@ -96,7 +96,7 @@ public sealed class JoystickTemplates
         var files = tree.Entries
             .Where(e => e.Type == "blob" && e.Path.StartsWith("templates/", StringComparison.Ordinal) && e.Path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
             .Select(e => e.Path["templates/".Length..])
-            .Where(p => !p.StartsWith("Starter", StringComparison.OrdinalIgnoreCase))
+            .Where(p => SafeRelative(p) && !p.StartsWith("Starter", StringComparison.OrdinalIgnoreCase))
             .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
             .ToList();
         if (files.Count == 0) throw new InvalidDataException("The template index lists no SVG.");
@@ -147,7 +147,7 @@ public sealed class JoystickTemplates
     public IReadOnlyList<JoystickTemplate> Available()
     {
         var list = new List<JoystickTemplate>();
-        foreach (var path in Index())
+        foreach (var path in Index().Where(SafeRelative))
         {
             var slash = path.IndexOf('/');
             var maker = slash > 0 ? path[..slash] : "";
@@ -187,22 +187,54 @@ public sealed class JoystickTemplates
         if (key.StartsWith("local:", StringComparison.Ordinal))
         {
             var name = key["local:".Length..];
-            if (name.Contains('/') || name.Contains('\\') || name.Contains("..") || _state.Folder is not { } folder) return null;
-            var path = Path.Combine(folder, name);
-            return File.Exists(path) ? await File.ReadAllBytesAsync(path, cancel) : null;
+            if (name.Contains('/') || _state.Folder is not { } folder) return null;
+            var path = TemplatePath(folder, name);
+            return path is not null && File.Exists(path)
+                ? JoystickSvg.Sanitize(await File.ReadAllBytesAsync(path, cancel)) : null;
         }
         if (!key.StartsWith("repo:", StringComparison.Ordinal)) return null;
 
         var relative = key["repo:".Length..];
-        if (relative.Contains("..")) return null;
-        var kept = Path.Combine(_directory, "svg", relative.Replace('/', Path.DirectorySeparatorChar));
-        if (File.Exists(kept)) return await File.ReadAllBytesAsync(kept, cancel);
+        if (!SafeRelative(relative) || !Index().Contains(relative, StringComparer.Ordinal)) return null;
+        var kept = TemplatePath(_directory, "svg/" + relative);
+        if (kept is null) return null;
+        if (File.Exists(kept)) return JoystickSvg.Sanitize(await File.ReadAllBytesAsync(kept, cancel));
         if (!_state.Enabled || http is null) return null;
 
-        var bytes = await http.GetByteArrayAsync(RawUrl + "templates/" + Uri.EscapeDataString(relative).Replace("%2F", "/"), cancel);
+        var bytes = JoystickSvg.Sanitize(await http.GetByteArrayAsync(RawUrl + "templates/" + Uri.EscapeDataString(relative).Replace("%2F", "/"), cancel));
         Directory.CreateDirectory(Path.GetDirectoryName(kept)!);
         await File.WriteAllBytesAsync(kept, bytes, cancel);
         return bytes;
+    }
+
+    private static bool SafeRelative(string relative) =>
+        !string.IsNullOrWhiteSpace(relative)
+        && !Path.IsPathRooted(relative)
+        && !relative.Contains('\\')
+        && relative.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
+        && relative.Split('/').All(segment => segment.Length > 0 && segment is not "." and not ".."
+            && !segment.EndsWith('.') && !segment.EndsWith(' ')
+            && !segment.Any(c => char.IsControl(c) || ":<>\"|?*".Contains(c)));
+
+    private static string? TemplatePath(string folder, string relative)
+    {
+        if (!SafeRelative(relative)) return null;
+        var root = Path.GetFullPath(folder);
+        var path = Path.GetFullPath(Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar)));
+        if (!path.StartsWith(Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar,
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) return null;
+
+        // A lexical boundary is not enough when a cache subdirectory or a
+        // local SVG is a link to somewhere else. The chosen folder is trusted;
+        // links below it are not templates.
+        var current = root;
+        foreach (var segment in relative.Split('/'))
+        {
+            current = Path.Combine(current, segment);
+            if ((File.Exists(current) || Directory.Exists(current))
+                && (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) return null;
+        }
+        return path;
     }
 
     private IReadOnlyList<string> Index()

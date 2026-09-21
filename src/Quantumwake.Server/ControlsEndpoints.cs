@@ -44,9 +44,14 @@ public sealed class ControlsWatchService(ControlsStore store, ILogger<ControlsWa
                     var now = (info.Length, info.LastWriteTimeUtc);
                     if (seen != now)
                     {
-                        seen = now;
-                        if (store.Snapshot(path) is { Taken: true } kept)
-                            logger.LogInformation("Keybindings changed; kept as {Id}.", kept.Backup.Id);
+                        // A locked file has not been seen yet: retry even when
+                        // its size and timestamp stay the same after unlocking.
+                        if (store.Snapshot(path) is { } kept)
+                        {
+                            seen = now;
+                            if (kept.Taken)
+                                logger.LogInformation("Keybindings changed; kept as {Id}.", kept.Backup.Id);
+                        }
                     }
                 }
             }
@@ -419,8 +424,16 @@ public static class ControlsEndpoints
             {
                 var svg = await templates.ReadAsync(key, templates.Enabled ? httpFactory.CreateClient("community") : null, ctx.RequestAborted);
                 if (svg is null) return Results.NotFound(new { message = "No picture: the template feed is off and nothing is kept for this one." });
-                ctx.Response.Headers.CacheControl = "private, max-age=86400";
+                // Also protect a template opened as a document, outside the
+                // dashboard. Do not reuse responses cached before sanitizing.
+                ctx.Response.Headers.CacheControl = "no-store";
+                ctx.Response.Headers.ContentSecurityPolicy = "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'";
+                ctx.Response.Headers.XContentTypeOptions = "nosniff";
                 return Results.File(svg, "image/svg+xml");
+            }
+            catch (InvalidDataException)
+            {
+                return Results.Problem(title: "The picture is not a supported SVG template.", statusCode: 422);
             }
             catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
             {

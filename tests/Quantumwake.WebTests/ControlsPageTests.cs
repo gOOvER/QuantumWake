@@ -163,6 +163,14 @@ public class ControlsPageTests
     }
 
     [Fact]
+    public void Template_requests_bypass_responses_cached_before_sanitizing()
+    {
+        var page = Opened();
+        page.Do("controlsDevice = 'js2'; await renderControlsDevice();");
+        Assert.Contains("GET /api/controls/template?key=repo%3AThrustmaster%2FThrustmaster%20Warthog%20-%20Throttle.svg&safe=1", page.Fetched());
+    }
+
+    [Fact]
     public void With_the_library_off_the_picture_slot_has_the_fetch_button_and_it_fetches()
     {
         var page = new Page();

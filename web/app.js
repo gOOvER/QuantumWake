@@ -9576,7 +9576,8 @@ async function renderControlsPicture(device, bound) {
 
   let text;
   try {
-    const response = await fetch(`/api/controls/template?key=${encodeURIComponent(device.template.key)}`);
+    // Older responses were cached for a day and had not been sanitized.
+    const response = await fetch(`/api/controls/template?key=${encodeURIComponent(device.template.key)}&safe=1`, { cache: 'no-store' });
     if (!response.ok) throw new Error(String(response.status));
     text = await response.text();
   } catch {

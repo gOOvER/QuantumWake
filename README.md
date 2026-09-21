@@ -365,7 +365,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.22
+### 0.15.23
+
+- **Safer Controls pictures and more reliable backups.** Picture requests stay
+  inside the template folders, and SVG pictures are cleaned before display so
+  they cannot run scripts or load external resources. If the game's keybinding
+  file is temporarily locked, automatic backups retry after it becomes readable.
 
 - **A crash can leave a trail without exposing your flight.** Settings now has
   an opt-in detailed crash trace. Turn it on, restart, and it records the last
