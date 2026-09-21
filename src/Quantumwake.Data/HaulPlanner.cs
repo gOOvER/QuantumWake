@@ -70,8 +70,10 @@ public sealed record ResolvedPlace(string Id, string Name, string? Body, string?
 /// <para>
 /// A frame is matched to a contract by title, which is not unique - three
 /// of the five cards on the 8 Sep frame read "to Stanton Gateway" - so the
-/// cargo and the number of sources break the tie, and a frame already
-/// given to one contract is not given to a second unless nothing else fits.
+/// cargo and the number of sources break the tie. A card that disagrees with
+/// either known signal is not used: a route that admits it does not belong to
+/// this contract. A frame already given to one compatible contract is only
+/// reused when there is no other compatible card.
 /// </para>
 /// <para>
 /// The order is pickups before deliveries, which is the one rule that is
@@ -103,8 +105,10 @@ public static class HaulPlanner
             var title = ContractTags.Clean(contract.Name);
             var archetype = HaulingContract.FromArchetype(contract.Raw);
             var route = HaulingContract.RouteFromTitle(contract.Title);
+            var titleIsAmbiguous = hauling.Count(other =>
+                ScreenFrames.SameContract(ContractTags.Clean(other.Name), title)) > 1;
 
-            var frame = BestFrame(contract, title, archetype, frames, taken);
+            var frame = BestFrame(contract, title, archetype, titleIsAmbiguous, frames, taken);
             var reused = frame is not null && taken.Contains(frame.Shot);
 
             if (frame is not null)
@@ -121,8 +125,7 @@ public static class HaulPlanner
                     archetype?.Shape ?? HaulShape.Unknown, legs, "screenshot", frame.Shot, frame.ShotAt,
                     contract.Pickups, contract.PickupsDone, contract.Deliveries, contract.DeliveriesDone,
                     scu > 0 ? scu : null,
-                    legs.Count == 0 ? "the frame showed this card selected but no objectives read"
-                        : reused ? "read from a frame that also matched another card with this title; photograph this card to be sure"
+                    reused ? "read from a frame that also matched another card with this title; photograph this card to be sure"
                         : null));
                 continue;
             }
@@ -182,10 +185,12 @@ public static class HaulPlanner
 
     /// <summary>
     /// The newest frame showing this contract selected, taken after it was
-    /// accepted, with the cargo and the source count as tie-breakers.
+    /// accepted, with the cargo and the source count as tie-breakers. A card
+    /// with no readable legs belongs to no plan: the title can still give a
+    /// useful partial route.
     /// </summary>
     private static ScreenSighting? BestFrame(
-        ContractRecord contract, string title, HaulArchetype? archetype,
+        ContractRecord contract, string title, HaulArchetype? archetype, bool titleIsAmbiguous,
         IReadOnlyList<ScreenSighting> frames, HashSet<string> taken)
     {
         ScreenSighting? best = null;
@@ -200,13 +205,41 @@ public static class HaulPlanner
                 continue;
 
             var (legs, _) = HaulLegs.From(frame.Contracts);
-            var score = 0;
+            if (legs.Count == 0)
+                continue;
 
-            if (archetype?.Commodity is { } cargo && legs.Any(l => SameCargo(l.Commodity, cargo)))
-                score += 2;
+            var signals = 0;
+            if (archetype?.Commodity is { } cargo && legs.Any(l => l.Commodity is not null))
+            {
+                // A same-title card for another cargo is not a weak match. It
+                // is evidence this card belongs to a different contract.
+                if (!legs.Any(l => SameCargo(l.Commodity, cargo)))
+                    continue;
 
-            if (archetype?.Pickups is { } sources && legs.Select(l => l.Pickup).Distinct().Count() == sources)
-                score += 1;
+                signals += 2;
+            }
+
+            var pickupCount = legs
+                .Where(l => l.Pickup is not null)
+                .Select(l => ScreenInsight.Fold(l.Pickup!))
+                .Distinct()
+                .Count();
+
+            if (archetype?.Pickups is { } sources && pickupCount > 0)
+            {
+                if (pickupCount != sources)
+                    continue;
+
+                signals += 1;
+            }
+
+            // A shared title is not enough to give a card's route to one of
+            // several contracts. Keep the safer title-only route until the
+            // screenshot reads a signal that distinguishes its card.
+            if (titleIsAmbiguous && signals == 0)
+                continue;
+
+            var score = signals;
 
             // A frame already explaining another contract is a weaker claim
             // for this one, but still better than nothing.

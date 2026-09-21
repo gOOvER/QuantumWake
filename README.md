@@ -365,7 +365,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.26
+### 0.15.27
+
+- **Hauling cards only guide their own contracts.** When two open contracts
+  have the same title, a photographed card now has to agree with the logged
+  cargo and pickup count before it supplies a route. A selected card whose
+  objectives do not read falls back to the destination in the contract title
+  instead of leaving the run empty.
 
 - **Every open hauling contract on one route.** Shopping now has a *Hauling
   run* under the session's contracts: each haul with where it goes, where its

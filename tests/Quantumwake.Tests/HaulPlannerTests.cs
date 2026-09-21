@@ -22,6 +22,7 @@ public class HaulPlannerTests
 
     private const string Multi3Aluminum = "RedWind_Pyro_SmallGrade_Solar_CFP_TradepostToStation_Aluminum_CargoHauling_Multi3ToSingle";
     private const string Multi2Copper = "RedWind_Pyro_SmallGrade_Solar_CFP_TradepostToStation_Copper_CargoHauling_Multi2ToSingle";
+    private const string Multi3Copper = "RedWind_Pyro_SmallGrade_Solar_CFP_TradepostToStation_Copper_CargoHauling_Multi3ToSingle";
     private const string DirectCarbon = "RedWind_Pyro_SupplyGrade_RegionA_CFP_StationToTradepost_Carbon_CargoHauling_AtoB_Intro";
 
     private static ScreenSighting Frame(string shot, int minutes, ScreenTextLine[] lines)
@@ -29,6 +30,10 @@ public class HaulPlannerTests
         var frame = ScreenFrames.Read(lines, [], []);
         return new ScreenSighting(shot, T0.AddMinutes(minutes), frame.Kind, "", [], null, null, null, null, [], 0, Contracts: frame.Contracts);
     }
+
+    private static ScreenSighting EmptyCard(string shot, int minutes, string title) =>
+        new(shot, T0.AddMinutes(minutes), ScreenKind.Contracts, "", [], null, null, null, null, [], 0,
+            Contracts: new ContractsReading(null, null, [], title, null, null, []));
 
     /// <summary>An atlas that knows the Pyro stations and nothing on the ground.</summary>
     private static ResolvedPlace? Atlas(string name) => name switch
@@ -137,6 +142,60 @@ public class HaulPlannerTests
         Assert.Equal("aluminum.jpg", plan.Contracts[2].Shot);
         Assert.Contains("also matched another card", plan.Contracts[2].Note);
         Assert.Null(plan.Contracts[1].Note);
+    }
+
+    [Fact]
+    public void A_same_title_card_with_the_wrong_cargo_is_not_used()
+    {
+        var plan = HaulPlanner.Plan(
+            [
+                Contract("m1", Multi2Copper, "Junior | Stellar Small Haul | to Stanton Gateway"),
+                Contract("m2", Multi3Aluminum, "Junior | Stellar Small Haul | to Stanton Gateway", 1),
+            ],
+            [Frame("aluminum.jpg", 48, ScreenAppFixtures.Contracts)],
+            Atlas);
+
+        // The aluminium card cannot stand in for the copper contract just
+        // because the destination title repeats.
+        Assert.Equal("title", plan.Contracts[0].Source);
+        Assert.Null(plan.Contracts[0].Shot);
+        Assert.Equal("screenshot", plan.Contracts[1].Source);
+        Assert.Equal("aluminum.jpg", plan.Contracts[1].Shot);
+    }
+
+    [Fact]
+    public void A_same_title_card_with_the_wrong_pickup_count_is_not_used()
+    {
+        var copperCard = ScreenAppFixtures.Contracts
+            .Select(line => new ScreenTextLine(line.Text.Replace("Aluminum", "Copper"), line.Left, line.Top, line.Height))
+            .ToArray();
+
+        var plan = HaulPlanner.Plan(
+            [
+                Contract("m1", Multi2Copper, "Junior | Stellar Small Haul | to Stanton Gateway"),
+                Contract("m2", Multi3Copper, "Junior | Stellar Small Haul | to Stanton Gateway", 1),
+            ],
+            [Frame("three-pickups.jpg", 48, copperCard)],
+            Atlas);
+
+        Assert.Equal("title", plan.Contracts[0].Source);
+        Assert.Equal("screenshot", plan.Contracts[1].Source);
+        Assert.Equal("three-pickups.jpg", plan.Contracts[1].Shot);
+    }
+
+    [Fact]
+    public void A_selected_card_without_objectives_falls_back_to_its_title()
+    {
+        var plan = HaulPlanner.Plan(
+            [Contract("m1", Multi3Aluminum, "Junior | Stellar Small Haul | to Stanton Gateway")],
+            [EmptyCard("unreadable.jpg", 48, "Junior | Stellar Small Haul | to Stanton Gateway")],
+            Atlas);
+
+        var contract = Assert.Single(plan.Contracts);
+        Assert.Equal("title", contract.Source);
+        Assert.Null(contract.Shot);
+        Assert.Equal("Stanton Gateway", Assert.Single(contract.Legs).Delivery);
+        Assert.Contains(plan.Stops, stop => stop.Place == "Stanton Gateway");
     }
 
     [Fact]
