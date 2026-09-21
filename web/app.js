@@ -15418,7 +15418,7 @@ function renderHaulPlan(host, plan) {
     `${plan.contracts.length} contract${plan.contracts.length === 1 ? '' : 's'}`,
     `${read} with the card read`,
     plan.knownScu > 0
-      ? `${plan.knownScu} SCU${read < plan.contracts.length ? ' known (a floor)' : ''}`
+      ? `${plan.knownScu} SCU remaining${read < plan.contracts.length ? ' known (a floor)' : ''}`
       : null,
     plan.ship && plan.shipScu ? `${plan.ship} holds ${plan.shipScu} SCU` : null,
   ].filter(Boolean).join(' · ');
@@ -15454,6 +15454,13 @@ function renderHaulPlan(host, plan) {
       card.append(legs);
     }
 
+    if (c.scu != null) {
+      const remaining = c.remainingScu != null ? c.remainingScu : c.scu;
+      const delivered = c.scuDone || 0;
+      card.append(el('div', 'muted haul-progress',
+        `${c.scu} SCU contracted · ${remaining} remaining${delivered ? ` · ${delivered} delivered` : ''}`));
+    }
+
     if (c.pickups > 0 || c.deliveries > 0) {
       const bits = [];
       if (c.pickups > 0) bits.push(`${c.pickupsDone} of ${c.pickups} pickup${c.pickups === 1 ? '' : 's'} done`);
@@ -15484,8 +15491,18 @@ function renderHaulPlan(host, plan) {
       const what = el('td');
       for (const a of stop.actions) {
         const scu = a.scu != null ? `${a.scu} SCU ` : '';
+        const delivered = a.scuDone ? ` (${a.scuDone} delivered)` : '';
         what.append(el('div', a.kind === 'load' ? 'haul-load' : 'haul-unload',
-          `${a.kind} ${scu}${a.commodity || 'cargo'} — ${a.contractTitle}${a.note ? ` (${a.note})` : ''}`));
+          `${a.kind} ${scu}${a.commodity || 'cargo'}${delivered} — ${a.contractTitle}${a.note ? ` (${a.note})` : ''}`));
+      }
+      if (stop.aboard?.length) {
+        const cargo = stop.aboard.map((item) => {
+          if (item.amountUnknown) return item.knownScu > 0
+            ? `${item.commodity} at least ${item.knownScu} SCU`
+            : `${item.commodity} amount unknown`;
+          return `${item.commodity} ${item.knownScu} SCU`;
+        }).join(' · ');
+        what.append(el('div', 'muted haul-aboard', `aboard after this stop: ${cargo}`));
       }
       if (stop.note) what.append(el('div', 'muted', stop.note));
       tr.append(what);
@@ -15517,6 +15534,8 @@ function renderHaulPlan(host, plan) {
     });
     actions.append(make);
     section.append(actions);
+    section.append(el('p', 'muted caption',
+      'Arrival marks the stop reached. Load and unload actions stay manual: the log does not identify which named contract leg changed.'));
   }
 
   for (const note of plan.notes || []) section.append(el('p', 'muted caption', note));

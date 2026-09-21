@@ -18,6 +18,26 @@ public sealed record TripStop(
     DateTimeOffset? DoneAt,
     IReadOnlyList<RunAction>? Actions = null);
 
+/// <summary>The contract evidence behind a generated action, retained even after its title changes.</summary>
+public sealed record RunActionLink(string? MissionId, IReadOnlyList<string>? LegIds = null)
+{
+    internal static RunActionLink? Clean(RunActionLink? value)
+    {
+        if (value is null) return null;
+
+        var missionId = Sanitise.CleanOptional(value.MissionId, 128);
+        var legs = (value.LegIds ?? [])
+            .Select(id => Sanitise.CleanOptional(id, 64))
+            .Where(id => id is not null)
+            .Cast<string>()
+            .Distinct(StringComparer.Ordinal)
+            .Take(32)
+            .ToList();
+
+        return missionId is null && legs.Count == 0 ? null : new RunActionLink(missionId, legs);
+    }
+}
+
 /// <summary>One manual instruction at a planned stop.</summary>
 /// <remarks>
 /// Game.log does not carry a cargo manifest, so action lines deliberately say
@@ -37,7 +57,8 @@ public sealed record RunAction(
     string? Unit,
     bool Done,
     DateTimeOffset? DoneAt,
-    decimal? Actual = null)
+    decimal? Actual = null,
+    RunActionLink? Link = null)
 {
     /// <summary>
     /// The kinds a run sheet may use, with anything else read as a plain "do".
@@ -270,7 +291,7 @@ public sealed class TripStore
 
     /// <summary>Adds a manual load, unload, collection, or service instruction to one stop.</summary>
     public bool AddAction(string tripId, string stopId, string? kind, string? text,
-        decimal? quantity, string? unit)
+        decimal? quantity, string? unit, RunActionLink? link = null)
     {
         if (string.IsNullOrWhiteSpace(text)) return false;
 
@@ -284,7 +305,8 @@ public sealed class TripStore
             if (stopIndex < 0) return false;
 
             var action = new RunAction(NewId(), RunAction.CleanKind(kind), Sanitise.Clean(text, "Action"),
-                RunAction.CleanQuantity(quantity), RunAction.CleanUnit(unit), Done: false, DoneAt: null);
+                RunAction.CleanQuantity(quantity), RunAction.CleanUnit(unit), Done: false, DoneAt: null,
+                Link: RunActionLink.Clean(link));
             stops[stopIndex] = stops[stopIndex] with { Actions = [.. (stops[stopIndex].Actions ?? []), action] };
             _trips[tripIndex] = _trips[tripIndex] with { Stops = stops };
             Save();

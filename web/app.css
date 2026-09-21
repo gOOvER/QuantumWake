@@ -2762,6 +2762,7 @@ body.overlay .checklist-attachments, body.overlay .checklist-due { display: none
 .haul-legs li { padding: 2px 0; }
 .haul-legs li::before { content: '↳ '; color: var(--dim); }
 .haul-progress, .haul-note { font-size: 11.5px; margin-top: 4px; }
+.haul-aboard { font-size: 11.5px; margin-top: 5px; color: var(--cyan); }
 .haul-stops td:first-child { width: 20px; }
 .haul-stops td:nth-child(2) { width: 34%; white-space: nowrap; }
 .haul-load::before { content: '▲ '; color: var(--cyan); }

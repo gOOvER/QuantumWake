@@ -24,6 +24,7 @@ public class HaulPlannerTests
     private const string Multi2Copper = "RedWind_Pyro_SmallGrade_Solar_CFP_TradepostToStation_Copper_CargoHauling_Multi2ToSingle";
     private const string Multi3Copper = "RedWind_Pyro_SmallGrade_Solar_CFP_TradepostToStation_Copper_CargoHauling_Multi3ToSingle";
     private const string DirectCarbon = "RedWind_Pyro_SupplyGrade_RegionA_CFP_StationToTradepost_Carbon_CargoHauling_AtoB_Intro";
+    private const string UnnamedCargo = "HaulCargo_Multi2ToSingle_Interstellar_Bulk_DistSp_Dia_FresFoo_Gol_Aphor";
 
     private static ScreenSighting Frame(string shot, int minutes, ScreenTextLine[] lines)
     {
@@ -34,6 +35,10 @@ public class HaulPlannerTests
     private static ScreenSighting EmptyCard(string shot, int minutes, string title) =>
         new(shot, T0.AddMinutes(minutes), ScreenKind.Contracts, "", [], null, null, null, null, [], 0,
             Contracts: new ContractsReading(null, null, [], title, null, null, []));
+
+    private static ScreenSighting Card(string shot, int minutes, string title, params ContractStep[] steps) =>
+        new(shot, T0.AddMinutes(minutes), ScreenKind.Contracts, "", [], null, null, null, null, [], 0,
+            Contracts: new ContractsReading(null, null, [], title, null, null, [], steps));
 
     /// <summary>An atlas that knows the Pyro stations and nothing on the ground.</summary>
     private static ResolvedPlace? Atlas(string name) => name switch
@@ -196,6 +201,39 @@ public class HaulPlannerTests
         Assert.Null(contract.Shot);
         Assert.Equal("Stanton Gateway", Assert.Single(contract.Legs).Delivery);
         Assert.Contains(plan.Stops, stop => stop.Place == "Stanton Gateway");
+    }
+
+    [Fact]
+    public void Separate_cargo_at_one_destination_keeps_its_own_remaining_unload_and_manifest()
+    {
+        const string title = "Rookie | Solar Cargo | to Seraphim Station";
+        var plan = HaulPlanner.Plan(
+            [Contract("m1", UnnamedCargo, title)],
+            [Card("multi-cargo.jpg", 48, title,
+                new("Collect Aluminum from Alpha.", "collect", "Aluminum", "Alpha", null, null, null, 0),
+                new("Deliver 0/4 SCU of Aluminum to Seraphim Station.", "deliver", "Aluminum", "Seraphim Station", null, 0, 4, 1),
+                new("Collect Copper from Beta.", "collect", "Copper", "Beta", null, null, null, 0),
+                new("Deliver 2/6 SCU of Copper to Seraphim Station.", "deliver", "Copper", "Seraphim Station", null, 2, 6, 1))],
+            Atlas);
+
+        var contract = Assert.Single(plan.Contracts);
+        Assert.Equal((10, 2, 8), (contract.Scu, contract.ScuDone, contract.RemainingScu));
+        Assert.Equal(8, plan.KnownScu);
+
+        var destination = plan.Stops.Single(stop => stop.Place == "Seraphim Station");
+        Assert.Equal(2, destination.Actions.Count);
+        Assert.Contains(destination.Actions, action => action is { Kind: "unload", Commodity: "Aluminum", Scu: 4, ScuDone: 0 });
+        Assert.Contains(destination.Actions, action => action is { Kind: "unload", Commodity: "Copper", Scu: 4, ScuDone: 2 });
+        Assert.All(destination.Actions, action =>
+        {
+            Assert.Equal("m1", action.MissionId);
+            Assert.NotEmpty(action.LegIds!);
+        });
+        Assert.Empty(destination.Aboard!);
+
+        var afterSecondPickup = plan.Stops.Single(stop => stop.Place == "Beta").Aboard!;
+        Assert.Contains(afterSecondPickup, cargo => cargo is { Commodity: "Aluminum", KnownScu: 4, AmountUnknown: false });
+        Assert.Contains(afterSecondPickup, cargo => cargo is { Commodity: "Copper", KnownScu: 4, AmountUnknown: false });
     }
 
     [Fact]

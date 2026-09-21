@@ -365,7 +365,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.27
+### 0.15.28
+
+- **Cargo stays distinct through a hauling run.** A shared destination now
+  keeps a separate unload for each commodity, with the amount still to
+  deliver when the card reports partial progress. Every stop shows the cargo
+  known aboard afterwards, and says when a multi-pickup card left a source's
+  share unknown. The tracked flight plan retains each generated action's
+  mission and card-leg identity; it still asks the pilot to confirm loads and
+  unloads because the log never names the stop whose objective changed.
 
 - **Hauling cards only guide their own contracts.** When two open contracts
   have the same title, a photographed card now has to agree with the logged

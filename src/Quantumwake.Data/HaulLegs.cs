@@ -10,7 +10,8 @@ public sealed record HaulLeg(
     string? DeliveryBody,
     string? Commodity,
     int? Scu,
-    int? ScuDone);
+    int? ScuDone,
+    string Id = "");
 
 /// <summary>
 /// Turns the objectives the Contracts app printed into legs.

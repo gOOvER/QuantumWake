@@ -112,9 +112,9 @@ says which:
 
 - **screenshot** — a Contracts-app frame showing this card selected, taken
   after the contract was accepted. Titles repeat — three of the five cards on
-  the 8 Sep frame read *to Stanton Gateway* — so the archetype's cargo and its
-  count of sources break the tie, and a frame already given to one contract
-  goes to a second only when nothing else fits, flagged when it does.
+  the 8 Sep frame read *to Stanton Gateway* — so a card has to agree with the
+  archetype's readable cargo and source count before it can supply a route.
+  A card whose objectives did not read falls back to the title instead.
 - **title** — one leg with whichever end the title named and the other
   missing, with the archetype's count of the missing end in the note: *3
   pickups, places unknown until this card is photographed*.
@@ -128,10 +128,16 @@ load first and again to deliver once its cargo is aboard. Nothing here knows a
 distance — the atlas has no coordinates for a station — so it is a starting
 order for the pilot to rewrite, not an answer.
 
-The SCU total is a floor and is called one: it counts the contracts whose card
-was read. Against it the plan prints the ship's hold from the community dump
-when the live feed knows the ship, and says in words when the floor is already
-more than the hold.
+The SCU total is a floor and is called one: it is the known cargo still to
+deliver, after any quantity the latest card says has already arrived. Against
+it the plan prints the ship's hold from the community dump when the live feed
+knows the ship, and says in words when the floor is already more than the hold.
+Shared destinations keep separate unload actions for each commodity. Every stop
+also shows the cargo known aboard afterwards; where a multi-pickup card gives
+only its delivery total, its source shares stay explicitly unknown rather than
+being made up. A flight-plan action retains the mission id and the card legs it
+came from, but the pilot still confirms it manually: the logs count completed
+objectives without naming the photographed pickup or delivery that changed.
 
 Places resolve to the map the way price terminals do — by the place whose name
 the text contains — and a place the logs have never seen visited keeps its

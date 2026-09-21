@@ -3506,7 +3506,8 @@ public static class ServerHost
                 {
                     var what = action.Commodity ?? "cargo";
                     var text = $"{what} — {action.ContractTitle}{(action.Note is null ? "" : $" ({action.Note})")}";
-                    trips.AddAction(trip.Id, trip.Stops[i].Id, action.Kind, text, action.Scu, action.Scu is null ? null : "SCU");
+                    trips.AddAction(trip.Id, trip.Stops[i].Id, action.Kind, text, action.Scu, action.Scu is null ? null : "SCU",
+                        new RunActionLink(action.MissionId, action.LegIds));
                 }
             }
 
@@ -3535,7 +3536,7 @@ public static class ServerHost
 
         app.MapPost("/api/trips/{id}/stops/{stopId}/actions", (string id, string stopId,
             TripStore trips, RunActionRequest body) =>
-            trips.AddAction(id, stopId, body.Kind, body.Text, body.Quantity, body.Unit)
+            trips.AddAction(id, stopId, body.Kind, body.Text, body.Quantity, body.Unit, body.Link)
                 ? Results.Ok(new { id, stopId }) : Results.NotFound());
 
         app.MapPost("/api/trips/{id}/stops/{stopId}/actions/{actionId}/toggle", (string id,
@@ -5457,7 +5458,7 @@ public sealed record WipeRequest(DateTimeOffset? At, string? Patch, List<string>
 public sealed record TripRequest(string? Title, List<TripStop>? Stops);
 
 /// <summary>Body of POST /api/trips/{id}/stops/{stopId}/actions.</summary>
-public sealed record RunActionRequest(string? Kind, string? Text, decimal? Quantity, string? Unit);
+public sealed record RunActionRequest(string? Kind, string? Text, decimal? Quantity, string? Unit, RunActionLink? Link = null);
 
 /// <summary>Body of POST /api/map-notes.</summary>
 public sealed record MapNoteRequest(

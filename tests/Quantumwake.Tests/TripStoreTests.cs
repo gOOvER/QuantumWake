@@ -226,6 +226,21 @@ public class TripStoreTests : IDisposable
     }
 
     [Fact]
+    public void A_generated_action_keeps_its_contract_and_leg_identity_after_restart()
+    {
+        var store = NewStore();
+        var trip = store.Add("Cargo run", [Stop("Stanton1_Lorville", "Lorville")]);
+        var stop = Assert.Single(trip.Stops);
+
+        Assert.True(store.AddAction(trip.Id, stop.Id, "unload", "Copper", 4, "SCU",
+            new RunActionLink("mission-42", ["leg-2", "leg-3"])));
+
+        var action = Assert.Single(NewStore().All().Single().Stops.Single().Actions!);
+        Assert.Equal("mission-42", action.Link!.MissionId);
+        Assert.Equal(["leg-2", "leg-3"], action.Link.LegIds);
+    }
+
+    [Fact]
     public void Arrival_keeps_the_current_stop_active_until_its_run_sheet_is_done()
     {
         var store = NewStore();

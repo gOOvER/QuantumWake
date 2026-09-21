@@ -43,7 +43,8 @@ public class HaulPlanTests
          ],
          "stops":[
            {"place":"Fallow Field","placeId":"","body":"Pyro IV","system":null,
-            "actions":[{"kind":"load","commodity":"Aluminum","scu":null,"contract":0,"contractTitle":"Junior | Stellar Small Haul | to Stanton Gateway"}],"note":null},
+            "actions":[{"kind":"load","commodity":"Aluminum","scu":null,"contract":0,"contractTitle":"Junior | Stellar Small Haul | to Stanton Gateway"}],"note":null,
+            "aboard":[{"commodity":"Aluminum","knownScu":0,"amountUnknown":true}]},
            {"place":"Ashland","placeId":"","body":"Pyro 5a","system":null,
             "actions":[{"kind":"load","commodity":"Aluminum","scu":null,"contract":0,"contractTitle":"Junior | Stellar Small Haul | to Stanton Gateway"}],"note":null},
            {"place":"Stanton Gateway","placeId":"Pyro_StantonGateway","body":"Pyro Jump","system":"Pyro",
@@ -101,6 +102,7 @@ public class HaulPlanTests
         Assert.Contains("Fallow Field", first);
         Assert.Contains("not on the map", first);
         Assert.Contains("load Aluminum — Junior | Stellar Small Haul | to Stanton Gateway", first);
+        Assert.Contains("aboard after this stop: Aluminum amount unknown", first);
 
         var gateway = page.Text($"{Host}.byClass('haul-stops')[0].byClass('have')[2].textContent");
         Assert.Contains("unload 18 SCU Aluminum", gateway);
@@ -109,10 +111,11 @@ public class HaulPlanTests
         var summary = page.Text($"{Host}.byClass('haul-plan')[0].byClass('caption')[0].textContent");
         Assert.Contains("2 contracts", summary);
         Assert.Contains("1 with the card read", summary);
-        Assert.Contains("18 SCU known (a floor)", summary);
+        Assert.Contains("18 SCU remaining known (a floor)", summary);
         Assert.Contains("RSI Hermes holds 480 SCU", summary);
 
         Assert.Contains("1 of 2 contracts has no screenshot", page.Text($"{Host}.textContent"));
+        Assert.Contains("Load and unload actions stay manual", page.Text($"{Host}.textContent"));
     }
 
     /// <summary>The non-hauling contract keeps its plain card, named as the game names it.</summary>

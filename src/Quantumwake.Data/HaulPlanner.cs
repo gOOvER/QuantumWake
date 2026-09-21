@@ -24,12 +24,36 @@ public sealed record PlannedContract(
     int Deliveries,
     int DeliveriesDone,
     int? Scu,
-    string? Note);
+    string? Note,
+    IReadOnlyList<HaulDelivery>? DeliveryDetails = null,
+    int? ScuDone = null,
+    int? RemainingScu = null);
+
+/// <summary>One destination's cargo total, including the amount its card says has already arrived.</summary>
+public sealed record HaulDelivery(
+    string Place,
+    string? Body,
+    string? Commodity,
+    int? Scu,
+    int? ScuDone,
+    IReadOnlyList<string> LegIds);
 
 /// <summary>Something to do at a stop: load or unload some cargo for one contract.</summary>
 /// <param name="Scu">The count when the screen printed one for this leg; null when only the contract total is known.</param>
 /// <param name="Note">Set on an unload whose contract has no pickup on the plan: it is placed last, and says why.</param>
-public sealed record HaulAction(string Kind, string? Commodity, int? Scu, int Contract, string ContractTitle, string? Note = null);
+public sealed record HaulAction(
+    string Kind,
+    string? Commodity,
+    int? Scu,
+    int Contract,
+    string ContractTitle,
+    string? Note = null,
+    int? ScuDone = null,
+    string? MissionId = null,
+    IReadOnlyList<string>? LegIds = null);
+
+/// <summary>Known cargo aboard after a stop; the amount is a floor when <see cref="AmountUnknown"/> is true.</summary>
+public sealed record HaulCargo(string Commodity, int KnownScu, bool AmountUnknown);
 
 /// <summary>One visit on the run.</summary>
 /// <param name="PlaceId">The map's id when the atlas knows the place; empty when it does not.</param>
@@ -40,7 +64,8 @@ public sealed record HaulStop(
     string? Body,
     string? System,
     IReadOnlyList<HaulAction> Actions,
-    string? Note);
+    string? Note,
+    IReadOnlyList<HaulCargo>? Aboard = null);
 
 /// <summary>The run: every contract, the stops in an order, and what the plan could not see.</summary>
 /// <param name="KnownScu">SCU summed over the legs that printed a count, and delivery totals where they did not - a floor.</param>
@@ -114,19 +139,23 @@ public static class HaulPlanner
             if (frame is not null)
             {
                 taken.Add(frame.Shot);
-                var (legs, deliveries) = HaulLegs.From(frame.Contracts!);
-
-                var scu = legs.Any(l => l.Scu is not null)
-                    ? legs.Sum(l => l.Scu ?? 0)
-                    : deliveries.Sum(d => d.Scu ?? 0);
+                var (readLegs, readDeliveries) = HaulLegs.From(frame.Contracts!);
+                var legs = WithIds(readLegs);
+                var deliveries = DeliveryDetails(legs, readDeliveries);
+                var scu = deliveries.Any(d => d.Scu is not null)
+                    ? deliveries.Sum(d => d.Scu ?? 0)
+                    : (int?)null;
+                var scuDone = scu is null ? (int?)null : deliveries.Sum(d => d.ScuDone ?? 0);
+                var remaining = scu is null ? (int?)null : Math.Max(0, scu.Value - (scuDone ?? 0));
 
                 planned.Add(new PlannedContract(
                     title, contract.MissionId, archetype?.Commodity ?? legs.FirstOrDefault(l => l.Commodity is not null)?.Commodity,
                     archetype?.Shape ?? HaulShape.Unknown, legs, "screenshot", frame.Shot, frame.ShotAt,
                     contract.Pickups, contract.PickupsDone, contract.Deliveries, contract.DeliveriesDone,
-                    scu > 0 ? scu : null,
+                    scu,
                     reused ? "read from a frame that also matched another card with this title; photograph this card to be sure"
-                        : null));
+                        : null,
+                    deliveries, scuDone, remaining));
                 continue;
             }
 
@@ -134,7 +163,7 @@ public static class HaulPlanner
             // the archetype's count of the other end as the note.
             var fromTitle = route is null ? [] : new List<HaulLeg>
             {
-                new(route.Pickup, null, route.Delivery, null, archetype?.Commodity, null, null),
+                new(route.Pickup, null, route.Delivery, null, archetype?.Commodity, null, null, "title-route"),
             };
 
             planned.Add(new PlannedContract(
@@ -146,7 +175,7 @@ public static class HaulPlanner
 
         var stops = Route(planned, resolve);
 
-        var known = planned.Sum(c => c.Scu ?? 0);
+        var known = planned.Sum(c => c.RemainingScu ?? c.Scu ?? 0);
         var notes = new List<string>();
 
         var unread = planned.Count(c => c.Source != "screenshot");
@@ -155,7 +184,7 @@ public static class HaulPlanner
                 ? $"1 of {planned.Count} contract{(planned.Count == 1 ? "" : "s")} has no screenshot of its card: open it on the Contracts app's Accepted tab and take one, and its pickups and SCU will be read."
                 : $"{unread} of {planned.Count} contracts have no screenshot of their card: open each on the Contracts app's Accepted tab and take one, and its pickups and SCU will be read.");
 
-        if (planned.Any(c => c.Scu is null))
+        if (planned.Any(c => (c.RemainingScu ?? c.Scu) is null))
             notes.Add("The SCU total is a floor: it counts only contracts whose card was read.");
 
         var unplaced = stops.Where(s => s.PlaceId.Length == 0).Select(s => s.Place).Distinct().ToList();
@@ -265,6 +294,52 @@ public static class HaulPlanner
         return n > 0 && string.CompareOrdinal(x, 0, y, 0, n) == 0;
     }
 
+    /// <summary>Number the card's legs within its mission, so a saved action can still say what it came from.</summary>
+    private static IReadOnlyList<HaulLeg> WithIds(IReadOnlyList<HaulLeg> legs) =>
+        [.. legs.Select((leg, index) => leg with { Id = $"leg-{index + 1}" })];
+
+    /// <summary>
+    /// The card lays a multi-pickup's total on its delivery parent, while a
+    /// direct or multi-drop card lays one total on each leg. Keep both shapes
+    /// as destination-and-cargo totals without inventing a split per pickup.
+    /// </summary>
+    private static IReadOnlyList<HaulDelivery> DeliveryDetails(
+        IReadOnlyList<HaulLeg> legs, IReadOnlyList<HaulLegs.Delivery> parents)
+    {
+        var details = new List<HaulDelivery>();
+
+        foreach (var parent in parents)
+        {
+            var linked = legs.Where(leg => SamePlace(leg.Delivery, parent.Place)
+                    && (parent.Commodity is null || leg.Commodity is null || SameCargo(leg.Commodity, parent.Commodity)))
+                .Select(leg => leg.Id)
+                .ToList();
+            details.Add(new HaulDelivery(parent.Place, parent.Body, parent.Commodity,
+                parent.Scu, parent.ScuDone, linked));
+        }
+
+        // A collect parent has no Delivery record. Its delivery children each
+        // carry their own count, so group only those counted legs.
+        foreach (var group in legs
+            .Where(leg => leg.Delivery is not null && leg.Scu is not null)
+            .GroupBy(leg => (Place: ScreenInsight.Fold(leg.Delivery!), Cargo: ScreenInsight.Fold(leg.Commodity ?? string.Empty))))
+        {
+            var first = group.First();
+            details.Add(new HaulDelivery(first.Delivery!, first.DeliveryBody, first.Commodity,
+                group.Sum(leg => leg.Scu ?? 0),
+                group.Any(leg => leg.ScuDone is not null) ? group.Sum(leg => leg.ScuDone ?? 0) : null,
+                [.. group.Select(leg => leg.Id)]));
+        }
+
+        return details;
+    }
+
+    private static bool SamePlace(string? left, string? right) =>
+        left is not null && right is not null && ScreenInsight.Fold(left) == ScreenInsight.Fold(right);
+
+    private static int? Remaining(int? total, int? done) =>
+        total is null ? null : Math.Max(0, total.Value - (done ?? 0));
+
     /// <summary>
     /// Stops in an order: every pickup before any delivery, same-body stops
     /// together, and a place that is both a source and a destination visited
@@ -296,24 +371,51 @@ public static class HaulPlanner
         {
             var contract = contracts[i];
             var blind = !contract.Legs.Any(l => l.Pickup is not null);
+            var completedLegs = (contract.DeliveryDetails ?? [])
+                .Where(delivery => Remaining(delivery.Scu, delivery.ScuDone) == 0)
+                .SelectMany(delivery => delivery.LegIds)
+                .ToHashSet(StringComparer.Ordinal);
 
-            foreach (var leg in contract.Legs.Where(l => l.Pickup is not null))
-                At(leg.Pickup!, leg.PickupBody).Loads.Add(new HaulAction("load", leg.Commodity, leg.Scu, i, contract.Title));
-
-            // One unload per destination per contract, not one per leg: three
-            // sources feeding Stanton Gateway are one drop of 18 SCU, and the
-            // screen printed that total on the parent line rather than a share
-            // on each source.
-            foreach (var group in contract.Legs.Where(l => l.Delivery is not null).GroupBy(l => ScreenInsight.Fold(l.Delivery!)))
+            foreach (var leg in contract.Legs.Where(l => l.Pickup is not null && !completedLegs.Contains(l.Id)))
             {
-                var legs = group.ToList();
-                var scu = legs.All(l => l.Scu is not null) ? legs.Sum(l => l.Scu)
-                    : legs.Count == contract.Legs.Count ? contract.Scu
-                    : null;
+                var remaining = Remaining(leg.Scu, leg.ScuDone);
+                if (remaining == 0) continue;
 
-                At(legs[0].Delivery!, legs[0].DeliveryBody).Unloads.Add(new HaulAction(
-                    "unload", legs.Select(l => l.Commodity).FirstOrDefault(c => c is not null), scu, i, contract.Title,
-                    blind ? "after its pickups, which are not on this plan" : null));
+                At(leg.Pickup!, leg.PickupBody).Loads.Add(new HaulAction(
+                    "load", leg.Commodity, remaining, i, contract.Title,
+                    ScuDone: leg.ScuDone, MissionId: contract.MissionId, LegIds: [leg.Id]));
+            }
+
+            var deliveries = contract.DeliveryDetails ?? [];
+            if (deliveries.Count == 0)
+            {
+                // Title-only routes and old records do not have card details.
+                // Keep those actions, but never collapse different cargo types
+                // into one instruction at a shared destination.
+                deliveries = [.. contract.Legs.Where(leg => leg.Delivery is not null)
+                    .GroupBy(leg => (Place: ScreenInsight.Fold(leg.Delivery!), Cargo: ScreenInsight.Fold(leg.Commodity ?? string.Empty)))
+                    .Select(group =>
+                    {
+                        var legs = group.ToList();
+                        var first = legs[0];
+                        var scu = legs.All(leg => leg.Scu is not null) ? legs.Sum(leg => leg.Scu ?? 0)
+                            : legs.Count == contract.Legs.Count ? contract.Scu
+                            : null;
+                        var done = legs.Any(leg => leg.ScuDone is not null) ? legs.Sum(leg => leg.ScuDone ?? 0) : (int?)null;
+                        return new HaulDelivery(first.Delivery!, first.DeliveryBody, first.Commodity, scu, done,
+                            [.. legs.Select(leg => leg.Id)]);
+                    })];
+            }
+
+            foreach (var delivery in deliveries)
+            {
+                var remaining = Remaining(delivery.Scu, delivery.ScuDone);
+                if (remaining == 0) continue;
+
+                At(delivery.Place, delivery.Body).Unloads.Add(new HaulAction(
+                    "unload", delivery.Commodity, remaining, i, contract.Title,
+                    blind ? "after its pickups, which are not on this plan" : null,
+                    delivery.ScuDone, contract.MissionId, delivery.LegIds));
             }
         }
 
@@ -367,6 +469,53 @@ public static class HaulPlanner
             // The deliveries that could not happen yet get a second visit.
             if (later.Count > 0)
                 pending.Add(new Place(next.Name, next.Id, next.Body, next.System) { Unloads = later });
+        }
+
+        return WithManifest(stops);
+    }
+
+    /// <summary>
+    /// The game has no cargo manifest. Quantities printed on objectives make a
+    /// lower bound; a multi-pickup card names a total but not each source's
+    /// share, so that commodity stays explicitly unknown until the pilot has
+    /// confirmed its load action.
+    /// </summary>
+    private static List<HaulStop> WithManifest(List<HaulStop> stops)
+    {
+        var aboard = new Dictionary<string, (string Name, int Known, bool Unknown)>(StringComparer.Ordinal);
+
+        for (var i = 0; i < stops.Count; i++)
+        {
+            foreach (var action in stops[i].Actions)
+            {
+                var name = action.Commodity ?? "Cargo";
+                var key = ScreenInsight.Fold(name);
+                var cargo = aboard.TryGetValue(key, out var current) ? current : (Name: name, Known: 0, Unknown: false);
+
+                if (action.Scu is null)
+                {
+                    cargo.Unknown = true;
+                }
+                else if (action.Kind == "load")
+                {
+                    cargo.Known += action.Scu.Value;
+                }
+                else
+                {
+                    // When one source's share was not printed, subtracting a
+                    // known delivery can only lower the known floor to zero.
+                    cargo.Known = Math.Max(0, cargo.Known - action.Scu.Value);
+                }
+
+                aboard[key] = cargo;
+            }
+
+            var manifest = aboard.Values
+                .Where(cargo => cargo.Known > 0 || cargo.Unknown)
+                .OrderBy(cargo => cargo.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(cargo => new HaulCargo(cargo.Name, cargo.Known, cargo.Unknown))
+                .ToList();
+            stops[i] = stops[i] with { Aboard = manifest };
         }
 
         return stops;
