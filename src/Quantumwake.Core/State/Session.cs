@@ -156,6 +156,42 @@ public sealed record ContractRecord(
     /// <summary>Mission id, used to join objective state onto the contract.</summary>
     public string? MissionId { get; init; }
 
+    /// <summary>
+    /// The title the game showed when the contract was accepted, exactly as
+    /// the toast rendered it - StarStrings' <c>[150 Rep]</c> tags and
+    /// <c>&lt;EM&gt;</c> markup included.
+    /// </summary>
+    /// <remarks>
+    /// Joined onto the record by mission id, which the acceptance toast and
+    /// the objective marker share: on this install they land within 20 ms of
+    /// each other, in either order. <see cref="DisplayName"/> is composed
+    /// from the archetype - "Red Wind · Recover Cargo · Easy" - and is what
+    /// every page showed for a year, which is also why the rep chips never
+    /// lit: the tags were read off a name that never carried them. This is
+    /// what the mobiGlas prints, and for a hauling contract it is the only
+    /// place the logs name a destination. Null when the marker came without
+    /// a toast - a contract carried over from an earlier session.
+    /// </remarks>
+    public string? Title { get; init; }
+
+    /// <summary>The title when there is one, else the composed name.</summary>
+    public string Name => string.IsNullOrWhiteSpace(Title) ? DisplayName : Title;
+
+    /// <summary>
+    /// Journal steps by kind. The game names a hauling objective
+    /// <c>pickup_&lt;uuid&gt;_1</c> or <c>dropoff_&lt;uuid&gt;_0</c> - 250
+    /// and 207 of them on this install - so which end a step belongs to is
+    /// readable even though which place is not: "two of three pickups done"
+    /// is true, and "Fallow Field done" would be a guess.
+    /// </summary>
+    public int Pickups { get; init; }
+
+    public int PickupsDone { get; init; }
+
+    public int Deliveries { get; init; }
+
+    public int DeliveriesDone { get; init; }
+
     public ContractOutcome Outcome { get; init; } = ContractOutcome.Unknown;
 
     public DateTimeOffset? CompletedAt { get; init; }

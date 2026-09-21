@@ -47,6 +47,13 @@ public sealed class SessionBuilder
     private readonly Dictionary<string, ObjectiveState> _objectiveStates = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// Acceptance-toast titles by mission id, for the marker that has not
+    /// arrived yet. The toast and the marker land within 20 ms of each other
+    /// and in either order, so both sides look the other up.
+    /// </summary>
+    private readonly Dictionary<string, string> _titlesByMission = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// Endings by mission id, for the ones that arrive before the contract
     /// marker they belong to - which happens, the same way objective state
     /// does, because the push messages and the markers are separate streams.
@@ -754,6 +761,16 @@ public sealed class SessionBuilder
         {
             var title = ContractTitle(notification.Text, "Contract Accepted:");
             Timeline(notification.Timestamp, "contract", "Contract accepted", title);
+
+            if (notification.MissionId is { Length: > 0 } mission && title.Length > 0)
+            {
+                _titlesByMission[mission] = title;
+
+                if (_contractsByMission.TryGetValue(mission, out var key)
+                    && _contracts.TryGetValue(key, out var contract))
+                    _contracts[key] = contract with { Title = title };
+            }
+
             return;
         }
 
@@ -961,11 +978,7 @@ public sealed class SessionBuilder
 
         // Step counts are recorded whatever the outcome: a contract abandoned
         // four steps in is a different story from one dropped at the first.
-        var progressed = contract with
-        {
-            Steps = StepCount(objective.MissionId),
-            StepsDone = StepsDoneCount(objective.MissionId)
-        };
+        var progressed = WithSteps(contract, objective.MissionId);
 
         // An ending is terminal. Objectives keep arriving after one - the
         // server upserts them as it tears the mission down - and none of that
@@ -1039,16 +1052,30 @@ public sealed class SessionBuilder
         };
 
         if (outcome == ContractOutcome.Completed)
-            Timeline(ended.Timestamp, "contract-done", "Contract completed", contract.DisplayName);
+            Timeline(ended.Timestamp, "contract-done", "Contract completed", contract.Name);
     }
 
-    private int StepCount(string missionId) =>
-        _objectiveSteps.TryGetValue(missionId, out var steps) ? steps.Count : 0;
+    /// <summary>The record with every step count read off the mission's journal objectives.</summary>
+    private ContractRecord WithSteps(ContractRecord contract, string missionId)
+    {
+        if (!_objectiveSteps.TryGetValue(missionId, out var steps))
+            return contract with { Steps = 0, StepsDone = 0, Pickups = 0, PickupsDone = 0, Deliveries = 0, DeliveriesDone = 0 };
 
-    private int StepsDoneCount(string missionId) =>
-        _objectiveSteps.TryGetValue(missionId, out var steps)
-            ? steps.Values.Count(s => s == ObjectiveState.Completed)
-            : 0;
+        // The kind is the id's own prefix - pickup_<uuid>_1, dropoff_<uuid>_0.
+        // Anything else (phase_…) is a step of no particular end.
+        var pickups = steps.Where(s => s.Key.StartsWith("pickup_", StringComparison.OrdinalIgnoreCase)).ToList();
+        var dropoffs = steps.Where(s => s.Key.StartsWith("dropoff_", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        return contract with
+        {
+            Steps = steps.Count,
+            StepsDone = steps.Values.Count(s => s == ObjectiveState.Completed),
+            Pickups = pickups.Count,
+            PickupsDone = pickups.Count(s => s.Value == ObjectiveState.Completed),
+            Deliveries = dropoffs.Count,
+            DeliveriesDone = dropoffs.Count(s => s.Value == ObjectiveState.Completed),
+        };
+    }
 
     /// <summary>
     /// Attributes an item to the location whose inventory was being browsed.
@@ -1273,9 +1300,15 @@ public sealed class SessionBuilder
     }
 
     /// <summary>Registers a contract, keeping the earliest sighting.</summary>
+    /// <remarks>
+    /// Keyed by mission id, not by archetype. Two contracts of one archetype
+    /// in a session - which a hauler does the moment they take two Aluminium
+    /// runs to the same station - used to fold into one record, and a plan
+    /// built from that record would have flown one of them.
+    /// </remarks>
     private void AddContract(ContractEvent contract)
     {
-        if (_contracts.ContainsKey(contract.Contract))
+        if (_contracts.ContainsKey(contract.MissionId))
             return;
 
         var parsed = ContractNameParser.Parse(contract.Contract);
@@ -1284,7 +1317,7 @@ public sealed class SessionBuilder
         // contract itself, so apply anything already seen for this mission.
         var known = _objectiveStates.GetValueOrDefault(contract.MissionId, ObjectiveState.Unknown);
 
-        _contracts[contract.Contract] = new ContractRecord(
+        _contracts[contract.MissionId] = WithSteps(new ContractRecord(
             contract.Timestamp,
             parsed.Raw,
             parsed.DisplayName,
@@ -1295,6 +1328,7 @@ public sealed class SessionBuilder
             Accepted: false)
         {
             MissionId = contract.MissionId,
+            Title = _titlesByMission.GetValueOrDefault(contract.MissionId),
 
             // A completed objective is a completed step, here as everywhere
             // else. Seeding the contract as done from one was the same bug in
@@ -1307,15 +1341,13 @@ public sealed class SessionBuilder
                 ObjectiveState.InProgress or ObjectiveState.Completed => ContractOutcome.InProgress,
                 _ => ContractOutcome.Unknown
             },
-            Steps = StepCount(contract.MissionId),
-            StepsDone = StepsDoneCount(contract.MissionId)
-        };
+        }, contract.MissionId);
 
-        _contractsByMission[contract.MissionId] = contract.Contract;
+        _contractsByMission[contract.MissionId] = contract.MissionId;
 
         // The ending can arrive before the marker, and a contract that ended
         // in this session is over whichever order the two turned up in.
         if (_missionEndings.TryGetValue(contract.MissionId, out var ended))
-            End(contract.Contract, _contracts[contract.Contract], ended);
+            End(contract.MissionId, _contracts[contract.MissionId], ended);
     }
 }

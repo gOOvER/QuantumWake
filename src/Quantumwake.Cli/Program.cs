@@ -257,6 +257,50 @@ if (args.Contains("--cargo", StringComparer.OrdinalIgnoreCase))
     return 0;
 }
 
+// Hauling as the logs have it: every hauling contract folded out of the
+// backups with what its title and archetype say about the route, and the
+// totals that decide how much a screenshot still has to add. The evidence
+// behind docs/hauling.md; run it again after the mod or the game changes a
+// title format.
+if (args.Contains("--hauling", StringComparer.OrdinalIgnoreCase))
+{
+    var hauls = new List<ContractRecord>();
+
+    foreach (var file in install.BackupLogs().Concat(install.HasGameLog ? [install.GameLogPath] : []))
+    {
+        var builder = new SessionBuilder(Path.GetFileName(file));
+        foreach (var ev in LogFileReader.ReadEvents(file, new LogEventParser())) builder.Add(ev);
+        hauls.AddRange(builder.Build().Contracts.Where(c => HaulingContract.IsHauling(c.Raw)));
+    }
+
+    var titled = hauls.Count(c => c.Title is not null);
+    var routes = hauls.Select(c => HaulingContract.RouteFromTitle(c.Title)).ToList();
+    var shapes = hauls.Select(c => HaulingContract.FromArchetype(c.Raw)!).ToList();
+
+    Console.WriteLine($"{hauls.Count} hauling contracts; {titled} with the toast's title, {hauls.Count - titled} marker only");
+    Console.WriteLine($"  delivery named : {routes.Count(r => r?.Delivery is not null)}");
+    Console.WriteLine($"  pickup named   : {routes.Count(r => r?.Pickup is not null)}");
+    Console.WriteLine($"  both named     : {routes.Count(r => r is { Pickup: not null, Delivery: not null })}");
+    Console.WriteLine($"  neither        : {routes.Count(r => r is null)}");
+    Console.WriteLine($"  shape known    : {shapes.Count(s => s.Shape != HaulShape.Unknown)}   cargo named: {shapes.Count(s => s.Commodity is not null)}");
+    Console.WriteLine($"  pickup steps   : {hauls.Sum(c => c.Pickups)} ({hauls.Sum(c => c.PickupsDone)} done)   drop-off steps: {hauls.Sum(c => c.Deliveries)} ({hauls.Sum(c => c.DeliveriesDone)} done)");
+
+    Console.WriteLine("\nplaces named, by end:");
+    foreach (var g in routes.Where(r => r is not null).SelectMany(r => new[] { ("to", r!.Delivery), ("from", r.Pickup) })
+        .Where(x => x.Item2 is not null).GroupBy(x => x).OrderByDescending(g => g.Count()))
+        Console.WriteLine($"  {g.Count(),4}  {g.Key.Item1,-4} {g.Key.Item2}");
+
+    Console.WriteLine("\nshapes:");
+    foreach (var g in shapes.GroupBy(s => (s.Shape, s.Pickups, s.Deliveries)).OrderByDescending(g => g.Count()))
+        Console.WriteLine($"  {g.Count(),4}  {g.Key.Shape,-14} {g.Key.Pickups?.ToString() ?? "?"} -> {g.Key.Deliveries?.ToString() ?? "?"}");
+
+    Console.WriteLine("\ncargo:");
+    foreach (var g in shapes.GroupBy(s => s.Commodity ?? "(not spelled)").OrderByDescending(g => g.Count()))
+        Console.WriteLine($"  {g.Count(),4}  {g.Key}");
+
+    return 0;
+}
+
 if (args.Any(a => a.StartsWith("--armoury", StringComparison.OrdinalIgnoreCase)))
 {
     var all = args.Contains("--armoury=all", StringComparer.OrdinalIgnoreCase);

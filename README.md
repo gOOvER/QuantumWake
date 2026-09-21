@@ -365,7 +365,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.23
+### 0.15.24
+
+- **Contracts read as the game names them.** The Contracts and Jobs pages,
+  the Now page and the screenshot checks now show the title the mobiGlas
+  printed — *Junior | Stellar Small Haul | to Stanton Gateway* — instead of
+  a name composed from the mission's internal id. The rep and blueprint chips
+  on the Contracts page are read off that title and so had nothing to read;
+  they light now.
+  Two contracts of the same kind taken in one session are two rows rather than
+  one. Every log is re-read once after updating.
 
 - **Safer Controls pictures and more reliable backups.** Picture requests stay
   inside the template folders, and SVG pictures are cleaned before display so

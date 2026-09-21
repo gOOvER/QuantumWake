@@ -79,7 +79,7 @@ public sealed class LibraryBeliefs(LogLibrary library) : IScreenBeliefs
             .Where(c => c.CompletedAt is null || c.CompletedAt > at)
             .Where(c => c.Outcome is ContractOutcome.Unknown or ContractOutcome.InProgress
                 || (c.CompletedAt is not null && c.CompletedAt > at))
-            .Select(c => ContractTags.Clean(c.DisplayName))];
+            .Select(c => ContractTags.Clean(c.Name))];
     }
 
     public decimal? LedgerRunningAt(DateTimeOffset at)

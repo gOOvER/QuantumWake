@@ -110,7 +110,15 @@ public sealed record NowContract(
     string? Difficulty,
     int Steps,
     int StepsDone,
-    DateTimeOffset Since)
+    DateTimeOffset Since,
+    bool Hauling = false,
+    string? Pickup = null,
+    string? Delivery = null,
+    string? Commodity = null,
+    int Pickups = 0,
+    int PickupsDone = 0,
+    int Deliveries = 0,
+    int DeliveriesDone = 0)
 {
     /// <summary>
     /// The contracts a session took and has not closed, newest first.
@@ -138,13 +146,21 @@ public sealed record NowContract(
             .Select(c => new NowContract(
                 // The annotations come off the title here for the same reason
                 // the logbook takes them off: a contract reads as its own name.
-                ContractTags.Clean(c.DisplayName),
+                ContractTags.Clean(c.Name),
                 c.Issuer,
                 c.Type,
                 c.Difficulty,
                 c.Steps,
                 c.StepsDone,
-                c.FirstSeen))];
+                c.FirstSeen,
+                HaulingContract.IsHauling(c.Raw),
+                HaulingContract.RouteFromTitle(c.Title)?.Pickup,
+                HaulingContract.RouteFromTitle(c.Title)?.Delivery,
+                HaulingContract.FromArchetype(c.Raw)?.Commodity,
+                c.Pickups,
+                c.PickupsDone,
+                c.Deliveries,
+                c.DeliveriesDone))];
 }
 
 /// <summary>

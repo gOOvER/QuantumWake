@@ -193,7 +193,15 @@ public sealed class SessionStore : IDisposable
     // 15: a disconnect carries its gamerules, and only the world's channel going
     //     down ends a stay. No stored stay changes on this install - every
     //     non-routine disconnect in 195 logs is SC_Default - but the builder did.
-    private const int PayloadVersion = 15;
+    // 16: a contract carries the title the acceptance toast showed, joined by
+    //     mission id, and its journal steps counted by kind (pickup, dropoff).
+    //     Every session ever summarised had the title in its timeline and never
+    //     on the contract, so the rep chips, the Contracts-app check and the
+    //     hauling route all read a name that carried none of it.
+    //     Contracts are also keyed by mission id now rather than archetype, so
+    //     two of one kind in a session are two records - one session of 209
+    //     folded a pair of Covalex recoveries into one.
+    private const int PayloadVersion = 16;
 
 
     /// <summary>
