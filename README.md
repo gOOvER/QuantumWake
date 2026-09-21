@@ -365,7 +365,17 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.21
+### 0.15.22
+
+- **A crash can leave a trail without exposing your flight.** Settings now has
+  an opt-in detailed crash trace. Turn it on, restart, and it records the last
+  completed startup stage — reading the game data, Windows OCR and joystick
+  setup, WebView2, then the first log scan — plus scrubbed managed errors. It
+  stays only on this computer, carries no Game.log lines, screenshots,
+  clipboard contents or folder names, is capped at 1 MB, and can be saved only
+  from the computer running Quantum Wake. A native crash can still stop the
+  process before it logs an exception, but the final completed stage tells us
+  where to look next.
 
 - **A component merely seen in inventory does not close a Garage list.** The
   logs never say when a ship part was fitted elsewhere, so a Garage list now

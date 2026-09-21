@@ -55,6 +55,14 @@ public partial class App : System.Windows.Application
         _arguments = e.Args;
 
         Core.AppPaths.UseFromArguments(e.Args);
+        DiagnosticTrace.Start("desktop overlay");
+        DispatcherUnhandledException += (_, failure) => DiagnosticTrace.Failed("dispatcher unhandled", failure.Exception);
+        AppDomain.CurrentDomain.UnhandledException += (_, failure) =>
+        {
+            if (failure.ExceptionObject is Exception error) DiagnosticTrace.Failed("appdomain unhandled", error);
+            else DiagnosticTrace.Mark("appdomain unhandled", "A non-Exception object reached the unhandled handler.");
+        };
+        TaskScheduler.UnobservedTaskException += (_, failure) => DiagnosticTrace.Failed("unobserved task", failure.Exception);
 
         _settings = Settings.Load();
 
@@ -154,14 +162,18 @@ public partial class App : System.Windows.Application
             // it hosts. A server started on its own gets neither, and the
             // screen panel says so rather than failing when pressed.
             var screen = new WindowsScreenReader();
+            DiagnosticTrace.Mark("desktop", screen.Available ? "Windows OCR is available." : "Windows OCR is unavailable.");
 
             var joysticks = new WindowsJoystickReader();
+            DiagnosticTrace.Mark("desktop", joysticks.Available ? "Windows joystick reader is available." : "Windows joystick reader is unavailable.");
             _server = ServerHost.Build(
                 args,
                 screen.Available ? screen : null,
                 new WindowsClipboardReader(OnUiThread),
                 joysticks.Available ? joysticks : null);
+            DiagnosticTrace.Mark("desktop", "Server built; starting listener.");
             await _server.StartAsync();
+            DiagnosticTrace.Mark("desktop", "Server listener started.");
 
             // Whatever the last update left behind. Done here rather than at the
             // moment of the swap, because then it was still the file this
@@ -191,6 +203,7 @@ public partial class App : System.Windows.Application
             // server is redundant. Anything else is worth saying out loud.
             _server = null;
             _tray?.Notify($"The dashboard could not start: {ex.Message}");
+            DiagnosticTrace.Failed("desktop server startup", ex);
         }
     }
 

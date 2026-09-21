@@ -1,4 +1,5 @@
 ﻿using System.Net;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.StaticFiles;
@@ -48,6 +49,7 @@ public static class ServerHost
         // and setting somewhere else, which is what makes a genuinely fresh
         // first run testable without disturbing the real one.
         Core.AppPaths.UseFromArguments(args);
+        DiagnosticTrace.Start("server host");
 
         // Whether this data folder was in use before this process touched it,
         // decided here because everything below starts writing to it - the
@@ -60,6 +62,7 @@ public static class ServerHost
         var builder = WebApplication.CreateBuilder(args);
 
         var install = ResolveInstall(args, builder.Configuration);
+        DiagnosticTrace.Mark("server", install is null ? "No game install resolved." : "Game install resolved.");
 
         // Scope the cache to the install, so a PTU channel or a simulated install never
         // blends its sessions into the LIVE totals.
@@ -2838,6 +2841,22 @@ public static class ServerHost
             });
         });
 
+        // The full trace is deliberately separate from the scrubbed support
+        // report: it is for a pilot investigating a process crash, and they
+        // choose explicitly whether to save or share it.
+        app.MapGet("/api/diagnostics/trace", () => DiagnosticTrace.Snapshot());
+
+        app.MapPost("/api/diagnostics/trace", (bool enabled) =>
+            Results.Ok(DiagnosticTrace.Configure(enabled)));
+
+        // POST makes the trace local-only when the dashboard is opened to the
+        // LAN. The normal report is safe to read remotely; a crash timeline is
+        // intentionally not exposed beyond the computer collecting it.
+        app.MapPost("/api/diagnostics/trace/file", () =>
+            DiagnosticTrace.Read() is { } trace
+                ? Results.File(Encoding.UTF8.GetBytes(trace), "text/plain", "quantumwake-trace.log")
+                : Results.NotFound(new { message = "No detailed trace has been recorded yet." }));
+
         // Counts and the window, never rows: nothing leaves without a click, and
         // a click is worth more when it follows seeing what would go.
         /*
@@ -4200,6 +4219,7 @@ public static class ServerHost
         if (install is null)
         {
             gameData.NoInstall();
+            DiagnosticTrace.Mark("game data", "Skipped because no game install was found.");
         }
         else
         {
@@ -4209,6 +4229,7 @@ public static class ServerHost
                 {
                     // Names first: cheap when cached, and every view reads better with them.
                     gameData.Begin();
+                    DiagnosticTrace.Mark("game data", "Reading game names and cached data began.");
                     library.LoadNames(install.RootPath);
 
                     // Said out loud, because for the half minute this takes every
@@ -4232,11 +4253,13 @@ public static class ServerHost
 
                     app.Logger.LogInformation("Game names: {Items} items, {Vehicles} vehicles.",
                         library.Names.ItemCount, library.Names.VehicleCount);
+                    DiagnosticTrace.Mark("game data", "Reading game names and cached data completed.");
                 }
                 catch (Exception e)
                 {
                     gameData.Failed($"The game files could not be read: {e.Message}");
                     app.Logger.LogError(e, "Reading the game files failed.");
+                    DiagnosticTrace.Failed("game data", e);
                 }
 
                 // Deliberately a second attempt rather than an else. Reading the
@@ -4248,13 +4271,16 @@ public static class ServerHost
                 try
                 {
                     status.Begin();
+                    DiagnosticTrace.Mark("log scan", "Initial scan began.");
                     var parsed = library.Scan(install, Progress(status));
                     app.Logger.LogInformation("Library ready: {Parsed} newly parsed, {Total} sessions.",
                         parsed, library.Store.Count());
+                    DiagnosticTrace.Mark("log scan", "Initial scan completed.");
                 }
                 catch (Exception e)
                 {
                     app.Logger.LogError(e, "Initial scan failed.");
+                    DiagnosticTrace.Failed("log scan", e);
                 }
                 finally
                 {

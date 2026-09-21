@@ -3257,9 +3257,68 @@ async function renderDiagnostics() {
   }
 }
 
+async function renderDiagnosticTrace() {
+  const toggle = $('#diag-trace-enabled');
+  const save = $('#diag-trace-save');
+  const status = $('#diag-trace-status');
+
+  try {
+    const trace = await getJson('/api/diagnostics/trace');
+    toggle.checked = trace.enabled === true;
+    save.hidden = !(trace.bytes > 0);
+    status.textContent = trace.enabled
+      ? `${trace.bytes.toLocaleString()} bytes recorded locally; restart to trace startup.`
+      : trace.bytes > 0
+        ? `${trace.bytes.toLocaleString()} bytes kept locally from an earlier trace.`
+        : 'Off — turn it on before reproducing a crash.';
+  } catch {
+    status.textContent = 'Trace status is unavailable.';
+  }
+}
+
 let diagnosticsReport = null;
 
 $('#diag-samples').addEventListener('change', () => renderDiagnostics());
+
+$('#diag-trace-enabled').addEventListener('change', async (e) => {
+  const toggle = e.currentTarget;
+  const status = $('#diag-trace-status');
+  toggle.disabled = true;
+
+  try {
+    const trace = await getJson2(`/api/diagnostics/trace?enabled=${toggle.checked}`);
+    status.textContent = trace.enabled
+      ? 'Detailed tracing is on. Restart now to include startup.'
+      : 'Detailed tracing is off; the existing trace is kept until you save it.';
+  } catch (err) {
+    status.textContent = `Trace setting could not be saved: ${err.message}`;
+  } finally {
+    toggle.disabled = false;
+    renderDiagnosticTrace();
+  }
+});
+
+$('#diag-trace-save').addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  const status = $('#diag-trace-status');
+  button.disabled = true;
+
+  try {
+    const response = await fetch('/api/diagnostics/trace/file', { method: 'POST' });
+    if (!response.ok) throw new Error((await response.json()).message || response.statusText);
+    const url = URL.createObjectURL(await response.blob());
+    const link = el('a');
+    link.href = url;
+    link.download = 'quantumwake-trace.log';
+    link.click();
+    URL.revokeObjectURL(url);
+    status.textContent = 'Saved quantumwake-trace.log. Read it before sharing.';
+  } catch (err) {
+    status.textContent = `Trace could not be saved: ${err.message}`;
+  } finally {
+    button.disabled = false;
+  }
+});
 
 $('#diag-save').addEventListener('click', async (e) => {
   const button = e.currentTarget;
@@ -16589,6 +16648,7 @@ async function renderSettings() {
   await renderExportPreview();
   await renderBackupPreview();
   await renderDiagnostics();
+  await renderDiagnosticTrace();
 }
 
 /* ---------- files other pilots have shared ---------- */

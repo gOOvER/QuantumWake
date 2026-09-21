@@ -3284,6 +3284,29 @@
 
     <div class="option-block">
       <div class="option-head">
+        <h3>Detailed crash trace</h3>
+        <button class="ghost" id="diag-trace-save" hidden>Save trace</button>
+      </div>
+      <p class="muted">
+        Native crashes can end the app before it has an error to show. This keeps a
+        small local breadcrumb trail of startup stages — game-data loading, Windows
+        OCR, joystick input and WebView2 — so the last completed step narrows the
+        next investigation. Restart after turning it on to include the earliest startup.
+      </p>
+      <label class="toggle">
+        <input type="checkbox" id="diag-trace-enabled">
+        <span>Keep a detailed local trace</span>
+      </label>
+      <p class="muted">
+        It records stage names and scrubbed error messages only: no Game.log lines,
+        screenshots, clipboard contents or folder names. It stays in Quantum Wake app
+        data as <code>diagnostic-trace.log</code>, is capped at 1 MB, and nothing is sent.
+      </p>
+      <span class="muted" id="diag-trace-status"></span>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
         <h3>Back up what you typed</h3>
         <button class="ghost" id="backup-save">Save a backup</button>
       </div>
