@@ -365,7 +365,28 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.30
+### 0.15.31
+
+- **Hauling contracts no longer disappear when the run cannot be worked
+  out.** The cards and the run above them come from two different places,
+  and a haul gave up its own card to a run that had not arrived — so if the
+  run failed, Shopping showed an empty panel with no contracts, no run and
+  no explanation, however many were open. Each haul now keeps its plain card
+  unless the run actually put it on screen.
+
+- **A drop-off is no longer listed twice under two spellings.** The
+  objectives panel abbreviates where the letter above it spells out — *NB
+  Int. Spaceport* against *New Babbage International Spaceport* — and the
+  two read as different places, so the run gained a second stop for a
+  destination already on it, and the flight plan gained one too. Nothing
+  showed it, because the invented stop carried no SCU and the totals still
+  added up.
+
+- **"Make it the flight plan" now means the run on screen.** It used to
+  work the route out again when pressed, so a card photographed — or a
+  contract handed in — in between wrote stops nobody had looked at and
+  reported them as though they had been chosen. It now says the run has
+  changed, shows the new one, and waits to be asked again.
 
 - **The cargo aboard is settled as soon as it can be.** A multi-pickup card
   prints the total to deliver and no share per source, so after the first

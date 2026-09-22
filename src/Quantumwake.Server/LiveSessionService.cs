@@ -143,7 +143,13 @@ public sealed record NowContract(
                 && c.Outcome is ContractOutcome.Unknown or ContractOutcome.InProgress)
             .OrderByDescending(c => c.FirstSeen)
             .Take(6)
-            .Select(c => new NowContract(
+            .Select(c =>
+            {
+                // Once per row: the pickup and the delivery come out of the
+                // same split, and asking twice ran its regexes twice.
+                var route = HaulingContract.RouteFromTitle(c.Title);
+
+                return new NowContract(
                 // The annotations come off the title here for the same reason
                 // the logbook takes them off: a contract reads as its own name.
                 ContractTags.Clean(c.Name),
@@ -154,13 +160,14 @@ public sealed record NowContract(
                 c.StepsDone,
                 c.FirstSeen,
                 HaulingContract.IsHauling(c.Raw),
-                HaulingContract.RouteFromTitle(c.Title)?.Pickup,
-                HaulingContract.RouteFromTitle(c.Title)?.Delivery,
+                route?.Pickup,
+                route?.Delivery,
                 HaulingContract.FromArchetype(c.Raw)?.Commodity,
                 c.Pickups,
                 c.PickupsDone,
                 c.Deliveries,
-                c.DeliveriesDone))];
+                c.DeliveriesDone);
+            })];
 }
 
 /// <summary>

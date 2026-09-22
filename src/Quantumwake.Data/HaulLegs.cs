@@ -136,13 +136,77 @@ public static class HaulLegs
             return new PickupSite(place, site.Body ?? body);
         }).ToList();
 
-    /// <summary>"CRU-L5 Beautiful Glen Station" and "Beautiful Glen Station" are one place; the engine's reading of either has the same letters inside.</summary>
+    /// <summary>
+    /// "CRU-L5 Beautiful Glen Station" and "Beautiful Glen Station" are one
+    /// place; the engine's reading of either has the same letters inside.
+    /// </summary>
+    /// <remarks>
+    /// Containment alone is not enough, because the two panels do not write a
+    /// place the same way: the objectives line abbreviates - "Deliver 0/13 SCU
+    /// to NB Int. Spaceport." - where the letter's DROP OFF list spells out
+    /// "New Babbage International Spaceport". Folded, neither contains the
+    /// other, so the drop read as one the plan had missed and a second leg was
+    /// appended for the same place under its long name. That became an extra
+    /// stop on the run and an extra stop in the flight plan, and nothing
+    /// flagged it: a backfilled leg carries no SCU, so the totals still added
+    /// up. Hence the abbreviation test as well.
+    /// </remarks>
     private static bool SamePlace(string a, string b)
     {
         var x = ScreenInsight.Fold(a);
         var y = ScreenInsight.Fold(b);
-        return x.Length > 0 && y.Length > 0 && (x.Contains(y) || y.Contains(x));
+        if (x.Length == 0 || y.Length == 0) return false;
+
+        return x.Contains(y) || y.Contains(x) || Abbreviates(a, b) || Abbreviates(b, a);
     }
+
+    /// <summary>
+    /// Whether <paramref name="shortForm"/> is the same place name as
+    /// <paramref name="longForm"/> written shorter: each of its words either
+    /// starts one of the long form's words - "Int." for "International" - or
+    /// spells the initials of a run of them - "NB" for "New Babbage". The
+    /// whole long form has to be accounted for, so "Port Olisar" cannot match
+    /// "Port Tressler", and an initialism must be two letters or more, so a
+    /// stray "A" cannot swallow a pair of words.
+    /// </summary>
+    private static bool Abbreviates(string shortForm, string longForm)
+    {
+        var shorts = Words(shortForm);
+        var longs = Words(longForm);
+        if (shorts.Count == 0 || longs.Count == 0 || shorts.Count > longs.Count) return false;
+
+        // A name that is not actually shorter is the containment test's job;
+        // matching it here would only add ways to be wrong.
+        if (shorts.Count == longs.Count && shorts.Sum(w => w.Length) >= longs.Sum(w => w.Length)) return false;
+
+        var at = 0;
+        foreach (var word in shorts)
+        {
+            if (at < longs.Count && longs[at].StartsWith(word, StringComparison.Ordinal))
+            {
+                at++;
+                continue;
+            }
+
+            // The initials of as many words as the abbreviation has letters.
+            if (word.Length >= 2 && at + word.Length <= longs.Count
+                && !word.Where((letter, i) => longs[at + i][0] != letter).Any())
+            {
+                at += word.Length;
+                continue;
+            }
+
+            return false;
+        }
+
+        return at == longs.Count;
+    }
+
+    /// <summary>The name's words, folded one at a time so the gaps between them survive.</summary>
+    private static List<string> Words(string text) =>
+        [.. text.Split([' ', '\t', '-', '·', '/'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(ScreenInsight.Fold)
+            .Where(w => w.Length > 0)];
 
     /// <summary>The body a pickup is on: from the objective if it said, else from the contract text's own list.</summary>
     private static string? BodyOf(ContractStep step, IReadOnlyList<PickupSite> sites)

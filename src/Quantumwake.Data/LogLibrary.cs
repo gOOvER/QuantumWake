@@ -1534,7 +1534,14 @@ public sealed class LogLibrary : IDisposable
                 .SelectMany(s => s.Contracts)
                 .Where(c => c.FirstSeen >= cutoff)
                 .OrderByDescending(c => c.FirstSeen)
-                .Select(c => new ContractLine(
+                .Select(c =>
+                {
+                    // Once: the split runs three regexes over the title, and
+                    // asking it for the pickup and then for the delivery ran
+                    // all of them twice for every row of every request.
+                    var route = HaulingContract.RouteFromTitle(c.Title);
+
+                    return new ContractLine(
                     c.FirstSeen,
 
                     // The annotations come off the name and become fields: a
@@ -1551,13 +1558,14 @@ public sealed class LogLibrary : IDisposable
                     ContractTags.RepFrom(c.Name),
                     ContractTags.AwardsBlueprint(c.Name),
                     HaulingContract.IsHauling(c.Raw),
-                    HaulingContract.RouteFromTitle(c.Title)?.Pickup,
-                    HaulingContract.RouteFromTitle(c.Title)?.Delivery,
+                    route?.Pickup,
+                    route?.Delivery,
                     HaulingContract.FromArchetype(c.Raw)?.Commodity,
                     c.Pickups,
                     c.PickupsDone,
                     c.Deliveries,
-                    c.DeliveriesDone))
+                    c.DeliveriesDone);
+                })
         ];
     }
 

@@ -408,4 +408,67 @@ public class HaulPlannerTests
         Assert.Equal("after its pickups, which are not on this plan", ruin.Actions[1].Note);
         Assert.Null(ruin.Note);
     }
+
+    /// <summary>
+    /// The same run fingerprints the same, and a run with a contract more
+    /// does not.
+    /// </summary>
+    /// <remarks>
+    /// This is what lets "make it the flight plan" commit the run the pilot
+    /// read: without it the button re-planned from scratch, so a card
+    /// photographed between the render and the click wrote stops nobody had
+    /// looked at and reported a count for them as though they had.
+    /// </remarks>
+    [Fact]
+    public void A_runs_fingerprint_follows_its_stops()
+    {
+        ContractRecord[] two =
+        [
+            Contract("m1", Multi3Aluminum, "Junior | Stellar Small Haul | to Stanton Gateway"),
+            Contract("m2", Multi2Copper, "Junior | Stellar Small Haul | to Ruin Station", 1),
+        ];
+
+        var frames = new[] { Frame("ScreenShot-2026-09-08_21-48-31-84A.jpg", 48, ScreenAppFixtures.Contracts) };
+
+        var first = HaulPlanner.Fingerprint(HaulPlanner.Plan(two, frames, Atlas));
+        var again = HaulPlanner.Fingerprint(HaulPlanner.Plan(two, frames, Atlas));
+        Assert.Equal(first, again);
+
+        // A third contract counts even though it names no place and so adds
+        // no stop: the trip is titled for how many contracts are on it.
+        var third = HaulPlanner.Fingerprint(HaulPlanner.Plan(
+            [.. two, Contract("m3", DirectCarbon, "Junior Rank - Direct Small Cargo Haul", 2)],
+            frames,
+            Atlas));
+
+        Assert.NotEqual(first, third);
+    }
+
+    /// <summary>
+    /// Re-reading a card the run already has does not refuse the run: the
+    /// fingerprint follows the route, not the notes or the floor.
+    /// </summary>
+    [Fact]
+    public void A_runs_fingerprint_ignores_what_does_not_change_the_route()
+    {
+        ContractRecord[] open =
+        [
+            Contract("m1", Multi3Aluminum, "Junior | Stellar Small Haul | to Stanton Gateway"),
+            Contract("m2", Multi2Copper, "Junior | Stellar Small Haul | to Ruin Station", 1),
+        ];
+
+        var once = new[] { Frame("ScreenShot-2026-09-08_21-48-31-84A.jpg", 48, ScreenAppFixtures.Contracts) };
+        var twice = new[]
+        {
+            once[0],
+            Frame("ScreenShot-2026-09-08_22-10-00-84A.jpg", 70, ScreenAppFixtures.Contracts),
+        };
+
+        var before = HaulPlanner.Plan(open, once, Atlas);
+        var after = HaulPlanner.Plan(open, twice, Atlas);
+
+        // The same route, read from a newer photograph of the same card.
+        Assert.Equal(before.Stops.Select(s => s.Place), after.Stops.Select(s => s.Place));
+        Assert.Equal(HaulPlanner.Fingerprint(before), HaulPlanner.Fingerprint(after));
+    }
 }

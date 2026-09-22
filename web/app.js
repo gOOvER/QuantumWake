@@ -15398,7 +15398,17 @@ async function loadJobContracts() {
 
   // Everything that is not a haul keeps its plain card; the hauls are on
   // the run above, with their legs.
-  for (const contract of open.filter((c) => !c.hauling)) {
+  //
+  // A haul only gives up its plain card to a run that actually put it on
+  // screen. The two lists come from different places - the cards from
+  // /api/contracts, the run from /api/haul/plan - so when the run request
+  // fails, or simply does not carry a contract the cards do, dropping every
+  // haul here left the panel completely empty: no run, no cards, and no
+  // message either, because the "No contract open" line above only appears
+  // when there is nothing open at all.
+  const planned = new Set((plan?.contracts || []).map((c) => c.title));
+
+  for (const contract of open.filter((c) => !c.hauling || !planned.has(c.name))) {
     const card = el('article', 'job-card');
 
     const head = el('div', 'job-head');
@@ -15429,9 +15439,22 @@ async function loadJobContracts() {
  * What the plan cannot see is said in words next to the thing it cannot see,
  * because a route with a pickup silently missing is worse than no route.
  */
+/**
+ * Something to say about the run the next time it is drawn - set when the
+ * server refuses a stale one. It cannot live on the button, because showing
+ * the pilot the run that now exists means re-rendering the panel the button
+ * is in.
+ */
+let haulPlanNotice = null;
+
 function renderHaulPlan(host, plan) {
   const section = el('div', 'haul-plan');
   section.append(el('h3', 'spaced', 'Hauling run'));
+
+  if (haulPlanNotice) {
+    section.append(el('p', 'outward caption', haulPlanNotice));
+    haulPlanNotice = null;
+  }
 
   const read = plan.contracts.filter((c) => c.source === 'screenshot').length;
   const summary = [
@@ -15539,13 +15562,29 @@ function renderHaulPlan(host, plan) {
     make.addEventListener('click', async () => {
       make.disabled = true;
       try {
-        const result = await fetch('/api/haul/plan/trip', { method: 'POST' }).then((r) => r.json());
+        // The run this button was drawn for, so the server commits the stops
+        // that were read rather than the ones that exist by the time the
+        // click arrives.
+        const result = await fetch('/api/haul/plan/trip', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ planId: plan.planId || null }),
+        }).then((r) => r.json());
         if (result?.id) {
           make.textContent = `✓ ${result.title} — ${result.stops} stops, tracked`;
           if (typeof loadTrips === 'function') loadTrips().catch(() => {});
         } else {
           make.textContent = result?.message || 'could not plan';
           make.disabled = false;
+
+          // The run moved under it: show the new one rather than leave the
+          // stale stops on screen next to a message about them. The message
+          // goes with it - re-rendering the panel takes this button, and its
+          // text, with it.
+          if (result?.planId) {
+            haulPlanNotice = result.message;
+            loadJobContracts().catch(() => {});
+          }
         }
       } catch {
         make.textContent = 'failed';

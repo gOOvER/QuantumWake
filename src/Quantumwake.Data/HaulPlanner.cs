@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text;
 using Quantumwake.Core.State;
 
 namespace Quantumwake.Data;
@@ -125,6 +127,19 @@ public static class HaulPlanner
         var planned = new List<PlannedContract>();
         var taken = new HashSet<string>(StringComparer.Ordinal);
 
+        // One reading per frame, shared by every contract that considers it.
+        var legsByShot = new Dictionary<string, IReadOnlyList<HaulLeg>>(StringComparer.Ordinal);
+        IReadOnlyList<HaulLeg> LegsOf(ScreenSighting frame)
+        {
+            if (legsByShot.TryGetValue(frame.Shot, out var known)) return known;
+
+            // A frame with no reading has no legs. Candidates only asks about
+            // frames it has already filtered for one, so this is the memo
+            // being honest rather than a case that happens.
+            var legs = frame.Contracts is { } reading ? HaulLegs.From(reading).Legs : [];
+            return legsByShot[frame.Shot] = legs;
+        }
+
         // Every contract's compatible frames before any is handed out. On
         // 21 Sep a fifth same-title Carbon contract was accepted a minute
         // after the fourth, and the card photographed after that fitted
@@ -138,7 +153,7 @@ public static class HaulPlanner
             var archetype = HaulingContract.FromArchetype(contract.Raw);
             var titleIsAmbiguous = hauling.Count(other =>
                 ScreenFrames.SameContract(ContractTags.Clean(other.Name), title)) > 1;
-            return (title, archetype, candidates: Candidates(contract, title, archetype, titleIsAmbiguous, frames));
+            return (title, archetype, candidates: Candidates(contract, title, archetype, titleIsAmbiguous, frames, LegsOf));
         }).ToList();
 
         var claims = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -233,6 +248,36 @@ public static class HaulPlanner
         return null;
     }
 
+    /// <summary>
+    /// A short stable name for the run a page was shown, so a plan can be
+    /// committed as the one the pilot read rather than as whatever the next
+    /// call computes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Over the stops and their actions, because those are what becomes the
+    /// flight plan, and over which contracts are on the run, because the trip
+    /// is named for how many there are - a contract that joins without moving
+    /// a stop still changes what gets written.
+    /// </para>
+    /// <para>
+    /// Not over the notes or the SCU floor: those move as cards are read
+    /// without the route moving, and re-reading a card the pilot already has
+    /// is no reason to refuse the run they chose.
+    /// </para>
+    /// </remarks>
+    public static string Fingerprint(HaulPlan plan)
+    {
+        var text = string.Join('\n',
+        [
+            .. plan.Contracts.Select(c => $"c|{c.MissionId}|{c.Title}"),
+            .. plan.Stops.Select(s =>
+                $"s|{s.PlaceId}|{s.Place}|{string.Join(',', s.Actions.Select(a => $"{a.Kind}:{a.Commodity}:{a.Scu}:{a.MissionId}"))}"),
+        ]);
+
+        return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..16];
+    }
+
     /// <summary>The best-scored frame, newest among equals; null when there is none.</summary>
     private static ScreenSighting? Pick(IEnumerable<(ScreenSighting Frame, int Score)> candidates) =>
         candidates.OrderByDescending(c => c.Score).ThenByDescending(c => c.Frame.ShotAt).Select(c => c.Frame).FirstOrDefault();
@@ -243,9 +288,14 @@ public static class HaulPlanner
     /// by how many of those signals it matched. A card with no readable legs
     /// belongs to no plan: the title can still give a useful partial route.
     /// </summary>
+    /// <param name="legsOf">
+    /// Reads a frame's legs once and remembers them. Every open contract walks
+    /// the same frame list, so without this the same card is parsed once per
+    /// contract on every request the page makes.
+    /// </param>
     private static List<(ScreenSighting Frame, int Score)> Candidates(
         ContractRecord contract, string title, HaulArchetype? archetype, bool titleIsAmbiguous,
-        IReadOnlyList<ScreenSighting> frames)
+        IReadOnlyList<ScreenSighting> frames, Func<ScreenSighting, IReadOnlyList<HaulLeg>> legsOf)
     {
         var candidates = new List<(ScreenSighting, int)>();
 
@@ -257,7 +307,7 @@ public static class HaulPlanner
             if (!ScreenFrames.SameContract(frame.Contracts!.SelectedTitle!, title))
                 continue;
 
-            var (legs, _) = HaulLegs.From(frame.Contracts);
+            var legs = legsOf(frame);
             if (legs.Count == 0)
                 continue;
 
@@ -455,10 +505,15 @@ public static class HaulPlanner
             // Sources first, and among them the ones whose deliveries are also
             // ready so the stop is done in one visit; same body as the last
             // stop before anything else.
+            // The last fallback cannot come back empty - the loop runs only
+            // while `pending` has something in it, and Prefer returns null
+            // only for an empty list - but the compiler cannot see that, and
+            // silencing it with `!` would hide a real null here later.
             var next = Prefer(ready.Where(p => p.Loads.Count > 0), lastBody)
                 ?? Prefer(pending.Where(p => p.Loads.Count > 0), lastBody)
                 ?? Prefer(ready, lastBody)
-                ?? Prefer(pending, lastBody);
+                ?? Prefer(pending, lastBody)
+                ?? throw new UnreachableException("pending is not empty, so a place is always preferred");
 
             pending.Remove(next);
             foreach (var load in next.Loads) pickupsLeft[load.Contract]--;

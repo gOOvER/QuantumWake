@@ -81,6 +81,72 @@ public class HaulLegsTests
         new("ACCEPT OFFER", 880, 461, 12),
     ];
 
+    /// <summary>
+    /// The Direct haul again, with the letter's own DROP OFF list under it -
+    /// which spells out the place the objectives line abbreviates.
+    /// </summary>
+    /// <remarks>
+    /// The two panels do not agree on how to write a place: the objective
+    /// says "NB Int. Spaceport", the list says "New Babbage International
+    /// Spaceport". Both name one destination, and the plan has to see that.
+    /// </remarks>
+    private static readonly ScreenTextLine[] DirectWithSpelledOutDrop =
+    [
+        .. Direct,
+        new("DROP OFF LOCATIONS (ANY ORDER)", 690, 440, 16),
+        new("- Freight elevator at New Babbage International Spaceport on", 690, 462, 16),
+        new("microTech", 690, 479, 16),
+    ];
+
+    /// <summary>
+    /// The abbreviated objective and the spelled-out drop list are one place,
+    /// so the backfill adds nothing.
+    /// </summary>
+    /// <remarks>
+    /// Matching them on folded containment alone said they were different -
+    /// NBINTSPACEPORT is not inside NEWBABBAGEINTERNATIONALSPACEPORT - so a
+    /// second leg was appended for a destination already on the plan. That
+    /// became an extra stop on the run and an extra stop in the flight plan,
+    /// and nothing said so: a backfilled leg carries no SCU, so the run's
+    /// totals still came out right.
+    /// </remarks>
+    [Fact]
+    public void An_abbreviated_objective_and_the_spelled_out_drop_list_are_one_place()
+    {
+        var app = Read(DirectWithSpelledOutDrop).Contracts!;
+
+        Assert.Equal("New Babbage International Spaceport", Assert.Single(app.DropSites!).Place);
+
+        var (legs, _) = HaulLegs.From(app);
+
+        var leg = Assert.Single(legs);
+        Assert.Equal("Port Tressler", leg.Pickup);
+        Assert.Equal("NB Int. Spaceport", leg.Delivery);
+        Assert.Equal(13, leg.Scu);
+    }
+
+    /// <summary>A drop the objectives panel never reached is still a leg of its own.</summary>
+    [Fact]
+    public void A_drop_the_objectives_panel_did_not_reach_is_still_backfilled()
+    {
+        var app = Read([
+            .. Direct,
+            new("DROP OFF LOCATIONS (ANY ORDER)", 690, 440, 16),
+            new("- Freight elevator at New Babbage International Spaceport on", 690, 462, 16),
+            new("microTech", 690, 479, 16),
+            new("- Freight elevator at Everus Harbor on Hurston", 690, 496, 16),
+        ]).Contracts!;
+
+        var (legs, _) = HaulLegs.From(app);
+
+        Assert.Equal(2, legs.Count);
+        Assert.Equal(["NB Int. Spaceport", "Everus Harbor"], legs.Select(l => l.Delivery));
+
+        // Backfilled from the list, so it carries no count of its own.
+        Assert.Null(legs[1].Scu);
+        Assert.Equal("Port Tressler", legs[1].Pickup);
+    }
+
     [Fact]
     public void A_direct_haul_is_one_leg_with_the_cargo_from_the_collect_line()
     {
