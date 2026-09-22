@@ -191,4 +191,54 @@ public class HaulPlanTests
         Assert.Equal("Large Covalex Shipment Needs Recovering", page.NodeText("#now-focus-detail"));
         Assert.Equal("Contracts", page.NodeText("#now-focus-open"));
     }
+
+    /// <summary>
+    /// The run sits under the shopping lists, off the bottom of the page when
+    /// a list is open. A button that says "Plan the run" and lands on the
+    /// Shopping header reads as an empty page - so it scrolls to the run once
+    /// the contracts have rendered, and only that once.
+    /// </summary>
+    [Fact]
+    public void Plan_the_run_lands_on_the_run_rather_than_the_shopping_header()
+    {
+        var page = new Page();
+        page.Serve("/api/now", Now);
+        page.Serve("/api/contracts?days=2", Contracts);
+        page.Serve("/api/haul/plan", Plan);
+        page.Serve("/api/trips", "[]");
+        page.Do("""
+            globalThis.__landed = 0;
+            __dom.node('#jobs-contracts').scrollIntoView = () => { globalThis.__landed++; };
+            renderNowFocus({ contracts: [
+              { name: 'Junior | Stellar Small Haul | to Stanton Gateway', hauling: true, delivery: 'Stanton Gateway' } ] });
+            __dom.node('#now-focus-open').onclick();
+            await loadJobContracts();
+            """);
+
+        Assert.Equal(1, page.Count("__landed"));
+        Assert.Equal(1, page.Count($"{Host}.byClass('haul-plan').length"));
+
+        // A plain visit to Shopping afterwards stays at the top.
+        page.Do("await loadJobContracts();");
+        Assert.Equal(1, page.Count("__landed"));
+    }
+
+    [Fact]
+    public void A_contract_that_is_not_a_haul_does_not_promise_a_landing()
+    {
+        var page = new Page();
+        page.Serve("/api/now", Now);
+        page.Serve("/api/contracts?days=2", Contracts);
+        page.Serve("/api/haul/plan", Plan);
+        page.Serve("/api/trips", "[]");
+        page.Do("""
+            globalThis.__landed = 0;
+            __dom.node('#jobs-contracts').scrollIntoView = () => { globalThis.__landed++; };
+            renderNowFocus({ contracts: [ { name: 'Large Covalex Shipment Needs Recovering', hauling: false } ] });
+            __dom.node('#now-focus-open').onclick();
+            await loadJobContracts();
+            """);
+
+        Assert.Equal(0, page.Count("__landed"));
+    }
 }

@@ -365,7 +365,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.28
+### 0.15.29
+
+- **"Plan the run" lands on the run.** The Now page's button took you to the
+  top of Shopping, where the hauling run sits below the lists — under
+  *Contracts in progress*, off the bottom of the page whenever a list is
+  open. With five contracts accepted that looked like an empty page. It now
+  scrolls to the run once the contracts have rendered.
 
 - **Cargo stays distinct through a hauling run.** A shared destination now
   keeps a separate unload for each commodity, with the amount still to

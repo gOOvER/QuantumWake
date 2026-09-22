@@ -874,7 +874,9 @@ function contractFocus(contracts) {
     const detail = hauls.length === 1
       ? (hauls[0].delivery ? `Deliver to ${hauls[0].delivery}` : hauls[0].name)
       : `${hauls.length} hauls open${ends.length ? ` — to ${ends.join(', ')}` : ''}`;
-    return { title: hauls.length === 1 ? 'Hauling' : 'Hauling run', detail, view: 'jobs', action: 'Plan the run' };
+    // Shopping keeps the run under the lists, off the bottom of the page
+    // when a list is open: the button lands on the run, not on the header.
+    return { title: hauls.length === 1 ? 'Hauling' : 'Hauling run', detail, view: 'jobs', action: 'Plan the run', anchor: '#jobs-contracts' };
   }
 
   return { title: 'Active contract', detail: contracts[0].name || 'Open contract', view: 'contracts', action: 'Contracts' };
@@ -904,7 +906,7 @@ function renderNowFocus(state, briefing = pilotBriefing) {
   detail.textContent = focus.detail;
   open.hidden = false;
   open.textContent = focus.action;
-  open.onclick = () => showView(focus.view);
+  open.onclick = () => { jobsLandOn = focus.anchor || null; showView(focus.view); };
 }
 
 function renderNow(state) {
@@ -15338,6 +15340,20 @@ async function renderPinnedJob(jobs) {
   card.hidden = false;
 }
 
+/**
+ * Where the Shopping page should scroll once its contracts have rendered.
+ * Set by a button that promised the run rather than the page, and spent on
+ * the next load so a later tab click lands at the top as usual.
+ */
+let jobsLandOn = null;
+
+/** Scroll to the panel a button promised, once it has something to show. */
+function landOnJobs() {
+  if (!jobsLandOn) return;
+  $(jobsLandOn)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  jobsLandOn = null;
+}
+
 async function loadJobContracts() {
   const host = $('#jobs-contracts');
   host.textContent = '';
@@ -15354,6 +15370,7 @@ async function loadJobContracts() {
     host.append(el('p', 'muted',
       'Nothing active — the game is not running. Contracts are dropped when you leave, '
       + 'so only a live session can have any.'));
+    landOnJobs();
     return;
   }
 
@@ -15373,6 +15390,7 @@ async function loadJobContracts() {
 
   if (!open.length && !plan?.contracts?.length) {
     host.append(el('p', 'muted', 'No contract open in this session.'));
+    landOnJobs();
     return;
   }
 
@@ -15399,6 +15417,8 @@ async function loadJobContracts() {
 
     host.append(card);
   }
+
+  landOnJobs();
 }
 
 /**
