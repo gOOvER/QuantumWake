@@ -103,4 +103,21 @@ public class DiagnosticsEndpointTests : IClassFixture<ServerUnderTest>
         Assert.False(report.GetProperty("install").GetProperty("found").GetBoolean());
         Assert.Equal(0, report.GetProperty("parser").GetProperty("unread").GetInt32());
     }
+
+    [Fact]
+    public async Task Detailed_tracing_is_opt_in_and_can_be_saved_locally()
+    {
+        var off = await _server.Get("/api/diagnostics/trace");
+        Assert.False(off.GetProperty("enabled").GetBoolean());
+
+        var on = await _server.Posted("/api/diagnostics/trace?enabled=true");
+        Assert.True(on.GetProperty("enabled").GetBoolean());
+        Assert.True(on.GetProperty("bytes").GetInt64() > 0);
+
+        var response = await _server.Client.PostAsync("/api/diagnostics/trace/file", null);
+        var trace = await response.Content.ReadAsStringAsync();
+        Assert.True(response.IsSuccessStatusCode);
+        Assert.Contains("Detailed tracing enabled", trace);
+        Assert.DoesNotContain(_server.DataDirectory, trace);
+    }
 }

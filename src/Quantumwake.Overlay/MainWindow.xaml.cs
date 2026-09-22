@@ -141,8 +141,12 @@ public partial class MainWindow : Window
 
         Directory.CreateDirectory(userData);
 
+        Quantumwake.Data.DiagnosticTrace.Mark("webview", "WebView2 environment creation began.");
         var environment = await CoreWebView2Environment.CreateAsync(null, userData);
         await Browser.EnsureCoreWebView2Async(environment);
+        Quantumwake.Data.DiagnosticTrace.Mark("webview", "WebView2 environment creation completed.");
+        Browser.CoreWebView2.ProcessFailed += (_, failure) =>
+            Quantumwake.Data.DiagnosticTrace.Mark("webview", $"WebView2 process failed: {failure.ProcessFailedKind}.");
 
         var settings = Browser.CoreWebView2.Settings;
         settings.AreDefaultContextMenusEnabled = false;

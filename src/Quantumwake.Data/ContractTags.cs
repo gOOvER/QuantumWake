@@ -29,6 +29,15 @@ public static partial class ContractTags
     [GeneratedRegex(@"\[\s*\+?\s*(?<rep>-?\d{1,7})\s*rep\s*\]", RegexOptions.IgnoreCase)]
     private static partial Regex RepTag { get; }
 
+    /// <summary>
+    /// <c>[50/200/250/500/1000/2000/4000 Rep]</c>: the Red Wind hauls carry the
+    /// whole reputation ladder rather than one figure. Not a number to sum -
+    /// <see cref="RepFrom"/> leaves it alone - but still a tag to take off the
+    /// name, or every hauling title on the Jobs page ends in a bracket.
+    /// </summary>
+    [GeneratedRegex(@"\[\s*\d{1,7}(?:\s*/\s*\d{1,7})+\s*rep\s*\]", RegexOptions.IgnoreCase)]
+    private static partial Regex LadderTag { get; }
+
     /// <summary><c>[BP]</c>, sometimes starred to mean "chance of".</summary>
     [GeneratedRegex(@"\[\s*BP\s*\]\*?", RegexOptions.IgnoreCase)]
     private static partial Regex BlueprintTag { get; }
@@ -62,6 +71,7 @@ public static partial class ContractTags
             return string.Empty;
 
         var text = RepTag.Replace(title, "");
+        text = LadderTag.Replace(text, "");
         text = BlueprintTag.Replace(text, "");
         text = Markup.Replace(text, "");
 

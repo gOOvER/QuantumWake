@@ -1,0 +1,194 @@
+using Quantumwake.Data;
+
+namespace Quantumwake.Tests;
+
+/// <summary>
+/// The selected contract's objectives, read into legs.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Three shapes, from three frames. The multi-pickup is this install's own
+/// Contracts-app frame of 8 September 2026, as the engine returned it (see
+/// <see cref="ScreenAppFixtures.Contracts"/>). The direct haul and the
+/// multi-drop are laid out from two published screenshots of the same app
+/// - the Star Docs hauling guide and timesaver.gg's 4.10 guide - read by
+/// eye on 21 September 2026: the wording and the indents are theirs, the
+/// pixel positions are drawn to match the layout, not measured by an
+/// engine. What each asserts is the wording and the nesting, which is what
+/// those frames actually show.
+/// </para>
+/// </remarks>
+public class HaulLegsTests
+{
+    private static ScreenFrame Read(ScreenTextLine[] lines) => ScreenFrames.Read(lines, [], []);
+
+    /// <summary>Star Docs, "How do I do hauling missions?": a Rookie direct planetary haul on the Offers tab.</summary>
+    /// <remarks>
+    /// The Offers tab prints no count, so the reader is given the Accepted
+    /// tab's wording to anchor on; the objectives panel is identical.
+    /// </remarks>
+    private static readonly ScreenTextLine[] Direct =
+    [
+        new("MARK ALL READ", 195, 119, 18),
+        new("ACCEPTED (1/10)", 806, 120, 18),
+        new("HISTORY", 953, 120, 18),
+        new("Rookie Rank - Direct Planetary Small Cargo Haul", 690, 214, 34),
+        new("Reward", 1305, 202, 16),
+        new("Ä 37,250", 1665, 202, 18),
+        new("Contracted By", 1305, 253, 16),
+        new("Covalex Independent Contractors", 1485, 253, 16),
+        new("DETAILS", 690, 324, 22),
+        new("PRIMARY OBJECTIVES", 1230, 324, 22),
+        new("Hello,", 690, 362, 16),
+        new("O Collect Agricultural Supplies from Port Tressler.", 1232, 361, 18),
+        new("O Deliver 0/13 SCU to NB Int. Spaceport.", 1262, 388, 18),
+        new("Need a contractor for a simple cargo haul going from a freight", 690, 394, 16),
+        new("elevator at Port Tressler above microTech to a freight elevator at", 690, 411, 16),
+        new("ACCEPT OFFER", 1632, 854, 18),
+    ];
+
+    /// <summary>timesaver.gg, 4.10 hauling guide: a Rookie solar haul, two sources, two cargos, one destination printed per pair.</summary>
+    private static readonly ScreenTextLine[] MultiDrop =
+    [
+        new("MARK ALL READ", 105, 63, 12),
+        new("ACCEPTED (2/10)", 457, 63, 12),
+        new("HISTORY", 533, 63, 12),
+        new("Rookie Rank - Solar Small Cargo Haul", 367, 125, 20),
+        new("Reward", 705, 107, 10),
+        new("Ä 42,000", 892, 107, 11),
+        new("Contracted By", 705, 135, 10),
+        new("Covalex Independent Contractors", 830, 135, 10),
+        new("DETAILS", 367, 174, 14),
+        new("PRIMARY OBJECTIVES", 668, 174, 14),
+        new("O Collect Waste from CRU-L5 Beautiful Glen Station.", 669, 194, 11),
+        new("O Deliver 0/2 SCU of Waste to Seraphim Station", 687, 208, 11),
+        new("above Crusader.", 697, 219, 11),
+        new("O Collect Waste from CRU-L4 Shallow Fields Station.", 669, 237, 11),
+        new("O Deliver 0/3 SCU of Waste to Seraphim Station", 687, 251, 11),
+        new("above Crusader.", 697, 262, 11),
+        new("PICK UP LOCATIONS (ANY ORDER)", 367, 257, 10),
+        new("- Freight elevator at Beautiful Glen Station at Crusader's L5", 367, 275, 10),
+        new("Lagrange point", 367, 286, 10),
+        new("- Freight elevator at Shallow Fields Station at Crusader's L4", 367, 293, 10),
+        new("Lagrange point", 367, 304, 10),
+        new("O Collect Scrap from CRU-L5 Beautiful Glen Station.", 669, 281, 11),
+        new("O Deliver 0/2 SCU of Scrap to Seraphim Station above", 687, 295, 11),
+        new("Crusader.", 697, 306, 11),
+        new("O Collect Scrap from CRU-L4 Shallow Fields Station.", 669, 324, 11),
+        new("O Deliver 0/3 SCU of Scrap to Seraphim Station above", 687, 338, 11),
+        new("Crusader.", 697, 349, 11),
+        new("Makes no difference what order you grab the stuff, as long as it's", 367, 326, 10),
+        new("ACCEPT OFFER", 880, 461, 12),
+    ];
+
+    [Fact]
+    public void A_direct_haul_is_one_leg_with_the_cargo_from_the_collect_line()
+    {
+        var app = Read(Direct).Contracts!;
+
+        Assert.Equal(2, app.Steps!.Count);
+        Assert.Equal(0, app.Steps[0].Depth);
+        Assert.Equal(1, app.Steps[1].Depth);
+
+        var (legs, deliveries) = HaulLegs.From(app);
+
+        var leg = Assert.Single(legs);
+        Assert.Equal("Port Tressler", leg.Pickup);
+        Assert.Equal("NB Int. Spaceport", leg.Delivery);
+        Assert.Equal("Agricultural Supplies", leg.Commodity);
+        Assert.Equal(13, leg.Scu);
+        Assert.Equal(0, leg.ScuDone);
+        Assert.Empty(deliveries);
+    }
+
+    [Fact]
+    public void A_multi_pickup_is_one_leg_per_source_to_the_parents_place()
+    {
+        var app = Read(ScreenAppFixtures.Contracts).Contracts!;
+
+        Assert.Equal(4, app.Steps!.Count);
+        Assert.Equal([0, 1, 1, 1], app.Steps.Select(s => s.Depth));
+
+        var (legs, deliveries) = HaulLegs.From(app);
+
+        Assert.Equal(3, legs.Count);
+        Assert.All(legs, leg => Assert.Equal("Stanton Gateway", leg.Delivery));
+        Assert.All(legs, leg => Assert.Equal("Aluminum", leg.Commodity));
+        Assert.Equal(["Fallow Field", "Ashland", "The Golden Riviera"], legs.Select(l => l.Pickup));
+
+        // The share per source is not printed, and the app does not invent one.
+        Assert.All(legs, leg => Assert.Null(leg.Scu));
+
+        var total = Assert.Single(deliveries);
+        Assert.Equal(("Stanton Gateway", 18, 0), (total.Place, total.Scu, total.ScuDone));
+    }
+
+    /// <summary>The body a pickup is on comes from the contract's own text, which is the only place it is printed.</summary>
+    [Fact]
+    public void The_pickup_list_says_which_body_each_source_is_on()
+    {
+        var app = Read(ScreenAppFixtures.Contracts).Contracts!;
+
+        Assert.Equal(3, app.PickupSites!.Count);
+        Assert.Equal(("Fallow Field", "Pyro IV"), (app.PickupSites[0].Place, app.PickupSites[0].Body));
+        Assert.Equal(("Ashland", "Pyro 5a"), (app.PickupSites[1].Place, app.PickupSites[1].Body));
+
+        // "Pyro Ill" is how the engine read III, and it is kept as read: a
+        // body name is a hint for grouping, not a claim the map has to honour.
+        Assert.Equal(("The Golden Riviera", "Pyro Ill"), (app.PickupSites[2].Place, app.PickupSites[2].Body));
+
+        var (legs, _) = HaulLegs.From(app);
+        Assert.Equal(["Pyro IV", "Pyro 5a", "Pyro Ill"], legs.Select(l => l.PickupBody));
+    }
+
+    [Fact]
+    public void A_multi_drop_pairs_each_source_with_its_own_delivery_and_joins_the_wrapped_lines()
+    {
+        var app = Read(MultiDrop).Contracts!;
+
+        Assert.Equal(8, app.Steps!.Count);
+        Assert.Equal("Deliver 0/2 SCU of Waste to Seraphim Station above Crusader.", app.Objectives[1]);
+
+        var (legs, _) = HaulLegs.From(app);
+
+        Assert.Equal(4, legs.Count);
+        Assert.Equal("CRU-L5 Beautiful Glen Station", legs[0].Pickup);
+        Assert.Equal("Seraphim Station", legs[0].Delivery);
+        Assert.Equal("Crusader", legs[0].DeliveryBody);
+        Assert.Equal(("Waste", 2), (legs[0].Commodity, legs[0].Scu));
+        Assert.Equal(("Waste", 3), (legs[1].Commodity, legs[1].Scu));
+        Assert.Equal(("Scrap", 2), (legs[2].Commodity, legs[2].Scu));
+        Assert.Equal(("Scrap", 3), (legs[3].Commodity, legs[3].Scu));
+        Assert.Equal(10, legs.Sum(l => l.Scu));
+    }
+
+    /// <summary>A line that does not parse is kept as read and filed as "other", never dropped.</summary>
+    [Theory]
+    [InlineData("Deliver 12/18 SCU of Aluminum to Stanton Gateway.", "deliver", "Aluminum", "Stanton Gateway", 12, 18)]
+    [InlineData("Deliver O/13 SCU to NB Int. Spaceport.", "deliver", null, "NB Int. Spaceport", 0, 13)]
+    [InlineData("Collect Aluminum from The Golden Riviera.", "collect", "Aluminum", "The Golden Riviera", null, null)]
+    [InlineData("Return the cargo to Ruin Station.", "other", null, null, null, null)]
+    public void A_step_reads_its_verb_cargo_place_and_count(
+        string text, string kind, string? cargo, string? place, int? done, int? total)
+    {
+        var step = ScreenFrames.Step(text, 0);
+
+        Assert.Equal(kind, step.Kind);
+        Assert.Equal(cargo, step.Commodity);
+        Assert.Equal(place, step.Place);
+        Assert.Equal(done, step.Done);
+        Assert.Equal(total, step.Total);
+        Assert.Equal(text, step.Text);
+    }
+
+    /// <summary>A pickup line wrapped onto a second line is one site, not one site and a break.</summary>
+    [Fact]
+    public void A_wrapped_pickup_line_is_still_one_site()
+    {
+        var app = Read(MultiDrop).Contracts!;
+
+        Assert.Equal(2, app.PickupSites!.Count);
+        Assert.Equal("Beautiful Glen Station at Crusader's L5 Lagrange point", app.PickupSites[0].Place);
+        Assert.Equal("Shallow Fields Station at Crusader's L4 Lagrange point", app.PickupSites[1].Place);
+    }
+}

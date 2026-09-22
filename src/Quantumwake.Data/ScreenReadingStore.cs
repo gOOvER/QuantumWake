@@ -315,6 +315,14 @@ public sealed class ScreenReadingStore
         }
     }
 
+    /// <summary>Every Contracts-app reading with a card selected, newest first, for the hauling plan.</summary>
+    public IReadOnlyList<ScreenSighting> ContractFrames()
+    {
+        lock (_gate) return [.. _sightings
+            .Where(s => !s.Dismissed && s.Contracts?.SelectedTitle is { Length: > 0 })
+            .OrderByDescending(s => s.ShotAt)];
+    }
+
     /// <summary>The newest Fleet Manager reading, for the fleet page.</summary>
     public ScreenSighting? LatestFleet()
     {

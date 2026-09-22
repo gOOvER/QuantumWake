@@ -252,9 +252,10 @@ The chooser then offers the same decision from either end:
 - **By location** — what is this landing worth? One row per counter, ranked by
   how much of the list it covers, then by what that stop costs. Ticking a stop
   claims everything it can supply that an earlier tick has not; unticking hands
-  those back to whatever is left. **Fewest stops** packs the list greedily,
-  because buying each thing where it is cheapest is one landing per thing, and
-  fuel and time cost more than the difference.
+  those back to whatever is left. The list opens packed greedily for fewer
+  stops, because buying each thing where it is cheapest is one landing per
+  thing and fuel and time cost more than the difference. **Optimise stops**
+  reapplies that grouping after the pilot changes the ticks.
 
 Both views write into one map of line → terminal, so switching never loses a
 choice and the plan is built from a single answer.

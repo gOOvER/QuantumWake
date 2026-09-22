@@ -365,6 +365,249 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.15.28
+
+- **Cargo stays distinct through a hauling run.** A shared destination now
+  keeps a separate unload for each commodity, with the amount still to
+  deliver when the card reports partial progress. Every stop shows the cargo
+  known aboard afterwards, and says when a multi-pickup card left a source's
+  share unknown. The tracked flight plan retains each generated action's
+  mission and card-leg identity; it still asks the pilot to confirm loads and
+  unloads because the log never names the stop whose objective changed.
+
+- **Hauling cards only guide their own contracts.** When two open contracts
+  have the same title, a photographed card now has to agree with the logged
+  cargo and pickup count before it supplies a route. A selected card whose
+  objectives do not read falls back to the destination in the contract title
+  instead of leaving the run empty.
+
+- **Every open hauling contract on one route.** Shopping now has a *Hauling
+  run* under the session's contracts: each haul with where it goes, where its
+  cargo is collected and how much, then the stops in an order — every pickup
+  before any delivery, stops on the same moon together, a place that is both
+  ends visited twice — and a button that writes it into a tracked flight plan
+  with a load or unload at every stop. The logs give the destination (with
+  the StarStrings text mod: *Junior | Stellar Small Haul | to Stanton
+  Gateway*), the cargo and how many pickups there are; a screenshot of the
+  card on the Contracts app's Accepted tab gives every leg with its SCU and
+  which moon each pickup is on. One screenshot per card, and the plan says
+  how many are still to take. What it cannot see it says in words — *3
+  pickups, places unknown until this card is photographed* — and the SCU
+  total is called a floor until every card has been read. The Now page leads
+  with the destination when a haul is open.
+
+- **Pickups and drop-offs counted apart.** A hauling contract now reads *2 of
+  3 pickups done · 0 of 1 drop-off done* rather than *2 of 4 objectives*,
+  from the journal's own naming of its steps.
+
+- **Contracts read as the game names them.** The Contracts and Jobs pages,
+  the Now page and the screenshot checks now show the title the mobiGlas
+  printed — *Junior | Stellar Small Haul | to Stanton Gateway* — instead of
+  a name composed from the mission's internal id. The rep and blueprint chips
+  on the Contracts page are read off that title and so had nothing to read;
+  they light now.
+  Two contracts of the same kind taken in one session are two rows rather than
+  one. Every log is re-read once after updating.
+
+- **Safer Controls pictures and more reliable backups.** Picture requests stay
+  inside the template folders, and SVG pictures are cleaned before display so
+  they cannot run scripts or load external resources. If the game's keybinding
+  file is temporarily locked, automatic backups retry after it becomes readable.
+
+- **A crash can leave a trail without exposing your flight.** Settings now has
+  an opt-in detailed crash trace. Turn it on, restart, and it records the last
+  completed startup stage — reading the game data, Windows OCR and joystick
+  setup, WebView2, then the first log scan — plus scrubbed managed errors. It
+  stays only on this computer, carries no Game.log lines, screenshots,
+  clipboard contents or folder names, is capped at 1 MB, and can be saved only
+  from the computer running Quantum Wake. A native crash can still stop the
+  process before it logs an exception, but the final completed stage tells us
+  where to look next.
+
+- **A component merely seen in inventory does not close a Garage list.** The
+  logs never say when a ship part was fitted elsewhere, so a Garage list now
+  keeps that purchase open and says *seen in inventory — not counted*. A stash
+  sighting is not proof that a loose spare remains.
+
+- **Shopping starts with fewer stops.** Making a run from a list now groups
+  what its known sellers can supply into a stop-efficient route before showing
+  the choices. It breaks equal coverage ties by price, and every counter stays
+  selectable when a different route suits the flight better.
+
+- **A fitted ship stays in Fleet.** Opening a Vehicle Loadout Manager now keeps
+  its named hull on the Fleet roster even if it has no logged flight or is
+  absent from a later Fleet Manager photo. It is marked as a photographed fit,
+  with no invented flight time.
+- **The quietest compatible part is marked in Garage.** A *Stealth pick* chip
+  identifies the lowest combined EM and IR option for the selected port, when
+  the installed data can measure a real difference.
+
+- **Controls has a flight-controls checklist.** Keep your own important
+  actions together, see which do not have a joystick assignment, and compare
+  them with the defaults the game recommends for your exact hardware.
+
+- **Setting a curve no longer means knowing what an exponent is.** Drag a
+  slider instead of typing `1.35`, or take one of five named curves —
+  *sharper, straight, soft, softer, very soft* — and the one you are on lights
+  up. Underneath, the number is translated into the only terms that matter at
+  the stick: *"Half a push gives 29%, four fifths gives 67%."* The dead zone
+  you have set is counted in that, because it moves both. The preview is
+  bigger, and with the tray app reading your sticks a dot rides the curve as
+  you push the axis — which explains what a curve does without any words at
+  all.
+
+- **Axes are drawn, not listed.** Every axis on a stick without a picture now
+  gets a gauge — a track with its centre marked, the dead zone you have set
+  shaded around it, and a needle that follows the axis when the tray app is
+  reading your sticks. A rudder is three axes and nothing else, so a
+  two-column list of letters was the whole of its picture; this is the same
+  information with a shape. It costs a joystick nothing, and with the sticks
+  live it shows every axis the device has rather than only the ones you have
+  bound.
+
+- **A stick with no picture is drawn as what it is, not as a joystick.** The
+  stand-in always started with at least eight numbered buttons, which was a
+  joystick talking: a pendular rudder has three axes and no buttons, and got
+  eight empty ones with its pedals underneath as a footnote. Nothing bound to
+  a button and nothing to read from the device means no button grid at all —
+  the axes are the device, so the axes are what it draws, and the line
+  underneath says so instead of describing buttons that are not there.
+
+- **A Check tab: is anything missing from your sticks?** Your profile against
+  the reference layouts the game ships for your exact hardware. Each thing it
+  finds can be staged with one click, into the same pending list as any other
+  change, or dismissed for good. It shows its working — how many bindings it
+  looked at, how many you already have, how many you took off on purpose —
+  because "nothing missing" out of 119 is an answer and "nothing missing" out
+  of nothing is a bug.
+
+  Three things stand between a useful list and a useless one, and on this
+  install they take 119 bindings down to 2. Defaults you cleared yourself are
+  not missing. Actions the game has **renamed** are not missing either — the
+  shipped layouts are stale, and 22 of them name actions this patch no longer
+  has. And a suggestion you say no to stays said no to.
+
+- **"Beside it" is now "Compare with the game's own layout".** Same control,
+  a name that says what it does.
+
+- **A stick wearing the wrong picture now says so.** Pictures are picked by
+  hand and nothing checked the pick: a pendular rudder — three axes, no
+  buttons — was given a Virpil joystick and drew 31 empty buttons over it
+  without comment. The page now compares the picture against the stick and
+  says when they disagree, with a button to take the picture off and go back
+  to the numbered grid. With the live read it is stated as fact; without it,
+  as a doubt, because a stick can carry buttons nobody has bound.
+
+- **Exported keybindings now land under a name the game will actually load.**
+  The game lists a profile only when its file is named
+  `layout_<name>_exported.xml`, and takes that whole filename at the console.
+  The app wrote `<name>.xml` and printed `pp_rebindkeys <name>`, so every
+  export made while the game was running — which is the route the app takes
+  *because* the game is running — went somewhere the game never looks, and
+  nothing said so. The file and the command now match the game's own
+  convention.
+
+- **Long action names stay inside their box on a stick's picture.** A name
+  the box could not hold on two lines — *Landing System (Toggle)* on the
+  throttle's button 26 — was left at full size and spilled a third line out
+  of the bottom of the box. Names are now measured word by word, the way a
+  browser breaks them, and shrunk until they fit; a name is only cut short
+  when a single word is wider than the box.
+
+- **"Take off" is now "unbind".** It removes what is on a control; on a page
+  about flying, the old wording read like the other thing.
+
+- **The Controls table no longer writes one column over another.** A long
+  action name in *Bound to* ran straight under the *Change* column instead of
+  wrapping inside its own — every row in the table wraps now, and the search
+  box and *unbind* share a line rather than stacking three deep.
+
+- **Controls pictures no longer repeat or collide with their device name.**
+  Diagram labels now use the SVG's modern rich-text layer only, and the
+  device subtitle is fitted to the space its template provides.
+
+- **Help now answers the questions the Controls page raises.** Six new
+  entries under *Sticks and keybindings*: where the bindings are read from,
+  what is backed up before anything is written, why writing is refused while
+  the game is running and what it offers instead, how to fix every binding
+  landing on the wrong stick after a re-plug, why a button might not light
+  up, and where the pictures come from.
+
+- **Assigning an action is now searchable — and browsable.** Type two
+  letters in a control's *Find action* field for a short, group-labelled
+  match list; the search reads the group name too, so the area you remember
+  finds the action you do not. Leave it empty and the same box lists the
+  groups, with a count each, to open and read through — which is what the
+  old every-action list was good for. Escape closes it.
+
+- **A clearer Controls workspace.** The profile summary now anchors the page,
+  every connected stick shares a tidy responsive rail, and the active stick is
+  easier to find at a glance. Its picture and bindings now read as one focused
+  workspace without changing how any binding is read, staged, or applied.
+
+- **A Controls page, under Settings: your sticks and what is bound to
+  them.** Read from the game's own keybinding profile — every joystick it
+  knows, by the name and USB id the game recorded — with each stick's
+  bindings written onto a picture of it and listed beside it, control by
+  control, in the game's own words for the action (*Eject*, *Cycle Lock -
+  Hostiles - Forward*) with how it fires (tap, hold, long press). The
+  other way round too: every one of the 1,103 actions the game can bind,
+  by the keybinding screen's categories, with what is on each stick and
+  the keyboard — filter to the ones on no stick to see the sea of buttons
+  as a list with gaps. Where the game ships a layout for your stick (the
+  Warthog, X52/X55/X56, T.16000M, VKB, T.Flight), it can be shown beside
+  yours. The pictures come from [Joystick Diagrams](https://github.com/Rexeh/joystick-diagrams)'
+  template library — 45 sticks, throttles and panels — fetched only once
+  you press *Fetch the pictures* where the picture would be (or under
+  *Pictures*), kept, and credited; a stick the
+  library knows (Warthog, T.16000M, X52, X56, VKB Gladiator) gets its
+  picture on its own, any other is yours to pick, and a folder of your own
+  SVGs in the same convention works too. A stick with no picture gets the
+  Windows game-controller panel's numbered buttons instead, lit where
+  something is bound, with the hats and axes beside them.
+
+- **Every version of your keybindings is kept.** The game rewrites its
+  profile whenever a binding changes and keeps no history; Quantum Wake
+  now keeps a copy of each distinct version as it appears, and *Backups*
+  lists them, shows what changed between any two ("Eject: was button 7,
+  now button 4"), and writes any of them back as a file the game imports
+  — with the sticks retargeted, for the day the throttle comes back as
+  `js3` and every throttle binding points at the pedals. The export lands
+  in Quantum Wake's own folder first; a second, explicit press copies it
+  into the game's `controls\mappings` folder, from where Options →
+  Keybindings imports it (or `pp_rebindkeys <name>` at the console). Any
+  version can be downloaded as a file to keep anywhere, a file can be
+  added back — one downloaded from here, another machine's
+  `actionmaps.xml`, an export from the mappings folder — and *Restore*
+  writes a version straight back over the game's profile: only with the
+  game closed, since it reads the profile at start and rewrites it in
+  play, and only after keeping the profile as it was, so a restore is
+  itself undoable.
+
+- **Mapping, and curves.** A control on a stick can be given any of the
+  game's actions from its row, or have its binding taken off; an action
+  can be bound to a stick and control from the Actions pane, or taken off
+  one. The changes stage into one list — with the clash the game would
+  flag named before it flags it — and go with one *Apply*. Each stick's
+  axes are an editor too: the curve the game keeps per axis group (its
+  exponent, with a preview), invert, and the dead zone per axis. Both are
+  written the way a restore is: into the profile with the game closed,
+  after keeping it as it was; as an import file for the keybinding screen
+  with the game open. The activation mode (tap, hold…) stays the action's
+  own unless you pick one on the picker — tap, press, hold, double tap,
+  long press. The whole list of what the game can bind is in
+  `docs/keybindings.md` (1,103 actions with their defaults, for Alpha 4.10),
+  and `--keys` in the CLI prints it with your own bindings beside each.
+
+- **Press it, see it.** Under QuantumWake.exe the sticks are read live
+  while the Sticks pane is open: a pressed button lights on the picture
+  and in the table, a held switch stays lit, the note names what is down,
+  and the fallback grid shows the stick's true button and hat count as
+  Windows reports it rather than a guess. A stick the profile names but
+  is not plugged in says so; two of one product cannot be told apart and
+  the pane says that too. The bare server has no way to read a stick and
+  says who does.
+
 ### 0.14.17
 
 - **Knives, grenades and attachments, each on its own Armoury tab.** The three

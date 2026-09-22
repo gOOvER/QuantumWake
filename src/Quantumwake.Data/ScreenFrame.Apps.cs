@@ -9,6 +9,13 @@ public sealed record ContractCard(string Title, string? Reward, string? Issuer);
 /// <summary>What the mobiGlas Contracts app said, on its Accepted tab.</summary>
 /// <param name="Accepted">The count in the tab itself: "ACCEPTED (5/10)".</param>
 /// <param name="SelectedReward">The detail panel's figure, in aUEC, with the ¤ read as whatever the engine made of it.</param>
+/// <param name="Objectives">Each objective line as read, continuation lines joined.</param>
+/// <param name="Steps">The same lines, read: verb, cargo, place, count and how deep the diamond sits.</param>
+/// <param name="PickupSites">
+/// The "PICK UP LOCATIONS (ANY ORDER)" list from the contract's own text,
+/// which is where the game says what body a pickup is on - "Freight elevator
+/// at Fallow Field on Pyro IV" - and the objectives never do.
+/// </param>
 public sealed record ContractsReading(
     int? Accepted,
     int? Capacity,
@@ -16,7 +23,38 @@ public sealed record ContractsReading(
     string? SelectedTitle,
     long? SelectedReward,
     string? SelectedIssuer,
-    IReadOnlyList<string> Objectives);
+    IReadOnlyList<string> Objectives,
+    IReadOnlyList<ContractStep>? Steps = null,
+    IReadOnlyList<PickupSite>? PickupSites = null);
+
+/// <summary>One objective of the selected contract, as the mobiGlas prints it.</summary>
+/// <remarks>
+/// Three shapes have been measured, and the indent is what pairs them. A
+/// direct haul prints <c>Collect Agricultural Supplies from Port Tressler.</c>
+/// with <c>Deliver 0/13 SCU to NB Int. Spaceport.</c> indented under it - the
+/// cargo named only on the Collect line. A multi-pickup prints a
+/// <c>Deliver 0/18 SCU of Aluminum to Stanton Gateway.</c> parent with one
+/// indented <c>Collect Aluminum from Fallow Field.</c> per source. And a
+/// multi-drop prints a Collect parent per source, each with its own indented
+/// Deliver. So a step is a verb, a cargo, a place and a count, plus how far
+/// in its diamond sits; the legs are worked out from that afterwards.
+/// </remarks>
+/// <param name="Kind"><c>collect</c>, <c>deliver</c>, or <c>other</c> for a line that read but did not parse.</param>
+/// <param name="Place">The place as printed, with any "above Crusader" / "on Pyro IV" tail moved to <paramref name="Body"/>.</param>
+/// <param name="Done">The count's first figure - <c>0</c> of <c>0/18 SCU</c> - and <paramref name="Total"/> the second.</param>
+/// <param name="Depth">0 for a diamond on the heading's own margin, 1 for one indented under it.</param>
+public sealed record ContractStep(
+    string Text,
+    string Kind,
+    string? Commodity,
+    string? Place,
+    string? Body,
+    int? Done,
+    int? Total,
+    int Depth);
+
+/// <summary>One line of the contract text's pickup list: the place, and the body the text says it is on.</summary>
+public sealed record PickupSite(string Place, string? Body);
 
 /// <summary>One row of the Fleet Manager terminal.</summary>
 /// <param name="Read">The name as the terminal's CRT face read, which is badly: two of five on the measured frame.</param>
@@ -145,16 +183,161 @@ public static partial class ScreenFrames
         var issuer2 = Beside(lines, "Contracted By");
 
         var objectivesHead = lines.FirstOrDefault(line => Is(line.Text, "PRIMARY OBJECTIVES"));
+        var steps = objectivesHead is null ? [] : ReadObjectives(lines, objectivesHead);
 
-        var objectives = objectivesHead is null ? [] : lines
-            .Where(line => line.Top > objectivesHead.Top)
-            .Where(line => line.Left >= objectivesHead.Left - objectivesHead.Height)
-            .Select(line => ObjectiveRegex().Match(line.Text))
-            .Where(m => m.Success)
-            .Select(m => m.Groups["text"].Value.Trim())
+        return new ContractsReading(accepted, capacity, cards, selected, reward2, issuer2,
+            [.. steps.Select(s => s.Text)], steps, ReadPickupSites(lines));
+    }
+
+    /// <summary>
+    /// The objectives column: every diamond line, with the lines a long one
+    /// wrapped onto joined back, and the indent measured against the heading.
+    /// </summary>
+    /// <remarks>
+    /// A wrapped objective - "Deliver 0/2 SCU of Waste to Seraphim Station
+    /// above" then "Crusader." on the next line - returns as two lines, the
+    /// second without a diamond. It is taken as a continuation when it sits
+    /// within two line heights below the diamond line and no further left
+    /// than its text: a new objective always brings its own diamond. Reading
+    /// stops at the first gap of more than four heights, which is where the
+    /// TRACK and SHARE buttons at the panel's foot begin.
+    /// </remarks>
+    private static List<ContractStep> ReadObjectives(IReadOnlyList<ScreenTextLine> lines, ScreenTextLine head)
+    {
+        var column = lines
+            .Where(line => line.Top > head.Top)
+            .Where(line => line.Left >= head.Left - head.Height)
+            .OrderBy(line => line.Top)
             .ToList();
 
-        return new ContractsReading(accepted, capacity, cards, selected, reward2, issuer2, objectives);
+        var steps = new List<(ScreenTextLine Line, string Text)>();
+        ScreenTextLine? last = null;
+
+        foreach (var line in column)
+        {
+            if (last is not null && line.Top - last.Top > last.Height * 4) break;
+
+            var m = ObjectiveRegex().Match(line.Text);
+
+            if (m.Success)
+            {
+                steps.Add((line, m.Groups["text"].Value.Trim()));
+                last = line;
+                continue;
+            }
+
+            if (last is null || steps.Count == 0) continue;
+
+            if (line.Top - last.Top <= last.Height * 2.2 && line.Left >= last.Left)
+            {
+                var (first, text) = steps[^1];
+                steps[^1] = (first, text + " " + line.Text.Trim());
+                last = line;
+            }
+        }
+
+        // The shallowest diamond is the margin; a step more than half a height
+        // further in is indented under the one before it.
+        var margin = steps.Count == 0 ? 0 : steps.Min(s => s.Line.Left);
+
+        return [.. steps.Select(s => Step(s.Text, s.Line.Left - margin > s.Line.Height * 0.5 ? 1 : 0))];
+    }
+
+    /// <summary>One objective line read into its parts, or filed as "other" with its text intact.</summary>
+    internal static ContractStep Step(string text, int depth)
+    {
+        var deliver = DeliverRegex().Match(text);
+
+        if (deliver.Success)
+        {
+            var (place, body) = SplitBody(deliver.Groups["place"].Value);
+
+            return new ContractStep(text, "deliver",
+                Clean(deliver.Groups["cargo"]), place, body,
+                Count(deliver.Groups["done"]), Count(deliver.Groups["total"]), depth);
+        }
+
+        var collect = CollectRegex().Match(text);
+
+        if (collect.Success)
+        {
+            var (place, body) = SplitBody(collect.Groups["place"].Value);
+            return new ContractStep(text, "collect", Clean(collect.Groups["cargo"]), place, body, null, null, depth);
+        }
+
+        return new ContractStep(text, "other", null, null, null, null, null, depth);
+    }
+
+    private static string? Clean(Group group) =>
+        group.Success && group.Value.Trim().Length > 0 ? group.Value.Trim() : null;
+
+    private static int? Count(Group group) =>
+        group.Success && int.TryParse(group.Value.Replace('O', '0').Replace('o', '0'), out var n) ? n : null;
+
+    /// <summary>
+    /// "Seraphim Station above Crusader" is a place and the body it orbits;
+    /// "The Golden Riviera on Pyro III" is a place and the body it stands on.
+    /// The tail is taken only when it is short enough to be a body's name.
+    /// </summary>
+    private static (string Place, string? Body) SplitBody(string value)
+    {
+        var text = Whitespace().Replace(value, " ").Trim().TrimEnd('.').Trim();
+
+        foreach (var joint in new[] { " above ", " on " })
+        {
+            var at = text.LastIndexOf(joint, StringComparison.OrdinalIgnoreCase);
+            if (at <= 0) continue;
+
+            var body = text[(at + joint.Length)..].Trim();
+            if (body.Split(' ').Length <= 3 && body.Length > 0)
+                return (text[..at].Trim(), body);
+        }
+
+        return (text, null);
+    }
+
+    /// <summary>
+    /// The contract text's own pickup list, when the selected contract prints
+    /// one: "PICK UP LOCATIONS (ANY ORDER)" then a dash per place.
+    /// </summary>
+    private static List<PickupSite> ReadPickupSites(IReadOnlyList<ScreenTextLine> lines)
+    {
+        var head = lines.FirstOrDefault(line => Opens(line.Text, "PICK UP LOCATIONS"));
+        if (head is null) return [];
+
+        var sites = new List<PickupSite>();
+        var raw = new List<string>();
+        ScreenTextLine? last = head;
+
+        foreach (var line in lines
+            .Where(line => line.Top > head.Top)
+            .Where(line => Math.Abs(line.Left - head.Left) <= head.Height * 2)
+            .OrderBy(line => line.Top))
+        {
+            // The list ends at the first line that is neither a dash nor the
+            // tail of a wrapped one, or at a paragraph gap; the letter's own
+            // prose follows it.
+            if (line.Top - last!.Top > last.Height * 2.5) break;
+
+            var m = PickupSiteRegex().Match(line.Text);
+
+            if (m.Success)
+                raw.Add(m.Groups["place"].Value);
+            else if (raw.Count > 0 && line.Top - last.Top <= last.Height * 1.4)
+                raw[^1] += " " + line.Text.Trim();
+            else
+                break;
+
+            last = line;
+        }
+
+        foreach (var text in raw)
+        {
+            var (place, body) = SplitBody(text);
+            sites.Add(new PickupSite(place, body));
+        }
+
+        return sites;
     }
 
     /// <summary>The value printed on the same row as a label, to its right.</summary>
@@ -206,6 +389,24 @@ public static partial class ScreenFrames
     // The objective diamond reads as O, 0, o or a bullet.
     [GeneratedRegex(@"^[Oo0•◇◆]\s+(?<text>\S.*)$")]
     private static partial Regex ObjectiveRegex();
+
+    // "Deliver 0/18 SCU of Aluminum to Stanton Gateway." and, on a direct
+    // haul, "Deliver 0/13 SCU to NB Int. Spaceport." with no cargo named. The
+    // zero reads as O often enough that Count folds it back.
+    [GeneratedRegex(@"^Deliver\s+(?<done>[0-9Oo]+)\s*/\s*(?<total>[0-9Oo]+)\s*SCU(?:\s+of\s+(?<cargo>.+?))?\s+to\s+(?<place>.+?)\.?\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex DeliverRegex();
+
+    // "Collect Aluminum from Fallow Field."
+    [GeneratedRegex(@"^Collect\s+(?<cargo>.+?)\s+from\s+(?<place>.+?)\.?\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex CollectRegex();
+
+    // "- Freight elevator at Fallow Field on Pyro IV"; the dash reads as any
+    // of its lookalikes and the elevator is not always mentioned.
+    [GeneratedRegex(@"^[-–—•·]\s*(?:Freight\s+elevator\s+at\s+)?(?<place>.+?)\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex PickupSiteRegex();
+
+    [GeneratedRegex(@"\s{2,}")]
+    private static partial Regex Whitespace();
 
     // ---- the Fleet Manager ----
 

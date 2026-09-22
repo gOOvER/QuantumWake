@@ -2753,6 +2753,22 @@ body.overlay .checklist-attachments, body.overlay .checklist-due { display: none
 .job-items .job-mark { width: 20px; text-align: center; color: var(--dim); }
 .job-items tr.have .job-mark { color: var(--green); }
 
+/* The hauling run on Jobs: one card per contract with its legs, then the
+   stops. A leg with an end missing is muted rather than hidden - the gap
+   is the information. */
+.haul-plan { margin-bottom: 18px; }
+.haul-plan h3 { margin-bottom: 4px; }
+.haul-legs { list-style: none; margin: 6px 0 2px; padding: 0; font-size: 12px; }
+.haul-legs li { padding: 2px 0; }
+.haul-legs li::before { content: '↳ '; color: var(--dim); }
+.haul-progress, .haul-note { font-size: 11.5px; margin-top: 4px; }
+.haul-aboard { font-size: 11.5px; margin-top: 5px; color: var(--cyan); }
+.haul-stops td:first-child { width: 20px; }
+.haul-stops td:nth-child(2) { width: 34%; white-space: nowrap; }
+.haul-load::before { content: '▲ '; color: var(--cyan); }
+.haul-unload::before { content: '▼ '; color: var(--green); }
+.haul-actions { margin: 10px 0 14px; }
+
 .job-form {
   display: flex;
   flex-direction: column;
@@ -4978,6 +4994,7 @@ body.overlay .ship-picture { display: none; }
 .candidate .c-act .state { font-size: 11px; color: var(--cyan); letter-spacing: .08em; text-transform: uppercase; }
 .chip.count { border-color: var(--cyan-deep); color: var(--cyan); }
 .chip.pip { border-color: rgba(235, 174, 71, .7); color: var(--amber); }
+.chip.stealth { border-color: #a989e8; color: #c9adff; }
 
 /* ---------- saved builds ---------- */
 
@@ -5258,3 +5275,172 @@ td.armoury-cost { color: var(--amber); }
 .garage-cargo-ships li.no a { color: var(--amber); }
 .mining-waiting .mining-estimate { flex: 0 0 100%; margin-left: 0; }
 .mining-waiting .time { margin-left: auto; }
+
+/* ---- Controls: the sticks, their pictures and their bindings. ---- */
+.controls-pane { display: none; }
+.controls-pane.active { display: block; }
+.controls-pane[hidden], #controls-tabs[hidden] { display: none; }
+.controls-status-frame { display: flex; align-items: stretch; gap: 10px; margin: 14px 0 13px; border: 1px solid var(--rule); border-left-color: var(--cyan-deep); background: linear-gradient(90deg, rgba(18, 72, 91, .24), var(--panel) 38%); }
+.controls-status-mark { flex: 0 0 3px; background: var(--cyan); box-shadow: 0 0 10px rgba(53, 200, 240, .6); }
+.controls-status-frame #controls-status { margin: 0; padding: 8px 10px 8px 0; line-height: 1.45; }
+.controls-devices { display: grid; grid-template-columns: repeat(auto-fit, minmax(172px, 1fr)); gap: 8px; margin: 0 0 16px; }
+.controls-stick { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 64px; padding: 9px 12px 9px 14px; border: 1px solid var(--rule); background: linear-gradient(135deg, rgba(15, 51, 67, .55), var(--panel) 70%); color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: border-color .15s ease, background .15s ease, transform .15s ease; }
+.controls-stick::before { content: ''; position: absolute; inset: 8px auto 8px 0; width: 2px; background: var(--rule-hot); }
+.controls-stick:hover { border-color: var(--cyan-deep); background: linear-gradient(135deg, rgba(19, 76, 97, .7), var(--panel) 70%); transform: translateY(-1px); }
+.controls-stick.active { border-color: var(--cyan); box-shadow: inset 0 0 18px rgba(53, 200, 240, .1), 0 0 14px rgba(53, 200, 240, .08); }
+.controls-stick.active::before { background: var(--cyan); box-shadow: 0 0 9px rgba(53, 200, 240, .65); }
+.controls-stick-key { font: 11px var(--mono); color: var(--cyan); letter-spacing: .08em; }
+.controls-stick-name { font-size: 13px; line-height: 1.2; }
+.controls-stick-count { margin-top: auto; font-size: 11px; }
+.controls-device { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.1fr); gap: 16px; align-items: stretch; }
+.controls-picture { min-width: 0; border: 1px solid var(--rule); border-top-color: var(--cyan-deep); background: linear-gradient(145deg, rgba(11, 43, 57, .62), var(--panel) 38%); padding: 12px; box-shadow: inset 0 1px 0 rgba(120, 223, 255, .08); }
+.controls-picture svg { width: 100%; height: auto; display: block; }
+.controls-picture .controls-slot { font-weight: 600; }
+.controls-picture .controls-slot.bound { fill: #0b2f3f; }
+.controls-picture .controls-slot.empty { fill: #9aa7b2; opacity: .6; }
+.controls-picture .controls-slot.lit { fill: #ff8a00; }
+/* A picture that is not of this stick. Amber, not red: it is the pilot's own
+   pick and the app may be wrong about it without the live counts. */
+.controls-picture-misfit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 7px; padding: 7px 9px; border: 1px solid var(--amber, #c8871f); border-left-width: 3px; background: rgba(200, 135, 31, .09); color: var(--text); font-size: 11px; line-height: 1.45; }
+/* The check. The counts are shown even when nothing is missing: "0 missing"
+   out of 119 looked at is an answer, and "0 missing" out of nothing is a bug. */
+#controls-pane-check .option-block { max-width: 1180px; }
+.controls-check-counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 8px; margin: 12px 0 16px; }
+.controls-check-count { display: grid; gap: 1px; min-width: 0; min-height: 56px; padding: 8px 10px; border: 1px solid var(--rule); border-top-color: var(--cyan-deep); background: linear-gradient(145deg, rgba(11, 43, 57, .38), var(--panel)); }
+.controls-check-count b { font-size: 17px; line-height: 1.1; }
+.controls-check-count span { color: var(--muted); font: 10px var(--mono); letter-spacing: .05em; text-transform: uppercase; }
+.controls-check-count.hot { border-color: var(--amber); border-top-color: var(--amber); }
+.controls-check-count.hot b { color: var(--amber); }
+.controls-check-dashboard { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.controls-check-section { min-width: 0; padding: 12px; border: 1px solid var(--rule); border-top-color: var(--cyan-deep); background: linear-gradient(145deg, rgba(11, 43, 57, .38), var(--panel)); }
+.controls-check-section h4 { margin: 0; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text); }
+.controls-check-section > p { min-height: 32px; margin: 5px 0 10px; line-height: 1.4; }
+.controls-check-add { min-width: 0; margin-bottom: 4px; }
+.controls-check-add .controls-action-search { max-width: none; }
+.controls-check-add .controls-action-results { width: 100%; }
+.controls-check-important-list, .controls-check-defaults-list { display: grid; gap: 7px; }
+.controls-check-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 14px; align-items: center; min-height: 68px; padding: 10px 12px; border: 1px solid var(--rule); border-left: 3px solid var(--cyan-deep); background: linear-gradient(145deg, rgba(11, 43, 57, .38), var(--panel)); }
+.controls-check-priority-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; min-height: 58px; padding: 8px 10px; border: 1px solid var(--rule); border-left: 3px solid var(--green); background: rgba(10, 47, 36, .18); }
+.controls-check-priority-row.unassigned { border-left-color: var(--amber); background: rgba(80, 48, 10, .12); }
+.controls-check-what { grid-column: 1; font-size: 13px; }
+.controls-check-where { grid-column: 1; grid-row: 2; color: var(--muted); font: 11px var(--mono); }
+.controls-check-unassigned { color: var(--amber); }
+.controls-check-do { grid-column: 2; grid-row: 1 / span 2; display: flex; align-items: center; gap: 12px; }
+.controls-check-no { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; white-space: nowrap; cursor: pointer; }
+@media (max-width: 900px) { .controls-check-dashboard { grid-template-columns: 1fr; } }
+@media (max-width: 620px) { .controls-check-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); } .controls-check-row, .controls-check-priority-row { grid-template-columns: 1fr; } .controls-check-do { grid-column: 1; grid-row: auto; justify-content: space-between; } }
+.controls-bindings { border: 1px solid var(--rule); border-top-color: var(--cyan-deep); background: linear-gradient(145deg, rgba(11, 43, 57, .42), var(--panel) 32%); padding: 12px 14px; min-width: 0; box-shadow: inset 0 1px 0 rgba(120, 223, 255, .08); }
+.controls-compare { display: flex; align-items: center; gap: 8px; margin: 6px 0 10px; }
+.controls-control { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+.controls-bound { line-height: 1.4; }
+.controls-unbound td { color: var(--muted); }
+.controls-unknown { color: var(--amber); font-size: 11px; }
+.controls-stick-tag { display: inline-block; padding: 0 5px; border: 1px solid var(--rule-hot); border-radius: 3px; font: 10px var(--mono); color: var(--muted); margin-right: 4px; }
+.controls-axes { margin-top: 10px; }
+.controls-axes h4 { margin: 8px 0 2px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.controls-latest { margin-left: 6px; font: 10px var(--mono); color: var(--cyan); letter-spacing: .08em; text-transform: uppercase; }
+.controls-was { color: var(--amber); font-family: var(--mono); font-size: 12px; }
+.controls-now { color: var(--green); font-family: var(--mono); font-size: 12px; }
+.controls-diff, .controls-export { margin-top: 16px; border: 1px solid var(--rule); background: var(--panel); padding: 12px 14px; }
+.controls-retarget { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 6px 14px; margin: 8px 0; }
+.controls-retarget-row, .controls-assign-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; }
+.controls-assign-row { padding: 6px 0; border-top: 1px solid var(--rule); }
+.controls-assign-row:first-child { border-top: 0; }
+.controls-assign-name { color: var(--text); }
+#controls-pane-pictures .option-block + .option-block { margin-top: 14px; }
+.ghost.small { padding: 2px 8px; font-size: 11px; }
+@media (max-width: 900px) { .controls-device { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .controls-devices { grid-template-columns: 1fr 1fr; } }
+#controls-buttons { table-layout: fixed; width: 100%; }
+#controls-buttons th:first-child { width: 96px; }
+#controls-buttons th:nth-child(3) { width: 96px; }
+/* tbody td is nowrap, so a long action label ran straight under the Change
+   column rather than wrapping inside its own. The whole table wraps; the
+   control name is the one thing worth keeping on one line. */
+#controls-buttons td { white-space: normal; overflow-wrap: anywhere; vertical-align: top; }
+#controls-buttons td.controls-control { white-space: nowrap; }
+/* The stand-in grid: Windows' numbered buttons, lit where something is bound. */
+.controls-grid { padding: 6px 2px; }
+.controls-grid-title { margin: 8px 0 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.controls-grid-buttons { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; }
+.controls-grid-button { position: relative; aspect-ratio: 1; border-radius: 50%; border: 2px solid #5a2222; background: #2a0d0d; color: #7a5a5a; display: flex; align-items: center; justify-content: center; font: 700 13px var(--mono); }
+.controls-grid-button.bound { background: radial-gradient(circle at 35% 35%, #ff6a6a, #b30000 70%); border-color: #ff8a8a; color: #fff; box-shadow: 0 0 10px rgba(255, 60, 60, .45); }
+.controls-grid-button.lit { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.controls-grid-label { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 3px; width: 120%; font: 9px var(--sans, inherit); line-height: 1.1; color: var(--muted); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.controls-grid-buttons { row-gap: 22px; }
+.controls-grid-cross { display: grid; grid-template-columns: repeat(3, 34px); grid-template-rows: repeat(3, 34px); gap: 4px; }
+.controls-grid-cross .up { grid-column: 2; grid-row: 1; }
+.controls-grid-cross .left { grid-column: 1; grid-row: 2; }
+.controls-grid-cross .right { grid-column: 3; grid-row: 2; }
+.controls-grid-cross .down { grid-column: 2; grid-row: 3; }
+.controls-grid-axis { display: flex; gap: 10px; align-items: baseline; padding: 3px 0; border-top: 1px solid var(--rule); font-size: 12px; }
+.controls-grid-axis:first-of-type { border-top: 0; }
+.controls-grid-axis-name { font: 12px var(--mono); color: var(--cyan); min-width: 60px; }
+/* An axis drawn rather than listed. A rudder is three axes and nothing else,
+   so the old two-column list of names was the whole of its picture. */
+.controls-axis-gauge { display: grid; grid-template-columns: 82px minmax(110px, 1fr) minmax(0, 1fr); gap: 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--rule); font-size: 12px; }
+.controls-axis-gauge:first-of-type { border-top: 0; }
+.controls-axis-gauge-name { font: 11px var(--mono); color: var(--muted); letter-spacing: .04em; }
+.controls-axis-gauge.bound .controls-axis-gauge-name { color: var(--cyan); }
+.controls-axis-gauge-what { min-width: 0; overflow-wrap: anywhere; }
+.controls-axis-track { position: relative; height: 20px; border: 1px solid var(--rule); background: repeating-linear-gradient(90deg, rgba(53, 200, 240, .05) 0 1px, transparent 1px 10%), linear-gradient(180deg, rgba(8, 28, 38, .85), rgba(12, 40, 54, .3)); }
+.controls-axis-gauge.bound .controls-axis-track { border-color: var(--cyan-deep); }
+.controls-axis-centre { position: absolute; top: -3px; bottom: -3px; left: 50%; width: 1px; background: var(--cyan-deep); }
+.controls-axis-track::before, .controls-axis-track::after { content: ""; position: absolute; top: 3px; bottom: 3px; width: 2px; background: var(--rule-hot); }
+.controls-axis-track::before { left: 2px; }
+.controls-axis-track::after { right: 2px; }
+.controls-axis-dead { position: absolute; top: 0; bottom: 0; background: rgba(255, 171, 61, .22); border-left: 1px solid rgba(255, 171, 61, .5); border-right: 1px solid rgba(255, 171, 61, .5); }
+.controls-axis-needle { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #ff8a00; box-shadow: 0 0 6px rgba(255, 138, 0, .8); }
+.controls-axis-needle[hidden] { display: none; }
+.controls-backup-actions { white-space: nowrap; }
+.controls-backup-actions .ghost + .ghost { margin-left: 5px; }
+.controls-axes-table { width: auto; min-width: 70%; margin-top: 6px; }
+.controls-axes-table input[type="number"] { width: 64px; padding: 2px 4px; font: 12px var(--mono); background: var(--deep); color: var(--text); border: 1px solid var(--rule); }
+/* The curve, made handleable. An exponent is not a thing anyone has an
+   intuition for, so the slider is the handle, the chips are the answers most
+   people want, and the dot on the preview is the explanation. */
+.controls-curve-cell { min-width: 208px; max-width: 250px; }
+.controls-curve-handle { display: flex; align-items: center; gap: 8px; }
+.controls-curve-slider { flex: 1 1 auto; min-width: 84px; accent-color: var(--cyan); }
+.controls-curve-presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.controls-curve-preset { padding: 2px 7px; border: 1px solid var(--rule); background: transparent; color: var(--muted); font: 10px var(--mono); letter-spacing: .04em; cursor: pointer; }
+.controls-curve-preset:hover:not(:disabled) { border-color: var(--cyan-deep); color: var(--text); }
+.controls-curve-preset.on { border-color: var(--cyan); background: rgba(53, 200, 240, .14); color: var(--cyan); }
+.controls-curve-preset:disabled { opacity: .35; cursor: default; }
+.controls-curve-words { margin-top: 5px; font-size: 11px; line-height: 1.4; }
+.controls-curve-dot { fill: #ff8a00; stroke: rgba(11, 43, 57, .9); stroke-width: 1; }
+.controls-curve { width: 76px; height: 76px; display: block; }
+.controls-curve-axis { fill: none; stroke: var(--rule-hot); stroke-width: 1; }
+.controls-curve-line { fill: none; stroke: var(--cyan); stroke-width: 2; }
+.controls-pending { margin: 0 0 12px; border: 1px solid var(--cyan-deep); background: var(--panel); padding: 10px 14px; }
+.controls-pending-list { margin: 6px 0; padding-left: 18px; font-size: 12.5px; line-height: 1.6; }
+.controls-pending-list .ghost.small { margin-left: 8px; }
+.controls-warn { color: var(--amber); }
+.controls-action-picker { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 8px; align-items: start; min-width: 190px; margin-bottom: 7px; }
+.controls-action-search { grid-area: 1 / 1; width: 100%; max-width: 280px; font-size: 11px; }
+.controls-action-results { grid-area: 2 / 1 / auto / -1; display: grid; width: min(340px, 100%); max-height: 210px; overflow-y: auto; border: 1px solid var(--rule); background: var(--deep); }
+.controls-action-results[hidden] { display: none; }
+.controls-action-results.muted { display: block; padding: 5px 7px; }
+.controls-action-result { display: grid; gap: 1px; padding: 5px 7px; border: 0; border-top: 1px solid var(--rule); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.controls-action-result:first-child { border-top: 0; }
+.controls-action-result:hover, .controls-action-result:focus-visible { background: rgba(53, 200, 240, .12); outline: none; }
+.controls-action-result-label { font-size: 12px; }
+.controls-action-result-map { color: var(--muted); font: 10px var(--mono); }
+.controls-action-group { display: grid; gap: 1px; padding: 5px 7px; border: 0; border-top: 1px solid var(--rule); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.controls-action-group:first-child { border-top: 0; }
+.controls-action-group:hover, .controls-action-group:focus-visible { background: rgba(53, 200, 240, .12); outline: none; }
+.controls-action-back { padding: 4px 7px; border: 0; border-bottom: 1px solid var(--rule); background: var(--panel); color: var(--muted); font: 10px var(--mono); text-align: left; cursor: pointer; position: sticky; top: 0; }
+.controls-action-back:hover, .controls-action-back:focus-visible { color: var(--text); outline: none; }
+.controls-action-remove { grid-area: 1 / 2; justify-self: start; white-space: nowrap; }
+.controls-input-pick .select { font-size: 11px; margin-right: 4px; }
+.controls-bind-cell { white-space: nowrap; }
+.controls-bind-cell .ghost.small { margin: 1px 4px 1px 0; }
+/* The live read: the pressed control on the picture and in the table. */
+#controls-buttons tr.lit td { background: rgba(0, 200, 255, .12); }
+#controls-buttons tr.lit td.controls-control { color: var(--cyan-hot, var(--cyan)); }
+.controls-picture .controls-slot.lit { fill: #ff8a00; }
+.controls-picture div.controls-slot.lit { color: #ff8a00 !important; font-weight: 700; }
+.controls-live { min-height: 1.4em; color: var(--cyan); }
+.controls-change { white-space: normal; vertical-align: top; }
+.controls-mode-pick { max-width: 110px; font-size: 11px; }
+.controls-axis-live { font: 11px var(--mono); margin-left: 6px; }

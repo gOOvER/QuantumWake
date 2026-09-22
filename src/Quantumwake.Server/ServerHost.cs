@@ -1,4 +1,5 @@
 ﻿using System.Net;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.StaticFiles;
@@ -34,7 +35,8 @@ public static class ServerHost
     public static WebApplication Build(
         string[] args,
         IScreenReader? screen = null,
-        IClipboardReader? clipboard = null)
+        IClipboardReader? clipboard = null,
+        IJoystickReader? joysticks = null)
     {
 
         // Quantumwake server.
@@ -47,6 +49,7 @@ public static class ServerHost
         // and setting somewhere else, which is what makes a genuinely fresh
         // first run testable without disturbing the real one.
         Core.AppPaths.UseFromArguments(args);
+        DiagnosticTrace.Start("server host");
 
         // Whether this data folder was in use before this process touched it,
         // decided here because everything below starts writing to it - the
@@ -59,6 +62,7 @@ public static class ServerHost
         var builder = WebApplication.CreateBuilder(args);
 
         var install = ResolveInstall(args, builder.Configuration);
+        DiagnosticTrace.Mark("server", install is null ? "No game install resolved." : "Game install resolved.");
 
         // Scope the cache to the install, so a PTU channel or a simulated install never
         // blends its sessions into the LIVE totals.
@@ -129,6 +133,15 @@ public static class ServerHost
         // Reads each screenshot as it lands, while the pilot has asked for that.
         // Idle otherwise: it checks the setting, not the folder.
         builder.Services.AddHostedService<ScreenWatchService>();
+
+        // The keybinding profile, kept whenever the game rewrites it, and the
+        // stick pictures the Controls page draws bindings on.
+        builder.Services.AddSingleton<ControlsStore>();
+        // The sticks as Windows sees them, from the host; the bare server has none.
+        builder.Services.AddSingleton<IJoystickReader>(joysticks ?? new NoJoysticks());
+        builder.Services.AddSingleton<JoystickTemplates>();
+        builder.Services.AddSingleton<ControlsDismissals>();
+        builder.Services.AddHostedService<ControlsWatchService>();
         builder.Services.AddSingleton<KitStore>();
         builder.Services.AddSingleton<ExportBuilder>();
         builder.Services.AddSingleton<ImportStore>();
@@ -661,6 +674,8 @@ public static class ServerHost
         // copy on disk is the one summarised, and the runs themselves. The Log
         // page's answer to "did it actually read my logs, and which ones".
         app.MapGet("/api/scan/history", (LogLibrary lib) => ScanHistory.Build(install, lib.Store));
+
+        ControlsEndpoints.Map(app, install);
 
         app.MapGet("/api/now", (LiveSessionService live) => live.Current);
 
@@ -2505,6 +2520,14 @@ public static class ServerHost
                 var lines = job.Items.Select(item =>
                 {
                     var where = HeldWhere(held, item.Name);
+                    var inventorySighting = where.Count > 0 || worn.Contains(item.Name);
+
+                    // A stash log says only that this part was once visible in
+                    // an inventory. It never records putting it onto another
+                    // ship, so using that sighting to close a Garage fit can
+                    // turn "buy a second one" into "nothing to buy". Keep a
+                    // Garage line open until the pilot resolves it instead.
+                    var needsLoosePart = !ShoppingAvailability.CountsInventorySighting(job.Source);
 
                     // Where to get what is missing: a commodity has a cheapest
                     // terminal, an item has a shop.
@@ -2529,9 +2552,10 @@ public static class ServerHost
                         item.Name,
                         item.Needed,
                         item.Unit,
-                        have = where.Count > 0 || worn.Contains(item.Name),
+                        have = inventorySighting && !needsLoosePart,
                         where,
-                        wornNow = worn.Contains(item.Name),
+                        wornNow = worn.Contains(item.Name) && !needsLoosePart,
+                        inventoryUnconfirmed = inventorySighting && needsLoosePart,
                         buyPrice,
                         buyAt
                     };
@@ -2816,6 +2840,22 @@ public static class ServerHost
                 },
             });
         });
+
+        // The full trace is deliberately separate from the scrubbed support
+        // report: it is for a pilot investigating a process crash, and they
+        // choose explicitly whether to save or share it.
+        app.MapGet("/api/diagnostics/trace", () => DiagnosticTrace.Snapshot());
+
+        app.MapPost("/api/diagnostics/trace", (bool enabled) =>
+            Results.Ok(DiagnosticTrace.Configure(enabled)));
+
+        // POST makes the trace local-only when the dashboard is opened to the
+        // LAN. The normal report is safe to read remotely; a crash timeline is
+        // intentionally not exposed beyond the computer collecting it.
+        app.MapPost("/api/diagnostics/trace/file", () =>
+            DiagnosticTrace.Read() is { } trace
+                ? Results.File(Encoding.UTF8.GetBytes(trace), "text/plain", "quantumwake-trace.log")
+                : Results.NotFound(new { message = "No detailed trace has been recorded yet." }));
 
         // Counts and the window, never rows: nothing leaves without a click, and
         // a click is worth more when it follows seeing what would go.
@@ -3242,15 +3282,19 @@ public static class ServerHost
 
         // The newest loadout read for each ship, for the fleet page - dated,
         // because a screenshot is a moment and never a state.
-        app.MapGet("/api/screen/fittings", (ScreenReadingStore readings) =>
-            Results.Ok(readings.LatestLoadouts().Select(s => new
+        app.MapGet("/api/screen/fittings", (ScreenReadingStore readings, LogLibrary lib) =>
+        {
+            var byName = VehicleClasses(lib);
+            return Results.Ok(readings.LatestLoadouts().Select(s => new
             {
                 s.Shot,
                 s.ShotAt,
                 ship = s.Loadout!.Ship,
+                className = byName.GetValueOrDefault(s.Loadout.Ship!),
                 s.Loadout.Scope,
                 s.Loadout.Fittings,
-            })));
+            }));
+        });
 
         // The newest Fleet Manager reading: where each ship was, the last time
         // the terminal was photographed. Nothing in the logs says where a
@@ -3266,11 +3310,7 @@ public static class ServerHost
                 return Results.Ok(new { shot = (string?)null, shotAt = (DateTimeOffset?)null, ships = Array.Empty<object>() });
 
             var flown = lib.Stats().Ships.Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var byName = lib.GameCommodities.Vehicles.Values
-                .GroupBy(v => v.Name, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(g => g.Key, g => g.First().Class, StringComparer.OrdinalIgnoreCase);
-            foreach (var ship in lib.Community.Ships)
-                byName.TryAdd(ship.Value.Name, ship.Key);
+            var byName = VehicleClasses(lib);
 
             return Results.Ok(new
             {
@@ -3408,6 +3448,72 @@ public static class ServerHost
         app.MapPost("/api/runs/settings", (RunSettingsStore settings, int? days) =>
             Results.Ok(settings.Save(days)));
 
+        // Every open hauling contract on one route. The logs give the
+        // contracts and, with the text mod, one end of most; a Contracts-app
+        // screenshot of a card gives that card's every leg. The plan says
+        // which contract got which, and what a screenshot would still add.
+        // Session-only, like the Jobs page's contract list: a contract from a
+        // session that has ended is a ghost.
+        app.MapGet("/api/haul/plan", (LiveSessionService live, ScreenReadingStore readings, LogLibrary lib) =>
+        {
+            var now = live.Current;
+            var plan = now.InGame
+                ? HaulPlanner.Plan(live.LiveSummary.Contracts, readings.ContractFrames(), name => ResolvePlace(lib, name))
+                : new HaulPlan([], [], 0, []);
+
+            // The ship's hold, when the live feed knows the ship and the
+            // reference knows the hull - so the SCU floor can be read against
+            // something. A ship the reference does not carry gets no number.
+            double? hold = null;
+            if (now.Ship is { Length: > 0 } ship
+                && VehicleClasses(lib).TryGetValue(ship, out var cls)
+                && lib.Community.GarageShip(cls) is { CargoScu: > 0 } hull)
+                hold = hull.CargoScu;
+
+            return Results.Ok(new
+            {
+                now.InGame,
+                now.Ship,
+                shipScu = hold,
+                plan.Contracts,
+                plan.Stops,
+                plan.KnownScu,
+                plan.Notes,
+            });
+        });
+
+        // The plan written into a flight plan - tracked, because Add tracks a
+        // new plan and Track would toggle it off again - so the Now page
+        // and the overlay lead with the next stop. Each stop's loads and
+        // unloads become the stop's actions, with the SCU where the screen
+        // printed one; the pilot can reorder the stops from there.
+        app.MapPost("/api/haul/plan/trip", (LiveSessionService live, ScreenReadingStore readings, LogLibrary lib, TripStore trips) =>
+        {
+            if (!live.Current.InGame)
+                return Results.BadRequest(new { message = "No session running, so no contracts to plan." });
+
+            var plan = HaulPlanner.Plan(live.LiveSummary.Contracts, readings.ContractFrames(), name => ResolvePlace(lib, name));
+
+            if (plan.Stops.Count == 0)
+                return Results.BadRequest(new { message = "Nothing to plan: no open hauling contract names a place yet." });
+
+            var title = $"Hauling run · {plan.Contracts.Count} contract{(plan.Contracts.Count == 1 ? "" : "s")}";
+            var trip = trips.Add(title, plan.Stops.Select(s => new TripStop("", s.PlaceId, s.Place, s.Note, false, null)));
+
+            for (var i = 0; i < plan.Stops.Count && i < trip.Stops.Count; i++)
+            {
+                foreach (var action in plan.Stops[i].Actions)
+                {
+                    var what = action.Commodity ?? "cargo";
+                    var text = $"{what} — {action.ContractTitle}{(action.Note is null ? "" : $" ({action.Note})")}";
+                    trips.AddAction(trip.Id, trip.Stops[i].Id, action.Kind, text, action.Scu, action.Scu is null ? null : "SCU",
+                        new RunActionLink(action.MissionId, action.LegIds));
+                }
+            }
+
+            return Results.Ok(new { trip.Id, trip.Title, stops = trip.Stops.Count });
+        });
+
         app.MapPost("/api/trips", (TripStore trips, TripRequest body) =>
             Results.Ok(trips.Add(body.Title, body.Stops)));
 
@@ -3430,7 +3536,7 @@ public static class ServerHost
 
         app.MapPost("/api/trips/{id}/stops/{stopId}/actions", (string id, string stopId,
             TripStore trips, RunActionRequest body) =>
-            trips.AddAction(id, stopId, body.Kind, body.Text, body.Quantity, body.Unit)
+            trips.AddAction(id, stopId, body.Kind, body.Text, body.Quantity, body.Unit, body.Link)
                 ? Results.Ok(new { id, stopId }) : Results.NotFound());
 
         app.MapPost("/api/trips/{id}/stops/{stopId}/actions/{actionId}/toggle", (string id,
@@ -4179,6 +4285,7 @@ public static class ServerHost
         if (install is null)
         {
             gameData.NoInstall();
+            DiagnosticTrace.Mark("game data", "Skipped because no game install was found.");
         }
         else
         {
@@ -4188,6 +4295,7 @@ public static class ServerHost
                 {
                     // Names first: cheap when cached, and every view reads better with them.
                     gameData.Begin();
+                    DiagnosticTrace.Mark("game data", "Reading game names and cached data began.");
                     library.LoadNames(install.RootPath);
 
                     // Said out loud, because for the half minute this takes every
@@ -4211,11 +4319,13 @@ public static class ServerHost
 
                     app.Logger.LogInformation("Game names: {Items} items, {Vehicles} vehicles.",
                         library.Names.ItemCount, library.Names.VehicleCount);
+                    DiagnosticTrace.Mark("game data", "Reading game names and cached data completed.");
                 }
                 catch (Exception e)
                 {
                     gameData.Failed($"The game files could not be read: {e.Message}");
                     app.Logger.LogError(e, "Reading the game files failed.");
+                    DiagnosticTrace.Failed("game data", e);
                 }
 
                 // Deliberately a second attempt rather than an else. Reading the
@@ -4227,13 +4337,16 @@ public static class ServerHost
                 try
                 {
                     status.Begin();
+                    DiagnosticTrace.Mark("log scan", "Initial scan began.");
                     var parsed = library.Scan(install, Progress(status));
                     app.Logger.LogInformation("Library ready: {Parsed} newly parsed, {Total} sessions.",
                         parsed, library.Store.Count());
+                    DiagnosticTrace.Mark("log scan", "Initial scan completed.");
                 }
                 catch (Exception e)
                 {
                     app.Logger.LogError(e, "Initial scan failed.");
+                    DiagnosticTrace.Failed("log scan", e);
                 }
                 finally
                 {
@@ -4307,6 +4420,29 @@ static WipeScope ScopeOf(List<string>? covers)
             scope |= one;
 
     return scope == WipeScope.None ? WipeScope.Everything : scope;
+}
+
+/// <summary>The game's class id for each display name this install can resolve.</summary>
+/// <summary>
+/// A place the contract text names, on the map - or null, and the stop keeps
+/// its name. The atlas is the places the logs have seen visited, resolved the
+/// way a price terminal is: by the place whose name the text contains.
+/// </summary>
+static ResolvedPlace? ResolvePlace(LogLibrary lib, string name) =>
+    lib.Terminals.Resolve(name) is { } place
+        ? new ResolvedPlace(place.RawId, place.Name, place.Body, place.System)
+        : null;
+
+static Dictionary<string, string> VehicleClasses(LogLibrary lib)
+{
+    var byName = lib.GameCommodities.Vehicles.Values
+        .GroupBy(v => v.Name, StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(g => g.Key, g => g.First().Class, StringComparer.OrdinalIgnoreCase);
+
+    foreach (var ship in lib.Community.Ships)
+        byName.TryAdd(ship.Value.Name, ship.Key);
+
+    return byName;
 }
 
 /// <summary>
@@ -5322,7 +5458,7 @@ public sealed record WipeRequest(DateTimeOffset? At, string? Patch, List<string>
 public sealed record TripRequest(string? Title, List<TripStop>? Stops);
 
 /// <summary>Body of POST /api/trips/{id}/stops/{stopId}/actions.</summary>
-public sealed record RunActionRequest(string? Kind, string? Text, decimal? Quantity, string? Unit);
+public sealed record RunActionRequest(string? Kind, string? Text, decimal? Quantity, string? Unit, RunActionLink? Link = null);
 
 /// <summary>Body of POST /api/map-notes.</summary>
 public sealed record MapNoteRequest(

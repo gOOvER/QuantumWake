@@ -217,9 +217,13 @@ jobs:
           ### What it does not do
 
           Reads your logs and your game's own data files. No memory is touched and
-          nothing is injected. The one thing it can write to the game folder is the
-          English text file, and only when you install item labels or StarStrings
-          from the Item labels page - both are undone from the same page. The app connects to the internet only where
+          nothing is injected. Two things it can write to the game folder, both only
+          when you press the button that says so: the English text file, when you
+          install item labels or StarStrings from the Item labels page - both undone
+          from the same page - and, from the Controls page, a keybinding layout into
+          the game's own import folder, or a kept version of the keybinding profile
+          restored over the live one, which it does only with the game closed and
+          after keeping the profile as it was. The app connects to the internet only where
           you have said it may, from the Settings page - the optional datasets, and the
           two that can go out unattended: the version check and the market-price
           refresh, both off until you turn them on.

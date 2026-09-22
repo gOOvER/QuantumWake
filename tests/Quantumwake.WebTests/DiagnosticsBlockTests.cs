@@ -48,6 +48,30 @@ public class DiagnosticsBlockTests
         return page;
     }
 
+    [Fact]
+    public void Detailed_trace_is_off_until_the_pilot_asks_for_it()
+    {
+        var page = Rendered();
+        page.Serve("/api/diagnostics/trace", "{\"enabled\":false,\"bytes\":0}");
+        page.Do("await renderDiagnosticTrace();");
+
+        Assert.False(page.Truth("__dom.node('#diag-trace-enabled').checked === true"));
+        Assert.Contains("turn it on", page.NodeText("#diag-trace-status"));
+        Assert.True(page.Truth("__dom.node('#diag-trace-save').hidden"));
+    }
+
+    [Fact]
+    public void Turning_on_the_trace_posts_only_the_choice()
+    {
+        var page = Rendered();
+        page.Serve("/api/diagnostics/trace?enabled=true", "{\"enabled\":true,\"bytes\":42}");
+        page.Serve("/api/diagnostics/trace", "{\"enabled\":true,\"bytes\":42}");
+        page.Do("__dom.node('#diag-trace-enabled').checked = true; __dom.node('#diag-trace-enabled').fire('change');");
+
+        Assert.Contains("POST /api/diagnostics/trace?enabled=true", page.Fetched());
+        Assert.Contains("restart to trace startup", page.NodeText("#diag-trace-status"), StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>
     /// The size of the problem, before the file exists: how much was read and
     /// how much of it defeated the parser.

@@ -62,7 +62,10 @@ be shown as accepted → in progress → completed or abandoned, with a completi
 rate and a time-to-complete.
 
 `<CMissionLogEntry::UpdateActiveObjective>` carries the same objective ids with
-UI display text, useful for naming individual objectives.
+UI display text - but checked on 21 Sep 2026 across 4,867 such lines, every one
+is a template (`Go to ~mission(Location)`) or a combat line, and no hauling
+step ever carries text. Naming a hauling objective needs the mobiGlas; see
+[hauling.md](hauling.md).
 
 **Suggested change:** upgrade the Contracts view from a list of names to a
 funnel with outcomes.
@@ -272,6 +275,45 @@ placement*. Two things looked at and left:
 
 Everything above is read-only and needs no new dependency; each is a parser
 addition plus a view.
+
+
+## 8. Community keybinding profiles — searched for, and not there
+
+Asked for in 0.15.13: fetch the mappings the community recommends, so the
+Controls check can say more than the game's own layouts do. Searched
+2026-09-18; the corpus does not exist in any form a program can read.
+
+What is actually out there:
+
+- `Chadarius/sc-config` — 9 stars, last pushed 2026-02-10, **no licence**.
+  Five profiles, all Logitech Extreme 3D and X56. None for a Warthog.
+- `charesredhat/Star-Citizen-tools-cs` — 0 stars, pushed 2026-09-12, no
+  licence. One profile, T.Flight Hotas One.
+- `jllamas/StarCitizenActionMaps` — last touched **2016**.
+- The rest of a GitHub search for "star citizen keybind" and "star citizen
+  hotas profile" is tools — viewers, extractors, parsers — not profile
+  collections. Top result is 10 stars and from 2018.
+- Star Binder (starbinder.space) edits your own binds. Its only preset
+  besides the game defaults is one creator's. No library, no API.
+
+So for this install's six devices there are **zero** community profiles, and
+every candidate source is unlicensed, which matters because the feed would
+fetch, keep and digest them the way the Joystick Diagrams one does — and
+that one was taken only after checking it is GPL-2.0 and creditable.
+
+The deeper problem is staleness, and it is not fixable by finding more
+sources. The game's *own* shipped layouts already name 22 actions this patch
+has renamed (`v_ifcs_toggle_vector_decoupling` became
+`v_ifcs_vector_decoupling_toggle`), out of 119 bindings for these sticks.
+A community profile is older than CIG's by definition, so it would be worse,
+and the catalogue filter in `ControlsCheck` would discard most of what it
+suggested before the pilot ever saw it.
+
+**Do not re-search this.** If it is ever revisited, the thing to look for is
+not more repositories but a *maintained, licensed, per-device* collection
+with a version stamp — and the honest prior is that keybinding profiles are
+shared as screenshots, forum posts and Discord attachments, none of which a
+parser can use.
 
 ## A caution
 

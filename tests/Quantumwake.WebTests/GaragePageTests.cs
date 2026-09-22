@@ -537,6 +537,26 @@ public class GaragePageTests
         Assert.Contains("No terminal aUEC seller recorded", page.Text($"{bracer}.textContent"));
     }
 
+    /// <summary>
+    /// The game no longer names a stealth component class consistently, so the
+    /// bench marks the option its own EM and IR figures make quietest instead.
+    /// A tie is not highlighted: it would turn a missing distinction into one.
+    /// </summary>
+    [Fact]
+    public void The_quietest_compatible_component_is_marked_as_a_stealth_pick()
+    {
+        var page = Bench();
+        page.Do("await selectBenchPort('p1');");
+
+        var candidates = "__dom.node('#garage-bench-panel').descendants().filter(n => n.classList.contains('candidate'))";
+        var endo = $"{candidates}.find(n => n.textContent.includes('Endo'))";
+        var bracer = $"{candidates}.find(n => n.textContent.includes('Bracer'))";
+
+        Assert.Contains("Stealth pick", page.Text($"{endo}.textContent"));
+        Assert.True(page.Truth($"{endo}.descendants().some(n => n.classList.contains('stealth'))"));
+        Assert.False(page.Truth($"{bracer}.descendants().some(n => n.classList.contains('stealth'))"));
+    }
+
     /// <summary>The Fleet card's button opens the Garage on that ship rather than a panel of its own.</summary>
     [Fact]
     public void The_fleet_card_opens_the_garage_on_the_ship()

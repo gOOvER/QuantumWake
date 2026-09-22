@@ -204,10 +204,9 @@ public class ShoppingByLocationTests
     }
 
     /// <summary>
-    /// The panel opens with a plan already made - the cheapest seller that can
-    /// fill each line - so this view has to arrive showing that plan. Ticks
-    /// that started blank while the count at the foot said "2 stops" would be
-    /// two answers to one question.
+    /// The panel opens with the stop-efficient plan already made, so this view
+    /// has to arrive showing its ticks. Ticks that started blank while the
+    /// count at the foot said "2 stops" would be two answers to one question.
     /// </summary>
     [Fact]
     public void The_plan_already_made_arrives_as_ticked_stops()
@@ -217,8 +216,8 @@ public class ShoppingByLocationTests
 
         var ticked = $"{Stops}.filter(s => s.byClass('stop-tick')[0].children[0].checked).length";
 
-        // Levski is the cheaper Laranite, Area18 the only Agricium, GrimHEX
-        // the only shield: three defaults, three ticks.
-        Assert.Equal(3, page.Count(ticked));
+        // Area18 carries both commodities and GrimHEX the shield: two ticks,
+        // even though Laranite alone is cheaper at Levski.
+        Assert.Equal(2, page.Count(ticked));
     }
 }

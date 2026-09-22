@@ -140,6 +140,73 @@ if (args.Contains("--mining"))
 // disintegrates to and how fast. What is NOT here, and why, is in
 // docs/salvage.md: a hull's own yield needs its surface area and volume,
 // which are geometry the DataCore does not hold.
+// Every action the game can bind, with its defaults and, if the profile
+// rebinds it, what this install has on it. --keys=md writes the reference
+// document (docs/keybindings-<version>.md is one of these).
+if (args.Any(a => a.StartsWith("--keys", StringComparison.OrdinalIgnoreCase)))
+{
+    var markdown = args.Contains("--keys=md", StringComparer.OrdinalIgnoreCase);
+    var cache = Path.Combine(Path.GetDirectoryName(SessionStore.DatabasePathFor(install.RootPath))!, "commodities.json");
+    var game = GameCommodities.Load(install.RootPath, cache);
+    var catalogue = game.Controls.Catalogue;
+    var profilePath = Path.Combine(install.RootPath, "user", "client", "0", "Profiles", "default", "actionmaps.xml");
+    var profile = File.Exists(profilePath) ? Quantumwake.Core.Controls.ControlProfile.Parse(File.ReadAllBytes(profilePath)) : null;
+    var mine = (profile?.Bindings ?? []).ToLookup(b => (b.ActionMap, b.Action));
+    var sticks = (profile?.Joysticks ?? []).ToDictionary(d => d.Key, d => d.Product ?? d.Key);
+    string Mine(Quantumwake.Core.Controls.ControlBinding b) =>
+        b.Input.Kind == Quantumwake.Core.Controls.InputKind.None ? $"{b.Input.DeviceKey} cleared"
+        : b.Input.IsJoystick ? $"{sticks.GetValueOrDefault(b.Input.DeviceKey, b.Input.DeviceKey)} {b.Input.Label}"
+        : b.Input.Label;
+    static string Dash(string s) => s.Length == 0 ? "—" : s;
+    static string Cell(string s) => s.Replace("|", "\\|");
+
+    if (markdown)
+    {
+        // The archive does not say its version; the live log's session does.
+        var version = install.HasGameLog && LogLibrary.BuildSession(install.GameLogPath).GameVersion is { Length: > 0 } v
+            ? $"Alpha {v}" : "this install";
+        Console.WriteLine($"# Star Citizen keybindings, {version}");
+        Console.WriteLine();
+        Console.WriteLine($"Every action the game can bind - {catalogue.Actions.Count} in {catalogue.ActionMaps.Count} groups - read from");
+        Console.WriteLine("`Data\\Libs\\Config\\defaultProfile.xml` in this install's archive and labelled from its");
+        Console.WriteLine("own strings, with the default input per device kind and how the action fires.");
+        Console.WriteLine("A dash is bindable but unbound by default. Generated on " + DateTime.Now.ToString("yyyy-MM-dd") + " by");
+        Console.WriteLine("`dotnet run --project src\\Quantumwake.Cli -c Release -- --keys=md > docs\\keybindings.md`;");
+        Console.WriteLine("regenerate after a patch and diff. `--keys` alone prints the same with this install's");
+        Console.WriteLine("own bindings beside each action.");
+        Console.WriteLine();
+        foreach (var map in catalogue.ActionMaps)
+        {
+            var actions = catalogue.Actions.Where(a => a.ActionMap == map.Name).ToList();
+            if (actions.Count == 0) continue;
+            Console.WriteLine($"## {map.Label}{(map.Category.Length > 0 ? $" · {map.Category}" : "")}");
+            Console.WriteLine();
+            Console.WriteLine($"`{map.Name}` · {actions.Count} actions");
+            Console.WriteLine();
+            Console.WriteLine("| Action | Id | Keyboard | Mouse | Gamepad | Joystick | Fires |");
+            Console.WriteLine("| --- | --- | --- | --- | --- | --- | --- |");
+            foreach (var a in actions)
+                Console.WriteLine($"| {Cell(a.Label)} | `{a.Name}` | {Cell(Dash(a.Keyboard))} | {Cell(Dash(a.Mouse))} | {Cell(Dash(a.Gamepad))} | {Cell(Dash(a.Joystick))} | {Dash(a.ActivationMode)} |");
+            Console.WriteLine();
+        }
+        return 0;
+    }
+
+    Console.WriteLine($"{catalogue.Actions.Count} actions in {catalogue.ActionMaps.Count} groups; profile {(profile is null ? "none" : $"{profile.Bindings.Count} rebinds on {sticks.Count} sticks")}");
+    foreach (var map in catalogue.ActionMaps)
+    {
+        var actions = catalogue.Actions.Where(a => a.ActionMap == map.Name).ToList();
+        if (actions.Count == 0) continue;
+        Console.WriteLine($"\n{map.Label}{(map.Category.Length > 0 ? $" [{map.Category}]" : "")}  ({map.Name})");
+        foreach (var a in actions)
+        {
+            var yours = mine[(map.Name, a.Name)].Select(Mine).ToList();
+            Console.WriteLine($"  {a.Label,-46} kb {Dash(a.Keyboard),-14} js {Dash(a.Joystick),-10} gp {Dash(a.Gamepad),-12} {a.ActivationMode,-18}{(yours.Count > 0 ? "  YOURS: " + string.Join(", ", yours) : "")}");
+        }
+    }
+    return 0;
+}
+
 if (args.Contains("--salvage", StringComparer.OrdinalIgnoreCase))
 {
     var cache = Path.Combine(Path.GetDirectoryName(SessionStore.DatabasePathFor(install.RootPath))!, "commodities.json");
@@ -187,6 +254,50 @@ if (args.Contains("--cargo", StringComparer.OrdinalIgnoreCase))
         Console.WriteLine($"\n4 x 32 + 2 x 16 in the Hermes: {(fit.Fits ? "fits" : "no packing found")}, {fit.PlacedScu} of {fit.LoadScu} SCU placed in {fit.CapacityScu}");
         foreach (var g in fit.Grids) Console.WriteLine($"  {g.Grid.Class} {g.Cells.W}x{g.Cells.L}x{g.Cells.H}: " + string.Join(", ", g.Placed.Select(p => $"{p.Scu}@({p.X},{p.Y},{p.Z}) {p.DX}x{p.DY}x{p.DZ}")) + (g.RuleIgnored ? "  [one-cell rule ignored]" : ""));
     }
+    return 0;
+}
+
+// Hauling as the logs have it: every hauling contract folded out of the
+// backups with what its title and archetype say about the route, and the
+// totals that decide how much a screenshot still has to add. The evidence
+// behind docs/hauling.md; run it again after the mod or the game changes a
+// title format.
+if (args.Contains("--hauling", StringComparer.OrdinalIgnoreCase))
+{
+    var hauls = new List<ContractRecord>();
+
+    foreach (var file in install.BackupLogs().Concat(install.HasGameLog ? [install.GameLogPath] : []))
+    {
+        var builder = new SessionBuilder(Path.GetFileName(file));
+        foreach (var ev in LogFileReader.ReadEvents(file, new LogEventParser())) builder.Add(ev);
+        hauls.AddRange(builder.Build().Contracts.Where(c => HaulingContract.IsHauling(c.Raw)));
+    }
+
+    var titled = hauls.Count(c => c.Title is not null);
+    var routes = hauls.Select(c => HaulingContract.RouteFromTitle(c.Title)).ToList();
+    var shapes = hauls.Select(c => HaulingContract.FromArchetype(c.Raw)!).ToList();
+
+    Console.WriteLine($"{hauls.Count} hauling contracts; {titled} with the toast's title, {hauls.Count - titled} marker only");
+    Console.WriteLine($"  delivery named : {routes.Count(r => r?.Delivery is not null)}");
+    Console.WriteLine($"  pickup named   : {routes.Count(r => r?.Pickup is not null)}");
+    Console.WriteLine($"  both named     : {routes.Count(r => r is { Pickup: not null, Delivery: not null })}");
+    Console.WriteLine($"  neither        : {routes.Count(r => r is null)}");
+    Console.WriteLine($"  shape known    : {shapes.Count(s => s.Shape != HaulShape.Unknown)}   cargo named: {shapes.Count(s => s.Commodity is not null)}");
+    Console.WriteLine($"  pickup steps   : {hauls.Sum(c => c.Pickups)} ({hauls.Sum(c => c.PickupsDone)} done)   drop-off steps: {hauls.Sum(c => c.Deliveries)} ({hauls.Sum(c => c.DeliveriesDone)} done)");
+
+    Console.WriteLine("\nplaces named, by end:");
+    foreach (var g in routes.Where(r => r is not null).SelectMany(r => new[] { ("to", r!.Delivery), ("from", r.Pickup) })
+        .Where(x => x.Item2 is not null).GroupBy(x => x).OrderByDescending(g => g.Count()))
+        Console.WriteLine($"  {g.Count(),4}  {g.Key.Item1,-4} {g.Key.Item2}");
+
+    Console.WriteLine("\nshapes:");
+    foreach (var g in shapes.GroupBy(s => (s.Shape, s.Pickups, s.Deliveries)).OrderByDescending(g => g.Count()))
+        Console.WriteLine($"  {g.Count(),4}  {g.Key.Shape,-14} {g.Key.Pickups?.ToString() ?? "?"} -> {g.Key.Deliveries?.ToString() ?? "?"}");
+
+    Console.WriteLine("\ncargo:");
+    foreach (var g in shapes.GroupBy(s => s.Commodity ?? "(not spelled)").OrderByDescending(g => g.Count()))
+        Console.WriteLine($"  {g.Count(),4}  {g.Key}");
+
     return 0;
 }
 
@@ -580,6 +691,15 @@ static int Screen(string linesFile, string installRoot, string? catalogueQuery)
             Console.WriteLine($"  card     {card.Title}  [{card.Reward ?? "?"}]  {card.Issuer ?? "(issuer not read)"}");
         Console.WriteLine($"Selected  : {contracts.SelectedTitle}  reward {contracts.SelectedReward}  by {contracts.SelectedIssuer}");
         foreach (var o in contracts.Objectives) Console.WriteLine($"  objective {o}");
+        foreach (var s in contracts.Steps ?? [])
+            Console.WriteLine($"  {new string(' ', s.Depth * 2)}step {s.Kind,-8} {s.Commodity ?? "-",-22} {(s.Kind == "collect" ? "from" : "to"),-4} {s.Place ?? "-"}{(s.Body is null ? "" : $" ({s.Body})")}{(s.Total is null ? "" : $"  {s.Done}/{s.Total} SCU")}");
+        foreach (var site in contracts.PickupSites ?? [])
+            Console.WriteLine($"  pickup site {site.Place}{(site.Body is null ? "" : $" on {site.Body}")}");
+        var (legs, deliveries) = HaulLegs.From(contracts);
+        foreach (var leg in legs)
+            Console.WriteLine($"  leg  {leg.Pickup ?? "?"}{(leg.PickupBody is null ? "" : $" ({leg.PickupBody})")} -> {leg.Delivery ?? "?"}{(leg.DeliveryBody is null ? "" : $" ({leg.DeliveryBody})")}  {leg.Commodity ?? "?"}  {(leg.Scu is null ? "share not printed" : $"{leg.ScuDone}/{leg.Scu} SCU")}");
+        foreach (var d in deliveries)
+            Console.WriteLine($"  total {d.ScuDone}/{d.Scu} SCU of {d.Commodity ?? "?"} to {d.Place}");
     }
 
     if (frame.Fleet is { } fleet)

@@ -145,6 +145,10 @@ public sealed record ReceiptPrice(decimal UnitPrice, int Times, DateTimeOffset L
 /// case and is not the same as zero.
 /// </param>
 /// <param name="Blueprint">Whether the title is tagged as awarding a blueprint.</param>
+/// <param name="Pickup">Where the cargo is collected, when the title says - "from Port Tressler".</param>
+/// <param name="Delivery">Where it goes, when the title says - "to Stanton Gateway".</param>
+/// <param name="Commodity">The cargo, when the archetype id spells it.</param>
+/// <param name="Pickups">Journal pickup steps, and how many finished; likewise deliveries.</param>
 public sealed record ContractLine(
     DateTimeOffset At,
     string Name,
@@ -157,7 +161,15 @@ public sealed record ContractLine(
     int StepsDone,
     double? Minutes,
     int? Rep = null,
-    bool Blueprint = false);
+    bool Blueprint = false,
+    bool Hauling = false,
+    string? Pickup = null,
+    string? Delivery = null,
+    string? Commodity = null,
+    int Pickups = 0,
+    int PickupsDone = 0,
+    int Deliveries = 0,
+    int DeliveriesDone = 0);
 
 /// <summary>
 /// How much work this install has done for one faction.
@@ -1527,7 +1539,7 @@ public sealed class LogLibrary : IDisposable
 
                     // The annotations come off the name and become fields: a
                     // contract should still read as its own title.
-                    ContractTags.Clean(c.DisplayName),
+                    ContractTags.Clean(c.Name),
                     c.Issuer,
                     c.Type,
                     c.System,
@@ -1536,8 +1548,16 @@ public sealed class LogLibrary : IDisposable
                     c.Steps,
                     c.StepsDone,
                     c.TimeToComplete?.TotalMinutes,
-                    ContractTags.RepFrom(c.DisplayName),
-                    ContractTags.AwardsBlueprint(c.DisplayName)))
+                    ContractTags.RepFrom(c.Name),
+                    ContractTags.AwardsBlueprint(c.Name),
+                    HaulingContract.IsHauling(c.Raw),
+                    HaulingContract.RouteFromTitle(c.Title)?.Pickup,
+                    HaulingContract.RouteFromTitle(c.Title)?.Delivery,
+                    HaulingContract.FromArchetype(c.Raw)?.Commodity,
+                    c.Pickups,
+                    c.PickupsDone,
+                    c.Deliveries,
+                    c.DeliveriesDone))
         ];
     }
 
@@ -1564,7 +1584,7 @@ public sealed class LogLibrary : IDisposable
                 .GroupBy(c => ContractTags.IssuerKey(c.Issuer))
                 .Select(g =>
                 {
-                    var rep = g.Select(c => ContractTags.RepFrom(c.DisplayName))
+                    var rep = g.Select(c => ContractTags.RepFrom(c.Name))
                         .Where(r => r is not null)
                         .Select(r => r!.Value)
                         .ToList();

@@ -84,6 +84,7 @@
       <div class="group-menu">
         <button data-view="settings">General</button>
         <button data-view="overlay">Overlay</button>
+        <button data-view="controls">Controls</button>
         <button data-view="labels">Item labels</button>
         <button data-view="imports">Shared files</button>
         <!-- An action, not a view. The strip's handler binds only
@@ -2589,6 +2590,222 @@
   </section>
 
 
+  <!-- CONTROLS -->
+  <section id="view-controls" class="view">
+    <div class="section-bar">
+      <div>
+        <h2>Controls</h2>
+        <p class="muted caption">Your sticks and what is bound to them, read from the game's own keybinding
+          profile; every version of it kept as the game rewrites it.</p>
+      </div>
+      <div class="controls">
+        <input type="search" id="controls-search" class="search" placeholder="Search actions and buttons…"
+               autocomplete="off" spellcheck="false">
+        <button class="ghost" id="controls-refresh">Refresh</button>
+      </div>
+    </div>
+    <p class="muted" id="controls-unready" hidden></p>
+    <div class="controls-status-frame" aria-live="polite">
+      <span class="controls-status-mark" aria-hidden="true"></span>
+      <p class="muted small" id="controls-status"></p>
+    </div>
+
+    <!-- Staged changes, from either pane, applied as one write. -->
+    <div class="controls-pending" id="controls-pending" hidden>
+      <div class="option-head">
+        <h3 id="controls-pending-title"></h3>
+        <div class="controls">
+          <button class="ghost" id="controls-pending-apply">Apply</button>
+          <button class="ghost" id="controls-pending-discard">Discard</button>
+        </div>
+      </div>
+      <ul class="controls-pending-list" id="controls-pending-list"></ul>
+      <p class="muted small" id="controls-pending-note"></p>
+    </div>
+
+    <nav class="subtabs" id="controls-tabs" aria-label="Controls pages">
+      <button type="button" data-pane="devices" class="active">Sticks</button>
+      <button type="button" data-pane="actions">Actions</button>
+      <button type="button" data-pane="backups">Backups</button>
+      <button type="button" data-pane="pictures">Pictures</button>
+      <button type="button" data-pane="check">Checklist</button>
+    </nav>
+
+    <!-- One stick at a time: its picture with the bindings written on, and
+         the same as a table beside it. -->
+    <div class="controls-pane active" id="controls-pane-devices">
+      <div class="controls-devices" id="controls-devices"></div>
+      <div class="controls-device" id="controls-device" hidden>
+        <div class="controls-picture" id="controls-picture">
+          <p class="muted small" id="controls-picture-note"></p>
+          <p class="muted small controls-live" id="controls-live-note"></p>
+          <div id="controls-svg"></div>
+        </div>
+        <div class="controls-bindings">
+          <div class="option-head">
+            <h3 id="controls-device-title"></h3>
+            <span class="muted" id="controls-device-note"></span>
+          </div>
+          <div class="controls-compare">
+            <label class="muted" for="controls-layout">Compare with the game's own layout</label>
+            <select id="controls-layout" class="select" title="Show what the game's own reference layout for this stick binds, in a column beside yours"></select>
+          </div>
+          <div class="table-wrap">
+            <table id="controls-buttons">
+              <thead><tr>
+                <th>Control</th>
+                <th>Bound to</th>
+                <th class="num" title="How the action fires: tap, hold, double tap…">Mode</th>
+                <th id="controls-layout-head" hidden>The game's layout</th>
+                <th title="Give this control an action, or take its binding off">Change</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="controls-axes" id="controls-axes"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- The other way round: every action the game can bind, with what is
+         on it, by the keybinding screen's own categories. -->
+    <div class="controls-pane" id="controls-pane-actions">
+      <div class="controls armoury-filters">
+        <select id="controls-category" class="select" title="The keybinding screen's tab"></select>
+        <label class="toggle"><input type="checkbox" id="controls-unbound"> Only actions on no stick</label>
+        <label class="toggle"><input type="checkbox" id="controls-rebound"> Only actions you rebound</label>
+      </div>
+      <p class="muted small" id="controls-actions-count"></p>
+      <div class="table-wrap">
+        <table id="controls-actions">
+          <thead><tr>
+            <th>Action</th>
+            <th>Group</th>
+            <th>On your sticks</th>
+            <th>Keyboard</th>
+            <th class="num" title="How the action fires">Mode</th>
+            <th title="Bind this action to a stick's control">Bind</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Every version kept, what changed between two, and the way back. -->
+    <div class="controls-pane" id="controls-pane-backups">
+      <p class="muted small">Each time the game rewrites its profile a copy is kept here, so a slip in the keybinding
+        screen or a stick that came back as a different number can be undone. Nothing is written under the game
+        unless you press the second button: the export lands in Quantum Wake's folder first, and only
+        <em>Put it where the game imports from</em> copies it into <code>controls\mappings</code>, where the
+        keybinding screen's import and <code>pp_rebindkeys</code> read.</p>
+      <div class="controls armoury-filters">
+        <button class="ghost" id="controls-keep">Keep a copy now</button>
+        <a class="ghost" id="controls-download-live" href="/api/controls/backups/live/file" download title="The game's profile as it is right now, as a file to keep anywhere">Download the current profile</a>
+        <button class="ghost" id="controls-import-pick" title="A file downloaded from here, another machine's actionmaps.xml, or an export from the game's mappings folder">Add a backup from a file</button>
+        <input type="file" id="controls-import-file" accept=".xml,application/xml,text/xml" hidden>
+        <span class="muted small" id="controls-backups-note"></span>
+      </div>
+      <p class="muted small"><em>Restore</em> writes a version back over the game's own profile, with the game closed
+        — it reads the profile at start and rewrites it in play, so a restore under a running game would be lost.
+        The profile as it is now is kept first, so a restore can itself be undone. With the game open, export
+        instead and import from the keybinding screen.</p>
+      <div class="table-wrap">
+        <table id="controls-backups">
+          <thead><tr>
+            <th></th>
+            <th>Written by the game</th>
+            <th>Kept</th>
+            <th class="num">Size</th>
+            <th>Changes since</th>
+            <th></th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="controls-diff" id="controls-diff" hidden>
+        <div class="option-head">
+          <h3 id="controls-diff-title"></h3>
+          <span class="muted" id="controls-diff-count"></span>
+        </div>
+        <table id="controls-diff-table">
+          <thead><tr><th>Action</th><th>Was</th><th>Now</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="controls-export" id="controls-export" hidden>
+        <div class="option-head">
+          <h3>Export for the game</h3>
+          <span class="muted" id="controls-export-source"></span>
+        </div>
+        <p class="muted small">A file the game imports. If your sticks came back under different numbers, say which is
+          which below and every binding follows its stick.</p>
+        <div class="controls-retarget" id="controls-retarget"></div>
+        <div class="controls armoury-filters">
+          <label class="muted" for="controls-export-name">Name</label>
+          <input type="text" id="controls-export-name" class="search" value="quantumwake" spellcheck="false">
+          <button class="ghost" id="controls-export-write">Write the export</button>
+          <button class="ghost" id="controls-export-install" hidden>Put it where the game imports from</button>
+        </div>
+        <p class="muted small" id="controls-export-result"></p>
+      </div>
+    </div>
+
+    <!-- Where the pictures come from, and which stick wears which. -->
+    <div class="controls-pane" id="controls-pane-pictures">
+      <div class="option-block">
+        <div class="option-head">
+          <h3>Pictures of sticks</h3>
+          <span class="muted" id="controls-templates-status"></span>
+        </div>
+        <p class="muted">The pictures are <a href="https://github.com/Rexeh/joystick-diagrams" target="_blank" rel="noopener">Joystick
+          Diagrams</a>' template library &mdash; 45 sticks, throttles and panels, each a photograph with the
+          buttons named on it, shared by that project under the GPL. Off until you turn it on: nothing is
+          fetched from the internet until then, and each picture is fetched once and kept.</p>
+        <div class="controls armoury-filters">
+          <button class="ghost" id="controls-templates-enable">Fetch the library</button>
+          <button class="ghost" id="controls-templates-disable" hidden>Stop fetching</button>
+        </div>
+      </div>
+      <div class="option-block">
+        <div class="option-head">
+          <h3>Your own pictures</h3>
+        </div>
+        <p class="muted">A folder of SVGs that follow the same convention &mdash; the community templates from the
+          project's Discord, or one you drew over a photo of your stick with <code>Button_1</code>,
+          <code>POV_1_U</code> and <code>AXIS_X</code> written where they are.</p>
+        <div class="controls armoury-filters">
+          <input type="text" id="controls-folder" class="search" placeholder="C:\Users\you\Documents\stick-pictures" spellcheck="false">
+          <button class="ghost" id="controls-folder-save">Use this folder</button>
+        </div>
+        <p class="muted small" id="controls-folder-note"></p>
+      </div>
+      <div class="option-block">
+        <div class="option-head">
+          <h3>Which picture for which stick</h3>
+        </div>
+        <p class="muted">Matched by the stick's USB ids where the library has a picture for it; pick one yourself
+          for anything else, or a different one.</p>
+        <div id="controls-assign"></div>
+      </div>
+    </div>
+
+    <!-- What the sticks are missing against the layouts the game ships for
+         them, after the three things that make a plain diff useless. -->
+    <div class="controls-pane" id="controls-pane-check">
+      <div class="option-block">
+        <div class="option-head">
+          <h3>Your flight-controls checklist</h3>
+          <button type="button" class="ghost small" id="controls-check-again" hidden>Ask again about the ones I dismissed</button>
+        </div>
+        <p class="muted">Keep the controls that matter to you in one place, see which have no joystick assignment,
+          and compare the profile with the game&rsquo;s layout for your exact hardware. Nothing is sent anywhere.</p>
+        <p class="muted small" id="controls-check-note"></p>
+        <div class="controls-check-counts" id="controls-check-counts"></div>
+        <div id="controls-check-list"></div>
+      </div>
+    </div>
+  </section>
+
   <!-- OVERLAY -->
   <section id="view-overlay" class="view">
     <h2>Overlay</h2>
@@ -3067,6 +3284,29 @@
 
     <div class="option-block">
       <div class="option-head">
+        <h3>Detailed crash trace</h3>
+        <button class="ghost" id="diag-trace-save" hidden>Save trace</button>
+      </div>
+      <p class="muted">
+        Native crashes can end the app before it has an error to show. This keeps a
+        small local breadcrumb trail of startup stages — game-data loading, Windows
+        OCR, joystick input and WebView2 — so the last completed step narrows the
+        next investigation. Restart after turning it on to include the earliest startup.
+      </p>
+      <label class="toggle">
+        <input type="checkbox" id="diag-trace-enabled">
+        <span>Keep a detailed local trace</span>
+      </label>
+      <p class="muted">
+        It records stage names and scrubbed error messages only: no Game.log lines,
+        screenshots, clipboard contents or folder names. It stays in Quantum Wake app
+        data as <code>diagnostic-trace.log</code>, is capped at 1 MB, and nothing is sent.
+      </p>
+      <span class="muted" id="diag-trace-status"></span>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
         <h3>Back up what you typed</h3>
         <button class="ghost" id="backup-save">Save a backup</button>
       </div>
@@ -3414,6 +3654,36 @@
         <details class="faq-item">
           <summary>Why does cash on hand say “about”?</summary>
           <p>The logs never state a balance. The figure comes from the last screenshot that printed it in a face the reader can read — so far that has been a commodity kiosk; the mobiGlas bar has never read — and the app carries it forward by the transactions logged since. It says “about” because the logs miss some money movement, such as fees, claims or a transaction the parser did not recognise. The next readable screenshot is the check, and says how far off the estimate was.</p>
+        </details>
+      </div>
+      </section>
+
+      <section class="help-section">
+      <h3>Sticks and keybindings</h3>
+      <div class="faq">
+        <details class="faq-item">
+          <summary>Where does the Controls page get my bindings from?</summary>
+          <p>From the game's own keybinding profile, <code>user\client\0\Profiles\default\actionmaps.xml</code> — the file the keybinding screen writes. Settings → <b>Controls</b> reads it against the catalogue of every action the game can bind and shows each stick with its bindings drawn on a picture of it. Nothing is guessed: a control with nothing on it is blank, not empty-looking.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Is it going to break my keybindings?</summary>
+          <p>It keeps a copy before it writes, and it keeps one whenever the game writes too — the app looks at the profile every five seconds and files any version it has not seen under the app's own folder, named by time and content. <b>Backups</b> lists them, shows what changed between any two, and restores one. So the state you are in now is already saved before you change anything, and nothing is written into the game folder except the profile itself.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Why does it refuse to write while the game is running?</summary>
+          <p>Star Citizen reads the profile at start and rewrites it in play, so anything written underneath a running game is overwritten and lost. With the game open the app offers the other route instead: it writes an import file into <code>user\client\0\controls\mappings\</code> and tells you the console command — <code>pp_rebindkeys yourname</code> — so the change loads from the keybinding screen without a restart. Close the game and the same change writes straight to the profile.</p>
+        </details>
+        <details class="faq-item">
+          <summary>My sticks swapped and every binding is on the wrong one. Can that be fixed?</summary>
+          <p>Yes, and it is the reason the page exists. The game stores a binding against a stick's <i>number</i>, not its name — <code>js2_button11</code> — and that number is the order Windows enumerated the devices in, which can change when something is unplugged or a USB port is reused. Restoring or exporting a version lets you say which number each stick has become, and every input and options line moves with it, chords included.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Why is nothing lighting up when I press a button?</summary>
+          <p>The live reading comes from the tray app, not the dashboard server, because reading a controller needs the Windows side of the app. If the page says so in the note under the sticks, you are on the bare server — start QuantumWake from the tray instead. A stick the profile knows but that is unplugged says that too. One case it deliberately refuses: two of the same product, because the id the game stores names the product, not the device, and lighting the wrong picture would be worse than lighting none.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Where do the pictures of the sticks come from?</summary>
+          <p>From <a href="https://github.com/Rexeh/joystick-diagrams" target="_blank" rel="noopener">Joystick Diagrams</a>, an open-source project with templates for 45 sticks, throttles and panels. They are fetched only if you ask, on the <b>Pictures</b> pane, and kept in the app's folder — nothing is bundled, and no feed is turned on by anything else you switch on. A stick with no template gets a numbered grid built from its real button, axis and switch counts, and you can add your own picture for it.</p>
         </details>
       </div>
       </section>

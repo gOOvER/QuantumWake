@@ -50,6 +50,27 @@ public class ImportedRowTests
     }
 
     /// <summary>
+    /// A Garage list needs a loose component. An inventory listing may be the
+    /// same component now installed on another ship, so it remains a missing
+    /// line and says why instead of silently closing the list.
+    /// </summary>
+    [Fact]
+    public void A_garage_inventory_sighting_is_not_counted_as_a_spare_part()
+    {
+        var page = WithJobs("""
+            [{"id":"j1","title":"315p quiet fit","kind":"list","source":"garage:ORIG_315p",
+              "done":false,"pinned":false,"items":[{"name":"Endo","needed":1,"unit":"","have":false,
+              "where":["Everus Harbor"],"wornNow":false,"inventoryUnconfirmed":true,"buyPrice":12000,"buyAt":"Dumper's Depot"}],
+              "haveCount":0,"totalCount":1}]
+            """);
+
+        var card = page.NodeText("#jobs-list");
+        Assert.Contains("seen in inventory — not counted", card);
+        Assert.Contains("Everus Harbor", card);
+        Assert.DoesNotContain("1 of 1 in hand", card);
+    }
+
+    /// <summary>
     /// The one that matters. Nothing on an imported card may issue a request
     /// that could reach a job of the reader's, and the ids here are equal, so
     /// the only safe number of such requests is zero.

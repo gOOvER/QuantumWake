@@ -289,6 +289,9 @@ function showView(name) {
   }
 
   // Jobs change from the Crafting page and from play, so re-read on entry too.
+  // The keybinding profile is the game's file and changes under the app;
+  // read on entry so the page is never a stale copy of it.
+  if (name === 'controls') loadControls().catch(() => {});
   if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
   if (name === 'checklists') loadChecklists().catch(() => {});
   if (name === 'imports') loadImports().catch(() => {});
@@ -858,6 +861,25 @@ function recentScreenDisagreement(state) {
   return `${differs.subject}: ${differs.note || differs.belief || differs.claim}`;
 }
 
+/**
+ * The contract worth leading with. A hauling contract that names where it
+ * goes leads with that, and points at Shopping, where the run is planned;
+ * several hauls open say so, because one destination is not the picture.
+ */
+function contractFocus(contracts) {
+  const hauls = contracts.filter((c) => c.hauling);
+
+  if (hauls.length) {
+    const ends = [...new Set(hauls.map((c) => c.delivery).filter(Boolean))];
+    const detail = hauls.length === 1
+      ? (hauls[0].delivery ? `Deliver to ${hauls[0].delivery}` : hauls[0].name)
+      : `${hauls.length} hauls open${ends.length ? ` — to ${ends.join(', ')}` : ''}`;
+    return { title: hauls.length === 1 ? 'Hauling' : 'Hauling run', detail, view: 'jobs', action: 'Plan the run' };
+  }
+
+  return { title: 'Active contract', detail: contracts[0].name || 'Open contract', view: 'contracts', action: 'Contracts' };
+}
+
 /** The one decision worth leading the hub with, before the configurable cards. */
 function renderNowFocus(state, briefing = pilotBriefing) {
   const strip = $('#now-focus');
@@ -873,7 +895,7 @@ function renderNowFocus(state, briefing = pilotBriefing) {
   if (state?.travelling) focus = { title: 'In quantum', detail: state.travellingTo || 'Destination not identified', view: 'map', action: 'Map' };
   else if (differing) focus = { title: 'Screenshot differs from the logs', detail: differing, view: 'log', action: 'Log' };
   else if (nextStop) focus = { title: 'Next stop', detail: nextStop.place || briefing.tripTitle || 'Tracked flight plan', view: 'map', action: 'Map' };
-  else if (state?.contracts?.length) focus = { title: 'Active contract', detail: state.contracts[0].name || 'Open contract', view: 'contracts', action: 'Contracts' };
+  else if (state?.contracts?.length) focus = contractFocus(state.contracts);
   else if (state?.location) focus = { title: 'At location', detail: state.location, view: 'map', action: 'Map' };
 
   strip.hidden = !focus;
@@ -3254,9 +3276,68 @@ async function renderDiagnostics() {
   }
 }
 
+async function renderDiagnosticTrace() {
+  const toggle = $('#diag-trace-enabled');
+  const save = $('#diag-trace-save');
+  const status = $('#diag-trace-status');
+
+  try {
+    const trace = await getJson('/api/diagnostics/trace');
+    toggle.checked = trace.enabled === true;
+    save.hidden = !(trace.bytes > 0);
+    status.textContent = trace.enabled
+      ? `${trace.bytes.toLocaleString()} bytes recorded locally; restart to trace startup.`
+      : trace.bytes > 0
+        ? `${trace.bytes.toLocaleString()} bytes kept locally from an earlier trace.`
+        : 'Off — turn it on before reproducing a crash.';
+  } catch {
+    status.textContent = 'Trace status is unavailable.';
+  }
+}
+
 let diagnosticsReport = null;
 
 $('#diag-samples').addEventListener('change', () => renderDiagnostics());
+
+$('#diag-trace-enabled').addEventListener('change', async (e) => {
+  const toggle = e.currentTarget;
+  const status = $('#diag-trace-status');
+  toggle.disabled = true;
+
+  try {
+    const trace = await getJson2(`/api/diagnostics/trace?enabled=${toggle.checked}`);
+    status.textContent = trace.enabled
+      ? 'Detailed tracing is on. Restart now to include startup.'
+      : 'Detailed tracing is off; the existing trace is kept until you save it.';
+  } catch (err) {
+    status.textContent = `Trace setting could not be saved: ${err.message}`;
+  } finally {
+    toggle.disabled = false;
+    renderDiagnosticTrace();
+  }
+});
+
+$('#diag-trace-save').addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  const status = $('#diag-trace-status');
+  button.disabled = true;
+
+  try {
+    const response = await fetch('/api/diagnostics/trace/file', { method: 'POST' });
+    if (!response.ok) throw new Error((await response.json()).message || response.statusText);
+    const url = URL.createObjectURL(await response.blob());
+    const link = el('a');
+    link.href = url;
+    link.download = 'quantumwake-trace.log';
+    link.click();
+    URL.revokeObjectURL(url);
+    status.textContent = 'Saved quantumwake-trace.log. Read it before sharing.';
+  } catch (err) {
+    status.textContent = `Trace could not be saved: ${err.message}`;
+  } finally {
+    button.disabled = false;
+  }
+});
 
 $('#diag-save').addEventListener('click', async (e) => {
   const button = e.currentTarget;
@@ -8817,6 +8898,18 @@ async function renderFleetFittings() {
     ships = [];
   }
 
+  photographedFleetShips = ships
+    .filter((ship) => ship.ship)
+    .map((ship) => ({
+      name: ship.ship,
+      className: ship.className || '',
+      sorties: 0,
+      estimatedTime: '00:00:00',
+      lastFlown: null,
+      photographedAt: ship.shotAt
+    }));
+  if (libraryStats) renderFleet(libraryStats);
+
   grid.textContent = '';
   const any = ships.length > 0;
   if (title) title.hidden = !any;
@@ -8917,6 +9010,1892 @@ async function renderFleetBerths() {
 
 $('#screen-log-refresh')?.addEventListener('click', () => {
   (logPane === 'files' ? loadScanHistory() : renderScreenLog()).catch(() => {});
+});
+
+/* ---------- controls: sticks, bindings, backups ---------- */
+
+/**
+ * The Controls page reads the game's keybinding profile against the
+ * catalogue the archive holds, and draws each stick's bindings on a
+ * picture of it. The picture is a Joystick Diagrams template: an SVG with
+ * a photograph and text placeholders - Button_7, POV_1_U, AXIS_X - where
+ * the controls are, so drawing the bindings is writing the action's name
+ * into the right text node. Nothing else about the picture is understood.
+ */
+let controlsModel = null;
+let controlsPane = 'devices';
+let controlsDevice = null;
+try { controlsDevice = localStorage.getItem('qw-controls-stick') || null; } catch { /* fine */ }
+let controlsBackups = [];
+let controlsDiffPick = [];
+let controlsExportSource = null;
+const CONTROLS_PANES = ['devices', 'actions', 'backups', 'pictures', 'check'];
+let controlsChecklistPins = [];
+
+try {
+  const kept = localStorage.getItem('qw-controls-pane');
+  if (CONTROLS_PANES.includes(kept)) controlsPane = kept;
+} catch { /* a private window has no memory, which is fine */ }
+
+try {
+  const kept = JSON.parse(localStorage.getItem('qw-controls-checklist-pins') || '[]');
+  if (Array.isArray(kept)) controlsChecklistPins = kept.filter((p) => p && p.actionMap && p.action);
+} catch { /* an older or private browser starts with an empty checklist */ }
+
+function controlsSaveChecklistPins() {
+  try { localStorage.setItem('qw-controls-checklist-pins', JSON.stringify(controlsChecklistPins)); }
+  catch { /* the checklist remains useful for this visit when storage is off */ }
+}
+
+function showControlsPane(name) {
+  if (!CONTROLS_PANES.includes(name)) name = 'devices';
+  controlsPane = name;
+  try { localStorage.setItem('qw-controls-pane', name); } catch { /* as above */ }
+  for (const pane of CONTROLS_PANES) $(`#controls-pane-${pane}`)?.classList.toggle('active', pane === name);
+  for (const button of $('#controls-tabs')?.querySelectorAll('button') || [])
+    button.classList.toggle('active', button.dataset.pane === name);
+  if (name === 'backups') loadControlsBackups().catch(() => {});
+  if (name === 'check') loadControlsCheck().catch(() => {});
+  if (name === 'devices' && controlsModel?.ready) controlsLiveStart(); else controlsLiveStop();
+}
+
+$('#controls-tabs')?.addEventListener('click', (e) => {
+  const button = e.target.closest('button[data-pane]');
+  if (button) showControlsPane(button.dataset.pane);
+});
+
+async function loadControls() {
+  const unready = $('#controls-unready');
+  try {
+    controlsModel = await getJson('/api/controls');
+  } catch {
+    controlsModel = null;
+  }
+
+  const panes = [...CONTROLS_PANES.map((p) => $(`#controls-pane-${p}`)), $('#controls-tabs')];
+  if (!controlsModel) {
+    for (const p of panes) if (p) p.hidden = true;
+    if (unready) { unready.hidden = false; unready.textContent = 'The controls could not be read.'; }
+    return;
+  }
+  if (!controlsModel.ready) {
+    for (const p of panes) if (p) p.hidden = true;
+    if (unready) {
+      unready.hidden = false;
+      unready.textContent = gameDataExcuse() || 'The install has not been read yet - Settings says when the game data is ready.';
+    }
+    return;
+  }
+  if (unready) unready.hidden = true;
+  for (const p of panes) if (p) p.hidden = false;
+
+  const status = $('#controls-status');
+  if (status) {
+    const m = controlsModel;
+    status.textContent = m.profileFound
+      ? `${m.profile.devices.filter((d) => d.type === 'joystick' && d.product).length} sticks and ${m.profile.bindings.filter((b) => b.input.device === 'js' && b.input.kind !== 'none').length} joystick bindings in the game's profile · ${m.catalogue.actions.length} actions the game can bind · ${m.backupCount} version${m.backupCount === 1 ? '' : 's'} kept${m.backups ? `, the latest written ${relative(m.backups.writtenAt)}` : ''}.`
+      : m.problem
+        ? `The game's profile could not be read: ${m.problem}`
+        : 'The game has not written a keybinding profile yet - it appears after the first time the keybinding screen is used.';
+  }
+
+  renderControlsDevices();
+  renderControlsActions();
+  renderControlsPictures();
+  renderControlsPending();
+  showControlsPane(controlsPane);
+}
+
+/* ---------- the sticks ---------- */
+
+/** The joysticks the profile knows, with a product; empty instances are not sticks. */
+function controlsSticks() {
+  return (controlsModel?.profile?.devices || []).filter((d) => d.type === 'joystick' && d.product);
+}
+
+function renderControlsDevices() {
+  const strip = $('#controls-devices');
+  if (!strip) return;
+  strip.textContent = '';
+  const sticks = controlsSticks();
+  if (!sticks.length) {
+    strip.append(el('p', 'muted', controlsModel?.profileFound
+      ? 'The profile names no joystick. Bind something to a stick in the game and it appears here.'
+      : 'No profile yet.'));
+    $('#controls-device').hidden = true;
+    return;
+  }
+  if (!sticks.some((d) => d.key === controlsDevice)) controlsDevice = sticks[0].key;
+  for (const d of sticks) {
+    const button = el('button', `controls-stick${d.key === controlsDevice ? ' active' : ''}`);
+    button.type = 'button';
+    button.append(el('span', 'controls-stick-key', d.key));
+    button.append(el('span', 'controls-stick-name', d.product));
+    button.append(el('span', 'controls-stick-count muted', `${d.bindings} bound`));
+    button.addEventListener('click', () => {
+      controlsDevice = d.key;
+      try { localStorage.setItem('qw-controls-stick', d.key); } catch { /* fine */ }
+      renderControlsDevices();
+    });
+    strip.append(button);
+  }
+  renderControlsDevice();
+}
+
+/**
+ * A template's placeholder for an input, and back: Button_7 is button7,
+ * POV_1_U is hat1_up, AXIS_RZ is rotz. Joystick Diagrams' spelling, since
+ * the pictures are theirs.
+ */
+const CONTROLS_AXIS_NAMES = { x: 'x', y: 'y', z: 'z', rx: 'rotx', ry: 'roty', rz: 'rotz', slider1: 'slider1', slider_1: 'slider1', slider2: 'slider2', slider_2: 'slider2' };
+const CONTROLS_HAT_DIRS = { u: 'up', d: 'down', l: 'left', r: 'right' };
+
+function controlsPlaceholderToControl(text) {
+  const t = String(text || '').trim();
+  let m = /^button_(\d+)$/i.exec(t);
+  if (m) return `button${Number(m[1])}`;
+  m = /^pov_(\d+)_([udlr])$/i.exec(t);
+  if (m) return `hat${Number(m[1])}_${CONTROLS_HAT_DIRS[m[2].toLowerCase()]}`;
+  m = /^axis_([a-z]+_?\d?)$/i.exec(t);
+  if (m) return CONTROLS_AXIS_NAMES[m[1].toLowerCase()] || m[1].toLowerCase();
+  return null;
+}
+
+/** The bindings on one stick, keyed by control, each a list (a button can do two things in two modes). */
+function controlsBindingsOf(deviceKey, bindings) {
+  const map = new Map();
+  for (const b of bindings || []) {
+    if (b.input.deviceKey !== deviceKey || b.input.kind === 'none') continue;
+    // A chord is listed under its final control, with the modifier in the label.
+    const key = b.input.control;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(b);
+  }
+  return map;
+}
+
+function controlsBindingWords(b) {
+  const held = b.input.modifiers?.length ? `${b.input.modifiers.map((m) => controlsShortInput(m)).join(' + ')} + ` : '';
+  return `${held}${b.label}`;
+}
+
+/** "js2 button 5" for a modifier's raw input. */
+function controlsShortInput(raw) {
+  const m = /^js(\d+)_button(\d+)$/i.exec(raw);
+  if (m) return `button ${m[2]}`;
+  return raw.replace(/^[a-z]{2}\d+_/, '');
+}
+
+function controlsModeWord(mode) {
+  return { tap: 'tap', hold: 'hold', press: 'press', double_tap: 'double tap', double_tap_nonblocking: 'double tap', delayed_press: 'long press', delayed_press_long: 'long press', delayed_press_medium: 'long press', delayed_press_quicker: 'long press', tap_quicker: 'tap', press_quicker: 'press', hold_no_retrigger: 'hold', all: '' }[mode] ?? (mode || '');
+}
+
+async function renderControlsDevice() {
+  const box = $('#controls-device');
+  const device = controlsSticks().find((d) => d.key === controlsDevice);
+  if (!box || !device) { if (box) box.hidden = true; return; }
+  box.hidden = false;
+
+  $('#controls-device-title').textContent = `${device.product} · ${device.key}`;
+  const usb = device.usb ? `USB ${device.usb.vendor.toString(16).padStart(4, '0')}:${device.usb.product.toString(16).padStart(4, '0')}` : 'no USB id';
+  $('#controls-device-note').textContent = `${usb} · ${device.guid || ''}`;
+
+  // The layout the game ships for this stick, beside the pilot's, if any.
+  const select = $('#controls-layout');
+  const keep = select?.value;
+  if (select) {
+    select.textContent = '';
+    select.append(new Option(device.layouts?.length ? 'Nothing' : 'The game ships no layout for this stick', ''));
+    for (const file of device.layouts || []) {
+      const layout = controlsModel.layouts.find((l) => l.file === file);
+      select.append(new Option(layout?.name || file, file));
+    }
+    select.disabled = !(device.layouts?.length);
+    select.value = (device.layouts || []).includes(keep) ? keep : '';
+  }
+
+  const bound = controlsBindingsOf(device.key, controlsModel.profile.bindings);
+  let reference = null;
+  if (select?.value) {
+    try {
+      const layout = await getJson(`/api/controls/layouts/${encodeURIComponent(select.value)}`);
+      // The layout names the stick by its own instance; match it by product.
+      const theirs = (layout.devices || []).find((d) => d.guid && device.guid && d.guid.toLowerCase() === device.guid.toLowerCase());
+      if (theirs) reference = controlsBindingsOf(theirs.key, layout.bindings);
+    } catch { reference = null; }
+  }
+  $('#controls-layout-head').hidden = !reference;
+
+  // The table: every control the picture names, then anything bound that
+  // the picture does not name, so nothing bound is ever hidden.
+  const svgControls = await renderControlsPicture(device, bound);
+  const q = ($('#controls-search')?.value || '').trim().toLowerCase();
+  const controls = [...svgControls];
+  for (const key of bound.keys()) if (!controls.includes(key)) controls.push(key);
+  if (reference) for (const key of reference.keys()) if (!controls.includes(key)) controls.push(key);
+  controls.sort(controlsControlOrder);
+
+  const body = $('#controls-buttons tbody');
+  body.textContent = '';
+  let shown = 0;
+  for (const control of controls) {
+    const here = bound.get(control) || [];
+    const there = reference?.get(control) || [];
+    const words = here.map((b) => `${controlsBindingWords(b)} ${b.map}`).join(' ');
+    if (q && !`${control} ${words}`.toLowerCase().includes(q)) continue;
+    shown++;
+    const tr = el('tr', here.length ? null : 'controls-unbound');
+    tr.dataset.control = control;
+    tr.append(el('td', 'controls-control', controlsControlLabel(control)));
+    const to = el('td');
+    if (!here.length) to.append(el('span', 'muted', 'nothing'));
+    for (const b of here) {
+      const line = el('div', 'controls-bound');
+      line.append(el('span', null, controlsBindingWords(b)));
+      line.append(el('span', 'armoury-kind', ` ${b.map}${b.category ? ` · ${b.category}` : ''}`));
+      if (!b.known) line.append(el('span', 'controls-unknown', ' not in this build\'s catalogue'));
+      to.append(line);
+    }
+    tr.append(to);
+    tr.append(el('td', 'num muted', here.map((b) => controlsModeWord(b.activationMode)).filter(Boolean).join(', ')));
+    if (reference) {
+      const ref = el('td', there.length ? null : 'muted');
+      ref.textContent = there.length ? there.map(controlsBindingWords).join(', ') : '—';
+      tr.append(ref);
+    }
+    // Change: give the control an action, with a mode if wanted, or take its binding off.
+    const change = el('td', 'controls-change');
+    const mode = controlsModePicker();
+    const pick = controlsActionPicker(here, (choice) => {
+      const input = `${device.key}_${control}`;
+      if (choice === '__remove__') {
+        for (const b of here) controlsStage({ actionMap: b.actionMap, action: b.action, input: b.input.raw, remove: true, label: b.label });
+      } else {
+        controlsStage({ actionMap: choice.actionMap, action: choice.name, input, label: choice.label, activationMode: mode.value || null });
+      }
+    });
+    change.append(pick, mode);
+    tr.append(change);
+    tr.addEventListener('mouseenter', () => controlsHighlight(control, true));
+    tr.addEventListener('mouseleave', () => controlsHighlight(control, false));
+    body.append(tr);
+  }
+  if (!shown) {
+    const td = el('td', 'muted', q ? 'Nothing on this stick matches.' : 'Nothing is bound to this stick and its picture names no controls.');
+    td.colSpan = 5;
+    const tr = el('tr');
+    tr.append(td);
+    body.append(tr);
+  }
+
+  renderControlsAxes(device, bound);
+}
+
+/**
+ * The axes as an editor: for each axis the stick binds, the curve the
+ * profile sets on the action's option group (exponent and invert) and the
+ * dead zone on the axis, with a preview, and Apply. The game keeps the
+ * curve per option group - flight_move_pitch, not "y" - so an axis that
+ * drives two groups gets two rows and a group nothing drives gets none.
+ */
+function renderControlsAxes(device, bound) {
+  const box = $('#controls-axes');
+  box.textContent = '';
+  const catalogue = controlsModel.catalogue;
+  const rows = [];
+  for (const [control, list] of bound) {
+    if (/^(button|hat)/.test(control)) continue;
+    for (const b of list) {
+      const action = catalogue.actions.find((a) => a.actionMap === b.actionMap && a.name === b.action);
+      rows.push({ axis: control, binding: b, group: action?.optionGroup || '' });
+    }
+  }
+  if (!rows.length) return;
+
+  box.append(el('h4', null, 'Axes'));
+  box.append(el('p', 'muted small', 'The curve is the game\'s exponent on the action\'s axis group: 1 is straight, above it the centre goes softer and the ends sharper. The dead zone is on the axis itself. What you set here is written the way a restore is.'));
+  const table = el('table', 'controls-axes-table');
+  const head = el('tr');
+  for (const [label, cls] of [['Axis', null], ['Drives', null], ['Curve', 'num'], ['Invert', null], ['Dead zone', 'num'], ['', null]]) head.append(el('th', cls, label));
+  const thead = el('thead');
+  thead.append(head);
+  table.append(thead);
+  const body = el('tbody');
+  const seenAxis = new Set();
+  for (const r of rows) {
+    const curve = (device.curves || []).find((c) => c.option === r.group) || {};
+    const tr = el('tr');
+    tr.dataset.axis = r.axis;
+    tr.dataset.group = r.group;
+    tr.append(el('td', 'controls-control', `${r.axis} axis`));
+    const drives = el('td', null, r.binding.label);
+    drives.append(el('div', 'armoury-kind', r.group ? r.group.replace(/^flight_/, '').replace(/_/g, ' ') : 'no curve group: the game keeps no curve for this action'));
+    tr.append(drives);
+
+    // An exponent is not a thing anyone has an intuition for. The slider is
+    // the handle, the presets are the answers most people want, and the line
+    // underneath says what the number does in the only terms that matter:
+    // how much you get for half a push.
+    const curveCell = el('td', 'controls-curve-cell');
+    const exponent = el('input', 'controls-exponent');
+    exponent.type = 'number';
+    exponent.min = '0.2';
+    exponent.max = '5';
+    exponent.step = '0.05';
+    exponent.value = String(Math.round((curve.exponent ?? 1) * 100) / 100);
+    exponent.disabled = !r.group;
+
+    const slider = el('input', 'controls-curve-slider');
+    slider.type = 'range';
+    slider.min = '0.4';
+    slider.max = '3';
+    slider.step = '0.05';
+    slider.value = String(Math.min(3, Math.max(0.4, Number(exponent.value) || 1)));
+    slider.disabled = !r.group;
+    slider.title = 'Drag for a softer or sharper centre; the box beside it takes anything the game allows';
+
+    const presets = el('div', 'controls-curve-presets');
+    for (const [name, value] of CONTROLS_CURVE_PRESETS) {
+      const chip = el('button', 'controls-curve-preset', name);
+      chip.type = 'button';
+      chip.dataset.value = String(value);
+      chip.disabled = !r.group;
+      presets.append(chip);
+    }
+
+    const words = el('div', 'controls-curve-words muted');
+    const handle = el('div', 'controls-curve-handle');
+    handle.append(slider, exponent);
+    curveCell.append(handle, presets, words);
+    tr.append(curveCell);
+
+    const invertCell = el('td');
+    const invert = el('input', 'controls-invert');
+    invert.type = 'checkbox';
+    invert.checked = !!curve.inverted;
+    invert.disabled = !r.group;
+    invertCell.append(invert);
+    tr.append(invertCell);
+
+    const dzCell = el('td', 'num');
+    const dz = el('input', 'controls-deadzone');
+    dz.type = 'number';
+    dz.min = '0';
+    dz.max = '50';
+    dz.step = '0.5';
+    const dzNow = device.deadzones?.[r.axis];
+    dz.value = String(dzNow != null ? Math.round(dzNow * 1000) / 10 : 0);
+    // One dead zone per axis: a second row on the same axis shows it, and
+    // the first row's is the one sent.
+    if (seenAxis.has(r.axis)) dz.disabled = true; else seenAxis.add(r.axis);
+    dzCell.append(dz);
+    dzCell.append(el('span', 'muted', ' %'));
+    tr.append(dzCell);
+
+    const preview = el('td');
+    // The chart gets its own holder so redrawing is a replaceChildren on it
+    // rather than a replaceChild against the cell's first node: the live
+    // reading sits in the same cell and would be counted.
+    const chart = el('div', 'controls-curve-holder');
+    chart.append(controlsCurvePreview(Number(exponent.value), invert.checked, Number(dz.value) / 100));
+    preview.append(chart);
+    preview.append(el('span', 'controls-axis-live muted'));
+    const redraw = () => {
+      const e = Number(exponent.value) || 1;
+      const zone = (Number(dz.value) || 0) / 100;
+      chart.replaceChildren(controlsCurvePreview(e, invert.checked, zone));
+      words.textContent = controlsCurveWords(e, zone);
+      for (const chip of presets.querySelectorAll('.controls-curve-preset'))
+        chip.classList.toggle('on', Math.abs(Number(chip.dataset.value) - e) < 0.026);
+    };
+    slider.addEventListener('input', () => { exponent.value = slider.value; redraw(); });
+    exponent.addEventListener('input', () => {
+      const e = Number(exponent.value);
+      if (e >= 0.4 && e <= 3) slider.value = String(e);
+      redraw();
+    });
+    for (const chip of presets.querySelectorAll('.controls-curve-preset'))
+      chip.addEventListener('click', () => { exponent.value = chip.dataset.value; slider.value = chip.dataset.value; redraw(); });
+    invert.addEventListener('change', redraw);
+    dz.addEventListener('input', redraw);
+    redraw();
+    tr.append(preview);
+    body.append(tr);
+  }
+  table.append(body);
+  box.append(table);
+
+  const bar = el('div', 'controls armoury-filters');
+  const apply = el('button', 'ghost', controlsModel.gameRunning ? 'Apply as an import file' : 'Apply to the profile');
+  apply.type = 'button';
+  apply.title = controlsModel.gameRunning
+    ? 'Star Citizen is running: the change is written as a file the keybinding screen imports'
+    : 'Written into the game\'s profile, after keeping it as it is';
+  apply.addEventListener('click', () => controlsApplyAxes(device, apply));
+  bar.append(apply);
+  bar.append(el('span', 'muted small controls-axes-note'));
+  box.append(bar);
+}
+
+/** A small graph of output against input for a curve, with the dead zone as a flat start. */
+/**
+ * The curves worth having, in the app's words rather than the game's.
+ * Below 1 the centre is sharper and the ends softer, which is what a pilot
+ * flying with a short-throw stick asks for; above 1 is the usual fine-control
+ * trade, more room around centre paid for at the stops.
+ */
+const CONTROLS_CURVE_PRESETS = [
+  ['sharper', 0.7],
+  ['straight', 1],
+  ['soft', 1.3],
+  ['softer', 1.8],
+  ['very soft', 2.5],
+];
+
+/**
+ * What an exponent does, in the only terms that mean anything at the stick:
+ * how far the ship goes for half a push, and for most of one. The dead zone
+ * is in it because it moves both, and a reading that ignored it would be
+ * wrong by exactly the amount the pilot just set.
+ */
+function controlsCurveWords(exponent, deadzone) {
+  const out = (x) => {
+    const past = Math.max(0, x - deadzone) / Math.max(0.0001, 1 - deadzone);
+    return Math.round(Math.pow(past, exponent > 0 ? exponent : 1) * 100);
+  };
+  const half = out(0.5);
+  const most = out(0.8);
+  if (Math.abs(exponent - 1) < 0.026 && !deadzone) return 'Straight through: half a push is half the output.';
+  return `Half a push gives ${half}%, four fifths gives ${most}%.`;
+}
+
+function controlsCurvePreview(exponent, inverted, deadzone) {
+  const ns = 'http://www.w3.org/2000/svg';
+  const make = (tag) => (typeof document.createElementNS === 'function' ? document.createElementNS(ns, tag) : el(tag));
+  const svg = make('svg');
+  svg.setAttribute('viewBox', '0 0 64 64');
+  svg.setAttribute('class', 'controls-curve');
+  const axis = make('path');
+  axis.setAttribute('d', 'M0 64 L64 64 M0 0 L0 64 M0 64 L64 0');
+  axis.setAttribute('class', 'controls-curve-axis');
+  svg.append(axis);
+  const points = [];
+  for (let i = 0; i <= 32; i++) {
+    const x = i / 32;
+    const past = Math.max(0, x - deadzone) / Math.max(0.0001, 1 - deadzone);
+    let y = Math.pow(past, exponent > 0 ? exponent : 1);
+    if (inverted) y = -y;
+    points.push(`${(x * 64).toFixed(1)},${(64 - y * 64).toFixed(1)}`);
+  }
+  const line = make('polyline');
+  line.setAttribute('points', points.join(' '));
+  line.setAttribute('class', 'controls-curve-line');
+  svg.append(line);
+  // Where the axis is now, once something is reading it. Pushing the pedal
+  // and watching the dot climb the curve is the whole explanation of what an
+  // exponent does, and it needs no words at all.
+  const dot = make('circle');
+  dot.setAttribute('r', '3.5');
+  dot.setAttribute('class', 'controls-curve-dot');
+  dot.setAttribute('cx', '-10');
+  dot.setAttribute('cy', '-10');
+  svg.append(dot);
+  return svg;
+}
+
+async function controlsApplyAxes(device, button) {
+  const note = $('#controls-axes .controls-axes-note');
+  const curves = [];
+  const deadzones = {};
+  for (const tr of $('#controls-axes')?.querySelectorAll?.('tr') || []) {
+    if (!tr.dataset?.axis) continue;
+    const exponent = tr.querySelector('.controls-exponent');
+    const invert = tr.querySelector('.controls-invert');
+    const dz = tr.querySelector('.controls-deadzone');
+    if (tr.dataset.group && exponent && !exponent.disabled)
+      curves.push({ option: tr.dataset.group, exponent: Number(exponent.value) || 1, inverted: !!invert?.checked });
+    if (dz && !dz.disabled) deadzones[tr.dataset.axis] = Math.max(0, Number(dz.value) || 0) / 100;
+  }
+  button.disabled = true;
+  try {
+    const response = await fetch('/api/controls/axes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instance: device.instance, curves, deadzones, how: controlsModel.gameRunning ? 'export' : 'live' }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) { note.textContent = result.message || result.title || `Could not apply (${response.status}).`; return; }
+    note.textContent = result.how === 'live'
+      ? 'Written to the profile; the game reads it at its next start. The profile as it was is kept under Backups.'
+      : `Written as ${result.mappings}. In the game: Options → Keybindings → import "${result.name}", or at the console: ${result.command}.`;
+    if (result.how === 'live') await loadControls();
+  } catch (err) {
+    note.textContent = `Could not apply: ${err.message}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function controlsControlOrder(a, b) {
+  const rank = (c) => (/^button/.test(c) ? 0 : /^hat/.test(c) ? 1 : 2);
+  const num = (c) => Number((/(\d+)/.exec(c) || [0, 0])[1]);
+  return rank(a) - rank(b) || num(a) - num(b) || a.localeCompare(b);
+}
+
+function controlsControlLabel(control) {
+  let m = /^button(\d+)$/.exec(control);
+  if (m) return `Button ${m[1]}`;
+  m = /^hat(\d+)_(\w+)$/.exec(control);
+  if (m) return `Hat ${m[1]} ${m[2]}`;
+  return `${control} axis`;
+}
+
+/**
+ * Draws the stick. The SVG is fetched as text and parsed here rather than
+ * shown in an img, because the bindings have to be written into it: every
+ * text node whose content is a placeholder gets the action bound to that
+ * control, or a dash. Returns the controls the picture names.
+ */
+async function renderControlsPicture(device, bound) {
+  const holder = $('#controls-svg');
+  const note = $('#controls-picture-note');
+  holder.textContent = '';
+  if (!device.template) {
+    // The fix is offered where the gap is: fetch the library from here, or
+    // pick a picture from here, rather than a pointer to another pane.
+    note.textContent = '';
+    const t = controlsModel.templates || {};
+    if (!t.enabled && !(t.available || []).length) {
+      note.append(el('span', null, 'No picture yet: the library is off. '));
+      const fetchButton = el('button', 'ghost small', 'Fetch the pictures');
+      fetchButton.type = 'button';
+      fetchButton.title = 'Joystick Diagrams\' template library, 45 sticks, throttles and panels - fetched from GitHub and kept';
+      fetchButton.addEventListener('click', () => controlsFetchLibrary(fetchButton));
+      note.append(fetchButton);
+    } else {
+      note.append(el('span', null, 'No picture matched to this stick. '));
+      const pick = el('select', 'select');
+      pick.append(new Option('Pick one…', ''));
+      let maker = null;
+      let group = null;
+      for (const x of t.available || []) {
+        if (x.maker !== maker) { maker = x.maker; group = el('optgroup'); group.label = maker || 'Library'; pick.append(group); }
+        group.append(new Option(x.name, x.key));
+      }
+      pick.addEventListener('change', async () => {
+        if (!pick.value) return;
+        await fetch('/api/controls/templates/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guid: device.guid, key: pick.value }) });
+        await loadControls();
+      });
+      note.append(pick);
+    }
+    return controlsDrawGrid(holder, device, bound);
+  }
+  note.textContent = `${device.template.name} · ${device.template.maker === 'yours' ? 'your own picture' : 'Joystick Diagrams'}`;
+
+  let text;
+  try {
+    // Older responses were cached for a day and had not been sanitized.
+    const response = await fetch(`/api/controls/template?key=${encodeURIComponent(device.template.key)}&safe=1`, { cache: 'no-store' });
+    if (!response.ok) throw new Error(String(response.status));
+    text = await response.text();
+  } catch {
+    note.textContent = `${device.template.name} · the picture could not be fetched`;
+    return [];
+  }
+
+  const drawn = controlsDrawSvg(holder, text, bound, device.product);
+  const misfit = controlsPictureMisfit(device, drawn, bound, controlsLiveDevice(device));
+  if (misfit) {
+    const warn = el('div', 'controls-picture-misfit');
+    warn.append(el('span', null, misfit + ' '));
+    const drop = el('button', 'ghost small', 'take the picture off');
+    drop.type = 'button';
+    drop.title = "Draw the numbered grid from this stick's own counts instead";
+    drop.addEventListener('click', async () => {
+      await fetch('/api/controls/templates/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guid: device.guid, key: '' }) });
+      await loadControls();
+    });
+    warn.append(drop);
+    note.append(warn);
+  }
+  return drawn;
+}
+
+/**
+ * The checklist holds two different promises apart: the actions a pilot says
+ * matter, and defaults the game recommends for this hardware. Calling both
+ * "mandatory" would make a pilot's preference sound like a game requirement.
+ *
+ * The counts are shown even - especially - when the list is empty, because
+ * "nothing missing" out of 119 reference bindings is an answer and "nothing
+ * missing" out of nothing is a bug, and the two look identical otherwise.
+ */
+async function loadControlsCheck() {
+  const list = $('#controls-check-list');
+  const counts = $('#controls-check-counts');
+  const note = $('#controls-check-note');
+  const again = $('#controls-check-again');
+  if (!list) return;
+  list.textContent = '';
+  counts.textContent = '';
+  note.textContent = 'Reading the profile…';
+
+  let result;
+  try { result = await getJson('/api/controls/check'); }
+  catch { note.textContent = 'The check could not be run.'; return; }
+
+  if (!result.ready) { note.textContent = result.reason || 'Not ready.'; return; }
+
+  const c = result.counts || {};
+  const names = result.names || {};
+  const against = (result.sources || []).map((f) => names[f] || f);
+  note.textContent = against.length
+    ? `Against ${against.join(' and ')}.`
+    : 'The game ships no reference layout for any stick in your profile, so there is nothing to check against.';
+
+  const pins = controlsChecklistPins.map((pin) => {
+    const action = controlsModel?.catalogue?.actions?.find((a) => a.actionMap === pin.actionMap && a.name === pin.action);
+    const map = controlsModel?.catalogue?.maps?.find((m) => m.name === pin.actionMap);
+    const bindings = (controlsModel?.profile?.bindings || []).filter((b) => b.actionMap === pin.actionMap && b.action === pin.action && b.input?.device === 'js' && b.input.kind !== 'none');
+    return { ...pin, label: action?.label || pin.label || pin.action, map: map?.label || pin.map || pin.actionMap, bindings };
+  });
+  const pinGaps = pins.filter((pin) => !pin.bindings.length);
+  const gaps = result.gaps || [];
+
+  for (const [label, value, why, hot] of [
+    ['important to you', pins.length, 'actions you chose to keep in view', false],
+    ['important unassigned', pinGaps.length, 'important actions with no joystick binding', pinGaps.length > 0],
+    ['game defaults missing', gaps.length, 'actions in the game’s layout that your profile does not bind', gaps.length > 0],
+    ['already bound', c.bound, 'game-layout defaults you have somewhere on your sticks', false],
+    ['you took off', c.cleared, 'defaults you cleared on purpose, so they are not suggestions', false],
+    ['renamed since', c.undefined, 'layout actions this patch no longer knows by that name', false],
+    ['layouts checked', c.reference, 'bindings in the game’s own layouts for your sticks', false],
+  ]) {
+    if (value === undefined) continue;
+    const cell = el('div', `controls-check-count${hot ? ' hot' : ''}`);
+    cell.append(el('b', null, String(value)));
+    cell.append(el('span', null, label));
+    cell.title = why;
+    counts.append(cell);
+  }
+
+  again.hidden = !(c.dismissed > 0);
+
+  const dashboard = el('div', 'controls-check-dashboard');
+  const important = el('section', 'controls-check-section controls-check-important');
+  important.append(el('h4', null, 'Important to you'));
+  important.append(el('p', 'muted small', 'Choose the actions you want to find quickly. They stay here with their joystick status.'));
+  const add = controlsActionPicker([], (action) => {
+    if (!controlsChecklistPins.some((pin) => pin.actionMap === action.actionMap && pin.action === action.name)) {
+      controlsChecklistPins.push({ actionMap: action.actionMap, action: action.name, label: action.label });
+      controlsSaveChecklistPins();
+    }
+    loadControlsCheck().catch(() => {});
+  });
+  add.classList.add('controls-check-add');
+  important.append(add);
+  const importantList = el('div', 'controls-check-important-list');
+  if (!pins.length) {
+    importantList.append(el('p', 'muted small', 'No important actions chosen yet. Search or browse above to add one.'));
+  }
+  for (const pin of pins) {
+    const row = el('div', `controls-check-priority-row${pin.bindings.length ? '' : ' unassigned'}`);
+    const head = el('div', 'controls-check-what');
+    head.append(el('b', null, pin.label));
+    head.append(el('span', 'armoury-kind', ` ${pin.map}`));
+    row.append(head);
+    const status = pin.bindings.length
+      ? pin.bindings.map((b) => `${controlsSticks().find((d) => d.key === b.input.deviceKey)?.product || b.input.deviceKey} · ${controlsInputWords(b.input.raw)}`).join(', ')
+      : 'Not assigned to a joystick';
+    row.append(el('div', `controls-check-where${pin.bindings.length ? '' : ' controls-check-unassigned'}`, status));
+    const doing = el('div', 'controls-check-do');
+    if (!pin.bindings.length) {
+      const assign = el('button', 'ghost small', 'find it');
+      assign.type = 'button';
+      assign.title = 'Open the Actions page filtered to this action';
+      assign.addEventListener('click', () => {
+        const search = $('#controls-search');
+        if (search) search.value = pin.label;
+        renderControlsActions();
+        showControlsPane('actions');
+      });
+      doing.append(assign);
+    }
+    const remove = el('button', 'ghost small', 'remove');
+    remove.type = 'button';
+    remove.title = 'Remove this action from your important-controls list';
+    remove.addEventListener('click', () => {
+      controlsChecklistPins = controlsChecklistPins.filter((p) => !(p.actionMap === pin.actionMap && p.action === pin.action));
+      controlsSaveChecklistPins();
+      loadControlsCheck().catch(() => {});
+    });
+    doing.append(remove);
+    row.append(doing);
+    importantList.append(row);
+  }
+  important.append(importantList);
+  dashboard.append(important);
+
+  const defaults = el('section', 'controls-check-section controls-check-defaults');
+  defaults.append(el('h4', null, 'Game-recommended defaults'));
+  defaults.append(el('p', 'muted small', against.length
+    ? 'The game puts these on your hardware in its own layout. Stage only the ones you want.'
+    : 'The game ships no reference layout for your sticks, so there is nothing to compare.'));
+  const defaultsList = el('div', 'controls-check-defaults-list');
+  if (!gaps.length && against.length) {
+    defaultsList.append(el('p', 'muted small', 'Nothing missing. Every default the game recommends is either assigned or one you removed on purpose.'));
+  }
+  for (const gap of gaps) {
+    const row = el('div', 'controls-check-row');
+    const head = el('div', 'controls-check-what');
+    head.append(el('b', null, gap.label));
+    head.append(el('span', 'armoury-kind', ` ${gap.map}`));
+    row.append(head);
+    row.append(el('div', 'controls-check-where', `${gap.product || gap.deviceKey} · the game puts it on ${controlsInputWords(gap.suggested)}`));
+
+    const doing = el('div', 'controls-check-do');
+    const add = el('button', 'ghost small', 'stage it');
+    add.type = 'button';
+    add.title = 'Add it to the pending changes, to apply with everything else';
+    add.addEventListener('click', () => {
+      controlsStage({ actionMap: gap.actionMap, action: gap.action, input: gap.suggested, label: gap.label });
+      add.disabled = true;
+      add.textContent = 'staged';
+    });
+    doing.append(add);
+
+    const no = el('label', 'controls-check-no');
+    const box = el('input');
+    box.type = 'checkbox';
+    box.addEventListener('change', async () => {
+      await fetch('/api/controls/check/dismiss', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: `${gap.deviceKey}/${gap.actionMap}/${gap.action}`, dismissed: box.checked }),
+      });
+      await loadControlsCheck();
+    });
+    no.append(box, el('span', null, 'I do not want this'));
+    doing.append(no);
+    row.append(doing);
+    defaultsList.append(row);
+  }
+  defaults.append(defaultsList);
+  dashboard.append(defaults);
+  list.append(dashboard);
+}
+
+$('#controls-check-again')?.addEventListener('click', async () => {
+  await fetch('/api/controls/check/ask-again', { method: 'POST' });
+  await loadControlsCheck();
+});
+
+/** An input as the game writes it, in words a pilot reads: js4_button10 -> button 10. */
+function controlsInputWords(raw) {
+  const m = /^(?:js|kb|mo|gp)\d*_(.*)$/.exec(String(raw || ''));
+  const control = m ? m[1] : String(raw || '');
+  const button = /^button(\d+)$/.exec(control);
+  if (button) return `button ${button[1]}`;
+  const hat = /^hat(\d+)_(\w+)$/.exec(control);
+  if (hat) return `hat ${hat[1]} ${hat[2]}`;
+  return control || 'nothing';
+}
+
+/**
+ * Whether the picture is of this stick at all, in words, or null when
+ * nothing says otherwise.
+ *
+ * A picture is chosen by hand and nothing stopped a rudder being given a
+ * joystick: a Virpil grip drew thirty empty buttons over a T-Pendular-Rudder,
+ * whose profile binds three axes and no button at all, and the page said only
+ * which picture it was. The library has no pedals in it, so for that stick
+ * there is no right answer and the app should say so rather than draw a
+ * confident wrong one.
+ *
+ * The live counts settle it when they are there. Without them the profile is
+ * the only witness and it can only ever be a doubt - a stick can carry buttons
+ * nobody has bound - so the wording stays a doubt and names what would settle it.
+ */
+function controlsPictureMisfit(device, drawn, bound, live) {
+  const named = (drawn || []).filter((c) => /^button\d+$/.test(c)).length;
+  if (!named) return null;
+  const product = device.product || 'this stick';
+  if (live && Number.isFinite(live.buttonCount)) {
+    if (live.buttonCount === 0)
+      return `This picture draws ${named} buttons and ${product} reports none, so it is a picture of a different device.`;
+    if (named > live.buttonCount)
+      return `This picture draws ${named} buttons and ${product} reports ${live.buttonCount}, so some of it belongs to a different device.`;
+    return null;
+  }
+  const keys = [...(bound?.keys?.() || [])];
+  const buttons = keys.filter((c) => /^button\d+$/.test(c)).length;
+  const axes = keys.filter((c) => !/^(button|hat)/.test(c)).length;
+  if (buttons || !axes) return null;
+  return `This picture draws ${named} buttons, and nothing on ${product} is bound to a button - only ${axes} ${axes === 1 ? 'axis' : 'axes'}. It may be a picture of a different device; the live read would say for certain.`;
+}
+
+/**
+ * The stand-in for a stick nobody has drawn: the numbered buttons of the
+ * Windows game-controller panel, lit where something is bound, with the
+ * hats as crosses and the axes as bars. How many buttons the stick has is
+ * not known without the live read, so the grid runs to the highest number
+ * the profile mentions, rounded to a full row, and says so.
+ */
+function controlsDrawGrid(holder, device, bound) {
+  const controls = [];
+  const buttons = [...bound.keys()].map((c) => /^button(\d+)$/.exec(c)).filter(Boolean).map((m) => Number(m[1]));
+  const hats = [...new Set([...bound.keys()].map((c) => /^hat(\d+)_/.exec(c)).filter(Boolean).map((m) => Number(m[1])))];
+  const axes = [...bound.keys()].filter((c) => !/^(button|hat)/.test(c));
+  const highest = buttons.length ? Math.max(...buttons) : 0;
+  // The live read knows the true count; without it, the highest number the
+  // profile mentions, rounded to a row.
+  //
+  // But the floor of 8 was a joystick talking. A rudder has three axes and no
+  // buttons at all, and the stand-in drew it eight empty ones and put its
+  // pedals underneath as a footnote - the same wrong shape the Virpil picture
+  // gave it. Nothing bound and nothing read means no button grid: the axes are
+  // the device, so they are all it draws.
+  const live = controlsLiveDevice(device);
+  const count = live ? live.buttonCount : (buttons.length ? Math.max(8, Math.ceil(highest / 8) * 8) : 0);
+  const liveHats = live ? live.hatCount : 0;
+
+  const grid = el('div', 'controls-grid');
+  if (count > 0) grid.append(el('div', 'controls-grid-title', live
+    ? `Buttons · ${count}, as Windows reports the stick`
+    : `Buttons · to ${count}, the highest your profile mentions being ${highest || 'none'}`));
+  const cells = el('div', 'controls-grid-buttons');
+  for (let i = 1; i <= count; i++) {
+    const control = `button${i}`;
+    controls.push(control);
+    const here = bound.get(control) || [];
+    const cell = el('div', `controls-grid-button${here.length ? ' bound' : ''}`, String(i));
+    cell.dataset.control = control;
+    cell.title = here.length ? here.map(controlsBindingWords).join(' / ') : 'nothing bound';
+    if (here.length) cell.append(el('span', 'controls-grid-label', here.map((b) => b.label).join(' / ')));
+    cells.append(cell);
+  }
+  if (count > 0) grid.append(cells);
+
+  for (let h = 1; h <= liveHats; h++) if (!hats.includes(h)) hats.push(h);
+  hats.sort((a, b) => a - b);
+  for (const hat of hats) {
+    const cross = el('div', 'controls-grid-hat');
+    cross.append(el('div', 'controls-grid-title', `Hat ${hat}`));
+    const pad = el('div', 'controls-grid-cross');
+    for (const dir of ['up', 'left', 'right', 'down']) {
+      const control = `hat${hat}_${dir}`;
+      controls.push(control);
+      const here = bound.get(control) || [];
+      const cell = el('div', `controls-grid-button ${dir}${here.length ? ' bound' : ''}`, { up: '▲', down: '▼', left: '◀', right: '▶' }[dir]);
+      cell.dataset.control = control;
+      cell.title = here.length ? here.map(controlsBindingWords).join(' / ') : 'nothing bound';
+      pad.append(cell);
+    }
+    cross.append(pad);
+    grid.append(cross);
+  }
+
+  // The live read knows every axis the device has; without it only the bound
+  // ones are known to exist, so the two lists are unioned rather than one
+  // replacing the other.
+  const shown = [...axes];
+  if (live) for (const name of CONTROLS_AXIS_ORDER.slice(0, live.axisCount || 0))
+    if (!shown.includes(name)) shown.push(name);
+  shown.sort((a, b) => CONTROLS_AXIS_ORDER.indexOf(a) - CONTROLS_AXIS_ORDER.indexOf(b));
+
+  if (shown.length) {
+    const bars = el('div', 'controls-grid-axes');
+    bars.append(el('div', 'controls-grid-title', live
+      ? `Axes · ${live.axisCount}, as Windows reports the device`
+      : `Axes · ${shown.length} your profile binds`));
+    for (const axis of shown) {
+      controls.push(axis);
+      bars.append(controlsAxisGauge(device, axis, bound.get(axis) || []));
+    }
+    grid.append(bars);
+  }
+
+  grid.append(el('p', 'muted small', controlsGridWords(count, axes.length, live)));
+  holder.append(grid);
+  return controls;
+}
+
+/**
+ * What the stand-in is, in a sentence that matches what it actually drew.
+ * A rudder gets no button grid, so telling it the buttons are numbered as
+ * Windows numbers them would be describing a thing that is not on the page.
+ */
+function controlsGridWords(buttons, axes, live) {
+  if (!buttons && axes)
+    return live
+      ? 'A stand-in until a picture is chosen. Windows reports no buttons on this device, so its axes are all there is to draw.'
+      : 'A stand-in until a picture is chosen. Nothing on this device is bound to a button - only axes - so only its axes are drawn. The live read would say whether it has buttons nobody has used.';
+  if (!buttons && !axes)
+    return live
+      ? 'Windows reports no buttons and no axes on this device.'
+      : 'Nothing in your profile binds anything on this device, and the sticks cannot be read here, so there is nothing to draw yet.';
+  return live
+    ? 'A stand-in until a picture is chosen: the buttons as Windows numbers them, red where your profile binds something, outlined while pressed.'
+    : 'A stand-in until a picture is chosen: the buttons as Windows numbers them, lit where your profile binds something. Only the ones the profile mentions are certain; the stick may have more.';
+}
+
+/** The order Windows reports axes in, which is how a live reading is indexed. */
+const CONTROLS_AXIS_ORDER = ['x', 'y', 'z', 'rotx', 'roty', 'rotz', 'slider1', 'slider2'];
+
+/** An axis in words: the game's name is terse and the same for every device. */
+function controlsAxisWords(axis) {
+  const rot = /^rot([xyz])$/.exec(axis);
+  if (rot) return `rotation ${rot[1].toUpperCase()}`;
+  const slider = /^slider(\d+)$/.exec(axis);
+  if (slider) return `slider ${slider[1]}`;
+  return /^[xyz]$/.test(axis) ? `${axis.toUpperCase()} axis` : axis;
+}
+
+/**
+ * One axis drawn rather than listed: a track with its centre marked, the
+ * dead zone the profile sets shaded around it, and a needle the live read
+ * moves.
+ *
+ * A rudder is three axes and nothing else, so a two-column list of names was
+ * the whole of its picture, and it read as a table of contents for a page
+ * that was not there. This is the same information as a shape, and it costs
+ * a joystick nothing - its axes were drawn the same flat way.
+ */
+function controlsAxisGauge(device, axis, here) {
+  const row = el('div', `controls-axis-gauge${here.length ? ' bound' : ''}`);
+  row.dataset.control = axis;
+  row.append(el('div', 'controls-axis-gauge-name', controlsAxisWords(axis)));
+
+  const track = el('div', 'controls-axis-track');
+  const dead = Number(device.deadzones?.[axis]) || 0;
+  if (dead > 0) {
+    // The game's dead zone is a fraction of the half-travel either side of
+    // centre, which is why it is drawn from the middle outwards both ways.
+    const band = el('div', 'controls-axis-dead');
+    band.style.left = `${Math.max(0, 50 - dead * 50)}%`;
+    band.style.width = `${Math.min(100, dead * 100)}%`;
+    band.title = `dead zone ${Math.round(dead * 1000) / 10}%`;
+    track.append(band);
+  }
+  track.append(el('div', 'controls-axis-centre'));
+  const needle = el('div', 'controls-axis-needle');
+  needle.hidden = true;
+  track.append(needle);
+  row.append(track);
+
+  row.append(el('div', `controls-axis-gauge-what${here.length ? '' : ' muted'}`,
+    here.length ? here.map((b) => b.label).join(' / ') : 'nothing bound'));
+  return row;
+}
+
+/**
+ * Fits a name into the template's box. The boxes were drawn for a word or
+ * two; the font shrinks to what the width allows, and below a readable
+ * size the name is cut with an ellipsis instead - the table has it whole,
+ * and the full name is the hover.
+ */
+function controlsFitLabel(node, words) {
+  const isSvg = node.namespaceURI === 'http://www.w3.org/2000/svg';
+  // draw.io shows the HTML label inside a foreignObject when it can and the
+  // SVG text otherwise; the box width is the foreignObject's, or the rect
+  // beside the text.
+  // draw.io puts the box's width on an inline style a few divs up from the
+  // HTML label, and the box itself is a rect a few groups up from either.
+  let width = 0;
+  if (!isSvg) {
+    for (let up = node, i = 0; up && i < 6; up = up.parentElement, i++) {
+      const w = parseFloat(up.style?.width);
+      if (w > 0) { width = w; break; }
+    }
+  }
+  // The walk can reach past the label's own box to the diagram's background -
+  // 827x1168 on the Warthog throttle - and a "box" that size makes every label
+  // look like it fits, so an SVG label never shrank at all. A label box is a
+  // small part of the drawing; anything above a third of it is not one.
+  const root = node.closest?.('svg') || node.ownerSVGElement || null;
+  const diagram = root
+    ? Number(root.getAttribute('width')) || Number((root.getAttribute('viewBox') || '').split(/[\s,]+/)[2]) || 0
+    : 0;
+  for (let up = node.parentElement, i = 0; up && i < 8; up = up.parentElement, i++) {
+    const rect = [...up.children || []].find((c) => c.nodeName.toLowerCase() === 'rect');
+    if (!rect) continue;
+    const w = Number(rect.getAttribute('width')) || 0;
+    if (diagram && w > diagram / 3) break;
+    if (!width) width = w;
+    break;
+  }
+  if (!width) width = 90;
+  const usable = Math.max(20, width - 8);
+  const perChar = 0.56;
+  // SVG text cannot wrap; an HTML label can take a second line when the box is tall enough.
+  // An HTML label wraps and an SVG text cannot, and that is the whole of it.
+  // The box's own height is not reachable: draw.io leaves it off the label and
+  // the walk upwards finds the diagram's background rect instead, so reading a
+  // height there once said every box was 1168 tall.
+  const maxLines = isSvg ? 1 : 2;
+  // Dividing the whole string by the line width says "Landing System (Toggle)"
+  // is two lines in 70px. A browser cannot break a word, so it is three, and
+  // the third spilled out of the box. Pack word by word the way one does.
+  const fits = (size) => {
+    const em = perChar * size;
+    let lines = 1;
+    let run = 0;
+    for (const word of String(words).split(/\s+/).filter(Boolean)) {
+      const w = word.length * em;
+      if (w > usable) return false; // a word wider than the line spills whatever we do
+      if (!run) run = w;
+      else if (run + em + w <= usable) run += em + w;
+      else { lines++; run = w; }
+    }
+    return lines <= maxLines;
+  };
+  let size = 10;
+  while (size > 6.5 && !fits(size)) size -= 0.5;
+  let text = words;
+  if (!fits(size)) {
+    const chars = Math.max(4, Math.floor((usable * maxLines) / (perChar * size)) - 1);
+    if (chars < words.length) text = `${words.slice(0, chars).trimEnd()}…`;
+  }
+  node.textContent = text;
+  const px = `${Math.round(size * 10) / 10}px`;
+  if (isSvg) {
+    node.setAttribute('font-size', px);
+    const title = node.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'title');
+    title.textContent = words;
+    node.append(title);
+  } else {
+    node.style.fontSize = px;
+    node.style.lineHeight = '1.1';
+    node.style.whiteSpace = 'normal';
+    node.style.overflowWrap = 'anywhere';
+    node.title = words;
+  }
+}
+
+/** Writes the bindings into a template's placeholders; the part a test can drive with a string. */
+function controlsDrawSvg(holder, svgText, bound, deviceName) {
+  // The test harness has no parser; the placeholder mapping is tested on its own.
+  if (typeof DOMParser === 'undefined') return [];
+  const parsed = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+  const svg = parsed.documentElement;
+  if (!svg || svg.nodeName.toLowerCase() !== 'svg') return [];
+  // draw.io exports both the rich HTML label and a plain SVG fallback in each
+  // switch. A browser that can render foreignObject must see only the rich
+  // label: rewriting both puts two copies of a long device name in one box.
+  for (const choice of svg.querySelectorAll('switch')) {
+    if (!choice.querySelector('foreignObject')) continue;
+    for (const fallback of [...choice.children])
+      if (fallback.nodeName.toLowerCase() === 'text') fallback.remove();
+  }
+  const controls = [];
+  const texts = [...svg.querySelectorAll('text, tspan, div, span')].filter((n) => !n.children.length || n.nodeName.toLowerCase() === 'text');
+  for (const node of texts) {
+    if (String(node.textContent).trim() === 'TEMPLATE_NAME') { controlsFitLabel(node, deviceName || ''); continue; }
+    const control = controlsPlaceholderToControl(node.textContent);
+    if (!control) continue;
+    if (!controls.includes(control)) controls.push(control);
+    const here = bound.get(control) || [];
+    node.setAttribute('data-control', control);
+    node.classList?.add('controls-slot');
+    if (here.length) {
+      controlsFitLabel(node, here.map(controlsBindingWords).join(' / '));
+      node.classList?.add('bound');
+    } else {
+      node.textContent = '—';
+      node.classList?.add('empty');
+    }
+  }
+  svg.removeAttribute('width');
+  svg.removeAttribute('height');
+  svg.setAttribute('preserveAspectRatio', 'xMidYMin meet');
+  holder.append(document.adoptNode ? document.adoptNode(svg) : svg);
+  return controls;
+}
+
+function controlsHighlight(control, on) {
+  // By class then by data attribute, rather than an attribute selector: the
+  // grid cells and the template's labels both carry the class, and the
+  // test harness has no attribute selectors.
+  const holder = $('#controls-svg');
+  for (const cls of ['.controls-grid-button', '.controls-slot', '.controls-grid-axis'])
+    for (const node of holder?.querySelectorAll?.(cls) || [])
+      if ((node.dataset?.control ?? node.getAttribute?.('data-control')) === control) node.classList?.toggle('lit', on);
+  for (const tr of $('#controls-buttons tbody')?.children || [])
+    if (tr.dataset?.control === control) tr.classList?.toggle('lit', on);
+}
+
+/* ---------- the live read ---------- */
+
+/**
+ * While the Sticks pane is open, the sticks are read ten times a second
+ * and whatever is pressed lights on the picture and in the table. Under
+ * the bare server there is nothing to read, and the pane says so once.
+ * The read is matched to the open stick by product GUID; two sticks of
+ * one product cannot be told apart and the pane says that too.
+ */
+let controlsLive = null;
+let controlsLiveTimer = null;
+let controlsLiveLit = new Set();
+
+function controlsLiveWanted() {
+  // Ten reads a second is cheap to look at and not cheap to leave running: a
+  // second-screen dashboard gets left open, and a hidden tab cannot show a lit
+  // button to anyone. document.hidden is read defensively - the WebTests' stub
+  // document has no visibility to report, and a missing one means visible.
+  if (typeof document !== 'undefined' && document.hidden === true) return false;
+  return controlsPane === 'devices' && $('#view-controls')?.classList.contains('active') && !!controlsModel?.ready;
+}
+
+async function controlsLiveTick() {
+  if (!controlsLiveWanted()) { controlsLiveStop(); return; }
+  try {
+    controlsLive = await getJson('/api/controls/live');
+  } catch {
+    controlsLive = null;
+  }
+  paintControlsLive();
+  if (controlsLiveWanted()) controlsLiveTimer = setTimeout(controlsLiveTick, controlsLive?.available ? 100 : 5000);
+}
+
+function controlsLiveStart() {
+  if (controlsLiveTimer) return;
+  controlsLiveTimer = setTimeout(controlsLiveTick, 0);
+}
+
+// Hiding the tab stops the poll, so showing it again has to start one: the
+// tick that noticed the tab was hidden cleared the timer on its way out and
+// nothing else on the page is watching for it to come back.
+document.addEventListener?.('visibilitychange', () => {
+  if (controlsLiveWanted()) controlsLiveStart(); else controlsLiveStop();
+});
+
+function controlsLiveStop() {
+  if (controlsLiveTimer) clearTimeout(controlsLiveTimer);
+  controlsLiveTimer = null;
+  for (const control of controlsLiveLit) controlsHighlight(control, false);
+  controlsLiveLit = new Set();
+}
+
+/** The live device for the open stick, or null; two of one product is ambiguous and reads as none. */
+function controlsLiveDevice(device) {
+  if (!controlsLive?.available || !device?.guid) return null;
+  const same = (controlsLive.devices || []).filter((d) => d.guid && d.guid.toLowerCase() === device.guid.toLowerCase());
+  return same.length === 1 ? same[0] : null;
+}
+
+/** What a reading says is active on a stick, as the game's control names. */
+function controlsLiveControls(reading) {
+  const controls = [];
+  for (const b of reading.pressed || []) controls.push(`button${b}`);
+  (reading.hats || []).forEach((h, i) => {
+    if (!h) return;
+    for (const dir of h.split('-')) controls.push(`hat${i + 1}_${dir}`);
+  });
+  return controls;
+}
+
+function paintControlsLive() {
+  const note = $('#controls-live-note');
+  const device = controlsSticks().find((d) => d.key === controlsDevice);
+  if (!note) return;
+  if (!controlsLive) { note.textContent = ''; return; }
+  if (!controlsLive.available) {
+    note.textContent = controlsLive.reason || 'The sticks cannot be read here.';
+    return;
+  }
+  const live = controlsLiveDevice(device);
+  const twins = device?.guid ? (controlsLive.devices || []).filter((d) => d.guid?.toLowerCase() === device.guid.toLowerCase()).length : 0;
+  if (!live) {
+    note.textContent = twins > 1
+      ? `Two of this product are plugged in; Windows cannot say which is ${device.key}, so nothing is lit.`
+      : device?.guid ? 'This stick is not plugged in right now.' : '';
+    for (const control of controlsLiveLit) controlsHighlight(control, false);
+    controlsLiveLit = new Set();
+    return;
+  }
+  const active = new Set(controlsLiveControls(live));
+  const words = [...active].map(controlsControlLabel);
+  note.textContent = `Live · ${live.buttonCount} buttons, ${live.axisCount} axes, ${live.hatCount} hat${live.hatCount === 1 ? '' : 's'} · ${words.length ? `pressed: ${words.join(', ')}` : 'press a button to see it'}`;
+  for (const control of controlsLiveLit) if (!active.has(control)) controlsHighlight(control, false);
+  for (const control of active) if (!controlsLiveLit.has(control)) controlsHighlight(control, true);
+  controlsLiveLit = active;
+  // Axis values, on the editor's rows.
+  const names = CONTROLS_AXIS_ORDER;
+  const reading = (axis) => {
+    const i = names.indexOf(axis);
+    return i >= 0 && i < (live.axes || []).length ? live.axes[i] : null;
+  };
+  for (const tr of $('#controls-axes')?.querySelectorAll?.('tr') || []) {
+    if (!tr.dataset?.axis) continue;
+    const meter = tr.querySelector('.controls-axis-live');
+    if (!meter) continue;
+    const value = reading(tr.dataset.axis);
+    meter.textContent = value == null ? '' : value.toFixed(2);
+    const dot = tr.querySelector('.controls-curve-dot');
+    if (dot) {
+      // The preview draws one half; the curve is symmetric, so how far the
+      // axis is from centre is all it needs.
+      const away = value == null ? null : Math.min(1, Math.abs(value));
+      const e = Number(tr.querySelector('.controls-exponent')?.value) || 1;
+      const zone = (Number(tr.querySelector('.controls-deadzone')?.value) || 0) / 100;
+      if (away == null) { dot.setAttribute('cx', '-10'); dot.setAttribute('cy', '-10'); }
+      else {
+        const past = Math.max(0, away - zone) / Math.max(0.0001, 1 - zone);
+        dot.setAttribute('cx', (away * 64).toFixed(1));
+        dot.setAttribute('cy', (64 - Math.pow(past, e > 0 ? e : 1) * 64).toFixed(1));
+      }
+    }
+  }
+  // ...and the needle on the stand-in's gauges, when there is no picture.
+  for (const row of $('#controls-svg')?.querySelectorAll?.('.controls-axis-gauge') || []) {
+    const needle = row.querySelector('.controls-axis-needle');
+    if (!needle) continue;
+    const value = reading(row.dataset?.control);
+    needle.hidden = value == null;
+    if (value != null) needle.style.left = `${Math.min(100, Math.max(0, (value + 1) * 50))}%`;
+  }
+}
+
+/* ---------- changing bindings ---------- */
+
+/**
+ * Changes are staged, from either pane, and written together: one write
+ * to the profile with the game closed, or one import file with it open.
+ * A change is keyed by action and device, since the game keeps one binding
+ * per device per action - staging a second control for the same action on
+ * the same stick replaces the first.
+ */
+let controlsPending = [];
+
+function controlsStage(change) {
+  const key = (c) => `${c.actionMap}/${c.action}/${ControlInput_deviceKey(c.input)}`;
+  controlsPending = controlsPending.filter((c) => key(c) !== key(change));
+  controlsPending.push(change);
+  renderControlsPending();
+}
+
+/** js4 from js4_button7, without parsing the rest. */
+function ControlInput_deviceKey(raw) {
+  const m = /^([a-z]{2}\d+)_/i.exec(raw || '');
+  return m ? m[1].toLowerCase() : '';
+}
+
+function controlsUnstage(index) {
+  controlsPending.splice(index, 1);
+  renderControlsPending();
+}
+
+/** What a control on a stick is bound to right now, as words, for the pending list. */
+function controlsBoundNow(input) {
+  return (controlsModel?.profile?.bindings || []).filter((b) => b.input.raw.toLowerCase() === input.toLowerCase()).map((b) => b.label);
+}
+
+function renderControlsPending() {
+  const box = $('#controls-pending');
+  if (!box) return;
+  box.hidden = !controlsPending.length;
+  if (!controlsPending.length) return;
+  $('#controls-pending-title').textContent = `${controlsPending.length} change${controlsPending.length === 1 ? '' : 's'} to apply`;
+  const list = $('#controls-pending-list');
+  list.textContent = '';
+  const sticks = new Map(controlsSticks().map((d) => [d.key, d]));
+  controlsPending.forEach((c, i) => {
+    const li = el('li');
+    const stick = sticks.get(ControlInput_deviceKey(c.input));
+    const where = `${stick ? stick.product : ControlInput_deviceKey(c.input)} ${c.input.replace(/^[a-z]{2}\d+_/, '').replace('_', ' ')}`;
+    li.append(el('span', null, c.remove ? `${c.label}: unbind from ${where}` : `${where} → ${c.label}${c.activationMode ? ` (${controlsModeWord(c.activationMode)})` : ''}`));
+    if (!c.remove) {
+      // The game flags two actions on one control in the same group; say so before it does.
+      const also = (controlsModel?.profile?.bindings || []).filter((b) => b.input.raw.toLowerCase() === c.input.toLowerCase() && b.actionMap === c.actionMap && b.action !== c.action);
+      if (also.length) li.append(el('span', 'controls-warn', ` also ${also.map((b) => b.label).join(', ')} in the same group - the game will flag the clash`));
+      const now = controlsBoundNow(c.input).filter((l) => l !== c.label);
+      if (now.length && !also.length) li.append(el('span', 'muted', ` (was ${now.join(', ')})`));
+    }
+    const undo = el('button', 'ghost small', 'undo');
+    undo.type = 'button';
+    undo.addEventListener('click', () => controlsUnstage(i));
+    li.append(undo);
+    list.append(li);
+  });
+  $('#controls-pending-apply').textContent = controlsModel?.gameRunning ? 'Apply as an import file' : 'Apply to the profile';
+  $('#controls-pending-note').textContent = controlsModel?.gameRunning
+    ? 'Star Citizen is running: the changes are written as a file the keybinding screen imports.'
+    : 'Written into the game\'s profile, after keeping it as it is; the game reads it at its next start.';
+}
+
+async function controlsApplyBindings(button) {
+  if (!controlsPending.length) return;
+  const note = $('#controls-pending-note');
+  button.disabled = true;
+  try {
+    const response = await fetch('/api/controls/bindings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        changes: controlsPending.map((c) => ({ actionMap: c.actionMap, action: c.action, input: c.input, remove: !!c.remove, activationMode: c.activationMode || null })),
+        how: controlsModel?.gameRunning ? 'export' : 'live',
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) { note.textContent = result.message || result.title || `Could not apply (${response.status}).`; return; }
+    controlsPending = [];
+    if (result.how === 'live') {
+      await loadControls();
+      $('#controls-status').textContent += ' Bindings written; the profile as it was is kept under Backups.';
+    } else {
+      renderControlsPending();
+      $('#controls-status').textContent = `Written as ${result.mappings}. In the game: Options → Keybindings → import "${result.name}", or at the console: ${result.command}.`;
+    }
+  } catch (err) {
+    note.textContent = `Could not apply: ${err.message}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+$('#controls-pending-apply')?.addEventListener('click', (e) => controlsApplyBindings(e.currentTarget));
+$('#controls-pending-discard')?.addEventListener('click', () => { controlsPending = []; renderControlsPending(); });
+
+/** The modes a binding can be given; blank keeps the action's own. */
+const CONTROLS_MODES = [['', 'the action\'s own'], ['tap', 'tap'], ['press', 'press'], ['hold', 'hold'], ['double_tap', 'double tap'], ['delayed_press', 'long press'], ['delayed_press_long', 'longer press']];
+
+function controlsModePicker() {
+  const select = el('select', 'select controls-mode-pick');
+  select.title = 'How the binding fires; the action\'s own unless you say';
+  for (const [value, label] of CONTROLS_MODES) select.append(new Option(label, value));
+  return select;
+}
+
+/**
+ * A narrow, searchable action finder. Rendering every game action in every
+ * control row made a six-stick profile a forest of tens of thousands of
+ * options; only matching actions are rendered here, when the pilot asks.
+ *
+ * Search alone was not enough: it answers "where is Self destruct" but not
+ * "what can I put here", and the grouped select it replaced did answer the
+ * second. So an empty box browses - the maps first, then one map's actions -
+ * and two letters switches to searching across all of them.
+ */
+function controlsActionPicker(current, choose) {
+  const wrap = el('div', 'controls-action-picker');
+  const search = el('input', 'search controls-action-search');
+  search.type = 'search';
+  search.placeholder = 'Find action, or browse…';
+  search.autocomplete = 'off';
+  search.spellcheck = false;
+  search.title = 'Type at least two letters to search, or open the box to browse by group';
+  const results = el('div', 'controls-action-results');
+  results.hidden = true;
+  const maps = new Map((controlsModel?.catalogue?.maps || []).map((map) => [map.name, map]));
+  const actions = controlsModel?.catalogue?.actions || [];
+  // Which map is being browsed, when nothing is typed; null is the map list.
+  let group = null;
+
+  const mapLabel = (map, fallback) => `${map?.label || fallback}${map?.category ? ` · ${map.category}` : ''}`;
+
+  const close = () => {
+    group = null;
+    results.textContent = '';
+    results.className = 'controls-action-results';
+    results.hidden = true;
+  };
+
+  const actionRow = (action) => {
+    const map = maps.get(action.actionMap);
+    const button = el('button', 'controls-action-result');
+    button.type = 'button';
+    button.append(el('span', 'controls-action-result-label', action.label));
+    button.append(el('span', 'controls-action-result-map', mapLabel(map, action.actionMap)));
+    button.addEventListener('click', () => { choose(action); search.value = ''; close(); });
+    return button;
+  };
+
+  const render = () => {
+    const query = search.value.trim().toLowerCase();
+    results.textContent = '';
+    results.className = 'controls-action-results';
+    results.hidden = false;
+
+    if (query.length >= 2) {
+      const matches = actions.filter((action) => {
+        const map = maps.get(action.actionMap);
+        return `${action.label} ${action.name} ${map?.label || ''} ${map?.category || ''}`.toLowerCase().includes(query);
+      }).slice(0, 12);
+      if (!matches.length) {
+        results.className = 'controls-action-results muted small';
+        results.textContent = 'No action matches that search.';
+        return;
+      }
+      for (const action of matches) results.append(actionRow(action));
+      return;
+    }
+
+    // Nothing typed: browse. One map's actions if one is open, else the maps.
+    if (group) {
+      const back = el('button', 'controls-action-back', `‹ all groups`);
+      back.type = 'button';
+      back.addEventListener('click', () => { group = null; render(); search.focus(); });
+      results.append(back);
+      const map = maps.get(group);
+      const mine = actions.filter((a) => a.actionMap === group);
+      if (!mine.length) results.append(el('div', 'muted small', `${mapLabel(map, group)} binds nothing.`));
+      for (const action of mine) results.append(actionRow(action));
+      return;
+    }
+
+    const groups = [...maps.values()].filter((map) => actions.some((a) => a.actionMap === map.name));
+    if (!groups.length) { close(); return; }
+    for (const map of groups) {
+      const count = actions.filter((a) => a.actionMap === map.name).length;
+      const button = el('button', 'controls-action-group');
+      button.type = 'button';
+      button.append(el('span', 'controls-action-result-label', mapLabel(map, map.name)));
+      button.append(el('span', 'controls-action-result-map', `${count} action${count === 1 ? '' : 's'}`));
+      button.addEventListener('click', () => { group = map.name; render(); });
+      results.append(button);
+    }
+  };
+
+  search.addEventListener('input', render);
+  search.addEventListener('focus', render);
+  search.addEventListener('keydown', (event) => {
+    // Escape closes the list rather than clearing the row, which is what a
+    // search input does by itself and would lose a half-typed query.
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); return; }
+    if (event.key !== 'Enter') return;
+    const first = results.querySelector('.controls-action-result');
+    if (first) { event.preventDefault(); first.click(); }
+  });
+  // A list left open over the row below it is read as that row's. The blur is
+  // deferred because it lands before the click that chose an action.
+  search.addEventListener('blur', () => setTimeout(() => {
+    if (!wrap.contains(document.activeElement)) close();
+  }, 150));
+  wrap.append(search, results);
+  if (current?.length) {
+    const remove = el('button', 'ghost small controls-action-remove', 'unbind');
+    remove.type = 'button';
+    remove.title = 'Unbind everything now on this control';
+    remove.addEventListener('click', () => choose('__remove__'));
+    wrap.append(remove);
+  }
+  return wrap;
+}
+
+/** A stick and one of its controls, composed into the input the game writes. */
+function controlsInputPicker() {
+  const wrap = el('span', 'controls-input-pick');
+  const stick = el('select', 'select');
+  for (const d of controlsSticks()) stick.append(new Option(d.product, d.key));
+  const control = el('select', 'select');
+  for (let i = 1; i <= 32; i++) control.append(new Option(`button ${i}`, `button${i}`));
+  for (const h of [1, 2]) for (const dir of ['up', 'down', 'left', 'right']) control.append(new Option(`hat ${h} ${dir}`, `hat${h}_${dir}`));
+  for (const a of ['x', 'y', 'z', 'rotx', 'roty', 'rotz', 'slider1', 'slider2']) control.append(new Option(`${a} axis`, a));
+  wrap.append(stick, control);
+  wrap.value = () => `${stick.value}_${control.value}`;
+  wrap.stick = stick;
+  wrap.control = control;
+  return wrap;
+}
+
+/* ---------- the actions ---------- */
+
+function renderControlsActions() {
+  const body = $('#controls-actions tbody');
+  if (!body || !controlsModel?.ready) return;
+  const catalogue = controlsModel.catalogue;
+  const profile = controlsModel.profile;
+
+  const categories = [...new Set(catalogue.maps.map((m) => m.category).filter(Boolean))].sort();
+  const select = $('#controls-category');
+  if (select && select.options.length !== categories.length + 1) {
+    const keep = select.value;
+    select.textContent = '';
+    select.append(new Option('Every category', ''));
+    for (const c of categories) select.append(new Option(c, c));
+    select.value = categories.includes(keep) ? keep : '';
+  }
+  const category = select?.value || '';
+  const unboundOnly = $('#controls-unbound')?.checked;
+  const reboundOnly = $('#controls-rebound')?.checked;
+  const q = ($('#controls-search')?.value || '').trim().toLowerCase();
+
+  // What the profile binds, per action, split by device kind.
+  const byAction = new Map();
+  for (const b of profile?.bindings || []) {
+    const key = `${b.actionMap}/${b.action}`;
+    if (!byAction.has(key)) byAction.set(key, []);
+    byAction.get(key).push(b);
+  }
+  const sticks = new Map(controlsSticks().map((d) => [d.key, d]));
+
+  body.textContent = '';
+  let shown = 0;
+  let total = 0;
+  for (const map of catalogue.maps) {
+    if (category && map.category !== category) continue;
+    for (const a of catalogue.actions.filter((x) => x.actionMap === map.name)) {
+      total++;
+      const mine = byAction.get(`${map.name}/${a.name}`) || [];
+      const onSticks = mine.filter((b) => b.input.device === 'js' && b.input.kind !== 'none');
+      const cleared = mine.some((b) => b.input.device === 'js' && b.input.kind === 'none');
+      const keyboard = mine.filter((b) => b.input.device === 'kb').map((b) => b.input.label);
+      if (unboundOnly && onSticks.length) continue;
+      if (reboundOnly && !mine.length) continue;
+      if (q && !`${a.label} ${a.name} ${map.label} ${onSticks.map(controlsBindingWords).join(' ')}`.toLowerCase().includes(q)) continue;
+      shown++;
+      const tr = el('tr', onSticks.length ? null : 'controls-unbound');
+      const name = el('td', null, a.label);
+      if (a.description && a.description !== a.label) name.title = a.description;
+      name.append(el('div', 'armoury-kind', a.name));
+      tr.append(name);
+      tr.append(el('td', 'muted', `${map.label}${map.category ? ` · ${map.category}` : ''}`));
+      const on = el('td');
+      if (!onSticks.length) on.append(el('span', 'muted', cleared ? 'cleared - the default was taken off' : a.joystick ? `default: ${a.joystick}` : 'nothing'));
+      for (const b of onSticks) {
+        const line = el('div', 'controls-bound');
+        const stick = sticks.get(b.input.deviceKey);
+        line.append(el('span', 'controls-stick-tag', stick ? stick.product : b.input.deviceKey));
+        line.append(el('span', null, ` ${b.input.label}`));
+        on.append(line);
+      }
+      tr.append(on);
+      tr.append(el('td', 'muted', keyboard.length ? keyboard.join(', ') : a.keyboard ? `default: ${a.keyboard}` : '—'));
+      tr.append(el('td', 'num muted', controlsModeWord((onSticks[0] || mine[0])?.activationMode || a.activationMode)));
+      // Bind: a stick and a control for this action; × on a binding takes it off.
+      const bind = el('td', 'controls-bind-cell');
+      for (const b of onSticks) {
+        const off = el('button', 'ghost small', `× ${b.input.label}`);
+        off.type = 'button';
+        off.title = `Take this action off ${sticks.get(b.input.deviceKey)?.product || b.input.deviceKey}`;
+        off.addEventListener('click', () => controlsStage({ actionMap: map.name, action: a.name, input: b.input.raw, remove: true, label: a.label }));
+        bind.append(off);
+      }
+      if (controlsSticks().length) {
+        const add = el('button', 'ghost small', 'Bind to…');
+        add.type = 'button';
+        add.addEventListener('click', () => {
+          add.hidden = true;
+          const picker = controlsInputPicker();
+          const mode = controlsModePicker();
+          const ok = el('button', 'ghost small', 'Stage');
+          ok.type = 'button';
+          ok.addEventListener('click', () => {
+            controlsStage({ actionMap: map.name, action: a.name, input: picker.value(), label: a.label, activationMode: mode.value || null });
+            picker.remove();
+            mode.remove();
+            ok.remove();
+            add.hidden = false;
+          });
+          bind.append(picker, mode, ok);
+        });
+        bind.append(add);
+      }
+      tr.append(bind);
+      body.append(tr);
+    }
+  }
+  $('#controls-actions-count').textContent = `${shown} of ${total} actions${category ? ` in ${category}` : ''}${unboundOnly ? ' on no stick' : ''}${reboundOnly ? ' you rebound' : ''}.`;
+}
+
+for (const id of ['#controls-category', '#controls-unbound', '#controls-rebound'])
+  $(id)?.addEventListener('change', renderControlsActions);
+$('#controls-layout')?.addEventListener('change', () => { renderControlsDevice().catch(() => {}); });
+onInput('#controls-search', () => { renderControlsActions(); renderControlsDevice().catch(() => {}); });
+$('#controls-refresh')?.addEventListener('click', () => { loadControls().catch(() => {}); });
+
+/* ---------- backups ---------- */
+
+async function loadControlsBackups() {
+  try {
+    controlsBackups = await getJson('/api/controls/backups');
+  } catch {
+    controlsBackups = [];
+  }
+  renderControlsBackups();
+}
+
+function renderControlsBackups() {
+  const body = $('#controls-backups tbody');
+  if (!body) return;
+  body.textContent = '';
+  const note = $('#controls-backups-note');
+  if (!controlsBackups.length) {
+    note.textContent = 'Nothing kept yet. The first copy is taken when the game has written a profile.';
+    $('#controls-diff').hidden = true;
+    return;
+  }
+  note.textContent = `${controlsBackups.length} version${controlsBackups.length === 1 ? '' : 's'} kept. Tick two to see what changed between them; tick one to see what changed since.`;
+
+  controlsBackups.forEach((b, i) => {
+    const tr = el('tr');
+    const pick = el('td');
+    const box = el('input');
+    box.type = 'checkbox';
+    box.checked = controlsDiffPick.includes(b.id);
+    box.addEventListener('change', () => {
+      controlsDiffPick = box.checked ? [...controlsDiffPick, b.id].slice(-2) : controlsDiffPick.filter((x) => x !== b.id);
+      renderControlsBackups();
+      showControlsDiff().catch(() => {});
+    });
+    pick.append(box);
+    tr.append(pick);
+    const when = el('td', null, `${dateOf(b.writtenAt)} ${shortTimeOf(b.writtenAt)}`);
+    if (i === 0) when.append(el('span', 'controls-latest', ' latest'));
+    tr.append(when);
+    tr.append(el('td', 'muted', relative(b.takenAt)));
+    tr.append(el('td', 'num', `${Math.round(b.bytes / 1024)} KB`));
+    const since = el('td', 'muted');
+    const previous = controlsBackups[i + 1];
+    since.textContent = previous ? 'see the diff' : 'first kept';
+    if (previous) {
+      const link = el('button', 'ghost small', 'Since the one before');
+      link.type = 'button';
+      link.addEventListener('click', () => { controlsDiffPick = [previous.id, b.id]; renderControlsBackups(); showControlsDiff().catch(() => {}); });
+      since.textContent = '';
+      since.append(link);
+    }
+    tr.append(since);
+    const act = el('td', 'controls-backup-actions');
+    const restore = el('button', 'ghost small', 'Restore');
+    restore.type = 'button';
+    restore.title = 'Write this version back over the game\'s profile - with the game closed';
+    restore.addEventListener('click', () => controlsRestore(b, restore));
+    act.append(restore);
+    const export_ = el('button', 'ghost small', 'Export');
+    export_.type = 'button';
+    export_.title = 'Write this version as a file the game imports, with the sticks retargeted if they moved';
+    export_.addEventListener('click', () => { controlsExportSource = b.id; renderControlsExport(); });
+    act.append(export_);
+    const download = el('a', 'ghost small', 'Download');
+    download.href = `/api/controls/backups/${encodeURIComponent(b.id)}/file`;
+    download.setAttribute('download', `actionmaps-${b.id}.xml`);
+    download.title = 'This version as a file, to keep anywhere';
+    act.append(download);
+    tr.append(act);
+    body.append(tr);
+  });
+}
+
+/**
+ * The restore itself. The server refuses while the game runs and says
+ * why; the page repeats it and points at the export, which works with
+ * the game open. A confirm first: this is the one button on the page
+ * that writes over something the game owns.
+ */
+async function controlsRestore(backup, button) {
+  const note = $('#controls-backups-note');
+  const when = `${dateOf(backup.writtenAt)} ${shortTimeOf(backup.writtenAt)}`;
+  if (typeof confirm === 'function' && !confirm(`Write the version of ${when} over the game's keybinding profile? The profile as it is now is kept first.`)) return;
+  button.disabled = true;
+  try {
+    const response = await fetch('/api/controls/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source: backup.id }) });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      note.textContent = result.message || result.title || `The restore failed (${response.status}).`;
+      return;
+    }
+    note.textContent = `Restored the version of ${when}. The game reads it at its next start.${result.keptBefore ? ' The profile as it was is kept above it.' : ''}`;
+    await loadControlsBackups();
+    await loadControls();
+  } catch (err) {
+    note.textContent = `The restore failed: ${err.message}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+$('#controls-import-pick')?.addEventListener('click', () => $('#controls-import-file')?.click());
+
+$('#controls-import-file')?.addEventListener('change', (event) => {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  controlsImportFile(file)
+    .catch((err) => { $('#controls-backups-note').textContent = `That file could not be added: ${err.message}`; })
+    // Cleared so that picking the same file twice still fires a change.
+    .finally(() => { event.target.value = ''; });
+});
+
+async function controlsImportFile(file) {
+  const note = $('#controls-backups-note');
+  const response = await fetch('/api/controls/backups/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/xml', 'X-File-Modified': new Date(file.lastModified || Date.now()).toISOString() },
+    body: file,
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.message || String(response.status));
+  note.textContent = result.taken
+    ? `Added: ${result.bindings} bindings on ${result.devices} devices.`
+    : 'Already kept: that file is one of the versions here.';
+  await loadControlsBackups();
+}
+
+$('#controls-keep')?.addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  button.disabled = true;
+  try {
+    const kept = await getJson2('/api/controls/backups');
+    $('#controls-backups-note').textContent = kept.taken ? 'Kept.' : 'Already kept: the profile has not changed since the latest copy.';
+    await loadControlsBackups();
+  } catch {
+    $('#controls-backups-note').textContent = 'Could not keep a copy.';
+  } finally {
+    button.disabled = false;
+  }
+});
+
+async function showControlsDiff() {
+  const box = $('#controls-diff');
+  if (!controlsDiffPick.length) { box.hidden = true; return; }
+  const [a, b] = controlsDiffPick.length === 2
+    ? [...controlsDiffPick].sort()
+    : [controlsDiffPick[0], 'live'];
+  let changes;
+  try {
+    changes = await getJson(`/api/controls/backups/${encodeURIComponent(a)}/diff/${encodeURIComponent(b)}`);
+  } catch {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  const name = (id) => id === 'live' ? 'the profile as it is now' : `the copy of ${dateOf(controlsBackups.find((x) => x.id === id)?.writtenAt || Date.now())}`;
+  $('#controls-diff-title').textContent = `From ${name(a)} to ${name(b)}`;
+  $('#controls-diff-count').textContent = changes.length ? `${changes.length} action${changes.length === 1 ? '' : 's'} changed` : 'no binding changed';
+  const body = $('#controls-diff-table tbody');
+  body.textContent = '';
+  for (const c of changes) {
+    const tr = el('tr');
+    const action = el('td', null, c.label);
+    action.append(el('div', 'armoury-kind', c.map));
+    tr.append(action);
+    tr.append(el('td', c.before.length ? 'controls-was' : 'muted', c.before.length ? c.before.join(', ') : 'nothing'));
+    tr.append(el('td', c.after.length ? 'controls-now' : 'muted', c.after.length ? c.after.join(', ') : 'nothing'));
+    body.append(tr);
+  }
+}
+
+function renderControlsExport() {
+  const box = $('#controls-export');
+  if (!box) return;
+  box.hidden = false;
+  const source = controlsExportSource || 'live';
+  $('#controls-export-source').textContent = source === 'live' ? 'from the profile as it is now' : `from the copy ${source}`;
+  $('#controls-export-result').textContent = '';
+  $('#controls-export-install').hidden = true;
+
+  // One select per stick: which number it is now. Left alone, nothing moves.
+  const retarget = $('#controls-retarget');
+  retarget.textContent = '';
+  const sticks = controlsSticks();
+  for (const d of sticks) {
+    const row = el('label', 'controls-retarget-row');
+    row.append(el('span', null, `${d.product} was ${d.key}, now`));
+    const select = el('select', 'select');
+    select.dataset.from = String(d.instance);
+    for (let i = 1; i <= Math.max(8, sticks.length); i++) select.append(new Option(`js${i}`, String(i)));
+    select.value = String(d.instance);
+    row.append(select);
+    retarget.append(row);
+  }
+}
+
+async function controlsWriteExport(install) {
+  const name = $('#controls-export-name')?.value || 'quantumwake';
+  const retarget = {};
+  for (const select of $('#controls-retarget')?.querySelectorAll('select') || [])
+    if (select.value !== select.dataset.from) retarget[select.dataset.from] = Number(select.value);
+  const result = $('#controls-export-result');
+  try {
+    const response = await fetch('/api/controls/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: controlsExportSource || 'live', name, retarget, install }),
+    });
+    if (!response.ok) throw new Error(String(response.status));
+    const written = await response.json();
+    result.textContent = written.installed
+      ? `In the game's folder as ${written.mappings}. In the game: Options → Keybindings → import "${written.name}", or at the console: ${written.command}.`
+      : `Written to ${written.path}. Not yet where the game reads: press the second button to copy it there, or copy it yourself.`;
+    $('#controls-export-install').hidden = written.installed;
+  } catch (err) {
+    result.textContent = `The export failed: ${err.message}`;
+  }
+}
+
+$('#controls-export-write')?.addEventListener('click', () => controlsWriteExport(false));
+$('#controls-export-install')?.addEventListener('click', () => controlsWriteExport(true));
+
+/* ---------- pictures ---------- */
+
+function renderControlsPictures() {
+  const t = controlsModel?.templates;
+  if (!t) return;
+  $('#controls-templates-status').textContent = t.enabled
+    ? `on · ${t.available.filter((x) => x.maker !== 'yours').length} in the library${t.fetchedAt ? `, listed ${relative(t.fetchedAt)}` : ''}`
+    : t.available.length ? 'off · what was fetched is kept' : 'off';
+  $('#controls-templates-enable').hidden = t.enabled;
+  $('#controls-templates-disable').hidden = !t.enabled;
+  const folder = $('#controls-folder');
+  if (folder && document.activeElement !== folder) folder.value = t.folder || '';
+  $('#controls-folder-note').textContent = t.folder
+    ? `${t.available.filter((x) => x.maker === 'yours').length} SVG${t.available.filter((x) => x.maker === 'yours').length === 1 ? '' : 's'} in ${t.folder}`
+    : '';
+
+  const box = $('#controls-assign');
+  box.textContent = '';
+  const sticks = controlsSticks();
+  if (!sticks.length) { box.append(el('p', 'muted', 'No stick in the profile to give a picture to.')); return; }
+  if (!t.available.length) { box.append(el('p', 'muted', 'No pictures to choose from yet.')); return; }
+  for (const d of sticks) {
+    const row = el('label', 'controls-assign-row');
+    row.append(el('span', 'controls-assign-name', `${d.product} (${d.key})`));
+    const select = el('select', 'select');
+    select.append(new Option(d.template && !t.assignments[d.guid] ? `Matched: ${d.template.name}` : 'None', ''));
+    let maker = null;
+    let group = null;
+    for (const x of t.available) {
+      if (x.maker !== maker) { maker = x.maker; group = el('optgroup'); group.label = maker || 'Library'; select.append(group); }
+      group.append(new Option(x.name, x.key));
+    }
+    select.value = t.assignments[d.guid] || '';
+    select.addEventListener('change', async () => {
+      await fetch('/api/controls/templates/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guid: d.guid, key: select.value }) });
+      await loadControls();
+    });
+    row.append(select);
+    box.append(row);
+  }
+}
+
+/** Turns the library on and reloads; the button that asked is disabled while it happens. */
+async function controlsFetchLibrary(button) {
+  button.disabled = true;
+  button.textContent = 'Fetching…';
+  try {
+    await getJson2('/api/controls/templates/enable');
+    await loadControls();
+  } catch (err) {
+    button.textContent = 'Fetch the pictures';
+    button.disabled = false;
+    const status = $('#controls-templates-status');
+    if (status) status.textContent = `could not fetch the library: ${err.message}`;
+    const note = $('#controls-picture-note');
+    if (note) note.append(el('span', 'muted', ` Could not fetch the library: ${err.message}`));
+  }
+}
+
+$('#controls-templates-enable')?.addEventListener('click', (e) => controlsFetchLibrary(e.currentTarget));
+
+$('#controls-templates-disable')?.addEventListener('click', async () => {
+  await getJson2('/api/controls/templates/disable');
+  await loadControls();
+});
+
+$('#controls-folder-save')?.addEventListener('click', async () => {
+  const response = await fetch('/api/controls/templates/folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: $('#controls-folder').value }) });
+  if (!response.ok) { $('#controls-folder-note').textContent = 'No such folder.'; return; }
+  await loadControls();
 });
 
 /* ---------- the Log page's two panes ---------- */
@@ -12006,6 +13985,27 @@ function componentClassChip(componentClass) {
   return chip;
 }
 
+/**
+ * A stealth label needs a measured meaning. The game no longer consistently
+ * classifies components as "Stealth", so mark the quietest compatible choice
+ * only when the installed data gives both of its signatures and the choices
+ * actually differ.
+ */
+function stealthPickChip(part, choices) {
+  const score = (candidate) => Number.isFinite(candidate?.em) && Number.isFinite(candidate?.ir)
+    ? candidate.em + candidate.ir : null;
+  const scores = choices.map(score).filter((value) => value !== null);
+  const here = score(part);
+  if (here === null || scores.length < 2) return null;
+
+  const lowest = Math.min(...scores);
+  if (here !== lowest || !scores.some((value) => value > lowest)) return null;
+
+  const chip = el('span', 'chip stealth', 'Stealth pick');
+  chip.title = 'Lowest combined EM + IR among the compatible parts shown; lower signatures are quieter.';
+  return chip;
+}
+
 /** A route is useful only when its kind is stated: a shop and a recipe answer different plans. */
 function acquisitionChip(kind, text, title) {
   const chip = el('span', `acquisition ${kind}`, text);
@@ -12279,6 +14279,8 @@ function renderBenchPanel() {
     name.append(partChip(part));
     const componentClass = componentClassChip(option.componentClass);
     if (componentClass) name.append(componentClass);
+    const stealth = stealthPickChip(part, garageOptions.options.map((choice) => choice.part));
+    if (stealth) name.append(stealth);
     const pip = pipChip(part, fittedPart);
     if (pip) name.append(pip);
     mid.append(name);
@@ -13356,8 +15358,12 @@ async function loadJobContracts() {
   }
 
   let rows = [];
+  let plan = null;
   try {
-    rows = await getJson('/api/contracts?days=2');
+    [rows, plan] = await Promise.all([
+      getJson('/api/contracts?days=2'),
+      getJson('/api/haul/plan').catch(() => null),
+    ]);
   } catch { /* nothing to show */ }
 
   // This session only: anything taken before it started belongs to the past.
@@ -13365,20 +15371,25 @@ async function loadJobContracts() {
   const open = rows.filter((c) =>
     c.outcome === 'InProgress' && new Date(c.at).getTime() >= since);
 
-  if (!open.length) {
+  if (!open.length && !plan?.contracts?.length) {
     host.append(el('p', 'muted', 'No contract open in this session.'));
     return;
   }
 
-  for (const contract of open) {
+  if (plan?.contracts?.length) renderHaulPlan(host, plan);
+
+  // Everything that is not a haul keeps its plain card; the hauls are on
+  // the run above, with their legs.
+  for (const contract of open.filter((c) => !c.hauling)) {
     const card = el('article', 'job-card');
 
     const head = el('div', 'job-head');
-    head.append(el('b', null, `${contract.issuer} · ${contract.type}`));
+    head.append(el('b', null, contract.name || `${contract.issuer} · ${contract.type}`));
     if (contract.difficulty) head.append(el('span', 'job-kind', contract.difficulty));
     card.append(head);
 
-    const sub = [contract.system, `taken ${relative(contract.at)}`].filter(Boolean).join(' · ');
+    const sub = [contract.issuer, contract.type, contract.system, `taken ${relative(contract.at)}`]
+      .filter(Boolean).join(' · ');
     card.append(el('div', 'muted', sub));
 
     if (contract.steps > 0) {
@@ -13388,6 +15399,148 @@ async function loadJobContracts() {
 
     host.append(card);
   }
+}
+
+/**
+ * Every open hauling contract on one route: what each one is known to
+ * want, from its title or from a screenshot of its card, then the stops in
+ * an order the pilot can rewrite once it is a flight plan.
+ *
+ * What the plan cannot see is said in words next to the thing it cannot see,
+ * because a route with a pickup silently missing is worse than no route.
+ */
+function renderHaulPlan(host, plan) {
+  const section = el('div', 'haul-plan');
+  section.append(el('h3', 'spaced', 'Hauling run'));
+
+  const read = plan.contracts.filter((c) => c.source === 'screenshot').length;
+  const summary = [
+    `${plan.contracts.length} contract${plan.contracts.length === 1 ? '' : 's'}`,
+    `${read} with the card read`,
+    plan.knownScu > 0
+      ? `${plan.knownScu} SCU remaining${read < plan.contracts.length ? ' known (a floor)' : ''}`
+      : null,
+    plan.ship && plan.shipScu ? `${plan.ship} holds ${plan.shipScu} SCU` : null,
+  ].filter(Boolean).join(' · ');
+  section.append(el('p', 'muted caption', summary));
+
+  if (plan.knownScu > 0 && plan.shipScu && plan.knownScu > plan.shipScu) {
+    section.append(el('p', 'outward caption',
+      `${plan.knownScu} SCU is more than the ${plan.ship} holds — two trips, or another hull.`));
+  }
+
+  for (const c of plan.contracts) {
+    const card = el('article', 'job-card haul-contract');
+
+    const head = el('div', 'job-head');
+    head.append(el('b', null, c.title));
+    const source = c.source === 'screenshot' ? 'card read' : c.source === 'title' ? 'title only' : 'unread';
+    head.append(el('span', 'job-kind', source));
+    if (c.commodity) head.append(el('span', 'muted', c.commodity));
+    card.append(head);
+
+    if (c.legs.length) {
+      const legs = el('ul', 'haul-legs');
+      for (const leg of c.legs) {
+        const from = leg.pickup
+          ? `${leg.pickup}${leg.pickupBody ? ` (${leg.pickupBody})` : ''}`
+          : 'pickup not known';
+        const to = leg.delivery
+          ? `${leg.delivery}${leg.deliveryBody ? ` (${leg.deliveryBody})` : ''}`
+          : 'drop-off not known';
+        const scu = leg.scu != null ? ` · ${leg.scuDone || 0}/${leg.scu} SCU` : '';
+        legs.append(el('li', leg.pickup && leg.delivery ? null : 'muted', `${from} → ${to}${scu}`));
+      }
+      card.append(legs);
+    }
+
+    if (c.scu != null) {
+      const remaining = c.remainingScu != null ? c.remainingScu : c.scu;
+      const delivered = c.scuDone || 0;
+      card.append(el('div', 'muted haul-progress',
+        `${c.scu} SCU contracted · ${remaining} remaining${delivered ? ` · ${delivered} delivered` : ''}`));
+    }
+
+    if (c.pickups > 0 || c.deliveries > 0) {
+      const bits = [];
+      if (c.pickups > 0) bits.push(`${c.pickupsDone} of ${c.pickups} pickup${c.pickups === 1 ? '' : 's'} done`);
+      if (c.deliveries > 0) bits.push(`${c.deliveriesDone} of ${c.deliveries} drop-off${c.deliveries === 1 ? '' : 's'} done`);
+      card.append(el('div', 'muted haul-progress', bits.join(' · ')));
+    }
+
+    if (c.note) card.append(el('div', 'muted haul-note', c.note));
+    if (c.shot) card.append(el('div', 'muted haul-note', `read from ${c.shot}`));
+
+    section.append(card);
+  }
+
+  if (plan.stops.length) {
+    const table = el('table', 'job-items haul-stops');
+    const body = el('tbody');
+
+    plan.stops.forEach((stop, i) => {
+      const tr = el('tr', 'have');
+      tr.append(el('td', 'job-mark', String(i + 1)));
+
+      const where = el('td');
+      where.append(el('b', null, stop.place));
+      if (stop.body) where.append(el('span', 'muted', ` · ${stop.body}`));
+      if (!stop.placeId) where.append(el('span', 'muted', ' · not on the map'));
+      tr.append(where);
+
+      const what = el('td');
+      for (const a of stop.actions) {
+        const scu = a.scu != null ? `${a.scu} SCU ` : '';
+        const delivered = a.scuDone ? ` (${a.scuDone} delivered)` : '';
+        what.append(el('div', a.kind === 'load' ? 'haul-load' : 'haul-unload',
+          `${a.kind} ${scu}${a.commodity || 'cargo'}${delivered} — ${a.contractTitle}${a.note ? ` (${a.note})` : ''}`));
+      }
+      if (stop.aboard?.length) {
+        const cargo = stop.aboard.map((item) => {
+          if (item.amountUnknown) return item.knownScu > 0
+            ? `${item.commodity} at least ${item.knownScu} SCU`
+            : `${item.commodity} amount unknown`;
+          return `${item.commodity} ${item.knownScu} SCU`;
+        }).join(' · ');
+        what.append(el('div', 'muted haul-aboard', `aboard after this stop: ${cargo}`));
+      }
+      if (stop.note) what.append(el('div', 'muted', stop.note));
+      tr.append(what);
+
+      body.append(tr);
+    });
+
+    table.append(body);
+    section.append(table);
+
+    const actions = el('div', 'haul-actions');
+    const make = el('button', 'ghost haul-make', 'Make it the flight plan');
+    make.title = 'Write these stops into a tracked flight plan, with the loads and unloads at each';
+    make.addEventListener('click', async () => {
+      make.disabled = true;
+      try {
+        const result = await fetch('/api/haul/plan/trip', { method: 'POST' }).then((r) => r.json());
+        if (result?.id) {
+          make.textContent = `✓ ${result.title} — ${result.stops} stops, tracked`;
+          if (typeof loadTrips === 'function') loadTrips().catch(() => {});
+        } else {
+          make.textContent = result?.message || 'could not plan';
+          make.disabled = false;
+        }
+      } catch {
+        make.textContent = 'failed';
+        make.disabled = false;
+      }
+    });
+    actions.append(make);
+    section.append(actions);
+    section.append(el('p', 'muted caption',
+      'Arrival marks the stop reached. Load and unload actions stay manual: the log does not identify which named contract leg changed.'));
+  }
+
+  for (const note of plan.notes || []) section.append(el('p', 'muted caption', note));
+
+  host.append(section);
 }
 
 /**
@@ -13446,7 +15599,13 @@ function jobLines(job) {
     // Where it is, or where to buy what is missing.
     const whereCell = el('td', 'muted');
 
-    if (item.wornNow) {
+    if (item.inventoryUnconfirmed) {
+      whereCell.append(el('span', 'note-inline', 'seen in inventory — not counted'));
+      if (item.where.length) {
+        whereCell.append(document.createTextNode(' · '));
+        whereCell.append(placeLink(item.where[0]));
+      }
+    } else if (item.wornNow) {
       whereCell.textContent = 'worn now';
     } else if (item.where.length) {
       whereCell.append(placeLink(item.where[0]));
@@ -14660,6 +16819,7 @@ async function renderSettings() {
   await renderExportPreview();
   await renderBackupPreview();
   await renderDiagnostics();
+  await renderDiagnosticTrace();
 }
 
 /* ---------- files other pilots have shared ---------- */
@@ -16581,19 +18741,35 @@ const money = (n) => `${Math.round(Number(n) || 0).toLocaleString()} aUEC`;
 /* Kept so the filter controls can re-render without another fetch. */
 let libraryStats = null;
 
+/* A named Vehicle Loadout Manager reading proves that this hull was available
+ * to fit, even when the log never saw it leave a pad. Keep that evidence in
+ * the Fleet roster rather than letting a later Fleet Manager photograph make
+ * the hull disappear. It is deliberately separate from libraryStats: the
+ * latter is the flight-log aggregate and must not acquire invented sorties. */
+let photographedFleetShips = [];
+
+function fleetRoster(stats) {
+  const known = new Set((stats?.ships || []).map((ship) => ship.name.toLowerCase()));
+  return [
+    ...(stats?.ships || []),
+    ...photographedFleetShips.filter((ship) => !known.has(ship.name.toLowerCase()))
+  ];
+}
+
 function renderFleet(stats) {
   libraryStats = stats;
+  const roster = fleetRoster(stats);
 
   // Unticked ships are not owned - a rental, or since sold - so every total
   // ignores them. Flight time and sorties still count: those happened.
-  const owned = stats.ships.filter((s) => !excludedShips.has(s.name));
+  const owned = roster.filter((s) => !excludedShips.has(s.name));
 
   // The game's entitlement count bundles ships and ground vehicles into one
   // number and never names them, so it is labelled as its own thing rather
   // than pretending to agree with the ticked roster.
   const fleetTiles = [
     ['Owned per game*', stats.fleetSize ?? '—'],
-    ['Roster ticked', `${owned.length} of ${stats.ships.length}`],
+    ['Roster ticked', `${owned.length} of ${roster.length}`],
     ['Total flights', owned.reduce((sum, s) => sum + s.sorties, 0)],
     ['Time aboard', `~${duration(owned.reduce((sum, s) => sum + toSeconds(s.estimatedTime), 0))}`],
   ];
@@ -16662,7 +18838,9 @@ function toggleShipPreview(ship, card) {
   }
   if (!body) return;
 
-  const preview = el('div', 'ship-preview', `${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'} · ~${duration(toSeconds(ship.estimatedTime))} aboard · last flown ${relative(ship.lastFlown)}.`);
+  const preview = el('div', 'ship-preview', ship.photographedAt
+    ? `fit photographed ${relative(ship.photographedAt)} · no flights logged.`
+    : `${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'} · ~${duration(toSeconds(ship.estimatedTime))} aboard · last flown ${relative(ship.lastFlown)}.`);
   body.append(preview);
 
   hangarPreviewFor(ship).then((sized) => {
@@ -16694,7 +18872,8 @@ function renderFleetShips() {
   // Unticked ships stay on the page, struck through - this is where the tick
   // lives, so hiding them would make the choice irreversible. They sort to
   // the back and count for nothing.
-  const ships = libraryStats.ships.filter((s) => {
+  const roster = fleetRoster(libraryStats);
+  const ships = roster.filter((s) => {
     const grounded = s.reference && !s.reference.isSpaceship;
     if (term && !s.name.toLowerCase().includes(term)) return false;
     if (cutoff && new Date(s.lastFlown).getTime() < cutoff) return false;
@@ -16714,7 +18893,7 @@ function renderFleetShips() {
 
   if (!ships.length) {
     grid.append(el('p', 'muted',
-      libraryStats.ships.length ? 'No ships match that filter.' : 'No ships recorded yet.'));
+      roster.length ? 'No ships match that filter.' : 'No ships recorded yet.'));
     return;
   }
 
@@ -16793,7 +18972,9 @@ function renderFleetShips() {
     if (seconds > 0) stat.append(el('span', 'note-inline', ` · ~${duration(seconds)}`));
 
     body.append(stat);
-    body.append(el('div', 'ship-seen', `last flown ${relative(ship.lastFlown)}`));
+    body.append(el('div', 'ship-seen', ship.photographedAt
+      ? `fit photographed ${relative(ship.photographedAt)} · no flights logged`
+      : `last flown ${relative(ship.lastFlown)}`));
 
     const statuses = el('div', 'ship-status');
     if (favouriteShips.has(ship.name)) statuses.append(el('span', 'ship-status-mark favourite', '★ favourite'));
@@ -16851,9 +19032,11 @@ function renderFleetShips() {
 
     const compare = el('button', hangarComparison.has(ship.name) ? 'ghost tiny ship-compare active' : 'ghost tiny ship-compare', hangarComparison.has(ship.name) ? 'Selected to compare' : 'Compare');
     compare.type = 'button';
-    compare.disabled = off;
+    compare.disabled = off || !!ship.photographedAt;
     compare.title = off
       ? 'Tick this ship as owned before comparing it in Hangar'
+      : ship.photographedAt
+        ? 'A photographed fit has no flight or size record to compare in Hangar'
       : 'Select this ship and one other, then compare them in Hangar';
     compare.addEventListener('click', () => {
       if (hangarComparison.has(ship.name)) hangarComparison.delete(ship.name);
@@ -20478,11 +22661,14 @@ function sellerLabel(seller, item) {
 }
 
 /**
- * Turns what a list is still missing into a run, asking where to buy each thing.
+ * Turns what a list is still missing into a run, grouping its purchases into
+ * a stop-efficient route from the sellers we know.
  *
  * One stop per terminal rather than per item, because a trip is a sequence of
- * places: three things bought at Area18 is one landing. Anything with no known
- * seller is shown and left off rather than quietly dropped.
+ * places: three things bought at Area18 is one landing. Prices decide between
+ * equally useful counters; they do not add a landing just to save a little.
+ * Anything with no known seller is shown and left off rather than quietly
+ * dropped.
  */
 async function planShoppingTrip(job, card) {
   card.querySelectorAll('.trip-chooser').forEach((n) => n.remove());
@@ -20503,8 +22689,8 @@ async function planShoppingTrip(job, card) {
 
   const head = el('div', 'chooser-head');
   head.append(el('span', null, destination
-    ? `Where to buy — ${destination.name} first`
-    : 'Where to buy — one stop per terminal'));
+    ? `Where to buy — ${destination.name} first, fewest stops after`
+    : 'Where to buy — optimised for fewer stops'));
   chooser.append(head);
 
   const rows = el('div', 'chooser-rows');
@@ -20542,6 +22728,52 @@ async function planShoppingTrip(job, card) {
    * is built from the one answer either of them wrote.
    */
   const stops = [];
+
+  // A quoted stock figure below the list's quantity cannot fill that line.
+  // When every quote is short we still show the alternatives, because the
+  // player may decide a partial purchase is useful; otherwise a full seller
+  // is the only one allowed into the automatic route.
+  const suppliesAt = (sellers, item, terminal) => {
+    const here = sellers.filter((seller) => seller.terminal === terminal);
+    if (!here.length) return false;
+    return here.some((seller) => !shortStock(seller, item))
+      || !sellers.some((seller) => !shortStock(seller, item));
+  };
+
+  // A practical set cover: take the counter that supplies the most remaining
+  // lines, then use the price of just those lines to settle a tie. It is kept
+  // deliberately local to this chooser, because stock and a pilot's manual
+  // selections are live UI facts rather than data worth persisting on a job.
+  const optimiseStops = () => {
+    stops.length = 0;
+    const left = new Set(options.filter((o) => o.sellers.length).map((o) => o.item.name));
+
+    while (left.size) {
+      const best = [...new Map(options.flatMap(({ item, sellers }) => sellers.map((seller) => [seller.terminal, seller]))).values()]
+        .map((seller) => ({
+          seller,
+          covers: options.filter(({ item, sellers }) => left.has(item.name)
+            && suppliesAt(sellers, item, seller.terminal)),
+        }))
+        .filter((counter) => counter.covers.length)
+        .sort((a, b) => Number(atSameStop(b.seller, destination)) - Number(atSameStop(a.seller, destination))
+          || b.covers.length - a.covers.length
+          || a.covers.reduce((sum, { item, sellers }) => {
+            const seller = sellers.find((candidate) => candidate.terminal === a.seller.terminal);
+            return sum + (seller?.price || 0) * Math.max(1, item.needed);
+          }, 0) - b.covers.reduce((sum, { item, sellers }) => {
+            const seller = sellers.find((candidate) => candidate.terminal === b.seller.terminal);
+            return sum + (seller?.price || 0) * Math.max(1, item.needed);
+          }, 0)
+          || a.seller.terminal.localeCompare(b.seller.terminal))[0];
+
+      if (!best) break;
+      stops.push(best.seller.terminal);
+      best.covers.forEach(({ item }) => left.delete(item.name));
+    }
+
+    assignFromStops();
+  };
 
   const renderItems = () => {
     rows.textContent = '';
@@ -20621,45 +22853,21 @@ async function planShoppingTrip(job, card) {
       // there regardless, so what it can supply is the first question.
       .sort((a, b) => Number(b.chosen) - Number(a.chosen)
         || b.supplies.length - a.supplies.length
-        || a.cost - b.cost)
-      .slice(0, 20);
+        || a.cost - b.cost);
 
     if (!ranked.length) {
       rows.append(el('div', 'muted', 'Nothing on this list has a known seller.'));
       return;
     }
 
-    // The default plan buys each thing wherever it is cheapest, which is one
-    // landing per thing. Fuel and time cost more than the difference, so the
-    // panel offers the other answer outright.
+    // The plan starts stop-efficient. This button returns to that answer after
+    // the pilot has ticked counters by hand.
     const fewest = el('div', 'chooser-actions');
-    const pack = el('button', 'ghost', 'Fewest stops');
-    pack.title = 'Cover the list with as few landings as possible';
+    const pack = el('button', 'ghost', 'Optimise stops');
+    pack.title = 'Re-group the list into a stop-efficient route';
 
     pack.addEventListener('click', () => {
-      stops.length = 0;
-
-      const left = new Set(options.filter((o) => o.sellers.length).map((o) => o.item.name));
-
-      while (left.size) {
-        // Most of what is still missing, and the cheapest of those.
-        const best = ranked
-          .map((counter) => ({
-            counter,
-            covers: counter.supplies.filter((s) => left.has(s.item.name)),
-          }))
-          .filter((c) => c.covers.length)
-          .sort((a, b) => b.covers.length - a.covers.length
-            || a.covers.reduce((sum, s) => sum + s.seller.price * Math.max(1, s.item.needed), 0)
-             - b.covers.reduce((sum, s) => sum + s.seller.price * Math.max(1, s.item.needed), 0))[0];
-
-        if (!best) break;
-
-        stops.push(best.counter.seller.terminal);
-        best.covers.forEach((s) => left.delete(s.item.name));
-      }
-
-      assignFromStops();
+      optimiseStops();
       renderLocations();
       retally();
     });
@@ -20730,7 +22938,7 @@ async function planShoppingTrip(job, card) {
 
     for (const terminal of stops)
       for (const { item, sellers } of options)
-        if (!chosen.get(item.name) && sellers.some((s) => s.terminal === terminal))
+        if (!chosen.get(item.name) && suppliesAt(sellers, item, terminal))
           chosen.set(item.name, terminal);
   };
 
@@ -20763,6 +22971,10 @@ async function planShoppingTrip(job, card) {
 
   head.append(views);
 
+  // Do this before the first item rows render, so their selects already show
+  // the grouped route instead of briefly saying every line wants its cheapest
+  // counter.
+  optimiseStops();
   renderItems();
   retally();
 
