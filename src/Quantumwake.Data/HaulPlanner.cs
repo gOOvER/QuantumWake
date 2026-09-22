@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text;
 using Quantumwake.Core.State;
 
 namespace Quantumwake.Data;
@@ -125,15 +127,49 @@ public static class HaulPlanner
         var planned = new List<PlannedContract>();
         var taken = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var contract in hauling)
+        // One reading per frame, shared by every contract that considers it.
+        var legsByShot = new Dictionary<string, IReadOnlyList<HaulLeg>>(StringComparer.Ordinal);
+        IReadOnlyList<HaulLeg> LegsOf(ScreenSighting frame)
+        {
+            if (legsByShot.TryGetValue(frame.Shot, out var known)) return known;
+
+            // A frame with no reading has no legs. Candidates only asks about
+            // frames it has already filtered for one, so this is the memo
+            // being honest rather than a case that happens.
+            var legs = frame.Contracts is { } reading ? HaulLegs.From(reading).Legs : [];
+            return legsByShot[frame.Shot] = legs;
+        }
+
+        // Every contract's compatible frames before any is handed out. On
+        // 21 Sep a fifth same-title Carbon contract was accepted a minute
+        // after the fourth, and the card photographed after that fitted
+        // both; the card photographed before it could only be the older
+        // contract's. Handing the newest compatible frame to the first
+        // contract gave both contracts the one card and lost the other. A
+        // frame only one contract can claim goes to that contract first.
+        var wanted = hauling.Select(contract =>
         {
             var title = ContractTags.Clean(contract.Name);
             var archetype = HaulingContract.FromArchetype(contract.Raw);
-            var route = HaulingContract.RouteFromTitle(contract.Title);
             var titleIsAmbiguous = hauling.Count(other =>
                 ScreenFrames.SameContract(ContractTags.Clean(other.Name), title)) > 1;
+            return (title, archetype, candidates: Candidates(contract, title, archetype, titleIsAmbiguous, frames, LegsOf));
+        }).ToList();
 
-            var frame = BestFrame(contract, title, archetype, titleIsAmbiguous, frames, taken);
+        var claims = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var (_, _, candidates) in wanted)
+            foreach (var (frame, _) in candidates)
+                claims[frame.Shot] = claims.GetValueOrDefault(frame.Shot) + 1;
+
+        for (var index = 0; index < hauling.Count; index++)
+        {
+            var contract = hauling[index];
+            var (title, archetype, candidates) = wanted[index];
+            var route = HaulingContract.RouteFromTitle(contract.Title);
+
+            var frame = Pick(candidates.Where(c => claims[c.Frame.Shot] == 1))
+                ?? Pick(candidates.Where(c => !taken.Contains(c.Frame.Shot)))
+                ?? Pick(candidates);
             var reused = frame is not null && taken.Contains(frame.Shot);
 
             if (frame is not null)
@@ -213,17 +249,55 @@ public static class HaulPlanner
     }
 
     /// <summary>
-    /// The newest frame showing this contract selected, taken after it was
-    /// accepted, with the cargo and the source count as tie-breakers. A card
-    /// with no readable legs belongs to no plan: the title can still give a
-    /// useful partial route.
+    /// A short stable name for the run a page was shown, so a plan can be
+    /// committed as the one the pilot read rather than as whatever the next
+    /// call computes.
     /// </summary>
-    private static ScreenSighting? BestFrame(
-        ContractRecord contract, string title, HaulArchetype? archetype, bool titleIsAmbiguous,
-        IReadOnlyList<ScreenSighting> frames, HashSet<string> taken)
+    /// <remarks>
+    /// <para>
+    /// Over the stops and their actions, because those are what becomes the
+    /// flight plan, and over which contracts are on the run, because the trip
+    /// is named for how many there are - a contract that joins without moving
+    /// a stop still changes what gets written.
+    /// </para>
+    /// <para>
+    /// Not over the notes or the SCU floor: those move as cards are read
+    /// without the route moving, and re-reading a card the pilot already has
+    /// is no reason to refuse the run they chose.
+    /// </para>
+    /// </remarks>
+    public static string Fingerprint(HaulPlan plan)
     {
-        ScreenSighting? best = null;
-        var bestScore = int.MinValue;
+        var text = string.Join('\n',
+        [
+            .. plan.Contracts.Select(c => $"c|{c.MissionId}|{c.Title}"),
+            .. plan.Stops.Select(s =>
+                $"s|{s.PlaceId}|{s.Place}|{string.Join(',', s.Actions.Select(a => $"{a.Kind}:{a.Commodity}:{a.Scu}:{a.MissionId}"))}"),
+        ]);
+
+        return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..16];
+    }
+
+    /// <summary>The best-scored frame, newest among equals; null when there is none.</summary>
+    private static ScreenSighting? Pick(IEnumerable<(ScreenSighting Frame, int Score)> candidates) =>
+        candidates.OrderByDescending(c => c.Score).ThenByDescending(c => c.Frame.ShotAt).Select(c => c.Frame).FirstOrDefault();
+
+    /// <summary>
+    /// Every frame showing this contract selected, taken after it was
+    /// accepted, that the cargo and the source count do not rule out - scored
+    /// by how many of those signals it matched. A card with no readable legs
+    /// belongs to no plan: the title can still give a useful partial route.
+    /// </summary>
+    /// <param name="legsOf">
+    /// Reads a frame's legs once and remembers them. Every open contract walks
+    /// the same frame list, so without this the same card is parsed once per
+    /// contract on every request the page makes.
+    /// </param>
+    private static List<(ScreenSighting Frame, int Score)> Candidates(
+        ContractRecord contract, string title, HaulArchetype? archetype, bool titleIsAmbiguous,
+        IReadOnlyList<ScreenSighting> frames, Func<ScreenSighting, IReadOnlyList<HaulLeg>> legsOf)
+    {
+        var candidates = new List<(ScreenSighting, int)>();
 
         foreach (var frame in frames
             .Where(f => !f.Dismissed && f.Contracts?.SelectedTitle is { Length: > 0 })
@@ -233,7 +307,7 @@ public static class HaulPlanner
             if (!ScreenFrames.SameContract(frame.Contracts!.SelectedTitle!, title))
                 continue;
 
-            var (legs, _) = HaulLegs.From(frame.Contracts);
+            var legs = legsOf(frame);
             if (legs.Count == 0)
                 continue;
 
@@ -268,18 +342,10 @@ public static class HaulPlanner
             if (titleIsAmbiguous && signals == 0)
                 continue;
 
-            var score = signals;
-
-            // A frame already explaining another contract is a weaker claim
-            // for this one, but still better than nothing.
-            if (taken.Contains(frame.Shot))
-                score -= 10;
-
-            if (score > bestScore)
-                (best, bestScore) = (frame, score);
+            candidates.Add((frame, signals));
         }
 
-        return best;
+        return candidates;
     }
 
     /// <summary>"Aluminum" and "Aluminium" are one cargo; the engine's reading of either is close enough on six letters.</summary>
@@ -439,10 +505,15 @@ public static class HaulPlanner
             // Sources first, and among them the ones whose deliveries are also
             // ready so the stop is done in one visit; same body as the last
             // stop before anything else.
+            // The last fallback cannot come back empty - the loop runs only
+            // while `pending` has something in it, and Prefer returns null
+            // only for an empty list - but the compiler cannot see that, and
+            // silencing it with `!` would hide a real null here later.
             var next = Prefer(ready.Where(p => p.Loads.Count > 0), lastBody)
                 ?? Prefer(pending.Where(p => p.Loads.Count > 0), lastBody)
                 ?? Prefer(ready, lastBody)
-                ?? Prefer(pending, lastBody);
+                ?? Prefer(pending, lastBody)
+                ?? throw new UnreachableException("pending is not empty, so a place is always preferred");
 
             pending.Remove(next);
             foreach (var load in next.Loads) pickupsLeft[load.Contract]--;
@@ -471,43 +542,60 @@ public static class HaulPlanner
                 pending.Add(new Place(next.Name, next.Id, next.Body, next.System) { Unloads = later });
         }
 
-        return WithManifest(stops);
+        return WithManifest(stops, contracts);
     }
 
     /// <summary>
-    /// The game has no cargo manifest. Quantities printed on objectives make a
-    /// lower bound; a multi-pickup card names a total but not each source's
-    /// share, so that commodity stays explicitly unknown until the pilot has
-    /// confirmed its load action.
+    /// The game has no cargo manifest, so what is aboard is worked out per
+    /// contract from the stops behind. A multi-pickup card names a total but
+    /// not each source's share, so its commodity is unknown while a pickup is
+    /// still ahead - but once the last one is behind the whole total is
+    /// aboard, and once the last delivery is behind none of it is. Saying
+    /// "unknown" past either point would be the plan forgetting what it read.
     /// </summary>
-    private static List<HaulStop> WithManifest(List<HaulStop> stops)
+    private static List<HaulStop> WithManifest(List<HaulStop> stops, IReadOnlyList<PlannedContract> contracts)
     {
-        var aboard = new Dictionary<string, (string Name, int Known, bool Unknown)>(StringComparer.Ordinal);
+        // What each contract still has to move of each commodity, and how
+        // many of its stops the route holds - so a contract's share can be
+        // settled the moment its last pickup or last delivery is behind.
+        var lots = new Dictionary<(int, string), Lot>();
+        for (var i = 0; i < stops.Count; i++)
+        {
+            foreach (var action in stops[i].Actions)
+            {
+                var key = (action.Contract, ScreenInsight.Fold(action.Commodity ?? "Cargo"));
+                if (!lots.TryGetValue(key, out var lot))
+                    lots[key] = lot = new Lot(action.Commodity ?? "Cargo", Remaining(contracts[action.Contract], action.Commodity));
+                if (action.Kind == "load") lot.Loads++; else lot.Unloads++;
+            }
+        }
 
         for (var i = 0; i < stops.Count; i++)
         {
             foreach (var action in stops[i].Actions)
             {
-                var name = action.Commodity ?? "Cargo";
-                var key = ScreenInsight.Fold(name);
-                var cargo = aboard.TryGetValue(key, out var current) ? current : (Name: name, Known: 0, Unknown: false);
-
-                if (action.Scu is null)
+                var lot = lots[(action.Contract, ScreenInsight.Fold(action.Commodity ?? "Cargo"))];
+                if (action.Kind == "load")
                 {
-                    cargo.Unknown = true;
-                }
-                else if (action.Kind == "load")
-                {
-                    cargo.Known += action.Scu.Value;
+                    lot.LoadsSeen++;
+                    if (action.Scu is { } scu) lot.KnownLoaded += scu;
+                    else lot.EveryLoadPrinted = false;
                 }
                 else
                 {
-                    // When one source's share was not printed, subtracting a
-                    // known delivery can only lower the known floor to zero.
-                    cargo.Known = Math.Max(0, cargo.Known - action.Scu.Value);
+                    lot.UnloadsSeen++;
+                    lot.KnownUnloaded += action.Scu ?? 0;
                 }
+            }
 
-                aboard[key] = cargo;
+            var aboard = new Dictionary<string, (string Name, int Known, bool Unknown)>(StringComparer.Ordinal);
+            foreach (var ((_, commodity), lot) in lots)
+            {
+                if (lot.Aboard() is not var (known, unknown)) continue;
+                var cargo = aboard.TryGetValue(commodity, out var current) ? current : (Name: lot.Name, Known: 0, Unknown: false);
+                cargo.Known += known;
+                cargo.Unknown |= unknown;
+                aboard[commodity] = cargo;
             }
 
             var manifest = aboard.Values
@@ -519,6 +607,44 @@ public static class HaulPlanner
         }
 
         return stops;
+    }
+
+    /// <summary>One contract's share of one commodity, as the route passes its stops.</summary>
+    private sealed class Lot(string name, int? remaining)
+    {
+        public string Name { get; } = name;
+        public int? Remaining { get; } = remaining;
+        public int Loads, LoadsSeen, Unloads, UnloadsSeen, KnownLoaded, KnownUnloaded;
+        public bool EveryLoadPrinted = true;
+
+        /// <summary>
+        /// What this lot has aboard after the stops seen so far: null before
+        /// any of its stops, otherwise the amount and whether it is a floor.
+        /// </summary>
+        public (int Known, bool Unknown)? Aboard()
+        {
+            if (LoadsSeen == 0 && UnloadsSeen == 0) return null;
+            // Its last delivery is behind: nothing of it is left, whatever
+            // the pickups printed.
+            if (Unloads > 0 && UnloadsSeen == Unloads) return (0, false);
+            if (LoadsSeen > 0 && EveryLoadPrinted) return (Math.Max(0, KnownLoaded - KnownUnloaded), false);
+            // Every pickup is behind, so the card's total is aboard even
+            // though no source printed its share.
+            if (Loads > 0 && LoadsSeen == Loads && Remaining is { } total) return (Math.Max(0, total - KnownUnloaded), false);
+            return (Math.Max(0, KnownLoaded - KnownUnloaded), true);
+        }
+    }
+
+    /// <summary>What a contract still has to move of a commodity: its delivery line's total less what that line says has arrived.</summary>
+    private static int? Remaining(PlannedContract contract, string? commodity)
+    {
+        var key = ScreenInsight.Fold(commodity ?? "Cargo");
+        var lines = (contract.DeliveryDetails ?? [])
+            .Where(d => d.Scu is not null && ScreenInsight.Fold(d.Commodity ?? contract.Commodity ?? "Cargo") == key)
+            .ToList();
+        if (lines.Count > 0) return lines.Sum(d => d.Scu!.Value - (d.ScuDone ?? 0));
+        if (ScreenInsight.Fold(contract.Commodity ?? "Cargo") == key) return contract.RemainingScu ?? contract.Scu;
+        return null;
     }
 
     private static Place? Prefer(IEnumerable<Place> candidates, string? body)

@@ -874,7 +874,9 @@ function contractFocus(contracts) {
     const detail = hauls.length === 1
       ? (hauls[0].delivery ? `Deliver to ${hauls[0].delivery}` : hauls[0].name)
       : `${hauls.length} hauls open${ends.length ? ` — to ${ends.join(', ')}` : ''}`;
-    return { title: hauls.length === 1 ? 'Hauling' : 'Hauling run', detail, view: 'jobs', action: 'Plan the run' };
+    // Shopping keeps the run under the lists, off the bottom of the page
+    // when a list is open: the button lands on the run, not on the header.
+    return { title: hauls.length === 1 ? 'Hauling' : 'Hauling run', detail, view: 'jobs', action: 'Plan the run', anchor: '#jobs-contracts' };
   }
 
   return { title: 'Active contract', detail: contracts[0].name || 'Open contract', view: 'contracts', action: 'Contracts' };
@@ -904,7 +906,7 @@ function renderNowFocus(state, briefing = pilotBriefing) {
   detail.textContent = focus.detail;
   open.hidden = false;
   open.textContent = focus.action;
-  open.onclick = () => showView(focus.view);
+  open.onclick = () => { jobsLandOn = focus.anchor || null; showView(focus.view); };
 }
 
 function renderNow(state) {
@@ -15338,6 +15340,20 @@ async function renderPinnedJob(jobs) {
   card.hidden = false;
 }
 
+/**
+ * Where the Shopping page should scroll once its contracts have rendered.
+ * Set by a button that promised the run rather than the page, and spent on
+ * the next load so a later tab click lands at the top as usual.
+ */
+let jobsLandOn = null;
+
+/** Scroll to the panel a button promised, once it has something to show. */
+function landOnJobs() {
+  if (!jobsLandOn) return;
+  $(jobsLandOn)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  jobsLandOn = null;
+}
+
 async function loadJobContracts() {
   const host = $('#jobs-contracts');
   host.textContent = '';
@@ -15354,6 +15370,7 @@ async function loadJobContracts() {
     host.append(el('p', 'muted',
       'Nothing active — the game is not running. Contracts are dropped when you leave, '
       + 'so only a live session can have any.'));
+    landOnJobs();
     return;
   }
 
@@ -15373,6 +15390,7 @@ async function loadJobContracts() {
 
   if (!open.length && !plan?.contracts?.length) {
     host.append(el('p', 'muted', 'No contract open in this session.'));
+    landOnJobs();
     return;
   }
 
@@ -15380,7 +15398,17 @@ async function loadJobContracts() {
 
   // Everything that is not a haul keeps its plain card; the hauls are on
   // the run above, with their legs.
-  for (const contract of open.filter((c) => !c.hauling)) {
+  //
+  // A haul only gives up its plain card to a run that actually put it on
+  // screen. The two lists come from different places - the cards from
+  // /api/contracts, the run from /api/haul/plan - so when the run request
+  // fails, or simply does not carry a contract the cards do, dropping every
+  // haul here left the panel completely empty: no run, no cards, and no
+  // message either, because the "No contract open" line above only appears
+  // when there is nothing open at all.
+  const planned = new Set((plan?.contracts || []).map((c) => c.title));
+
+  for (const contract of open.filter((c) => !c.hauling || !planned.has(c.name))) {
     const card = el('article', 'job-card');
 
     const head = el('div', 'job-head');
@@ -15399,6 +15427,8 @@ async function loadJobContracts() {
 
     host.append(card);
   }
+
+  landOnJobs();
 }
 
 /**
@@ -15409,9 +15439,22 @@ async function loadJobContracts() {
  * What the plan cannot see is said in words next to the thing it cannot see,
  * because a route with a pickup silently missing is worse than no route.
  */
+/**
+ * Something to say about the run the next time it is drawn - set when the
+ * server refuses a stale one. It cannot live on the button, because showing
+ * the pilot the run that now exists means re-rendering the panel the button
+ * is in.
+ */
+let haulPlanNotice = null;
+
 function renderHaulPlan(host, plan) {
   const section = el('div', 'haul-plan');
   section.append(el('h3', 'spaced', 'Hauling run'));
+
+  if (haulPlanNotice) {
+    section.append(el('p', 'outward caption', haulPlanNotice));
+    haulPlanNotice = null;
+  }
 
   const read = plan.contracts.filter((c) => c.source === 'screenshot').length;
   const summary = [
@@ -15519,13 +15562,29 @@ function renderHaulPlan(host, plan) {
     make.addEventListener('click', async () => {
       make.disabled = true;
       try {
-        const result = await fetch('/api/haul/plan/trip', { method: 'POST' }).then((r) => r.json());
+        // The run this button was drawn for, so the server commits the stops
+        // that were read rather than the ones that exist by the time the
+        // click arrives.
+        const result = await fetch('/api/haul/plan/trip', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ planId: plan.planId || null }),
+        }).then((r) => r.json());
         if (result?.id) {
           make.textContent = `✓ ${result.title} — ${result.stops} stops, tracked`;
           if (typeof loadTrips === 'function') loadTrips().catch(() => {});
         } else {
           make.textContent = result?.message || 'could not plan';
           make.disabled = false;
+
+          // The run moved under it: show the new one rather than leave the
+          // stale stops on screen next to a message about them. The message
+          // goes with it - re-rendering the panel takes this button, and its
+          // text, with it.
+          if (result?.planId) {
+            haulPlanNotice = result.message;
+            loadJobContracts().catch(() => {});
+          }
         }
       } catch {
         make.textContent = 'failed';

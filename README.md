@@ -365,7 +365,64 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.28
+### 0.15.31
+
+- **Hauling contracts no longer disappear when the run cannot be worked
+  out.** The cards and the run above them come from two different places,
+  and a haul gave up its own card to a run that had not arrived — so if the
+  run failed, Shopping showed an empty panel with no contracts, no run and
+  no explanation, however many were open. Each haul now keeps its plain card
+  unless the run actually put it on screen.
+
+- **A drop-off is no longer listed twice under two spellings.** The
+  objectives panel abbreviates where the letter above it spells out — *NB
+  Int. Spaceport* against *New Babbage International Spaceport* — and the
+  two read as different places, so the run gained a second stop for a
+  destination already on it, and the flight plan gained one too. Nothing
+  showed it, because the invented stop carried no SCU and the totals still
+  added up.
+
+- **"Make it the flight plan" now means the run on screen.** It used to
+  work the route out again when pressed, so a card photographed — or a
+  contract handed in — in between wrote stops nobody had looked at and
+  reported them as though they had been chosen. It now says the run has
+  changed, shows the new one, and waits to be asked again.
+
+- **The cargo aboard is settled as soon as it can be.** A multi-pickup card
+  prints the total to deliver and no share per source, so after the first
+  pickup the amount is unknown — but after the last one the whole total is
+  aboard, and after the delivery none of it is. The run used to say
+  *unknown* from the first pickup to the end; it now says *293 SCU* once
+  every source is behind, and drops the cargo once it is delivered. Two
+  contracts of one commodity keep the settled one's figure and call the
+  rest a floor.
+
+- **A card the objectives panel cut short is still read whole.** The panel
+  shows two or three lines and the rest are below the fold; the letter above
+  it lists every pickup, and for a one-source contract every drop-off. Those
+  lists now fill in the legs the panel did not reach, so a card no longer
+  reads as one pickup short and gets refused as another contract's. A
+  Lagrange station's tail — *at the L3 Lagrange of Pyro III*, *at Crusader's
+  L5 Lagrange point* — is now the body, not part of the name, so the letter
+  and the objective agree on the place. Two cards of the 21 Sep run were
+  refused for this; both read now.
+
+- **A card that fits only one contract goes to that contract.** Two open
+  contracts with the same title and cargo, one card photographed before the
+  second was accepted and one after: the first card can only be the older
+  contract's, but the newest compatible card went to it and the other card
+  was dropped. Cards that fit exactly one contract are handed out first.
+
+- **A title that wraps onto a second line reads whole.** *Member | Stellar
+  Medium Haul | from Ruin* then *Station*: the second line is now joined,
+  so the card matches its contract. A screenshot read before this update
+  keeps its old reading — *Read again* on the Log page re-reads it.
+
+- **"Plan the run" lands on the run.** The Now page's button took you to the
+  top of Shopping, where the hauling run sits below the lists — under
+  *Contracts in progress*, off the bottom of the page whenever a list is
+  open. With five contracts accepted that looked like an empty page. It now
+  scrolls to the run once the contracts have rendered.
 
 - **Cargo stays distinct through a hauling run.** A shared destination now
   keeps a separate unload for each commodity, with the amount still to

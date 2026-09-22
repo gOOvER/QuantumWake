@@ -16,6 +16,11 @@ public sealed record ContractCard(string Title, string? Reward, string? Issuer);
 /// which is where the game says what body a pickup is on - "Freight elevator
 /// at Fallow Field on Pyro IV" - and the objectives never do.
 /// </param>
+/// <param name="DropSites">
+/// The "DROP OFF LOCATIONS (ANY ORDER)" list, the same list for a contract
+/// with one source and several destinations; the objectives panel shows
+/// the first two or three and the rest are below the fold.
+/// </param>
 public sealed record ContractsReading(
     int? Accepted,
     int? Capacity,
@@ -25,7 +30,8 @@ public sealed record ContractsReading(
     string? SelectedIssuer,
     IReadOnlyList<string> Objectives,
     IReadOnlyList<ContractStep>? Steps = null,
-    IReadOnlyList<PickupSite>? PickupSites = null);
+    IReadOnlyList<PickupSite>? PickupSites = null,
+    IReadOnlyList<PickupSite>? DropSites = null);
 
 /// <summary>One objective of the selected contract, as the mobiGlas prints it.</summary>
 /// <remarks>
@@ -173,11 +179,21 @@ public static partial class ScreenFrames
             .Where(line => anchor is null || line.Left > anchor.Left + anchor.Height * 6)
             .Min(line => (double?)line.Left) ?? tab.Left;
 
-        var selected = lines
+        // A long title wraps - "Member | Stellar Medium Haul | from Ruin" then
+        // "Station" - at the same size directly under; the 21 Sep Waste card
+        // lost its last word and matched no contract. Every large line within
+        // two heights of the one above is the same title.
+        var headline = lines
             .Where(line => line.Left > panelLeft - tab.Height * 2 && line.Top > tab.Top)
             .Where(line => line.Height >= tab.Height * 2)
             .OrderBy(line => line.Top)
-            .FirstOrDefault()?.Text;
+            .ToList();
+        string? selected = null;
+        for (var i = 0; i < headline.Count; i++)
+        {
+            if (i > 0 && headline[i].Top - headline[i - 1].Top > headline[i - 1].Height * 2) break;
+            selected = selected is null ? headline[i].Text : selected + " " + headline[i].Text.Trim();
+        }
 
         var reward2 = Beside(lines, "Reward") is { } figure ? Figure(figure) : null;
         var issuer2 = Beside(lines, "Contracted By");
@@ -186,7 +202,7 @@ public static partial class ScreenFrames
         var steps = objectivesHead is null ? [] : ReadObjectives(lines, objectivesHead);
 
         return new ContractsReading(accepted, capacity, cards, selected, reward2, issuer2,
-            [.. steps.Select(s => s.Text)], steps, ReadPickupSites(lines));
+            [.. steps.Select(s => s.Text)], steps, ReadSites(lines, "PICK UP LOCATIONS"), ReadSites(lines, "DROP OFF LOCATIONS"));
     }
 
     /// <summary>
@@ -278,10 +294,19 @@ public static partial class ScreenFrames
     /// "Seraphim Station above Crusader" is a place and the body it orbits;
     /// "The Golden Riviera on Pyro III" is a place and the body it stands on.
     /// The tail is taken only when it is short enough to be a body's name.
+    /// A Lagrange station is printed either way round - "Patch City at the
+    /// L3 Lagrange of Pyro III", "Beautiful Glen Station at Crusader's L5
+    /// Lagrange point" - and the objective names it bare, so the tail has
+    /// to come off for the two to be the same place.
     /// </summary>
-    private static (string Place, string? Body) SplitBody(string value)
+    internal static (string Place, string? Body) SplitBody(string value)
     {
         var text = Whitespace().Replace(value, " ").Trim().TrimEnd('.').Trim();
+
+        var lagrange = LagrangeRegex().Match(text);
+        if (lagrange.Success)
+            return (lagrange.Groups["place"].Value.Trim(),
+                (lagrange.Groups["of"].Success ? lagrange.Groups["of"] : lagrange.Groups["whose"]).Value.Trim());
 
         foreach (var joint in new[] { " above ", " on " })
         {
@@ -297,12 +322,13 @@ public static partial class ScreenFrames
     }
 
     /// <summary>
-    /// The contract text's own pickup list, when the selected contract prints
-    /// one: "PICK UP LOCATIONS (ANY ORDER)" then a dash per place.
+    /// The contract text's own place list, when the selected contract prints
+    /// one: "PICK UP LOCATIONS (ANY ORDER)" or "DROP OFF LOCATIONS (ANY
+    /// ORDER)", then a dash per place.
     /// </summary>
-    private static List<PickupSite> ReadPickupSites(IReadOnlyList<ScreenTextLine> lines)
+    private static List<PickupSite> ReadSites(IReadOnlyList<ScreenTextLine> lines, string heading)
     {
-        var head = lines.FirstOrDefault(line => Opens(line.Text, "PICK UP LOCATIONS"));
+        var head = lines.FirstOrDefault(line => Opens(line.Text, heading));
         if (head is null) return [];
 
         var sites = new List<PickupSite>();
@@ -404,6 +430,12 @@ public static partial class ScreenFrames
     // of its lookalikes and the elevator is not always mentioned.
     [GeneratedRegex(@"^[-–—•·]\s*(?:Freight\s+elevator\s+at\s+)?(?<place>.+?)\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex PickupSiteRegex();
+
+    // "Patch City at the L3 Lagrange of Pyro III" and "Beautiful Glen Station
+    // at Crusader's L5 Lagrange point": the L reads as I or 1 as often as
+    // not, and the 21 Sep frames read L5 as "LS" and L1 as "LI".
+    [GeneratedRegex(@"^(?<place>.+?)\s+at\s+(?:the\s+[LI1][\dSOIl]\s+Lagrange\s+(?:point\s+)?of\s+(?<of>.+?)|(?<whose>.+?)'?s\s+[LI1][\dSOIl]\s+Lagrange(?:\s+point)?)\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex LagrangeRegex();
 
     [GeneratedRegex(@"\s{2,}")]
     private static partial Regex Whitespace();

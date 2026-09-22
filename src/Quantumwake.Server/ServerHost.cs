@@ -3475,6 +3475,7 @@ public static class ServerHost
                 now.InGame,
                 now.Ship,
                 shipScu = hold,
+                planId = HaulPlanner.Fingerprint(plan),
                 plan.Contracts,
                 plan.Stops,
                 plan.KnownScu,
@@ -3487,7 +3488,7 @@ public static class ServerHost
         // and the overlay lead with the next stop. Each stop's loads and
         // unloads become the stop's actions, with the SCU where the screen
         // printed one; the pilot can reorder the stops from there.
-        app.MapPost("/api/haul/plan/trip", (LiveSessionService live, ScreenReadingStore readings, LogLibrary lib, TripStore trips) =>
+        app.MapPost("/api/haul/plan/trip", (LiveSessionService live, ScreenReadingStore readings, LogLibrary lib, TripStore trips, HaulTripRequest? body) =>
         {
             if (!live.Current.InGame)
                 return Results.BadRequest(new { message = "No session running, so no contracts to plan." });
@@ -3496,6 +3497,18 @@ public static class ServerHost
 
             if (plan.Stops.Count == 0)
                 return Results.BadRequest(new { message = "Nothing to plan: no open hauling contract names a place yet." });
+
+            // The button says "make it the flight plan", so it has to mean
+            // this run and not whatever the route is by the time the click
+            // lands. A card photographed - or a contract handed in - between
+            // the render and the press moves the stops, and the old behaviour
+            // wrote the new ones while reporting a count for them as though
+            // the pilot had chosen them. Say so instead; the page re-reads.
+            var current = HaulPlanner.Fingerprint(plan);
+            if (body?.PlanId is { Length: > 0 } seen && seen != current)
+                return Results.Json(
+                    new { message = "The run changed since this was shown - here it is again, have another look.", planId = current },
+                    statusCode: StatusCodes.Status409Conflict);
 
             var title = $"Hauling run · {plan.Contracts.Count} contract{(plan.Contracts.Count == 1 ? "" : "s")}";
             var trip = trips.Add(title, plan.Stops.Select(s => new TripStop("", s.PlaceId, s.Place, s.Note, false, null)));
@@ -4422,7 +4435,6 @@ static WipeScope ScopeOf(List<string>? covers)
     return scope == WipeScope.None ? WipeScope.Everything : scope;
 }
 
-/// <summary>The game's class id for each display name this install can resolve.</summary>
 /// <summary>
 /// A place the contract text names, on the map - or null, and the stop keeps
 /// its name. The atlas is the places the logs have seen visited, resolved the
@@ -4433,6 +4445,7 @@ static ResolvedPlace? ResolvePlace(LogLibrary lib, string name) =>
         ? new ResolvedPlace(place.RawId, place.Name, place.Body, place.System)
         : null;
 
+/// <summary>The game's class id for each display name this install can resolve.</summary>
 static Dictionary<string, string> VehicleClasses(LogLibrary lib)
 {
     var byName = lib.GameCommodities.Vehicles.Values
@@ -5456,6 +5469,16 @@ public sealed record WipeRequest(DateTimeOffset? At, string? Patch, List<string>
 
 /// <summary>Body of POST /api/trips.</summary>
 public sealed record TripRequest(string? Title, List<TripStop>? Stops);
+
+/// <summary>
+/// Body of POST /api/haul/plan/trip.
+/// </summary>
+/// <param name="PlanId">
+/// The fingerprint of the run the page was showing when the button was
+/// pressed. Omitted, the current run is committed unchecked - which is what
+/// a caller that never rendered one wants.
+/// </param>
+public sealed record HaulTripRequest(string? PlanId);
 
 /// <summary>Body of POST /api/trips/{id}/stops/{stopId}/actions.</summary>
 public sealed record RunActionRequest(string? Kind, string? Text, decimal? Quantity, string? Unit, RunActionLink? Link = null);

@@ -191,4 +191,129 @@ public class HaulPlanTests
         Assert.Equal("Large Covalex Shipment Needs Recovering", page.NodeText("#now-focus-detail"));
         Assert.Equal("Contracts", page.NodeText("#now-focus-open"));
     }
+
+    /// <summary>
+    /// The run sits under the shopping lists, off the bottom of the page when
+    /// a list is open. A button that says "Plan the run" and lands on the
+    /// Shopping header reads as an empty page - so it scrolls to the run once
+    /// the contracts have rendered, and only that once.
+    /// </summary>
+    [Fact]
+    public void Plan_the_run_lands_on_the_run_rather_than_the_shopping_header()
+    {
+        var page = new Page();
+        page.Serve("/api/now", Now);
+        page.Serve("/api/contracts?days=2", Contracts);
+        page.Serve("/api/haul/plan", Plan);
+        page.Serve("/api/trips", "[]");
+        page.Do("""
+            globalThis.__landed = 0;
+            __dom.node('#jobs-contracts').scrollIntoView = () => { globalThis.__landed++; };
+            renderNowFocus({ contracts: [
+              { name: 'Junior | Stellar Small Haul | to Stanton Gateway', hauling: true, delivery: 'Stanton Gateway' } ] });
+            __dom.node('#now-focus-open').onclick();
+            await loadJobContracts();
+            """);
+
+        Assert.Equal(1, page.Count("__landed"));
+        Assert.Equal(1, page.Count($"{Host}.byClass('haul-plan').length"));
+
+        // A plain visit to Shopping afterwards stays at the top.
+        page.Do("await loadJobContracts();");
+        Assert.Equal(1, page.Count("__landed"));
+    }
+
+    [Fact]
+    public void A_contract_that_is_not_a_haul_does_not_promise_a_landing()
+    {
+        var page = new Page();
+        page.Serve("/api/now", Now);
+        page.Serve("/api/contracts?days=2", Contracts);
+        page.Serve("/api/haul/plan", Plan);
+        page.Serve("/api/trips", "[]");
+        page.Do("""
+            globalThis.__landed = 0;
+            __dom.node('#jobs-contracts').scrollIntoView = () => { globalThis.__landed++; };
+            renderNowFocus({ contracts: [ { name: 'Large Covalex Shipment Needs Recovering', hauling: false } ] });
+            __dom.node('#now-focus-open').onclick();
+            await loadJobContracts();
+            """);
+
+        Assert.Equal(0, page.Count("__landed"));
+    }
+
+    /// <summary>
+    /// The run failing does not take the contracts with it.
+    /// </summary>
+    /// <remarks>
+    /// The cards and the run come from two different endpoints, and the hauls
+    /// gave up their plain card to a run that had not rendered: the panel came
+    /// out completely empty - no run, no cards, and no message either, because
+    /// the "no contract open" line only appears when nothing is open at all.
+    /// The install with contracts open saw the least.
+    /// </remarks>
+    [Fact]
+    public void A_haul_keeps_its_plain_card_when_the_run_cannot_be_fetched()
+    {
+        var page = new Page();
+        page.Serve("/api/now", Now);
+        page.Serve("/api/contracts?days=2", Contracts);
+        page.Serve("/api/trips", "[]");
+        page.Do("__fetch.unreachable.push('/api/haul/plan');");
+        page.Do("await loadJobContracts();");
+
+        Assert.Equal(0, page.Count($"{Host}.byClass('haul-plan').length"));
+
+        // Both contracts are on the page, the haul included.
+        Assert.Equal(2, page.Count($"{Host}.byClass('job-card').length"));
+        Assert.Contains("Stellar Small Haul", page.NodeText("#jobs-contracts"));
+    }
+
+    /// <summary>A haul the run does not carry keeps its card, even when the run rendered.</summary>
+    [Fact]
+    public void A_haul_the_run_left_out_keeps_its_plain_card()
+    {
+        var page = Loaded("""
+            {"inGame":true,"ship":"RSI Hermes","shipScu":480,"planId":"abc123",
+             "contracts":[
+               {"title":"Junior | Stellar Small Haul | to Ruin Station","missionId":"m2","commodity":"Copper","shape":"MultiToSingle",
+                "legs":[{"pickup":null,"pickupBody":null,"delivery":"Ruin Station","deliveryBody":null,"commodity":"Copper","scu":null,"scuDone":null}],
+                "source":"title","shot":null,"shotAt":null,"pickups":0,"pickupsDone":0,"deliveries":0,"deliveriesDone":0,"scu":null,"note":null}
+             ],
+             "stops":[],"knownScu":0,"notes":[]}
+            """);
+
+        // The Stanton Gateway haul is open but not on the run, so it is still
+        // shown rather than dropped between the two lists.
+        Assert.Contains("Stellar Small Haul | to Stanton Gateway", page.NodeText("#jobs-contracts"));
+    }
+
+    /// <summary>
+    /// The button commits the run that was read, not whatever the route is by
+    /// the time the click lands.
+    /// </summary>
+    [Fact]
+    public void Making_the_flight_plan_sends_the_run_it_was_drawn_for()
+    {
+        var page = Loaded(Plan.Replace("\"inGame\":true", "\"inGame\":true,\"planId\":\"abc123\""));
+        page.Serve("/api/haul/plan/trip", """{"id":"t1","title":"Hauling run · 2 contracts","stops":4}""");
+        page.Do($"await {Host}.byClass('haul-make')[0].fire('click');");
+
+        Assert.Contains("\"planId\":\"abc123\"", page.BodyOf("/api/haul/plan/trip"));
+    }
+
+    /// <summary>A run that moved under the button says so, and the page shows the new one.</summary>
+    [Fact]
+    public void A_run_that_changed_under_the_button_is_reported_not_committed()
+    {
+        var page = Loaded(Plan.Replace("\"inGame\":true", "\"inGame\":true,\"planId\":\"abc123\""));
+        page.Fail("/api/haul/plan/trip", 409,
+            """{"message":"The run changed since this was shown - here it is again, have another look.","planId":"def456"}""");
+        page.Do($"await {Host}.byClass('haul-make')[0].fire('click');");
+
+        Assert.Contains("The run changed", page.NodeText("#jobs-contracts"));
+
+        // Re-read, so the stops on screen are the ones that now exist.
+        Assert.Equal(2, page.Fetched().Count(c => c == "GET /api/haul/plan"));
+    }
 }
