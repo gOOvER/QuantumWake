@@ -35,6 +35,14 @@ public sealed record HaulLeg(
 /// A step with no children is a leg on its own with one end missing, which is
 /// what the app shows rather than pairing it with a neighbour by guesswork.
 /// </para>
+/// <para>
+/// The objectives panel is the shorter list and the one that gets cut off:
+/// the 21 Sep Potassium card read "Deliver 0/213 SCU" and one Collect line
+/// where the letter above it listed two pickups. On a multi-pickup the two
+/// lists name the same places, so a site the objectives missed is added as
+/// a leg of its own - a card read as one pickup short is rejected as
+/// another contract's, which is worse than a leg without a count.
+/// </para>
 /// </remarks>
 public static class HaulLegs
 {
@@ -45,7 +53,8 @@ public static class HaulLegs
     public static (IReadOnlyList<HaulLeg> Legs, IReadOnlyList<Delivery> Deliveries) From(ContractsReading reading)
     {
         var steps = reading.Steps ?? [];
-        var sites = reading.PickupSites ?? [];
+        var sites = Split(reading.PickupSites);
+        var drops = Split(reading.DropSites);
         var legs = new List<HaulLeg>();
         var deliveries = new List<Delivery>();
 
@@ -89,10 +98,50 @@ public static class HaulLegs
                         parent.Place, parent.Body,
                         child.Commodity ?? parent.Commodity,
                         null, null));
+
+                // Only when this is the card's one delivery: with several,
+                // which one a missed site belongs under is a guess.
+                if (steps.Count(s => s.Depth == 0 && s.Kind == "deliver") == 1)
+                    foreach (var site in sites.Where(site => !children.Any(c => c.Place is not null && SamePlace(c.Place, site.Place))))
+                        legs.Add(new HaulLeg(site.Place, site.Body, parent.Place, parent.Body, parent.Commodity, null, null));
             }
         }
 
+        // One source, several destinations, and the objectives panel showing
+        // the first of them: the 21 Sep Waste card read "Deliver 0/61 SCU to
+        // Starlight Service Station" over "Collect Waste from Ruin Station"
+        // where the letter listed three drop-offs. A destination the panel
+        // did not reach is a leg from that one source, with no count.
+        var sources = legs.Where(l => l.Pickup is not null).Select(l => l.Pickup!).Distinct().ToList();
+        if (drops.Count > 0 && sources.Count == 1)
+        {
+            var source = legs.First(l => l.Pickup == sources[0]);
+            foreach (var drop in drops.Where(drop => !legs.Any(l => l.Delivery is not null && SamePlace(l.Delivery, drop.Place))))
+                legs.Add(new HaulLeg(source.Pickup, source.PickupBody, drop.Place, drop.Body, source.Commodity, null, null));
+        }
+
         return (legs, deliveries);
+    }
+
+    /// <summary>
+    /// The list with each Lagrange station's tail taken off. A reading stored
+    /// before the reader did that keeps "Rat's Nest at the L5 Lagrange of
+    /// Pyro V" as the place; splitting again is idempotent and spares a
+    /// re-read.
+    /// </summary>
+    private static List<PickupSite> Split(IReadOnlyList<PickupSite>? sites) =>
+        (sites ?? []).Select(site =>
+        {
+            var (place, body) = ScreenFrames.SplitBody(site.Place);
+            return new PickupSite(place, site.Body ?? body);
+        }).ToList();
+
+    /// <summary>"CRU-L5 Beautiful Glen Station" and "Beautiful Glen Station" are one place; the engine's reading of either has the same letters inside.</summary>
+    private static bool SamePlace(string a, string b)
+    {
+        var x = ScreenInsight.Fold(a);
+        var y = ScreenInsight.Fold(b);
+        return x.Length > 0 && y.Length > 0 && (x.Contains(y) || y.Contains(x));
     }
 
     /// <summary>The body a pickup is on: from the objective if it said, else from the contract text's own list.</summary>

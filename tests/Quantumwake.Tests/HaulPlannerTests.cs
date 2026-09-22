@@ -236,6 +236,108 @@ public class HaulPlannerTests
         Assert.Contains(afterSecondPickup, cargo => cargo is { Commodity: "Copper", KnownScu: 4, AmountUnknown: false });
     }
 
+    /// <summary>
+    /// The 21 Sep Potassium card, as Copper so the fixture's mission id
+    /// agrees: "Deliver 0/293 SCU" and two "Collect from" lines with no
+    /// number on either. Unknown after the first
+    /// pickup is honest; after the second the whole 293 is aboard, and after
+    /// Ruin Station none of it is.
+    /// </summary>
+    [Fact]
+    public void A_multi_pickup_total_is_known_once_its_last_pickup_is_behind_and_gone_once_delivered()
+    {
+        const string title = "Member | Stellar Medium Haul | to Ruin Station";
+        var plan = HaulPlanner.Plan(
+            [Contract("m1", Multi2Copper, title)],
+            [Card("potassium.jpg", 48, title,
+                new("Deliver 0/293 SCU of Copper to Ruin Station above Pyro VI.", "deliver", "Copper", "Ruin Station", "Pyro VI", 0, 293, 0),
+                new("Collect Copper from Dudley e Daughters.", "collect", "Copper", "Dudley e Daughters", null, null, null, 1),
+                new("Collect Copper from Starlight Service Station.", "collect", "Copper", "Starlight Service Station", null, null, null, 1))],
+            Atlas);
+
+        var stops = plan.Stops;
+        Assert.Equal(3, stops.Count);
+        Assert.Equal("Ruin Station", stops[2].Place);
+
+        var afterFirst = Assert.Single(stops[0].Aboard!);
+        Assert.Equal(("Copper", 0, true), (afterFirst.Commodity, afterFirst.KnownScu, afterFirst.AmountUnknown));
+
+        var afterSecond = Assert.Single(stops[1].Aboard!);
+        Assert.Equal(("Copper", 293, false), (afterSecond.Commodity, afterSecond.KnownScu, afterSecond.AmountUnknown));
+
+        Assert.Empty(stops[2].Aboard!);
+    }
+
+    /// <summary>Two contracts for the same commodity: one settled, one still collecting, and the manifest says which part is the floor.</summary>
+    [Fact]
+    public void Two_contracts_of_one_commodity_keep_the_settled_share_known()
+    {
+        const string title = "Member | Stellar Medium Haul | to Ruin Station";
+        var plan = HaulPlanner.Plan(
+            [
+                Contract("m1", Multi2Copper, title),
+                Contract("m2", Multi3Copper, title, 1),
+            ],
+            [
+                Card("two.jpg", 48, title,
+                    new("Deliver 0/100 SCU of Copper to Ruin Station.", "deliver", "Copper", "Ruin Station", null, 0, 100, 0),
+                    new("Collect Copper from Alpha.", "collect", "Copper", "Alpha", null, null, null, 1),
+                    new("Collect Copper from Beta.", "collect", "Copper", "Beta", null, null, null, 1)),
+                Card("three.jpg", 49, title,
+                    new("Deliver 0/60 SCU of Copper to Ruin Station.", "deliver", "Copper", "Ruin Station", null, 0, 60, 0),
+                    new("Collect Copper from Gamma.", "collect", "Copper", "Gamma", null, null, null, 1),
+                    new("Collect Copper from Delta.", "collect", "Copper", "Delta", null, null, null, 1),
+                    new("Collect Copper from Epsilon.", "collect", "Copper", "Epsilon", null, null, null, 1)),
+            ],
+            Atlas);
+
+        var pickups = plan.Stops.Where(stop => stop.Actions.All(a => a.Kind == "load")).ToList();
+        Assert.Equal(5, pickups.Count);
+
+        // Somewhere along the pickups the two-source contract is complete
+        // while the three-source one is not: 100 known, the rest a floor.
+        Assert.Contains(pickups, stop => stop.Aboard!.Any(c => c is { Commodity: "Copper", KnownScu: 100, AmountUnknown: true }));
+
+        var last = pickups[^1];
+        var cargo = Assert.Single(last.Aboard!);
+        Assert.Equal((160, false), (cargo.KnownScu, cargo.AmountUnknown));
+        Assert.Empty(plan.Stops.Last().Aboard!);
+    }
+
+    /// <summary>
+    /// 21 Sep: two same-title Carbon contracts, one accepted at 01:41 and
+    /// one at 01:44. The card photographed at 01:43 can only be the first's;
+    /// the card photographed at 01:44:49 fits both. The newest compatible
+    /// frame went to the first contract and the second reused it, so the
+    /// Endgame / Stanton Gateway card - the only one for its contract - was
+    /// dropped from the plan.
+    /// </summary>
+    [Fact]
+    public void A_card_only_one_contract_can_claim_goes_to_that_contract_before_a_shared_one()
+    {
+        const string title = "Member | Stellar Medium Haul | to Ruin Station";
+        var plan = HaulPlanner.Plan(
+            [
+                Contract("m1", Multi2Copper, title),
+                Contract("m2", Multi2Copper, title, 3),
+            ],
+            [
+                Card("first.jpg", 2, title,
+                    new("Deliver 0/257 SCU of Copper to Ruin Station above Pyro VI.", "deliver", "Copper", "Ruin Station", "Pyro VI", 0, 257, 0),
+                    new("Collect Copper from Endgame.", "collect", "Copper", "Endgame", null, null, null, 1),
+                    new("Collect Copper from Stanton Gateway.", "collect", "Copper", "Stanton Gateway", null, null, null, 1)),
+                Card("second.jpg", 4, title,
+                    new("Deliver 0/129 SCU of Copper to Ruin Station above Pyro VI.", "deliver", "Copper", "Ruin Station", "Pyro VI", 0, 129, 0),
+                    new("Collect Copper from Starlight Service Station.", "collect", "Copper", "Starlight Service Station", null, null, null, 1),
+                    new("Collect Copper from Location1Address.", "collect", "Copper", "Location1Address", null, null, null, 1)),
+            ],
+            Atlas);
+
+        Assert.Equal(["first.jpg", "second.jpg"], plan.Contracts.Select(c => c.Shot));
+        Assert.All(plan.Contracts, c => Assert.Null(c.Note));
+        Assert.Equal(257 + 129, plan.KnownScu);
+    }
+
     [Fact]
     public void A_frame_from_before_the_contract_was_taken_does_not_count()
     {

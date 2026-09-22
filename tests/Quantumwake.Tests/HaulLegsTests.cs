@@ -181,14 +181,111 @@ public class HaulLegsTests
         Assert.Equal(text, step.Text);
     }
 
-    /// <summary>A pickup line wrapped onto a second line is one site, not one site and a break.</summary>
+    /// <summary>
+    /// A pickup line wrapped onto a second line is one site, not one site and
+    /// a break; and a Lagrange station's tail is the body, not the name, so
+    /// the objective's bare "Beautiful Glen Station" finds it.
+    /// </summary>
     [Fact]
     public void A_wrapped_pickup_line_is_still_one_site()
     {
         var app = Read(MultiDrop).Contracts!;
 
         Assert.Equal(2, app.PickupSites!.Count);
-        Assert.Equal("Beautiful Glen Station at Crusader's L5 Lagrange point", app.PickupSites[0].Place);
-        Assert.Equal("Shallow Fields Station at Crusader's L4 Lagrange point", app.PickupSites[1].Place);
+        Assert.Equal(("Beautiful Glen Station", "Crusader"), (app.PickupSites[0].Place, app.PickupSites[0].Body));
+        Assert.Equal(("Shallow Fields Station", "Crusader"), (app.PickupSites[1].Place, app.PickupSites[1].Body));
     }
+
+    /// <summary>
+    /// The 21 Sep Potassium card: the letter listed two pickups, the
+    /// objectives panel read one - the second Collect line was below the
+    /// fold. The missing pickup comes from the letter, with its body off the
+    /// Pyro phrasing of a Lagrange point, so the card is two pickups and
+    /// matches the two-source contract it belongs to.
+    /// </summary>
+    [Fact]
+    public void A_pickup_the_objectives_missed_is_taken_from_the_letter()
+    {
+        var app = Read(CutOffPickup).Contracts!;
+
+        Assert.Equal(2, app.PickupSites!.Count);
+        Assert.Equal(("Patch City", "Pyro Ill"), (app.PickupSites[0].Place, app.PickupSites[0].Body));
+        Assert.Equal(("Rat's Nest", "Pyro V"), (app.PickupSites[1].Place, app.PickupSites[1].Body));
+        Assert.Equal(2, app.Steps!.Count);
+
+        var (legs, deliveries) = HaulLegs.From(app);
+
+        Assert.Equal(2, legs.Count);
+        Assert.Equal(("Patch City", "Pyro Ill", "Ruin Station", "Potassium"), (legs[0].Pickup, legs[0].PickupBody, legs[0].Delivery, legs[0].Commodity));
+        Assert.Equal(("Rat's Nest", "Pyro V", "Ruin Station", "Potassium"), (legs[1].Pickup, legs[1].PickupBody, legs[1].Delivery, legs[1].Commodity));
+        Assert.All(legs, leg => Assert.Null(leg.Scu));
+        Assert.Equal(213, Assert.Single(deliveries).Scu);
+    }
+
+    /// <summary>ScreenShot-2026-09-21_21-43-47-C74: the objectives panel ended after one Collect line, the letter above named both pickups.</summary>
+    private static readonly ScreenTextLine[] CutOffPickup =
+    [
+        new("ACCEPTED (4/10)", 533, 63, 12),
+        new("Member I Stellar Medium Haul I to Ruin Station", 367, 125, 20),
+        new("DETAILS", 367, 174, 14),
+        new("PRIMARY OBJECTIVES", 668, 174, 14),
+        new("O Deliver 0/213 SCU of Potassium to Ruin Station above", 669, 194, 11),
+        new("Pyro VI.", 679, 205, 11),
+        new("o Collect Potassium from Patch City.", 687, 222, 11),
+        new("PICK UP LOCATIONS (ANY ORDER)", 367, 257, 10),
+        new("- Freight elevator at Patch City at the L3 Lagrange of Pyro Ill", 367, 275, 10),
+        new("- Freight elevator at Rat's Nest at the LS Lagrange of Pyro V", 367, 293, 10),
+        new("I'd recommend taking a few minutes to plan your route before", 367, 326, 10),
+    ];
+
+    /// <summary>
+    /// ScreenShot-2026-09-21_21-43-46-950: the title wrapped onto a second
+    /// line and the reader kept "…from Ruin", which matched no contract; the
+    /// objectives panel showed one of three drop-offs, the letter listed
+    /// them all. The title joins, and the drops the panel did not reach come
+    /// from the letter as legs from the one source.
+    /// </summary>
+    [Fact]
+    public void A_wrapped_title_joins_and_a_multi_drops_missing_destinations_come_from_the_letter()
+    {
+        var app = Read(WasteMultiDrop).Contracts!;
+
+        Assert.Equal("Member I Stellar Medium Haul I from Ruin Station", app.SelectedTitle);
+        Assert.Equal(2, app.Steps!.Count);
+        Assert.Equal(3, app.DropSites!.Count);
+        Assert.Equal(("Starlight Service Station", "Pyro III"), (app.DropSites[0].Place, app.DropSites[0].Body));
+        Assert.Equal(("Gaslight", "Pyro V"), (app.DropSites[1].Place, app.DropSites[1].Body));
+        Assert.Equal(("Endgame", "Pyro VI"), (app.DropSites[2].Place, app.DropSites[2].Body));
+
+        var (legs, deliveries) = HaulLegs.From(app);
+
+        Assert.Equal(3, legs.Count);
+        Assert.All(legs, leg => Assert.Equal(("Ruin Station", "Waste"), (leg.Pickup, leg.Commodity)));
+        Assert.Equal(["Starlight Service Station", "Gaslight", "Endgame"], legs.Select(l => l.Delivery));
+        Assert.Equal(["Pyro III", "Pyro V", "Pyro VI"], legs.Select(l => l.DeliveryBody));
+
+        // Only the drop the panel printed has a count; the others are not invented.
+        Assert.Equal(61, Assert.Single(deliveries).Scu);
+        Assert.All(legs, leg => Assert.Null(leg.Scu));
+    }
+
+    private static readonly ScreenTextLine[] WasteMultiDrop =
+    [
+        new("MARK ALL READ", 105, 63, 12),
+        new("ACCEPTED (4/10)", 457, 63, 12),
+        new("HISTORY", 533, 63, 12),
+        new("Member I Stellar Medium Haul I from Ruin", 460, 118, 26),
+        new("Station", 460, 148, 26),
+        new("DETAILS", 367, 184, 14),
+        new("PRIMARY OBJECTIVES", 668, 184, 14),
+        new("O Deliver 0/61 SCU of Waste to Starlight Service Station at", 669, 204, 11),
+        new("the Li Lagrange of Pyro III.", 679, 215, 11),
+        new("o Collect Waste from Ruin Station.", 687, 232, 11),
+        new("DROP OFF LOCATIONS (ANY ORDER)", 367, 257, 10),
+        new("- Freight elevator at Starlight Service Station at the LI Lagrange", 367, 275, 10),
+        new("of Pyro III", 367, 286, 10),
+        new("- Freight elevator at Gaslight at the L2 Lagrange of Pyro V", 367, 293, 10),
+        new("- Freight elevator at Endgame at the L3 Lagrange of Pyro VI", 367, 311, 10),
+        new("I'd recommend taking a few minutes to plan your route before", 367, 344, 10),
+    ];
 }

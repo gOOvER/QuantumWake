@@ -365,7 +365,37 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.29
+### 0.15.30
+
+- **The cargo aboard is settled as soon as it can be.** A multi-pickup card
+  prints the total to deliver and no share per source, so after the first
+  pickup the amount is unknown — but after the last one the whole total is
+  aboard, and after the delivery none of it is. The run used to say
+  *unknown* from the first pickup to the end; it now says *293 SCU* once
+  every source is behind, and drops the cargo once it is delivered. Two
+  contracts of one commodity keep the settled one's figure and call the
+  rest a floor.
+
+- **A card the objectives panel cut short is still read whole.** The panel
+  shows two or three lines and the rest are below the fold; the letter above
+  it lists every pickup, and for a one-source contract every drop-off. Those
+  lists now fill in the legs the panel did not reach, so a card no longer
+  reads as one pickup short and gets refused as another contract's. A
+  Lagrange station's tail — *at the L3 Lagrange of Pyro III*, *at Crusader's
+  L5 Lagrange point* — is now the body, not part of the name, so the letter
+  and the objective agree on the place. Two cards of the 21 Sep run were
+  refused for this; both read now.
+
+- **A card that fits only one contract goes to that contract.** Two open
+  contracts with the same title and cargo, one card photographed before the
+  second was accepted and one after: the first card can only be the older
+  contract's, but the newest compatible card went to it and the other card
+  was dropped. Cards that fit exactly one contract are handed out first.
+
+- **A title that wraps onto a second line reads whole.** *Member | Stellar
+  Medium Haul | from Ruin* then *Station*: the second line is now joined,
+  so the card matches its contract. A screenshot read before this update
+  keeps its old reading — *Read again* on the Log page re-reads it.
 
 - **"Plan the run" lands on the run.** The Now page's button took you to the
   top of Shopping, where the hauling run sits below the lists — under
