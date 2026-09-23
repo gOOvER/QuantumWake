@@ -102,7 +102,10 @@ public class HaulPlanTests
         Assert.Contains("Fallow Field", first);
         Assert.Contains("not on the map", first);
         Assert.Contains("load Aluminum — Junior | Stellar Small Haul | to Stanton Gateway", first);
-        Assert.Contains("aboard after this stop: Aluminum amount unknown", first);
+        Assert.Contains("projected aboard after this stop: Aluminum quantity not yet known", first);
+        Assert.Contains("amount of Aluminum at each pickup was not read", first);
+        Assert.Contains("not a live inventory", page.NodeText("#jobs-contracts"));
+        Assert.Contains("Current location unknown", page.NodeText("#jobs-contracts"));
 
         var gateway = page.Text($"{Host}.byClass('haul-stops')[0].byClass('have')[2].textContent");
         Assert.Contains("unload 18 SCU Aluminum", gateway);
@@ -119,6 +122,19 @@ public class HaulPlanTests
     }
 
     /// <summary>The non-hauling contract keeps its plain card, named as the game names it.</summary>
+    [Fact]
+    public void The_route_names_its_last_known_start_and_explains_the_missing_pickup_split()
+    {
+        var page = Loaded(Plan.Replace("\"inGame\":true",
+            "\"inGame\":true,\"start\":{\"name\":\"Checkmate\",\"body\":\"Pyro IV\"},\"locationConfidence\":\"Inferred\",\"travelling\":true")
+            .Replace("\"amountUnknown\":true", "\"amountUnknown\":true,\"note\":\"18 SCU remaining for this contract; the amount at each pickup was not read\""));
+
+        var text = page.NodeText("#jobs-contracts");
+        Assert.Contains("Route from Checkmate · Pyro IV", text);
+        Assert.Contains("last known location, inferred confidence, in transit", text);
+        Assert.Contains("18 SCU remaining for this contract; the amount at each pickup was not read", text);
+    }
+
     [Fact]
     public void Other_contracts_keep_their_own_card_under_the_run()
     {

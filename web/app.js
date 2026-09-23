@@ -15467,6 +15467,12 @@ function renderHaulPlan(host, plan) {
   ].filter(Boolean).join(' · ');
   section.append(el('p', 'muted caption', summary));
 
+  section.append(el('p', 'muted haul-origin', plan.start
+    ? `Route from ${plan.start.name}${plan.start.body ? ` · ${plan.start.body}` : ''} (last known location${plan.locationConfidence ? `, ${plan.locationConfidence.toLowerCase()} confidence` : ''}${plan.travelling ? ', in transit' : ''}). Pickups first, grouped by body and system; distances are not known.`
+    : 'Current location unknown — this route cannot choose a nearby starting stop.'));
+  section.append(el('p', 'muted caption',
+    'Cargo below is projected after completing each stop, assuming the listed pickups still need collecting. It is not a live inventory of your hold.'));
+
   if (plan.knownScu > 0 && plan.shipScu && plan.knownScu > plan.shipScu) {
     section.append(el('p', 'outward caption',
       `${plan.knownScu} SCU is more than the ${plan.ship} holds — two trips, or another hull.`));
@@ -15542,10 +15548,14 @@ function renderHaulPlan(host, plan) {
         const cargo = stop.aboard.map((item) => {
           if (item.amountUnknown) return item.knownScu > 0
             ? `${item.commodity} at least ${item.knownScu} SCU`
-            : `${item.commodity} amount unknown`;
+            : `${item.commodity} quantity not yet known`;
           return `${item.commodity} ${item.knownScu} SCU`;
         }).join(' · ');
-        what.append(el('div', 'muted haul-aboard', `aboard after this stop: ${cargo}`));
+        what.append(el('div', 'muted haul-aboard', `projected aboard after this stop: ${cargo}`));
+        for (const item of stop.aboard.filter((item) => item.amountUnknown)) {
+          what.append(el('div', 'muted haul-cargo-note', item.note
+            || `The amount of ${item.commodity} at each pickup was not read. Check this contract's cargo details before loading.`));
+        }
       }
       if (stop.note) what.append(el('div', 'muted', stop.note));
       tr.append(what);

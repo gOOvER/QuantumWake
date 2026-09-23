@@ -55,7 +55,7 @@ public sealed record HaulAction(
     IReadOnlyList<string>? LegIds = null);
 
 /// <summary>Known cargo aboard after a stop; the amount is a floor when <see cref="AmountUnknown"/> is true.</summary>
-public sealed record HaulCargo(string Commodity, int KnownScu, bool AmountUnknown);
+public sealed record HaulCargo(string Commodity, int KnownScu, bool AmountUnknown, string? Note = null);
 
 /// <summary>One visit on the run.</summary>
 /// <param name="PlaceId">The map's id when the atlas knows the place; empty when it does not.</param>
@@ -76,7 +76,8 @@ public sealed record HaulPlan(
     IReadOnlyList<PlannedContract> Contracts,
     IReadOnlyList<HaulStop> Stops,
     int KnownScu,
-    IReadOnlyList<string> Notes);
+    IReadOnlyList<string> Notes,
+    ResolvedPlace? Start = null);
 
 /// <summary>What the atlas says about a place name, when it says anything.</summary>
 public sealed record ResolvedPlace(string Id, string Name, string? Body, string? System);
@@ -116,7 +117,8 @@ public static class HaulPlanner
     public static HaulPlan Plan(
         IReadOnlyList<ContractRecord> contracts,
         IReadOnlyList<ScreenSighting> frames,
-        Func<string, ResolvedPlace?> resolve)
+        Func<string, ResolvedPlace?> resolve,
+        ResolvedPlace? start = null)
     {
         var hauling = contracts
             .Where(c => HaulingContract.IsHauling(c.Raw))
@@ -209,7 +211,7 @@ public static class HaulPlanner
                 null, MissingNote(route, archetype)));
         }
 
-        var stops = Route(planned, resolve);
+        var stops = Route(planned, resolve, start);
 
         var known = planned.Sum(c => c.RemainingScu ?? c.Scu ?? 0);
         var notes = new List<string>();
@@ -227,7 +229,7 @@ public static class HaulPlanner
         if (unplaced.Count > 0)
             notes.Add($"Not on the map yet: {string.Join(", ", unplaced)}. A place is on the map once the logs have seen you there; the stop keeps its name either way.");
 
-        return new HaulPlan(planned, stops, known, notes);
+        return new HaulPlan(planned, stops, known, notes, start);
     }
 
     private static string? MissingNote(HaulRoute? route, HaulArchetype? archetype)
@@ -411,7 +413,8 @@ public static class HaulPlanner
     /// together, and a place that is both a source and a destination visited
     /// twice when its delivery depends on a pickup not yet made.
     /// </summary>
-    private static List<HaulStop> Route(IReadOnlyList<PlannedContract> contracts, Func<string, ResolvedPlace?> resolve)
+    private static List<HaulStop> Route(IReadOnlyList<PlannedContract> contracts, Func<string, ResolvedPlace?> resolve,
+        ResolvedPlace? start)
     {
         var places = new Dictionary<string, Place>(StringComparer.Ordinal);
 
@@ -492,7 +495,8 @@ public static class HaulPlanner
         var pickupsLeft = contracts.Select((c, i) => (i, n: places.Values.Sum(p => p.Loads.Count(a => a.Contract == i)))).ToDictionary(x => x.i, x => x.n);
         var stops = new List<HaulStop>();
         var pending = places.Values.ToList();
-        string? lastBody = null;
+        string? lastBody = start?.Body;
+        string? lastSystem = start?.System;
 
         bool Ready(HaulAction unload) =>
             pickupsLeft[unload.Contract] == 0
@@ -509,10 +513,18 @@ public static class HaulPlanner
             // while `pending` has something in it, and Prefer returns null
             // only for an empty list - but the compiler cannot see that, and
             // silencing it with `!` would hide a real null here later.
-            var next = Prefer(ready.Where(p => p.Loads.Count > 0), lastBody)
-                ?? Prefer(pending.Where(p => p.Loads.Count > 0), lastBody)
-                ?? Prefer(ready, lastBody)
-                ?? Prefer(pending, lastBody)
+            // Being at a destination does not make its cargo collected. Only
+            // work that can happen here may outrank the pickup dependencies.
+            var here = stops.Count == 0 && start is not null
+                ? pending.FirstOrDefault(p => (p.Loads.Count > 0 || p.Unloads.Any(Ready))
+                    && ((start.Id.Length > 0 && string.Equals(p.Id, start.Id, StringComparison.OrdinalIgnoreCase))
+                        || SamePlace(p.Name, start.Name)))
+                : null;
+            var next = here
+                ?? Prefer(ready.Where(p => p.Loads.Count > 0), lastBody, lastSystem)
+                ?? Prefer(pending.Where(p => p.Loads.Count > 0), lastBody, lastSystem)
+                ?? Prefer(ready, lastBody, lastSystem)
+                ?? Prefer(pending, lastBody, lastSystem)
                 ?? throw new UnreachableException("pending is not empty, so a place is always preferred");
 
             pending.Remove(next);
@@ -536,6 +548,7 @@ public static class HaulPlanner
             }
 
             lastBody = next.Body;
+            lastSystem = next.System;
 
             // The deliveries that could not happen yet get a second visit.
             if (later.Count > 0)
@@ -588,20 +601,30 @@ public static class HaulPlanner
                 }
             }
 
-            var aboard = new Dictionary<string, (string Name, int Known, bool Unknown)>(StringComparer.Ordinal);
-            foreach (var ((_, commodity), lot) in lots)
+            var aboard = new Dictionary<string, (string Name, int Known, bool Unknown, List<string> Notes)>(StringComparer.Ordinal);
+            foreach (var ((contract, commodity), lot) in lots)
             {
                 if (lot.Aboard() is not var (known, unknown)) continue;
-                var cargo = aboard.TryGetValue(commodity, out var current) ? current : (Name: lot.Name, Known: 0, Unknown: false);
+                var cargo = aboard.TryGetValue(commodity, out var current) ? current
+                    : (Name: lot.Name, Known: 0, Unknown: false, Notes: new List<string>());
                 cargo.Known += known;
                 cargo.Unknown |= unknown;
+                if (unknown)
+                {
+                    var reason = lot.Remaining is { } total
+                        ? $"{total} SCU remaining for this contract; the amount at each pickup was not read"
+                        : "no cargo quantity was read; photograph this contract's cargo details";
+                    if (lot.Unloads == 0) reason += "; drop-off unknown, so this plan cannot finish the delivery";
+                    cargo.Notes.Add($"{contracts[contract].Title}: {reason}");
+                }
                 aboard[commodity] = cargo;
             }
 
             var manifest = aboard.Values
                 .Where(cargo => cargo.Known > 0 || cargo.Unknown)
                 .OrderBy(cargo => cargo.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(cargo => new HaulCargo(cargo.Name, cargo.Known, cargo.Unknown))
+                .Select(cargo => new HaulCargo(cargo.Name, cargo.Known, cargo.Unknown,
+                    cargo.Notes.Count > 0 ? string.Join(" · ", cargo.Notes) : null))
                 .ToList();
             stops[i] = stops[i] with { Aboard = manifest };
         }
@@ -647,14 +670,16 @@ public static class HaulPlanner
         return null;
     }
 
-    private static Place? Prefer(IEnumerable<Place> candidates, string? body)
+    private static Place? Prefer(IEnumerable<Place> candidates, string? body, string? system)
     {
         var list = candidates.ToList();
         if (list.Count == 0) return null;
 
-        return list.FirstOrDefault(p => body is not null && p.Body is not null
-                && string.Equals(p.Body, body, StringComparison.OrdinalIgnoreCase))
-            ?? list.OrderByDescending(p => p.Loads.Count + p.Unloads.Count).First();
+        return list.OrderByDescending(p => body is not null && p.Body is not null
+                && string.Equals(p.Body, body, StringComparison.OrdinalIgnoreCase)
+                && (system is null || p.System is null || string.Equals(p.System, system, StringComparison.OrdinalIgnoreCase)))
+            .ThenByDescending(p => system is not null && string.Equals(p.System, system, StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(p => p.Loads.Count + p.Unloads.Count).First();
     }
 
     private sealed class Place(string name, string id, string? body, string? system)

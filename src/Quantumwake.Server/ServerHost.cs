@@ -3458,7 +3458,7 @@ public static class ServerHost
         {
             var now = live.Current;
             var plan = now.InGame
-                ? HaulPlanner.Plan(live.LiveSummary.Contracts, readings.ContractFrames(), name => ResolvePlace(lib, name))
+                ? HaulPlanner.Plan(live.LiveSummary.Contracts, readings.ContractFrames(), name => ResolvePlace(lib, name), HaulStart(now))
                 : new HaulPlan([], [], 0, []);
 
             // The ship's hold, when the live feed knows the ship and the
@@ -3480,6 +3480,9 @@ public static class ServerHost
                 plan.Stops,
                 plan.KnownScu,
                 plan.Notes,
+                plan.Start,
+                locationConfidence = now.Confidence,
+                now.Travelling,
             });
         });
 
@@ -3490,10 +3493,11 @@ public static class ServerHost
         // printed one; the pilot can reorder the stops from there.
         app.MapPost("/api/haul/plan/trip", (LiveSessionService live, ScreenReadingStore readings, LogLibrary lib, TripStore trips, HaulTripRequest? body) =>
         {
-            if (!live.Current.InGame)
+            var now = live.Current;
+            if (!now.InGame)
                 return Results.BadRequest(new { message = "No session running, so no contracts to plan." });
 
-            var plan = HaulPlanner.Plan(live.LiveSummary.Contracts, readings.ContractFrames(), name => ResolvePlace(lib, name));
+            var plan = HaulPlanner.Plan(live.LiveSummary.Contracts, readings.ContractFrames(), name => ResolvePlace(lib, name), HaulStart(now));
 
             if (plan.Stops.Count == 0)
                 return Results.BadRequest(new { message = "Nothing to plan: no open hauling contract names a place yet." });
@@ -4434,6 +4438,12 @@ static WipeScope ScopeOf(List<string>? covers)
 
     return scope == WipeScope.None ? WipeScope.Everything : scope;
 }
+
+/// <summary>The last known location is an origin, not evidence that cargo was loaded there.</summary>
+static ResolvedPlace? HaulStart(NowState now) =>
+    now.Location is { Length: > 0 } name && now.Confidence != "None"
+        ? new ResolvedPlace(now.LocationId ?? "", name, now.LocationBody, now.LocationSystem)
+        : null;
 
 /// <summary>
 /// A place the contract text names, on the map - or null, and the stop keeps
