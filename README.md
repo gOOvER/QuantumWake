@@ -365,7 +365,17 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.31
+### 0.15.32
+
+- **Hauling runs start from your last known location.** A pickup where you
+  already are comes first, with body and system used to group later stops.
+  Deliveries still wait for their pickups. The run names its starting location
+  and confidence, or explains when your location is unknown.
+
+- **Cargo after each stop is labelled as a projection.** Unknown quantities
+  explain when a card's total has no amount for each pickup, and show the
+  known contract total alongside that explanation. A missing drop-off is
+  called out when it leaves uncounted cargo on the plan.
 
 - **Hauling contracts no longer disappear when the run cannot be worked
   out.** The cards and the run above them come from two different places,

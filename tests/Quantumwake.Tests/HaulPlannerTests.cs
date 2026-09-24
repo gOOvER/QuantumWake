@@ -50,6 +50,77 @@ public class HaulPlannerTests
     };
 
     [Fact]
+    public void A_pickup_at_the_current_place_comes_before_a_busier_remote_stop()
+    {
+        ContractRecord[] contracts =
+        [
+            Contract("m1", DirectCarbon, "Rookie | DIRECT Small Haul | Checkmate > Ruin Station"),
+            Contract("m2", DirectCarbon, "Rookie | DIRECT Small Haul | Checkmate > Stanton Gateway", 1),
+            Contract("m3", DirectCarbon, "Rookie | DIRECT Small Haul | Stanton Gateway > Ruin Station", 2),
+        ];
+        var withoutLocation = HaulPlanner.Plan(contracts, [], Atlas);
+        var plan = HaulPlanner.Plan(contracts, [], Atlas,
+            new("Pyro_StantonGateway", "Station display alias", "Pyro Jump", "Pyro"));
+
+        Assert.Equal("Checkmate", withoutLocation.Stops[0].Place);
+        Assert.Equal("Stanton Gateway", plan.Stops[0].Place);
+        Assert.All(plan.Stops[0].Actions, action => Assert.Equal("load", action.Kind));
+        Assert.Contains(plan.Stops.Skip(1), stop => stop.Place == "Stanton Gateway"
+            && stop.Actions.Any(action => action.Kind == "unload"));
+        Assert.NotEqual(HaulPlanner.Fingerprint(withoutLocation), HaulPlanner.Fingerprint(plan));
+    }
+
+    [Fact]
+    public void Cargo_left_on_a_pickup_only_route_explains_the_missing_amount_and_dropoff()
+    {
+        var plan = HaulPlanner.Plan(
+            [Contract("m1", DirectCarbon, "Rookie | DIRECT Small Haul | from Checkmate")],
+            [], Atlas);
+
+        var cargo = Assert.Single(Assert.Single(plan.Stops).Aboard!);
+        Assert.True(cargo.AmountUnknown);
+        Assert.Contains("no cargo quantity was read", cargo.Note);
+        Assert.Contains("drop-off unknown", cargo.Note);
+    }
+
+    [Fact]
+    public void Being_at_the_destination_does_not_skip_its_pickup()
+    {
+        var plan = HaulPlanner.Plan(
+            [Contract("m1", DirectCarbon, "Rookie | DIRECT Small Haul | Checkmate > Ruin Station")],
+            [], Atlas, Atlas("Ruin Station"));
+
+        Assert.Equal(["Checkmate", "Ruin Station"], plan.Stops.Select(stop => stop.Place));
+    }
+
+    [Fact]
+    public void An_unmapped_current_place_still_matches_its_pickup_by_name()
+    {
+        var plan = HaulPlanner.Plan(
+            [Contract("m1", Multi3Aluminum, "Junior | Stellar Small Haul | to Stanton Gateway")],
+            [Frame("a.jpg", 48, ScreenAppFixtures.Contracts)], Atlas,
+            new("", "The Golden Riviera", null, null));
+
+        Assert.Equal("The Golden Riviera", plan.Stops[0].Place);
+    }
+
+    [Theory]
+    [InlineData("Pyro IV", "Pyro")]
+    [InlineData(null, "Pyro")]
+    public void A_start_outside_the_run_prefers_its_body_or_system(string? body, string system)
+    {
+        ResolvedPlace? Resolve(string name) => name == "Remote"
+            ? new("remote", name, "Hurston", "Stanton") : Atlas(name);
+        var plan = HaulPlanner.Plan(
+            [
+                Contract("m1", DirectCarbon, "Rookie | DIRECT Small Haul | Remote > Ruin Station"),
+                Contract("m2", DirectCarbon, "Rookie | DIRECT Small Haul | Checkmate > Ruin Station", 1),
+            ], [], Resolve, new("elsewhere", "Elsewhere", body, system));
+
+        Assert.Equal("Checkmate", plan.Stops[0].Place);
+    }
+
+    [Fact]
     public void A_photographed_card_gives_its_legs_and_the_rest_say_what_is_missing()
     {
         var plan = HaulPlanner.Plan(
@@ -261,9 +332,12 @@ public class HaulPlannerTests
 
         var afterFirst = Assert.Single(stops[0].Aboard!);
         Assert.Equal(("Copper", 0, true), (afterFirst.Commodity, afterFirst.KnownScu, afterFirst.AmountUnknown));
+        Assert.Contains("293 SCU remaining", afterFirst.Note);
+        Assert.Contains("amount at each pickup was not read", afterFirst.Note);
 
         var afterSecond = Assert.Single(stops[1].Aboard!);
         Assert.Equal(("Copper", 293, false), (afterSecond.Commodity, afterSecond.KnownScu, afterSecond.AmountUnknown));
+        Assert.Null(afterSecond.Note);
 
         Assert.Empty(stops[2].Aboard!);
     }
