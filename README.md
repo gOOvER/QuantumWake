@@ -365,9 +365,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.42
+### 0.15.45
 
-- **Make Now easier to read at a glance.** The current focus is now a clear command strip, location leads the instrument deck, and ship, session and next-step cards use a quieter, denser hierarchy.
+- **Tighten the Now dashboard.** Ship, session and pilot details now share one configurable Flight status card; the briefing keeps each section only as tall as its content, local stash items use two columns on the full dashboard, and the live feed stays a readable glance rather than filling the whole display.
 
 - **Find nearby support from the cockpit.** The MFD Flight menu now lists the closest refuel, clinic and refinery in the current system, using the same facility evidence as the star map and explaining that distances are based on bodies rather than travel time.
 

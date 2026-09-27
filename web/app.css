@@ -606,16 +606,13 @@ body:not(.overlay) #view-now .card.hero {
     linear-gradient(150deg, var(--panel-2), var(--deep));
 }
 body:not(.overlay) #view-now .card.hero::before { width: 68px; }
-body:not(.overlay) #view-now .card[data-card="ship"],
-body:not(.overlay) #view-now .card[data-card="session"] {
-  min-height: 72px;
-  padding: 13px 15px;
+body:not(.overlay) #view-now .now-flight-status {
+  grid-row: span 2;
+  min-height: 154px;
+  padding: 16px 17px;
   background: linear-gradient(150deg, rgba(10, 18, 28, .96), rgba(7, 12, 20, .98));
 }
-body:not(.overlay) #view-now .card[data-card="ship"] .card-label,
-body:not(.overlay) #view-now .card[data-card="session"] .card-label { margin-bottom: 7px; }
-body:not(.overlay) #view-now .card[data-card="ship"] .value,
-body:not(.overlay) #view-now .card[data-card="session"] .value { font-size: 17px; }
+body:not(.overlay) #view-now .now-flight-status .card-label { margin-bottom: 9px; }
 body:not(.overlay) #view-now .card.now-briefing {
   border-color: var(--rule-hot);
   background:
@@ -628,10 +625,13 @@ body:not(.overlay) #view-now .card[data-card="job"],
 body:not(.overlay) #view-now .card[data-card="checklist"],
 body:not(.overlay) #view-now .card[data-card="trip"] { border-left: 2px solid var(--rule-hot); }
 body:not(.overlay) #view-now .card[data-card="feed"] { background: linear-gradient(150deg, rgba(8, 16, 25, .96), var(--deep)); }
+/* The feed is a glanceable timeline. Letting it claim an ultrawide's whole
+   height strands the adjacent status card and delays the next useful panel. */
+body:not(.overlay) #view-now #now-feed { max-height: clamp(240px, 35vh, 420px); }
 
 @media (max-width: 1040px) {
   body:not(.overlay) #view-now .now-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  body:not(.overlay) #view-now .card.hero { grid-row: auto; }
+  body:not(.overlay) #view-now .card.hero, body:not(.overlay) #view-now .now-flight-status { grid-row: auto; }
 }
 @media (max-width: 780px) {
   body:not(.overlay) #view-now .now-grid { grid-template-columns: 1fr; }
@@ -733,6 +733,21 @@ body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
    Now page that had nothing hidden. */
 .now-card-visibility[hidden] { display: none; }
 #now-hidden-card-list { display: flex; flex-wrap: wrap; gap: 5px; }
+.now-flight-status { position: relative; }
+.now-flight-config { position: absolute; top: 9px; right: 76px; }
+.now-flight-readings { display: flex; flex-direction: column; }
+.now-flight-field { min-width: 0; padding: 7px 0; border-top: 1px solid rgba(83, 128, 151, .28); }
+.now-flight-field:first-child { padding-top: 0; border-top: 0; }
+.now-flight-label { color: var(--dim); font-size: 8px; letter-spacing: .17em; text-transform: uppercase; }
+.now-flight-field .card-source { margin: 2px 0 5px; min-height: 0; }
+.now-flight-field .data-source { font-size: 7.5px; padding: 1px 4px; }
+.now-flight-field .value { font-size: 16px; }
+.now-flight-field .sub { margin-top: 2px; font-size: 10.5px; }
+.now-flight-options { display: flex; flex-wrap: wrap; gap: 5px 11px; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 10px; }
+.now-flight-options[hidden] { display: none; }
+.now-flight-options > span { color: var(--dim); font-size: 8.5px; letter-spacing: .15em; text-transform: uppercase; }
+.now-flight-options label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+.now-flight-options input { accent-color: var(--cyan); }
 .now-ship-summary { display: flex; align-items: center; gap: 10px; }
 .now-ship-logo { flex: 0 0 44px; width: 44px; height: 30px; display: flex; align-items: center; justify-content: center; }
 .now-ship-logo img { max-width: 100%; max-height: 100%; opacity: .9; }
@@ -3719,10 +3734,21 @@ button.ghost.tiny.wide { width: 100%; padding: 5px; margin: 2px 0 6px; }
 .briefing-actions { display: flex; justify-content: flex-end; gap: 5px; flex-wrap: wrap; padding-right: 58px; }
 .briefing-why { color: var(--cyan); font-size: 10px; margin-top: 4px; }
 .briefing-actions .select { min-width: 0; font-size: 10px; padding: 3px 5px; }
-.briefing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 9px; }
-.briefing-section { min-width: 0; border: 1px solid var(--rule); background: rgba(53, 200, 240, .025); padding: 8px 9px; }
+.briefing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 9px;
+  align-items: start;
+}
+.briefing-section { align-self: start; min-width: 0; border: 1px solid var(--rule); background: rgba(53, 200, 240, .025); padding: 8px 9px; }
 .briefing-label { color: var(--dim); font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; margin-bottom: 5px; }
 .briefing-list { display: flex; flex-direction: column; gap: 3px; }
+.briefing-section#briefing-stash-section .briefing-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 12px;
+}
+.briefing-section#briefing-stash-section .briefing-row:nth-child(-n + 2) { border-top: 0; padding-top: 0; }
 .briefing-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid rgba(83, 128, 151, .28); padding-top: 5px; min-width: 0; }
 .briefing-row:first-child { border-top: 0; padding-top: 0; }
 .briefing-main { min-width: 0; overflow-wrap: anywhere; }
@@ -3768,11 +3794,18 @@ button.briefing-service:hover { border-color: var(--cyan); color: var(--cyan-hot
 .map-note-form .ghost { justify-self: start; }
 
 body.overlay .now-card-actions, body.overlay .now-card-visibility { display: none; }
+body.overlay .now-flight-config, body.overlay .now-flight-options { display: none; }
+body.overlay .now-flight-readings { gap: 0; }
+body.overlay .now-flight-field { padding: 4px 0; }
+body.overlay .now-flight-label { font-size: 7px; }
+body.overlay .now-flight-field .value { font-size: 12px; }
 body.overlay .briefing-head { margin-bottom: 6px; }
 body.overlay .briefing-title { font-size: 13px; }
 body.overlay .briefing-sub, body.overlay .briefing-detail { font-size: 9px; }
 body.overlay .briefing-grid { grid-template-columns: 1fr 1fr; gap: 5px; }
 body.overlay .briefing-section { padding: 5px 6px; }
+body.overlay .briefing-section#briefing-stash-section .briefing-list { grid-template-columns: 1fr; }
+body.overlay .briefing-section#briefing-stash-section .briefing-row:nth-child(2) { border-top: 1px solid rgba(83, 128, 151, .28); padding-top: 5px; }
 body.overlay .briefing-actions { padding-right: 0; }
 body.overlay .briefing-services { gap: 3px; }
 body.overlay .briefing-service { font-size: 8px; padding: 2px 4px; }

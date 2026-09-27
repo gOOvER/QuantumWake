@@ -540,10 +540,13 @@ function initPageStatsCollapsers() {
 const NOW_COLLAPSED_KEY = 'qw-now-collapsed-cards';
 const NOW_HIDDEN_KEY = 'qw-now-hidden-cards';
 const NOW_ORDER_KEY = 'qw-now-card-order';
+const NOW_FLIGHT_FIELDS_KEY = 'qw-now-flight-fields';
+const NOW_FLIGHT_FIELDS = ['ship', 'session', 'handle'];
 let collapsedNowCards = new Set();
 let hiddenNowCards = new Set();
 let nowCardOrder = [];
 let draggedNowCard = null;
+let visibleFlightFields = new Set(NOW_FLIGHT_FIELDS);
 
 try {
   const saved = JSON.parse(localStorage.getItem(NOW_COLLAPSED_KEY) || '[]');
@@ -560,6 +563,14 @@ try {
   if (Array.isArray(saved)) nowCardOrder = saved.filter((n) => typeof n === 'string');
 } catch { /* a bad preference must not scramble the dashboard */ }
 
+try {
+  const raw = localStorage.getItem(NOW_FLIGHT_FIELDS_KEY);
+  if (raw !== null) {
+    const saved = JSON.parse(raw);
+    if (Array.isArray(saved)) visibleFlightFields = new Set(saved.filter((name) => NOW_FLIGHT_FIELDS.includes(name)));
+  }
+} catch { /* a bad preference must not empty the flight card */ }
+
 function saveCollapsedNowCards() {
   try { localStorage.setItem(NOW_COLLAPSED_KEY, JSON.stringify([...collapsedNowCards])); } catch { /* optional */ }
 }
@@ -570,6 +581,45 @@ function saveHiddenNowCards() {
 
 function saveNowCardOrder() {
   try { localStorage.setItem(NOW_ORDER_KEY, JSON.stringify(nowCardOrder)); } catch { /* optional */ }
+}
+
+function saveVisibleFlightFields() {
+  try { localStorage.setItem(NOW_FLIGHT_FIELDS_KEY, JSON.stringify([...visibleFlightFields])); } catch { /* optional */ }
+}
+
+function applyVisibleFlightFields() {
+  for (const name of NOW_FLIGHT_FIELDS) {
+    const field = $(`#now-flight-card [data-flight-field="${name}"]`);
+    const toggle = $(`#now-flight-options [data-flight-field-toggle="${name}"]`);
+    if (field) field.hidden = !visibleFlightFields.has(name);
+    if (toggle) toggle.checked = visibleFlightFields.has(name);
+  }
+  const empty = $('#now-flight-empty');
+  if (empty) empty.hidden = visibleFlightFields.size !== 0;
+}
+
+function initFlightStatusConfiguration() {
+  const button = $('#now-flight-config');
+  const options = $('#now-flight-options');
+  if (!button || !options) return;
+
+  button.addEventListener('click', () => {
+    options.hidden = !options.hidden;
+    button.setAttribute('aria-expanded', String(!options.hidden));
+  });
+
+  for (const toggle of $$('#now-flight-options [data-flight-field-toggle]')) {
+    toggle.addEventListener('change', () => {
+      const name = toggle.dataset.flightFieldToggle;
+      if (!NOW_FLIGHT_FIELDS.includes(name)) return;
+      if (toggle.checked) visibleFlightFields.add(name);
+      else visibleFlightFields.delete(name);
+      saveVisibleFlightFields();
+      applyVisibleFlightFields();
+    });
+  }
+
+  applyVisibleFlightFields();
 }
 
 /**
@@ -25581,6 +25631,7 @@ async function maybeShowSetup() {
 
 async function boot() {
   initNowCardCollapsers();
+  initFlightStatusConfiguration();
   initPageStatsCollapsers();
 
   if (isOverlay) {

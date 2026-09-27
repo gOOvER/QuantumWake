@@ -281,8 +281,8 @@ const GROUPS = {
   '.view': ['#view-now', '#view-about', '#view-help', '#view-fleet', '#view-garage', '#view-mining'],
   '#tabs .tab-group': [],
   '#view-now .card[data-card]': [
-    '#now-location-card', '#now-briefing-card', '#now-ship-card', '#now-session-card',
-    '#now-handle-card', '#now-feed-card', '#now-stats-card', '#now-respawn-card',
+    '#now-location-card', '#now-flight-card', '#now-briefing-card', '#now-feed-card',
+    '#now-stats-card', '#now-respawn-card',
     '#now-job-card', '#now-checklist-card', '#now-trip-card', '#trade-advice-card',
   ],
 };
@@ -361,8 +361,7 @@ node('#side-buy').dataset.side = 'buy';
 
 for (const [selector, card] of [
   ['#now-location-card', 'location'], ['#now-briefing-card', 'briefing'],
-  ['#now-ship-card', 'ship'], ['#now-session-card', 'session'],
-  ['#now-handle-card', 'handle'], ['#now-feed-card', 'feed'],
+  ['#now-flight-card', 'flight'], ['#now-feed-card', 'feed'],
   ['#now-stats-card', 'stats'], ['#now-respawn-card', 'respawn'],
   ['#now-job-card', 'job'], ['#now-checklist-card', 'checklist'], ['#now-trip-card', 'trip'], ['#trade-advice-card', 'trade'],
 ]) node(selector).dataset.card = card;

@@ -200,20 +200,38 @@
         </div>
       </article>
 
-      <article class="card" data-card="ship">
-        <div class="card-label">Ship</div>
-        <div class="card-source source-slot" id="now-ship-source" data-sources="logs"></div>
-        <div class="now-ship-summary">
-          <div class="now-ship-logo" id="now-ship-logo" hidden></div>
-          <div class="value" id="now-ship">—</div>
+      <article class="card now-flight-status" id="now-flight-card" data-card="flight">
+        <div class="card-label">Flight status</div>
+        <button class="ghost tiny now-flight-config" id="now-flight-config" type="button"
+                aria-expanded="false" aria-controls="now-flight-options">Configure</button>
+        <div class="now-flight-readings">
+          <section class="now-flight-field" data-flight-field="ship">
+            <div class="now-flight-label">Ship</div>
+            <div class="card-source source-slot" id="now-ship-source" data-sources="logs"></div>
+            <div class="now-ship-summary">
+              <div class="now-ship-logo" id="now-ship-logo" hidden></div>
+              <div class="value" id="now-ship">—</div>
+            </div>
+          </section>
+          <section class="now-flight-field" data-flight-field="session">
+            <div class="now-flight-label">Session</div>
+            <div class="card-source source-slot" id="now-session-source" data-sources="logs"></div>
+            <div class="value" id="now-clock">—</div>
+            <div class="sub" id="now-mode"></div>
+          </section>
+          <section class="now-flight-field" data-flight-field="handle">
+            <div class="now-flight-label">Pilot</div>
+            <div class="value" id="now-handle">—</div>
+            <div class="sub" id="now-version"></div>
+          </section>
         </div>
-      </article>
-
-      <article class="card" data-card="session">
-        <div class="card-label">Session</div>
-        <div class="card-source source-slot" id="now-session-source" data-sources="logs"></div>
-        <div class="value" id="now-clock">—</div>
-        <div class="sub" id="now-mode"></div>
+        <div class="now-flight-options" id="now-flight-options" hidden>
+          <span>Show</span>
+          <label><input type="checkbox" data-flight-field-toggle="ship" checked> Ship</label>
+          <label><input type="checkbox" data-flight-field-toggle="session" checked> Session</label>
+          <label><input type="checkbox" data-flight-field-toggle="handle" checked> Pilot</label>
+        </div>
+        <div class="note" id="now-flight-empty" hidden>Choose at least one reading to show in this card.</div>
       </article>
 
       <article class="card span2 now-briefing" id="now-briefing-card" data-card="briefing" hidden>
@@ -269,12 +287,6 @@
             <div class="briefing-list" id="briefing-claim"></div>
           </section>
         </div>
-      </article>
-
-      <article class="card" data-card="handle">
-        <div class="card-label">Handle</div>
-        <div class="value" id="now-handle">—</div>
-        <div class="sub" id="now-version"></div>
       </article>
 
       <article class="card span2" data-card="feed">
