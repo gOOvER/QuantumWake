@@ -365,7 +365,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.37
+### 0.15.38
+
+- **Navigation is organised around what you are doing.** Operations now holds shopping, routes, contracts and planning tools; Flight holds journeys and location history; Hangar holds ships and equipment. About now lives with Settings, leaving the frequent Now, Map and Log views directly available.
 
 - City and station marks now have stronger tower and orbital-hub silhouettes. Every filled map icon keeps dark inset detail, so landing pads, headframes, research flasks, cargo stacks and jump gates remain recognisable at ordinary zoom.
 

@@ -367,9 +367,9 @@ body.overlay .feed .d { display: none; }
   border-left: 1px solid var(--rule-hot);
 }
 
-/* Grouped since sixteen flat tabs got crowded: seven top-level items, three
-   of them dropdowns. No overflow scrolling here - a scrollable strip would
-   clip the dropdowns; the overlay keeps its own scrolling flat strip. */
+/* Direct views are followed by purpose-based groups. No overflow scrolling
+   here - a scrollable strip would clip the dropdowns; the overlay keeps its
+   own scrolling flat strip. */
 .tabs {
   display: flex;
   gap: 4px;
@@ -428,6 +428,7 @@ body.overlay .feed .d { display: none; }
 }
 .tabs button:hover { color: var(--muted); }
 .tabs button.active { color: var(--cyan-hot); }
+
 .tabs button.active::after { opacity: 1; }
 
 .status { display: flex; align-items: center; gap: 13px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
@@ -435,7 +436,7 @@ body.overlay .feed .d { display: none; }
 /* The grouped tabs still need to fit alongside the live search on a normal
    narrow desktop window.  Letting the top bar determine the document width
    gave the Hangar a horizontal scrollbar even when its scale drawing fitted. */
-@media (max-width: 1200px) {
+@media (max-width: 1320px) {
   .topbar { gap: 10px; padding-inline: 14px; }
   .brand { gap: 7px; }
   .brand .by { display: none; }

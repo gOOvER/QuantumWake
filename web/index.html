@@ -19,21 +19,22 @@
     <span class="by">by nekron</span>
   </div>
 
-  <!-- Sixteen flat tabs got crowded; the strip is grouped instead. The
-       overlay flattens the groups back out with display:contents and keeps
-       its own six-tab whitelist. -->
+  <!-- Frequent views stay direct. Related work sits under a small set of
+       clear areas; the overlay flattens those groups back out with
+       display:contents and keeps its own six-tab whitelist. -->
   <nav class="tabs" id="tabs">
     <button data-view="now" class="active">Now</button>
     <button data-view="map">Map</button>
     <button data-view="log">Log</button>
     <div class="tab-group">
-      <button type="button" class="group-btn">Jobs<span class="caret">▾</span></button>
+      <button type="button" class="group-btn">Operations<span class="caret">▾</span></button>
       <div class="group-menu">
         <button data-view="jobs">Shopping</button>
+        <button data-view="routes">Routes</button>
+        <button data-view="contracts">Contracts</button>
         <button data-view="checklists">Checklists</button>
         <button data-view="blueprints">Blueprints</button>
         <button data-view="wikelo">Wikelo</button>
-        <button data-view="routes">Routes</button>
       </div>
     </div>
     <div class="tab-group">
@@ -42,11 +43,8 @@
         <button data-view="logbook">Logbook</button>
         <button data-view="sessions">Sessions</button>
         <button data-view="servers">Servers</button>
-        <button data-view="fleet">Fleet</button>
-        <button data-view="hangar">Hangar</button>
         <button data-view="places">Places</button>
         <button data-view="points">Points</button>
-        <button data-view="contracts">Contracts</button>
         <button data-view="crew">Crew</button>
         <button data-view="casualties">Casualties</button>
       </div>
@@ -70,8 +68,10 @@
       </div>
     </div>
     <div class="tab-group">
-      <button type="button" class="group-btn">Gear<span class="caret">▾</span></button>
+      <button type="button" class="group-btn">Hangar<span class="caret">▾</span></button>
       <div class="group-menu">
+        <button data-view="fleet">Fleet</button>
+        <button data-view="hangar">Hangar</button>
         <button data-view="loadout">Loadout</button>
         <button data-view="stash">Stash</button>
         <button data-view="loot">Loot</button>
@@ -92,9 +92,9 @@
              runs its own click instead; menu-action keeps it out of the
              overlay, whose every button rule is scoped to [data-view]. -->
         <button type="button" class="menu-action" id="menu-update-check">Check for updates</button>
+        <button data-view="about">About</button>
       </div>
     </div>
-    <button data-view="about">About</button>
   </nav>
 
   <div class="status">
