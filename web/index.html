@@ -231,6 +231,12 @@
             <div class="statline"><span>Incapacitations</span><b id="now-incaps">0</b></div>
             <div class="note" id="combat-note"></div>
           </section>
+          <section class="now-status-field now-status-respawn" data-status-field="respawn" data-status-available="false" hidden>
+            <div class="now-status-label">Wake up at</div>
+            <div class="value" id="now-respawn">—</div>
+            <div class="sub" id="now-respawn-sub"></div>
+            <div class="sub" id="now-respawn-bed"></div>
+          </section>
         </div>
         <div class="now-status-options" id="now-status-options" hidden>
           <span>Show</span>
@@ -239,6 +245,7 @@
           <label><input type="checkbox" data-status-field-toggle="session" checked> Session</label>
           <label><input type="checkbox" data-status-field-toggle="handle" checked> Pilot</label>
           <label><input type="checkbox" data-status-field-toggle="health" checked> Session health</label>
+          <label><input type="checkbox" data-status-field-toggle="respawn" checked> Wake up at</label>
         </div>
         <div class="note" id="now-status-empty" hidden>Choose at least one reading to show in this card.</div>
       </article>
@@ -360,13 +367,6 @@
         </form>
 
         <div class="note" id="now-earning-note"></div>
-      </article>
-
-      <article class="card" id="now-respawn-card" data-card="respawn" hidden>
-        <div class="card-label">Wake up at</div>
-        <div class="value" id="now-respawn">—</div>
-        <div class="sub" id="now-respawn-sub"></div>
-        <div class="sub" id="now-respawn-bed"></div>
       </article>
 
       <article class="card span2" id="now-job-card" data-card="job" hidden>

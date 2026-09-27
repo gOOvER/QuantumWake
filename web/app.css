@@ -631,6 +631,7 @@ body:not(.overlay) #view-now #now-feed { max-height: clamp(240px, 35vh, 420px); 
 @media (max-width: 780px) {
   body:not(.overlay) #view-now .now-grid { grid-template-columns: 1fr; }
   body:not(.overlay) #view-now .now-status-readings { grid-template-columns: 1fr; }
+  body:not(.overlay) #view-now .now-status-respawn { grid-column: auto; }
   body:not(.overlay) #view-now .now-status-card { min-height: 132px; }
 }
 
@@ -734,7 +735,8 @@ body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
 .now-status-config:hover { color: var(--cyan-hot); }
 .now-status-readings { display: grid; grid-template-columns: minmax(260px, 1.45fr) repeat(2, minmax(180px, .72fr)); gap: 0 15px; }
 .now-status-field { min-width: 0; padding: 7px 0; border-top: 1px solid rgba(83, 128, 151, .28); }
-.now-status-location { grid-row: span 2; padding: 4px 17px 4px 0; border-top: 0; border-right: 1px solid var(--rule); }
+.now-status-location { grid-row: span 3; padding: 4px 17px 4px 0; border-top: 0; border-right: 1px solid var(--rule); }
+.now-status-respawn { grid-column: span 2; }
 .now-status-label { color: var(--dim); font-size: 8px; letter-spacing: .17em; text-transform: uppercase; }
 .now-status-field .card-source { margin: 2px 0 5px; min-height: 0; }
 .now-status-field .data-source { font-size: 7.5px; padding: 1px 4px; }

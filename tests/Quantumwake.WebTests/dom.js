@@ -281,7 +281,7 @@ const GROUPS = {
   '.view': ['#view-now', '#view-about', '#view-help', '#view-fleet', '#view-garage', '#view-mining'],
   '#tabs .tab-group': [],
   '#view-now .card[data-card]': [
-    '#now-status-card', '#now-briefing-card', '#now-feed-card', '#now-respawn-card',
+    '#now-status-card', '#now-briefing-card', '#now-feed-card',
     '#now-job-card', '#now-checklist-card', '#now-trip-card', '#trade-advice-card',
   ],
 };
@@ -360,7 +360,7 @@ node('#side-buy').dataset.side = 'buy';
 
 for (const [selector, card] of [
   ['#now-status-card', 'status'], ['#now-briefing-card', 'briefing'],
-  ['#now-feed-card', 'feed'], ['#now-respawn-card', 'respawn'],
+  ['#now-feed-card', 'feed'],
   ['#now-job-card', 'job'], ['#now-checklist-card', 'checklist'], ['#now-trip-card', 'trip'], ['#trade-advice-card', 'trade'],
 ]) node(selector).dataset.card = card;
 

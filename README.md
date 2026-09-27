@@ -365,9 +365,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.46
+### 0.15.47
 
-- **Put the current situation in one place.** Location, ship, session, pilot and session health now share one configurable Current status card, whose gear matches the other card controls.
+- **Put the current situation in one place.** Wake-up location joins location, ship, session, pilot and session health in the configurable Current status card.
 
 - **Find nearby support from the cockpit.** The MFD Flight menu now lists the closest refuel, clinic and refinery in the current system, using the same facility evidence as the star map and explaining that distances are based on bodies rather than travel time.
 

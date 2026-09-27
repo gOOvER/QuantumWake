@@ -541,7 +541,7 @@ const NOW_COLLAPSED_KEY = 'qw-now-collapsed-cards';
 const NOW_HIDDEN_KEY = 'qw-now-hidden-cards';
 const NOW_ORDER_KEY = 'qw-now-card-order';
 const NOW_STATUS_FIELDS_KEY = 'qw-now-status-fields';
-const NOW_STATUS_FIELDS = ['location', 'ship', 'session', 'handle', 'health'];
+const NOW_STATUS_FIELDS = ['location', 'ship', 'session', 'handle', 'health', 'respawn'];
 let collapsedNowCards = new Set();
 let hiddenNowCards = new Set();
 let nowCardOrder = [];
@@ -567,7 +567,12 @@ try {
   const raw = localStorage.getItem(NOW_STATUS_FIELDS_KEY);
   if (raw !== null) {
     const saved = JSON.parse(raw);
-    if (Array.isArray(saved)) visibleStatusFields = new Set(saved.filter((name) => NOW_STATUS_FIELDS.includes(name)));
+    if (Array.isArray(saved)) {
+      visibleStatusFields = new Set(saved.filter((name) => NOW_STATUS_FIELDS.includes(name)));
+      // A new reading belongs in a status card by default, even for pilots who
+      // configured it before that reading existed.
+      visibleStatusFields.add('respawn');
+    }
   }
 } catch { /* a bad preference must not empty the status card */ }
 
@@ -591,11 +596,17 @@ function applyVisibleStatusFields() {
   for (const name of NOW_STATUS_FIELDS) {
     const field = $(`#now-status-card [data-status-field="${name}"]`);
     const toggle = $(`#now-status-options [data-status-field-toggle="${name}"]`);
-    if (field) field.hidden = !visibleStatusFields.has(name);
+    if (field) field.hidden = !visibleStatusFields.has(name) || field.dataset.statusAvailable === 'false';
     if (toggle) toggle.checked = visibleStatusFields.has(name);
   }
   const empty = $('#now-status-empty');
-  if (empty) empty.hidden = visibleStatusFields.size !== 0;
+  if (empty) {
+    const hasVisibleReading = NOW_STATUS_FIELDS.some((name) => {
+      const field = $(`#now-status-card [data-status-field="${name}"]`);
+      return visibleStatusFields.has(name) && field?.dataset.statusAvailable !== 'false';
+    });
+    empty.hidden = hasVisibleReading;
+  }
 }
 
 function initCurrentStatusConfiguration() {
@@ -12208,19 +12219,21 @@ renderRouteProfiles();
  * answer, and honest about how sure it is.
  */
 async function loadRespawn() {
-  const card = $('#now-respawn-card');
-  if (!card) return;
+  const field = $('#now-status-card [data-status-field="respawn"]');
+  if (!field) return;
 
   let data;
   try {
     data = await getJson('/api/respawn');
   } catch {
-    card.hidden = true;
+    field.dataset.statusAvailable = 'false';
+    applyVisibleStatusFields();
     return;
   }
 
   if (!data.known) {
-    card.hidden = true;
+    field.dataset.statusAvailable = 'false';
+    applyVisibleStatusFields();
     return;
   }
 
@@ -12247,7 +12260,8 @@ async function loadRespawn() {
       : `last woke · ${data.place}, ${relative(data.at)}`)
     : '';
 
-  card.hidden = false;
+  field.dataset.statusAvailable = 'true';
+  applyVisibleStatusFields();
 }
 
 /* ---------- casualties ---------- */
