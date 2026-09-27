@@ -365,9 +365,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.41
+### 0.15.42
 
-- **Set up a focused overlay faster.** Flight, Trading, Minimal and Full presets replace a wall of toggles; individual pages, cards and density remain available under Customize. MFD guidance now stays out of the way until it is needed.
+- **Make Now easier to read at a glance.** The current focus is now a clear command strip, location leads the instrument deck, and ship, session and next-step cards use a quieter, denser hierarchy.
 
 - **Find nearby support from the cockpit.** The MFD Flight menu now lists the closest refuel, clinic and refinery in the current system, using the same facility evidence as the star map and explaining that distances are based on bodies rather than travel time.
 
