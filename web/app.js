@@ -11221,6 +11221,7 @@ $('#screen-read-older')?.addEventListener('click', async (e) => {
   }
 });
 
+let overlayLayoutData = null;
 async function renderOverlayLayout() {
   let data;
   try {
@@ -11228,6 +11229,7 @@ async function renderOverlayLayout() {
   } catch {
     return;
   }
+  overlayLayoutData = data;
 
   const draw = (host, names, chosen) => {
     const node = $(host);
@@ -11323,6 +11325,22 @@ async function saveOverlayLayout() {
     status.textContent = 'could not save';
   }
 }
+
+const OVERLAY_PRESETS = {
+  flight: { tabs: ['now', 'map', 'logbook'], cards: ['location', 'briefing', 'ship', 'session', 'feed'], density: 'compact' },
+  trading: { tabs: ['now', 'jobs', 'cargo', 'market'], cards: ['location', 'briefing', 'ship', 'trip', 'trade'], density: 'compact' },
+  minimal: { tabs: ['now', 'map'], cards: ['location', 'ship', 'session'], density: 'tiny' },
+  full: null,
+};
+$('#overlay-presets')?.addEventListener('click', event => {
+  const preset = OVERLAY_PRESETS[event.target?.dataset?.preset];
+  if (preset === undefined) return;
+  const all = (host, values) => $$(`${host} input`).forEach(box => { box.checked = values.includes(box.value); });
+  const next = preset || { tabs: overlayLayoutData?.tabs || [], cards: overlayLayoutData?.cards || [], density: 'normal' };
+  all('#overlay-tabs', next.tabs); all('#overlay-cards', next.cards);
+  $$('#overlay-density input').forEach(box => { box.checked = box.value === next.density; });
+  saveOverlayLayout();
+});
 
 /**
  * In the widget, applies the chosen layout: which tabs appear, which Now cards

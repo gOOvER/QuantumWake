@@ -275,6 +275,12 @@ body.overlay.density-tiny .tabs button[data-view] { padding: 3px 5px; font-size:
 
 /* The layout editor's tick grids. */
 .layout-group { margin-top: 12px; }
+.overlay-presets { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0 4px; }
+.overlay-presets .ghost { min-width: 88px; }
+.overlay-customize, .mfd-guide { margin-top: 12px; border-top: 1px solid var(--rule); }
+.overlay-customize > summary, .mfd-guide > summary { cursor: pointer; padding: 10px 0; color: var(--muted); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+.overlay-customize[open] > summary, .mfd-guide[open] > summary { color: var(--cyan); }
+.overlay-unavailable { padding: 8px 10px; border-left: 2px solid var(--amber); background: rgba(255,171,61,.06); }
 .layout-label {
   color: var(--dim);
   font-size: 10px;

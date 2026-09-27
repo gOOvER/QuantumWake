@@ -2845,7 +2845,7 @@
         changes page and <code>Ctrl+Alt+F</code> goes fullscreen. The choice is
         remembered.
       </p>
-      <p class="muted" id="overlay-unavailable" hidden>
+      <p class="muted overlay-unavailable" id="overlay-unavailable" hidden>
         Not available here: this dashboard is served by the bare server, which
         has no overlay window. Run <code>QuantumWake.exe</code> to get one.
       </p>
@@ -2863,7 +2863,7 @@
       <p class="muted">Optional cockpit displays for Thrustmaster MFD Cougar frames.
         <b>They are set up from the tray, not from here</b> — this page cannot see your
         monitors or read a USB frame. Off until you turn them on.</p>
-      <ol class="mfd-steps muted">
+      <details class="mfd-guide"><summary>How MFD setup works</summary><ol class="mfd-steps muted">
         <li>Right-click the <b>Quantum Wake</b> tray icon (under the <code>^</code> arrow if
           it is hidden) and choose <b>MFD setup…</b></li>
         <li>Drag the left and right rectangles onto the monitor behind your frames, and
@@ -2887,7 +2887,7 @@
       <div class="option-head">
         <a class="ghost" href="mfd-setup.html" target="_blank" rel="noopener">Preview the placement editor</a>
         <a class="ghost" href="mfd.html" target="_blank" rel="noopener">Preview an MFD page</a>
-      </div>
+      </div></details>
     </div>
 
     <div class="option-block">
@@ -2903,7 +2903,14 @@
         the lot.
       </p>
 
-      <div class="layout-group">
+      <div class="overlay-presets" id="overlay-presets" aria-label="Overlay presets">
+        <button type="button" class="ghost" data-preset="flight">Flight</button>
+        <button type="button" class="ghost" data-preset="trading">Trading</button>
+        <button type="button" class="ghost" data-preset="minimal">Minimal</button>
+        <button type="button" class="ghost" data-preset="full">Full</button>
+      </div>
+
+      <details class="overlay-customize"><summary>Customize pages, cards and density</summary><div class="layout-group">
         <div class="layout-label">Pages</div>
         <div class="layout-boxes" id="overlay-tabs"></div>
       </div>
@@ -2912,6 +2919,7 @@
         <div class="layout-label">Cards on the Now page</div>
         <div class="layout-boxes" id="overlay-cards"></div>
       </div>
+      </details>
 
       <div class="layout-group">
         <div class="layout-label">Density</div>
