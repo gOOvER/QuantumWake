@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -403,74 +403,87 @@
     </div>
 
     <div class="map-tools">
-      <label class="toggle">
-        <input type="checkbox" id="map-visited-only">
-        <span>Visited only</span>
-      </label>
-      <select id="map-mode" class="select" title="Choose an accurate system view or a schematic jump network">
-        <option value="system">System positions</option>
-        <option value="network">Jump network</option>
-      </select>
-      <select id="map-system" class="select" title="System to draw with relative body positions"></select>
-      <label class="toggle" title="List the commodities sold at a place on its hover tip and detail card">
-        <input type="checkbox" id="map-goods">
-        <span>Goods on hover</span>
-      </label>
-      <div class="map-service-filter" id="map-service-filter" role="group" aria-label="Filter places by service">
-        <button type="button" class="active" data-service="" title="Show every place">All</button>
-        <button type="button" data-service="shop" title="UEX-listed counters and shops">▦ Shops</button>
-        <button type="button" data-service="refuel" title="Places with a UEX fuel price">⛽ Refuel</button>
-        <button type="button" data-service="clinic" title="Places listed with a clinic">✚ Clinic</button>
+      <div class="map-toolbar-row map-primary-tools">
+        <select id="map-mode" class="select" title="Choose an accurate system view or a schematic jump network">
+          <option value="system">System positions</option>
+          <option value="network">Jump network</option>
+        </select>
+        <select id="map-system" class="select" title="System to draw with relative body positions"></select>
+        <span class="map-search-box">
+          <input type="search" id="map-search" aria-label="Find a place or commodity" placeholder="Find a place or commodity…" autocomplete="off">
+          <div class="map-results" id="map-results" hidden></div>
+        </span>
+        <button class="ghost map-player" id="map-here" title="Show your current location on the map">
+          <svg class="map-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/><circle cx="12" cy="12" r="1"/></svg> <span id="map-here-label">Your location</span>
+        </button>
       </div>
-      <select id="map-amenity" class="select" aria-label="Facility" title="Choose a facility, then select the closest to your last known location">
-        <option value="">Any facility</option>
-      </select>
-      <button type="button" class="ghost" id="map-closest" title="Find the closest matching facility or service from your last known location">Select closest</button>
-      <div class="map-focus-filter" id="map-focus-filter" role="group" aria-label="Focus the map on your work">
-        <button type="button" class="active" data-focus="" title="Show every place">All</button>
-        <button type="button" data-focus="plan" title="Stops on the active flight plan">Plan</button>
-        <button type="button" data-focus="shopping" title="Shopping-list destinations and known sellers">Shopping</button>
-        <button type="button" data-focus="stash" title="Places where your stash was last recorded">Stash</button>
-        <button type="button" data-focus="notes" title="Places with one of your personal map notes">Notes</button>
+      <div class="map-toolbar-row map-filter-tools">
+        <span class="map-tool-label">Services</span>
+        <div class="map-service-filter" id="map-service-filter" role="group" aria-label="Filter places by service">
+          <button type="button" class="active" data-service="" title="Show every place">All</button>
+          <button type="button" data-service="shop" title="UEX-listed counters and shops">Shops</button>
+          <button type="button" data-service="refuel" title="Places with a UEX fuel price">Refuel</button>
+          <button type="button" data-service="clinic" title="Places listed with a clinic">Clinic</button>
+        </div>
+        <select id="map-amenity" class="select" aria-label="Facility" title="Choose a facility, then select the closest to your last known location">
+          <option value="">Any facility</option>
+        </select>
+        <button type="button" class="ghost" id="map-closest" title="Find the closest matching facility or service from your last known location">Select closest</button>
+        <span class="map-tool-label map-focus-label">Focus</span>
+        <div class="map-focus-filter" id="map-focus-filter" role="group" aria-label="Focus the map on your work">
+          <button type="button" class="active" data-focus="" title="Show every place">All</button>
+          <button type="button" data-focus="plan" title="Stops on the active flight plan">Plan</button>
+          <button type="button" data-focus="shopping" title="Shopping-list destinations and known sellers">Shopping</button>
+          <button type="button" data-focus="stash" title="Places where your stash was last recorded">Stash</button>
+          <button type="button" data-focus="notes" title="Places with one of your personal map notes">Notes</button>
+        </div>
       </div>
-      <span class="map-search-box">
-        <input type="search" id="map-search" placeholder="Find a place or commodity…" autocomplete="off">
-        <div class="map-results" id="map-results" hidden></div>
-      </span>
-      <select id="map-shade" class="select" hidden title="What the highlight colour encodes">
-        <option value="price">Shade by price</option>
-        <option value="scu">Shade by capacity</option>
-        <option value="mine">Shade by my own prices</option>
-      </select>
-      <div class="seg" id="map-side" hidden title="Which side of the counter the map is showing">
-        <button type="button" data-side="sell" class="active">Selling</button>
-        <button type="button" data-side="buy">Buying</button>
+      <div class="map-toolbar-row map-action-tools">
+        <details class="map-view-options">
+          <summary>View options</summary>
+          <div class="map-options-panel">
+            <label class="toggle">
+              <input type="checkbox" id="map-visited-only">
+              <span>Visited only</span>
+            </label>
+            <label class="toggle" title="List the commodities sold at a place on its hover tip and detail card">
+              <input type="checkbox" id="map-goods">
+              <span>Goods on hover</span>
+            </label>
+            <select id="map-label-density" class="select" title="How many place labels to show as you zoom">
+              <option value="auto">Labels: auto</option>
+              <option value="quiet">Labels: quiet</option>
+              <option value="all">Labels: all</option>
+            </select>
+            <select id="map-preset" class="select" title="Apply or restore a saved map view">
+              <option value="">Map preset</option>
+              <option value="plan">Current plan</option>
+              <option value="shopping">Shopping run</option>
+              <option value="services">Service scan</option>
+              <option value="visited">My places</option>
+              <option value="saved">Saved view</option>
+            </select>
+            <button class="ghost" id="map-save-preset" title="Save the current map controls as Saved view">Save view</button>
+          </div>
+        </details>
+        <select id="map-shade" class="select" hidden title="What the highlight colour encodes">
+          <option value="price">Shade by price</option>
+          <option value="scu">Shade by capacity</option>
+          <option value="mine">Shade by my own prices</option>
+        </select>
+        <div class="seg" id="map-side" hidden title="Which side of the counter the map is showing">
+          <button type="button" data-side="sell" class="active">Selling</button>
+          <button type="button" data-side="buy">Buying</button>
+        </div>
+        <select id="map-window" class="select period" data-all="All time" hidden
+            title="How far back your own receipts count"></select>
+          <span class="muted" id="map-count"></span>
+          <span class="spacer"></span>
+          <button class="ghost" id="map-plan" title="The flight plan: where to go, in order">Plan</button>
+          <button class="ghost" id="map-follow" title="Keep the map centred on you as you move">Follow</button>
+          <button class="ghost" id="map-reset">Reset view</button>
+        </div>
       </div>
-      <select id="map-window" class="select period" data-all="All time" hidden
-              title="How far back your own receipts count"></select>
-      <select id="map-label-density" class="select" title="How many place labels to show as you zoom">
-        <option value="auto">Labels: auto</option>
-        <option value="quiet">Labels: quiet</option>
-        <option value="all">Labels: all</option>
-      </select>
-      <select id="map-preset" class="select" title="Apply or restore a saved map view">
-        <option value="">Map preset</option>
-        <option value="plan">Current plan</option>
-        <option value="shopping">Shopping run</option>
-        <option value="services">Service scan</option>
-        <option value="visited">My places</option>
-        <option value="saved">Saved view</option>
-      </select>
-      <button class="ghost" id="map-save-preset" title="Save the current map controls as Saved view">Save view</button>
-      <span class="spacer"></span>
-      <span class="muted" id="map-count"></span>
-      <button class="ghost" id="map-plan" title="The flight plan: where to go, in order">Plan</button>
-      <button class="ghost" id="map-follow" title="Keep the map centred on you as you move">Follow</button>
-      <button class="ghost map-player" id="map-here" title="Show your current location on the map">
-        <span aria-hidden="true">⌖</span> <span id="map-here-label">Your location</span>
-      </button>
-      <button class="ghost" id="map-reset">Reset view</button>
-    </div>
     <p class="muted map-mode-note" id="map-mode-note"></p>
     <div class="map-closest-result" id="map-closest-result" aria-live="polite" hidden></div>
 
@@ -1869,37 +1882,43 @@
     </p>
     <p class="muted" id="crack-unready" hidden></p>
     <div class="crack" id="crack" hidden>
-      <div class="crack-rock">
-        <label>Ship
-          <select id="crack-ship" class="select" title="The heads come from the ship's own loadout"></select>
-        </label>
-        <label>Mass
-          <input type="number" id="crack-mass" class="search" min="0" step="100" value="5000" title="Kilograms, as the scan HUD prints it">
-          <span class="unit">kg</span>
-        </label>
-        <label>Resistance
-          <input type="number" id="crack-resistance" class="search" min="0" max="100" step="1" value="0" title="The HUD's resistance, in percent">
-          <span class="unit">%</span>
-        </label>
-        <label>Instability
-          <input type="number" id="crack-instability" class="search" min="0" max="100" step="1" value="15" title="The HUD's instability, in percent">
-          <span class="unit">%</span>
-        </label>
-        <label>Deposit
-          <select id="crack-deposit" class="select" title="The kind of rock, as the game defines its mix; picks the likeliest mineral below"></select>
-        </label>
-        <label>Mineral
-          <select id="crack-mineral" class="select" title="What most of the rock is - for the notes; the HUD's figures above are what count"></select>
-        </label>
-        <label>Gadget
-          <select id="crack-gadget" class="select" title="A gadget placed on the rock"></select>
-        </label>
-        <button type="button" class="ghost tiny" id="crack-use-scan" title="Fill the rock from the newest scan-results screenshot the Log tab has read">Use the last scanned rock</button>
+      <div class="crack-inputs">
+        <section class="crack-fit-panel">
+          <h4>Ship and equipment</h4>
+          <label>Ship
+            <select id="crack-ship" class="select" title="The heads come from the ship's own loadout"></select>
+          </label>
+          <div class="crack-heads" id="crack-heads"></div>
+          <div class="crack-fit-summary" id="crack-fit-summary"></div>
+        </section>
+        <section class="crack-rock">
+          <h4>Scanned rock</h4>
+          <label>Mass
+            <input type="number" id="crack-mass" class="search" min="0" step="100" value="5000" title="Kilograms, as the scan HUD prints it">
+            <span class="unit">kg</span>
+          </label>
+          <label>Resistance
+            <input type="number" id="crack-resistance" class="search" min="0" max="100" step="1" value="0" title="The HUD's resistance, in percent">
+            <span class="unit">%</span>
+          </label>
+          <label>Instability
+            <input type="number" id="crack-instability" class="search" min="0" max="100" step="1" value="15" title="The HUD's instability, in percent">
+            <span class="unit">%</span>
+          </label>
+          <label>Deposit
+            <select id="crack-deposit" class="select" title="The kind of rock, as the game defines its mix; picks the likeliest mineral below"></select>
+          </label>
+          <label>Mineral
+            <select id="crack-mineral" class="select" title="What most of the rock is - for the notes; the HUD's figures above are what count"></select>
+          </label>
+          <label>Gadget
+            <select id="crack-gadget" class="select" title="A gadget placed on the rock"></select>
+          </label>
+          <button type="button" class="ghost tiny" id="crack-use-scan" title="Fill the rock from the newest scan-results screenshot the Log tab has read">Use the last scanned rock</button>
+        </section>
+        <div class="crack-verdict" id="crack-verdict"></div>
       </div>
       <p class="muted crack-note" id="crack-scan-note" hidden></p>
-      <div class="crack-heads" id="crack-heads"></div>
-      <div class="crack-fit-summary" id="crack-fit-summary"></div>
-      <div class="crack-verdict" id="crack-verdict"></div>
       <div class="crack-deposit" id="crack-deposit-panel" hidden>
         <div class="table-wrap">
           <table id="crack-mix">

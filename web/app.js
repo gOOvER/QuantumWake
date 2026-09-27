@@ -5166,17 +5166,22 @@ function renderCrackHeads() {
 
     const laser = document.createElement('select');
     laser.className = 'select crack-laser';
-    for (const l of crackModel.lasers.filter((l) => l.size === head.size)) {
+    const locked = head.editable === false || head.editable === null;
+    for (const l of crackModel.lasers.filter((l) => locked ? l.class === head.stock
+      : l.size === head.size && !l.bespoke)) {
       laser.append(new Option(`${l.name} · ${fmtInt(l.power)} · ${describeModifiers(l.modifiers) || 'no modifiers'}`, l.class));
     }
     if (head.stock && [...laser.options].some((o) => o.value === head.stock)) laser.value = head.stock;
-    laser.title = 'The head; the ship\'s own is picked first';
+    if (!laser.options.length && head.stock) laser.append(new Option(`${head.stock} · figures unavailable`, head.stock));
+    laser.disabled = locked;
+    laser.title = head.note || 'The head; the ship\'s own is picked first';
     laser.addEventListener('change', () => {
       renderCrackSlots(row);
       renderCrackFitSummary();
       assessCrack().catch(() => {});
     });
     row.append(laser);
+    if (head.note) row.append(el('span', 'crack-head-note', head.note));
     renderCrackSlots(row);
     host.append(row);
   });
@@ -5238,6 +5243,7 @@ function crackRequest() {
     modules: [...row.querySelectorAll('.crack-module')].map((s) => s.value).filter(Boolean),
   }));
   return {
+    ship: $('#crack-ship').value || null,
     massKg: Number($('#crack-mass').value) || 0,
     resistance: Number($('#crack-resistance').value) || 0,
     instability: Number($('#crack-instability').value) || 0,
@@ -5319,7 +5325,10 @@ async function assessCrack() {
     body.append(tr);
   }
   const heads = request.heads.length;
-  $('#crack-matrix-note').textContent = `Every S${crackModel.ships.find((s) => s.class === $('#crack-ship').value)?.heads[0]?.size ?? '?'} head on this rock, ${heads} to a fit with the same modules; only the laser changes, and a module is carried over even where the other head has no slot for it.`;
+  const hull = crackModel.ships.find((s) => s.class === $('#crack-ship').value);
+  $('#crack-matrix-note').textContent = hull?.heads.some((h) => h.editable === false || h.editable === null)
+    ? 'Stock head only: this fit has a fixed head or its replacement compatibility is not yet known. Modules and gadgets still affect the estimate.'
+    : `Compatible S${hull?.heads[0]?.size ?? '?'} heads on this rock, ${heads} to a fit with the same modules; only the laser changes, and a module is carried over even where the other head has no slot for it.`;
 }
 
 $('#crack-ship')?.addEventListener('change', () => { renderCrackHeads(); assessCrack().catch(() => {}); });
@@ -12947,6 +12956,7 @@ const GARAGE_GROUP_WORDS = {
   EMP: 'EMP',
   QuantumInterdictionGenerator: 'Quantum interdiction',
   WeaponMining: 'Mining laser',
+  SalvageHead: 'Salvage head',
   Armor: 'Armour',
   LifeSupportGenerator: 'Life support',
   FlightController: 'Flight controller',
@@ -13688,6 +13698,10 @@ function renderGarage(data, stock) {
   notes.textContent = '';
   notes.hidden = !(s.notes && s.notes.length);
   for (const note of s.notes || []) notes.append(el('div', null, note));
+  if (data.industrialPortsKnown === false && /mining|salvage/i.test(`${ship.role || ''} ${ship.career || ''}`)) {
+    notes.hidden = false;
+    notes.append(el('div', null, 'Replacement choices for mining and salvage heads are missing from this cached loadout. Refresh the community dataset in Settings to check their compatibility.'));
+  }
 
   renderBench(data);
 }
@@ -13763,6 +13777,8 @@ function garageRigSlot(port, ship) {
   const many = port.portIds.length > 1;
   const name = port.name || port.class || 'Empty port';
   button.title = `${garageWord(port.group)} · ${garagePortName(port.hardpoint)} · ${name}`;
+  button.disabled = !!port.fixedReason;
+  if (port.fixedReason) button.title = port.fixedReason;
   button.append(partMark(port.fitted, true));
 
   const body = el('span', 'garage-rig-slot-body');
@@ -13771,6 +13787,7 @@ function garageRigSlot(port, ship) {
   if (port.fitted) part.append(partChip(port.fitted));
   if (many) part.append(el('span', 'chip count', `×${port.portIds.length}`));
   body.append(part);
+  if (port.fixedReason) body.append(el('span', 'garage-rig-slot-spec', port.fixedReason));
   const figures = partFigures(port.fitted, ship).slice(0, 2);
   if (figures.length) body.append(el('span', 'garage-rig-slot-spec', figures.map((f) => `${f[2]} ${f[0]}`).join(' · ')));
   button.append(body);
@@ -13912,7 +13929,7 @@ let garageOptions = null;
 
 /** The kinds in the order a pilot thinks about them, and the figure that heads each. */
 const BENCH_KINDS = ['PowerPlant', 'Cooler', 'Shield', 'QuantumDrive', 'WeaponGun', 'MissileLauncher', 'Missile', 'Radar',
-  'EMP', 'QuantumInterdictionGenerator', 'WeaponMining'];
+  'EMP', 'QuantumInterdictionGenerator', 'WeaponMining', 'SalvageHead'];
 
 
 /**
@@ -14143,6 +14160,7 @@ function renderBench(data) {
       const sub = el('div', 'port-name', many ? `${garagePortName(port.hardpoint)} and ${port.portIds.length - 1} more` : garagePortName(port.hardpoint));
       if (port.changed) sub.append(el('span', 'was', `was ${port.stockName || port.stockClass || 'empty'}`));
       mid.append(sub);
+      if (port.fixedReason) mid.append(el('span', 'muted small', port.fixedReason));
       rowEl.append(mid);
 
       const figure = el('div', 'figure');
@@ -14151,7 +14169,7 @@ function renderBench(data) {
       if (second) figure.append(document.createTextNode(`${second[2]} ${second[0]}`));
       rowEl.append(figure);
 
-      rowEl.addEventListener('click', () => selectBenchPort(port.portIds[0]).catch(() => {}));
+      if (!port.fixedReason) rowEl.addEventListener('click', () => selectBenchPort(port.portIds[0]).catch(() => {}));
       list.append(rowEl);
     }
   }
@@ -14159,6 +14177,7 @@ function renderBench(data) {
 
 /** Opens the candidates for one port. */
 async function selectBenchPort(portId, revealChoices = false) {
+  if (garageBenchPorts.find((p) => p.portId === portId)?.fixedReason) return;
   const request = ++benchRequest;
   const cls = garageClass;
   garageSelectedPort = portId;
@@ -20100,28 +20119,11 @@ function drawServiceBadges(group, x, y, radius, services) {
     const badge = svgEl('g', { class: `map-service-badge ${service}` });
     badge.append(svgEl('circle', { cx: bx, cy: by, r: badgeRadius }));
 
-    if (service === 'shop') {
-      badge.append(svgEl('rect', {
-        x: bx - badgeRadius * .52, y: by - badgeRadius * .52,
-        width: badgeRadius * 1.04, height: badgeRadius * 1.04, class: 'service-glyph',
-      }));
-      badge.append(svgEl('line', { x1: bx, y1: by - badgeRadius * .52, x2: bx, y2: by + badgeRadius * .52, class: 'service-glyph' }));
-    } else if (service === 'refuel') {
-      badge.append(svgEl('path', {
-        d: `M ${bx} ${by - badgeRadius * .68} C ${bx + badgeRadius * .56} ${by - badgeRadius * .14}, ${bx + badgeRadius * .42} ${by + badgeRadius * .56}, ${bx} ${by + badgeRadius * .62} C ${bx - badgeRadius * .42} ${by + badgeRadius * .56}, ${bx - badgeRadius * .56} ${by - badgeRadius * .14}, ${bx} ${by - badgeRadius * .68} Z`,
-        class: 'service-glyph',
-      }));
-    } else if (service === 'clinic') {
-      badge.append(svgEl('path', {
-        d: `M ${bx - badgeRadius * .22} ${by - badgeRadius * .64} H ${bx + badgeRadius * .22} V ${by - badgeRadius * .22} H ${bx + badgeRadius * .64} V ${by + badgeRadius * .22} H ${bx + badgeRadius * .22} V ${by + badgeRadius * .64} H ${bx - badgeRadius * .22} V ${by + badgeRadius * .22} H ${bx - badgeRadius * .64} V ${by - badgeRadius * .22} H ${bx - badgeRadius * .22} Z`,
-        class: 'service-glyph',
-      }));
-    } else {
-      badge.append(svgEl('path', {
-        d: `M ${bx - badgeRadius * .58} ${by} H ${bx + badgeRadius * .58} M ${bx} ${by - badgeRadius * .58} V ${by + badgeRadius * .58}`,
-        class: 'service-glyph',
-      }));
-    }
+    badge.append(svgEl('path', {
+      d: MAP_SERVICE_PATHS[service] || MAP_SERVICE_PATHS.repair,
+      transform: `translate(${bx - badgeRadius * .78} ${by - badgeRadius * .78}) scale(${badgeRadius * 1.56 / 24})`,
+      class: 'service-glyph',
+    }));
 
     const title = svgEl('title');
     title.textContent = SERVICE_META[service]?.label || service;
@@ -20279,7 +20281,29 @@ try { followHere = localStorage.getItem('qw-map-follow') === '1'; } catch { /* p
 /** Where the player is, kept in step with the live feed. */
 let hereId = null;
 
-const SYSTEM_COLOURS = { Stanton: '#ffdc9a', Pyro: '#ff8f66', Nyx: '#9fb8ff' };
+// Muted families keep the map quiet; shape identifies the place and saturated
+// colour stays available for the player, search results and commodity prices.
+const MAP_KIND_COLOURS = {
+  City: '#b6d2df', Station: '#8fbacb', RestStop: '#91bdb5',
+  Outpost: '#c7b89c', Mine: '#bba585', Asteroid: '#9da9b7',
+  Research: '#b3abc9', DistributionCentre: '#b4bdcb', JumpPoint: '#d4dfe8',
+  MissionBeacon: '#d6bb86', Unknown: '#8495a6',
+};
+
+// One path set is shared by toolbar icons, service badges and the legend.
+const MAP_SERVICE_PATHS = {
+  shop: 'M4 10h16v10H4z M3 10l2-6h14l2 6 M9 20v-6h6v6 M3 10h18',
+  refuel: 'M12 3C10 6 5 11 5 15a7 7 0 0 0 14 0c0-4-5-9-7-12Z',
+  clinic: 'M9 4h6v5h5v6h-5v5H9v-5H4V9h5Z',
+  repair: 'M14 5a5 5 0 0 0-6 6L3 16l5 5 5-5a5 5 0 0 0 6-6l-4 3-4-4Z',
+};
+function mapServiceIcon(service) {
+  const icon = svgEl('svg', { viewBox: '0 0 24 24', class: 'map-ui-icon', 'aria-hidden': 'true' });
+  icon.append(svgEl('path', { d: MAP_SERVICE_PATHS[service] || MAP_SERVICE_PATHS.repair }));
+  return icon;
+}
+
+const SYSTEM_COLOURS = { Stanton: '#d6c39e', Pyro: '#c39988', Nyx: '#a6b3d0' };
 
 /** Jump lanes, drawn between the stars they connect. */
 const JUMP_LANES = [
@@ -20891,6 +20915,9 @@ function drawHere() {
 
 /** Wheel zoom, drag pan, and the toolbar. Wired once. */
 function initMap() {
+  for (const button of $$('#map-service-filter [data-service]')) {
+    if (button.dataset.service) button.prepend(mapServiceIcon(button.dataset.service));
+  }
   const map = $('#starmap');
 
   map.addEventListener('wheel', (e) => {
@@ -23236,7 +23263,7 @@ function showMapTip(location) {
   const services = servicesAt(location);
   if (services.length)
     tip.append(el('span', 'service-tip', services
-      .map((service) => `${SERVICE_META[service]?.icon || '•'} ${SERVICE_META[service]?.label || service}`)
+      .map((service) => `${SERVICE_META[service]?.label || service}`)
       .join(' · ')));
 
   tip.hidden = false;
@@ -23284,7 +23311,7 @@ function showBodyTip(bodyName, system, sites) {
       serviceCounts.set(service, (serviceCounts.get(service) || 0) + 1);
   if (serviceCounts.size) {
     const summary = [...serviceCounts.entries()]
-      .map(([service, count]) => `${SERVICE_META[service]?.icon || '•'} ${count} ${SERVICE_META[service]?.label || service}`)
+      .map(([service, count]) => `${count} ${SERVICE_META[service]?.label || service}`)
       .join(' · ');
     tip.append(el('span', 'service-tip', summary));
   }
@@ -23554,7 +23581,7 @@ function renderMapInfoServices(location) {
     const chip = el('button', 'map-service-chip');
     chip.type = 'button';
     chip.title = `Filter the map to ${meta.label.toLowerCase()}`;
-    chip.append(el('span', 'service-icon', meta.icon));
+    chip.append(mapServiceIcon(service));
     chip.append(el('span', 'service-text', meta.label));
     chip.addEventListener('click', () => selectMapService(service));
     host.append(chip);
@@ -23919,7 +23946,7 @@ function drawMap() {
 
       map.append(svgEl('line', {
         x1: place.from.x, y1: place.from.y, x2: bx, y2: by,
-        stroke: 'rgba(53,200,240,.13)', 'stroke-width': '1',
+        stroke: 'rgba(150,172,194,.13)', 'stroke-width': '1',
       }));
 
       const sites = bodies.get(bodyName);
@@ -24055,50 +24082,77 @@ function drawMap() {
  * business.
  *
  * Colour alone was carrying the whole taxonomy: nine kinds, nine dots, and a
- * legend to memorise. A shape can be read without the legend - a headframe is a
- * mine whether or not you remember that mines are brown - and the colour stays
- * exactly as it was, so anyone who had learnt it loses nothing.
+ * legend to memorise. Distinct silhouettes carry the type even when the map
+ * switches from its muted place palette to commodity price shading.
  *
- * Deliberately blunt geometry. These are drawn between four and seventeen
- * pixels across, where a detailed glyph turns to mush; a silhouette that
- * survives being tiny beats one that looks good in a design tool.
+ * These are compact technical pictograms rather than arbitrary geometry. They
+ * have one recognisable detail at the smallest size and a little more character
+ * once zoomed in; intricate library icons lost that detail on dense bodies.
  */
 const KIND_SHAPES = {
-  // A skyline. Two steps rather than three: at eight pixels a third is a smudge.
-  City: [{ tag: 'path', attrs: { d: 'M-1 .9 L-1 -.15 L-.05 -.15 L-.05 -1 L1 -1 L1 .9 Z' } }],
+  // A skyline with three distinct towers. The stepped outline survives a dense
+  // cluster while the inset reads as streets when the map frames a city.
+  City: [
+    { tag: 'path', attrs: { d: 'M-1 .9V-.2H-.58V-1H-.16V.2H.18V-.68H.64V.04H1V.9Z' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.8 .34H.8M-.37-.7V.68M.4-.35V.68' } },
+  ],
 
-  // A ring - the one shape that reads as "you dock inside it".
-  Station: [{ tag: 'path', attrs: { d: 'M0 -1 A 1 1 0 1 1 0 1 A 1 1 0 1 1 0 -1 Z M0 -.42 A .42 .42 0 1 0 0 .42 A .42 .42 0 1 0 0 -.42 Z' }, evenodd: 1 }],
+  // A top-down docking spine with lateral berths. It reads as a built station
+  // rather than a face-like cluster of lobes when a highlighted mark is large.
+  Station: [
+    { tag: 'path', attrs: { d: 'M-.22-1H.22V-.44H.68L1-.16V.16L.68.44H.22V1H-.22V.44H-.68L-1 .16V-.16L-.68-.44H-.22Z' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.22-.7H.22M-.52 0H.52M-.22 .7H.22' } },
+  ],
 
-  // A horizontal berth: it stays distinct from an asteroid's uneven rock
-  // silhouette even when a map icon is only a handful of pixels across.
-  RestStop: [{ tag: 'rect', attrs: { x: -1, y: -.62, width: 2, height: 1.24, rx: .34 } }],
+  // A pad marker: octagonal perimeter and a compact H for the landing berth.
+  RestStop: [
+    { tag: 'path', attrs: { d: 'M-.55-1H.55L1-.55V.55L.55 1H-.55L-1 .55V-.55Z' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.38-.45V.45M.38-.45V.45M-.38 0H.38' } },
+  ],
 
-  // A dome on the ground.
-  Outpost: [{ tag: 'path', attrs: { d: 'M-1 .55 A 1 1 0 0 1 1 .55 L1 .8 L-1 .8 Z' } }],
+  // A staffed surface outpost: a low habitat, mast, and one status window.
+  Outpost: [
+    { tag: 'path', attrs: { d: 'M-1 .72V.22L-.38-.45V-1H.02V-.45L.68.08V.72Z' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.7 .35H.42M-.18-1v-.22M.2 .1h.2' } },
+  ],
 
-  // A spoil heap. Nothing on top of it - the headframe it used to carry turned
-  // to mush at map size, which is the size it is always drawn at.
-  Mine: [{ tag: 'polygon', attrs: { points: '0,-1 1,.85 -1,.85' } }],
+  // An open headframe with a crossbeam reads as mining rather than a warning.
+  Mine: [
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-1 .9 0-1 1 .9M-.62 .2H.62M-.32-.35H.32M-1 .9H1' } },
+  ],
 
-  // An uneven rock: the lopsided outline is intentional, otherwise it reads
-  // too much like a rest-stop berth at a glance.
-  Asteroid: [{ tag: 'polygon', attrs: { points: '-.72,-.92 .5,-.72 1,.02 .42,.9 -.74,.62 -1,-.18' } }],
+  // A chipped rock with two crater cuts. It stays asymmetric at map scale.
+  Asteroid: [
+    { tag: 'path', attrs: { d: 'M-.76-.84 .42-.73 1-.08.47.9-.72.63-1-.14ZM-.22-.3a.22.22 0 1 0 0 .44.22.22 0 1 0 0-.44ZM.43.2a.14.14 0 1 0 0 .28.14.14 0 1 0 0-.28Z' }, evenodd: 1 },
+  ],
 
-  // A cross: legible at any size, and nothing else on the map is one.
-  Research: [{ tag: 'path', attrs: { d: 'M-.32 -1 L.32 -1 L.32 -.32 L1 -.32 L1 .32 L.32 .32 L.32 1 L-.32 1 L-.32 .32 L-1 .32 L-1 -.32 L-.32 -.32 Z' } }],
+  // A flask reads as research while leaving the medical cross exclusively to clinics.
+  Research: [
+    { tag: 'path', attrs: { d: 'M-.34-1H.34V-.34L.88.62Q.94.92.58.92H-.58Q-.94.92-.88.62L-.34-.34Z' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.48 .4H.48M-.18-.68H.18' } },
+  ],
 
-  // Cargo moving: an arrow, not a crate with a band nobody could see.
-  DistributionCentre: [{ tag: 'polygon', attrs: { points: '-1,-.85 .95,0 -1,.85 -1,.3 -.15,0 -1,-.3' } }],
+  // Stacked containers plus a directional seam make a freight depot distinct from a city.
+  DistributionCentre: [
+    { tag: 'path', attrs: { d: 'M-1-.78H.3V-.1H1V.78H-.3V.1H-1Z' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.72-.44H.02M-.02 .44H.72M-.36-.78V-.1M.36 .1V.78' } },
+  ],
 
-  // The same diamond the jump lanes wear.
-  JumpPoint: [{ tag: 'polygon', attrs: { points: '0,-1 1,0 0,1 -1,0' } }],
+  // A gate with a star cutout describes a jump point without reusing a diamond.
+  JumpPoint: [
+    { tag: 'path', attrs: { d: 'M-1 .85V-.35L-.35-1H.35L1-.35V.85H.5V-.18L.18-.55H-.18L-.5-.18V.85Z' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M0-.35V.45M-.34.05H.34' } },
+  ],
 
-  MissionBeacon: [{ tag: 'polygon', attrs: { points: '0,1 -1,-.85 0,-.3 1,-.85' } }],
+  // A transmitter with two short waves gives mission beacons a different rhythm.
+  MissionBeacon: [
+    { tag: 'path', attrs: { d: 'M0-1 .5.72H-.5Z' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.78-.56-.98-.35M.78-.56 .98-.35M-.9 .08-1 .28M.9 .08 1 .28M-.62.72H.62' } },
+  ],
 };
 
-/** Anything without a mark of its own keeps the dot it always had. */
-const PLAIN_MARK = [{ tag: 'circle', attrs: { cx: 0, cy: 0, r: 1 } }];
+/** Unknown places use a four-tick locator so every default is a real icon. */
+const PLAIN_MARK = [{ tag: 'path', open: true, attrs: { d: 'M0-1v.46M0 .54V1M-1 0h.46M.54 0H1' } }];
 
 /**
  * Draws a place's mark at a size.
@@ -24107,9 +24161,8 @@ const PLAIN_MARK = [{ tag: 'circle', attrs: { cx: 0, cy: 0, r: 1 } }];
  *   outline, exactly as when every kind was a circle.
  */
 /**
- * Equal radius is not equal weight: a triangle inside a circle covers under
- * half of it, so the same number drew a mine that looked half the size of a
- * rest stop beside it. Each shape is nudged until they read as one set.
+ * Equal radius is not equal visual weight: an open headframe reads lighter than
+ * a filled station, so the weights make the set feel intentional at a glance.
  */
 const SHAPE_WEIGHT = {
   City: 0.92,
@@ -24119,7 +24172,7 @@ const SHAPE_WEIGHT = {
   Mine: 1.18,
   Asteroid: 1,
   Research: 1.06,
-  DistributionCentre: 1.12,
+  DistributionCentre: 1,
   JumpPoint: 1.15,
   MissionBeacon: 1.15,
 };
@@ -24136,17 +24189,18 @@ function kindMark(kind, x, y, radius, colour, solid) {
     group.append(svgEl(part.tag, {
       ...part.attrs,
 
-      // Line parts are strokes whatever the history: a filled orbit or shaft is
-      // a blob. Everything else fills once the place has been visited.
-      fill: solid ? colour : 'none',
-      stroke: colour,
+      // Interior detail stays open. On a filled icon it is darkened so the
+      // streets, docking collars, and cargo seams remain visible at normal zoom.
+      fill: part.open ? 'none' : solid ? colour : 'none',
+      stroke: part.inset && solid ? '#08131b' : colour,
 
       // Heavy enough to survive being drawn six pixels across, which is the
       // size these are actually used at; an outline at .14 disappeared.
-      'stroke-width': 0.22,
+      'stroke-width': part.open ? 0.19 : 0.22,
+      'stroke-linecap': 'round',
       'stroke-linejoin': 'round',
       'fill-rule': part.evenodd ? 'evenodd' : 'nonzero',
-      opacity: solid ? 0.92 : 0.6,
+      opacity: solid ? 1 : 0.78,
     }));
   }
 
@@ -24209,7 +24263,7 @@ const hitPad = (radius, room) => Math.max(radius + 1, Math.min(radius + 8, room)
  */
 function drawNode(map, x, y, location, radius, anchor = null, room = Infinity) {
 
-  const colour = KIND_COLOURS[location.kind] || KIND_COLOURS.Unknown;
+  const colour = MAP_KIND_COLOURS[location.kind] || MAP_KIND_COLOURS.Unknown;
   const been = location.visits > 0;
 
   let cls = been ? 'map-node' : 'map-node unvisited';
@@ -24446,7 +24500,7 @@ function drawLegend(locations) {
 
     for (const service of shown) {
       const item = el('div', 'item');
-      item.append(el('span', 'service-tip', SERVICE_META[service]?.icon || '•'));
+      item.append(mapServiceIcon(service));
       item.append(el('span', null, `${SERVICE_META[service]?.label || service} badge`));
       legend.append(item);
     }
@@ -24489,12 +24543,15 @@ function drawLegend(locations) {
     const swatch = document.createElementNS(SVG_NS, 'svg');
     swatch.setAttribute('viewBox', '-1.35 -1.35 2.7 2.7');
     swatch.setAttribute('class', 'swatch-mark');
-    swatch.append(kindMark(kind, 0, 0, 1, KIND_COLOURS[kind] || KIND_COLOURS.Unknown, true));
+    swatch.append(kindMark(kind, 0, 0, 1, MAP_KIND_COLOURS[kind] || MAP_KIND_COLOURS.Unknown, true));
     item.append(swatch);
     item.append(el('span', null, kind.replace(/([a-z])([A-Z])/g, '$1 $2')));
     legend.append(item);
   }
 
+  const historyKey = el('div', 'item map-history-key');
+  historyKey.append(el('span', null, 'Filled: visited · Outline: unvisited'));
+  legend.append(historyKey);
   appendPriceFreshness();
   appendServiceLegend();
 }

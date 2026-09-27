@@ -365,12 +365,27 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.33
+### 0.15.37
+
+- City and station marks now have stronger tower and orbital-hub silhouettes. Every filled map icon keeps dark inset detail, so landing pads, headframes, research flasks, cargo stacks and jump gates remain recognisable at ordinary zoom.
+
+- Star-map places now use purpose-drawn technical icons: docks, landing pads, headframes, research flasks, cargo stacks and jump gates. Each keeps its own detail at close range and remains distinct in a dense cluster.
+
+- The star map uses a muted palette and matching service icons. Search and location controls lead the toolbar, with display settings under View options. Filled and outlined place markers keep visited history visible.
 
 - **Select the closest facility on the map.** Choose a facility or service,
   then select closest from your last known location. Body-based estimates are
   labelled approximate, tied places remain a choice, and missing coordinates
   are explained. Selecting a result centres the map and opens its place card.
+
+- **Mining and salvage heads appear in the Garage.** Mining lasers and
+  salvage heads now have fitted slots and compatible replacement choices.
+  Older reference caches explain when a Settings refresh is needed.
+
+- **The Golem keeps its bespoke Pitman.** Garage and Mining label the fixed
+  head and prevent ordinary laser swaps; mining modules remain configurable.
+  Mining's fit calculator separates ship equipment and scanned-rock inputs
+  into matching panels that stack on smaller screens.
 
 - **Hauling runs start from your last known location.** A pickup where you
   already are comes first, with body and system used to group later stops.
