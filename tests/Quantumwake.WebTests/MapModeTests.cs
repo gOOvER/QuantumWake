@@ -157,6 +157,8 @@ public class MapModeTests
 
         Assert.Equal(2, page.Number("KIND_SHAPES.RestStop.length"));
         Assert.Equal(2, page.Number("KIND_SHAPES.Station.length"));
+        Assert.True(page.Truth("KIND_SHAPES.City[1].inset"));
+        Assert.True(page.Truth("KIND_SHAPES.Station[1].inset"));
         Assert.True(page.Truth("KIND_SHAPES.Mine[0].open"));
         Assert.True(page.Truth("KIND_SHAPES.Research[1].open"));
         Assert.NotEqual("circle", page.Text("PLAIN_MARK[0].tag"));

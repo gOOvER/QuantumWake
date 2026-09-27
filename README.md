@@ -365,7 +365,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.36
+### 0.15.37
+
+- City and station marks now have stronger tower and orbital-hub silhouettes. Every filled map icon keeps dark inset detail, so landing pads, headframes, research flasks, cargo stacks and jump gates remain recognisable at ordinary zoom.
 
 - Star-map places now use purpose-drawn technical icons: docks, landing pads, headframes, research flasks, cargo stacks and jump gates. Each keeps its own detail at close range and remains distinct in a dense cluster.
 

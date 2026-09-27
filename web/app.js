@@ -24090,33 +24090,35 @@ function drawMap() {
  * once zoomed in; intricate library icons lost that detail on dense bodies.
  */
 const KIND_SHAPES = {
-  // A city block with a central tower and a visible street line.
+  // A skyline with three distinct towers. The stepped outline survives a dense
+  // cluster while the inset reads as streets when the map frames a city.
   City: [
-    { tag: 'path', attrs: { d: 'M-1 .9V-.18H-.3V-1H.35V-.55H1V.9Z' } },
-    { tag: 'path', open: true, attrs: { d: 'M-.72 .32H.72 M0-.72V.6' } },
+    { tag: 'path', attrs: { d: 'M-1 .9V-.2H-.58V-1H-.16V.2H.18V-.68H.64V.04H1V.9Z' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.8 .34H.8M-.37-.7V.68M.4-.35V.68' } },
   ],
 
-  // A docking wheel, faceted instead of circular, with three unmistakable bays.
+  // A top-down docking spine with lateral berths. It reads as a built station
+  // rather than a face-like cluster of lobes when a highlighted mark is large.
   Station: [
-    { tag: 'path', attrs: { d: 'M0-1 .86-.5v1L0 1l-.86-.5v-1ZM0-.35l.3.18v.34L0 .35l-.3-.18v-.34Z' }, evenodd: 1 },
-    { tag: 'path', open: true, attrs: { d: 'M0-1v.3M.86-.5l-.26.15M.86.5 .6.35M0 1V.7M-.86.5l.26-.15M-.86-.5l.26.15' } },
+    { tag: 'path', attrs: { d: 'M-.22-1H.22V-.44H.68L1-.16V.16L.68.44H.22V1H-.22V.44H-.68L-1 .16V-.16L-.68-.44H-.22Z' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.22-.7H.22M-.52 0H.52M-.22 .7H.22' } },
   ],
 
   // A pad marker: octagonal perimeter and a compact H for the landing berth.
   RestStop: [
     { tag: 'path', attrs: { d: 'M-.55-1H.55L1-.55V.55L.55 1H-.55L-1 .55V-.55Z' } },
-    { tag: 'path', open: true, attrs: { d: 'M-.38-.45V.45M.38-.45V.45M-.38 0H.38' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.38-.45V.45M.38-.45V.45M-.38 0H.38' } },
   ],
 
   // A staffed surface outpost: a low habitat, mast, and one status window.
   Outpost: [
     { tag: 'path', attrs: { d: 'M-1 .72V.22L-.38-.45V-1H.02V-.45L.68.08V.72Z' } },
-    { tag: 'path', open: true, attrs: { d: 'M-.7 .35H.42M-.18-1v-.22M.2 .1h.2' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.7 .35H.42M-.18-1v-.22M.2 .1h.2' } },
   ],
 
   // An open headframe with a crossbeam reads as mining rather than a warning.
   Mine: [
-    { tag: 'path', open: true, attrs: { d: 'M-1 .9 0-1 1 .9M-.62 .2H.62M-.32-.35H.32M-1 .9H1' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-1 .9 0-1 1 .9M-.62 .2H.62M-.32-.35H.32M-1 .9H1' } },
   ],
 
   // A chipped rock with two crater cuts. It stays asymmetric at map scale.
@@ -24127,25 +24129,25 @@ const KIND_SHAPES = {
   // A flask reads as research while leaving the medical cross exclusively to clinics.
   Research: [
     { tag: 'path', attrs: { d: 'M-.34-1H.34V-.34L.88.62Q.94.92.58.92H-.58Q-.94.92-.88.62L-.34-.34Z' } },
-    { tag: 'path', open: true, attrs: { d: 'M-.48 .4H.48M-.18-.68H.18' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.48 .4H.48M-.18-.68H.18' } },
   ],
 
   // Stacked containers plus a directional seam make a freight depot distinct from a city.
   DistributionCentre: [
     { tag: 'path', attrs: { d: 'M-1-.78H.3V-.1H1V.78H-.3V.1H-1Z' } },
-    { tag: 'path', open: true, attrs: { d: 'M-.72-.44H.02M-.02 .44H.72M-.36-.78V-.1M.36 .1V.78' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.72-.44H.02M-.02 .44H.72M-.36-.78V-.1M.36 .1V.78' } },
   ],
 
   // A gate with a star cutout describes a jump point without reusing a diamond.
   JumpPoint: [
     { tag: 'path', attrs: { d: 'M-1 .85V-.35L-.35-1H.35L1-.35V.85H.5V-.18L.18-.55H-.18L-.5-.18V.85Z' } },
-    { tag: 'path', open: true, attrs: { d: 'M0-.35V.45M-.34.05H.34' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M0-.35V.45M-.34.05H.34' } },
   ],
 
   // A transmitter with two short waves gives mission beacons a different rhythm.
   MissionBeacon: [
     { tag: 'path', attrs: { d: 'M0-1 .5.72H-.5Z' } },
-    { tag: 'path', open: true, attrs: { d: 'M-.78-.56-.98-.35M.78-.56 .98-.35M-.9 .08-1 .28M.9 .08 1 .28M-.62.72H.62' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.78-.56-.98-.35M.78-.56 .98-.35M-.9 .08-1 .28M.9 .08 1 .28M-.62.72H.62' } },
   ],
 };
 
@@ -24187,14 +24189,15 @@ function kindMark(kind, x, y, radius, colour, solid) {
     group.append(svgEl(part.tag, {
       ...part.attrs,
 
-      // Interior detail stays open. Filling it would turn windows, bays, and
-      // headframes into blobs exactly where a map mark has the fewest pixels.
+      // Interior detail stays open. On a filled icon it is darkened so the
+      // streets, docking collars, and cargo seams remain visible at normal zoom.
       fill: part.open ? 'none' : solid ? colour : 'none',
-      stroke: colour,
+      stroke: part.inset && solid ? '#08131b' : colour,
 
       // Heavy enough to survive being drawn six pixels across, which is the
       // size these are actually used at; an outline at .14 disappeared.
       'stroke-width': part.open ? 0.19 : 0.22,
+      'stroke-linecap': 'round',
       'stroke-linejoin': 'round',
       'fill-rule': part.evenodd ? 'evenodd' : 'nonzero',
       opacity: solid ? 1 : 0.78,
