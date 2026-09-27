@@ -365,7 +365,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.39
+### 0.15.40
+
+- **Find nearby support from the cockpit.** The MFD Flight menu now lists the closest refuel, clinic and refinery in the current system, using the same facility evidence as the star map and explaining that distances are based on bodies rather than travel time.
 
 - **The dashboard has a calmer shared visual language.** Page headers, filters, tables, status and empty results now use matching spacing, hierarchy and visual cues, making dense screens easier to scan without hiding information.
 

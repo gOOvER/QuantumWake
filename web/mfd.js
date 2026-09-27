@@ -29,6 +29,7 @@ let bindings = QwMfd.buttons(null);
    places every five seconds to draw a plan that has not moved would be waste
    on a panel that is meant to be left running. */
 let atlas = null;
+let servicePlaces = [], mapAmenities = [];
 /* Community code-to-name, so a ship that arrives as "Drake Corsair" finds the
    same badge as one that arrives as "DRAK Corsair". Absent is fine: the
    sixteen built-in names already cover the fleet anyone flies. */
@@ -237,7 +238,7 @@ function render() {
   drawMap(showing === 'map', plan, true);
   drawMaker();
   const view = QwMfd.readingView(screen, isMenu() ? [] : QwMfd.rows(page, state, briefing, briefingUnavailable,
-    { selected, armed, map: plan, extra, offset, now: Date.now() }), details);
+    { selected, armed, map: plan, extra: { ...extra, nearestServices: nearestServices() }, offset, now: Date.now() }), details);
   hasDetails = view.more;
   const rows = view.rows;
   const key = JSON.stringify([screen, details, rows]);
@@ -623,8 +624,35 @@ async function loadAtlas() {
     const response = await fetch('/api/map', { signal: AbortSignal.timeout(15000) });
     if (!response.ok) throw new Error('No atlas');
     atlas = await response.json();
+    const [services, amenities] = await Promise.all([
+      fetch('/api/map/services', { signal: AbortSignal.timeout(15000) }),
+      fetch('/api/map/amenities', { signal: AbortSignal.timeout(15000) })]);
+    if (services.ok) servicePlaces = await services.json();
+    if (amenities.ok) mapAmenities = await amenities.json();
   } catch { atlas = { nodes: [], positions: {} }; }
   finally { lastMap = ''; render(); }
+}
+
+/* Facilities have body positions, not building coordinates. This therefore
+   answers "closest by body" and says so, rather than inventing a travel time. */
+function nearestServices() {
+  if (!atlas || !state?.locationSystem) return null;
+  const same = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
+  const serviceAt = id => servicePlaces.find(p => p.placeId === id)?.services || [];
+  const amenityAt = name => mapAmenities.find(p => same(p.place, name))?.amenities || [];
+  const kinds = [['Refuel', p => serviceAt(p.rawId).includes('refuel')], ['Clinic', p => serviceAt(p.rawId).includes('clinic')],
+    ['Refinery', p => amenityAt(p.name).some(a => same(a, 'Refinery'))]];
+  const positions = atlas.positions?.[String(state.locationSystem).toLowerCase()] || {};
+  const point = body => Object.entries(positions).find(([name]) => same(name, body))?.[1];
+  const origin = point(state.locationBody);
+  return kinds.map(([label, match]) => {
+    const candidates = (atlas.nodes || []).filter(p => same(p.system, state.locationSystem) && match(p))
+      .map(p => ({ p, distance: same(p.body, state.locationBody) ? 0 : point(p.body) && origin ? Math.hypot(point(p.body).x - origin.x, point(p.body).y - origin.y) : null }))
+      .filter(item => item.distance !== null).sort((a, b) => a.distance - b.distance || a.p.name.localeCompare(b.p.name));
+    if (!candidates.length) return { label, message: `No comparable ${label.toLowerCase()} is listed in ${state.locationSystem}.` };
+    const target = candidates[0].p;
+    return { label, message: `${target.name} · ${target.body || 'body unknown'} · approximate from body positions` };
+  });
 }
 /* Each one is allowed to fail on its own: a page whose figure is missing says
    so, and must not take the other two down with it. */
