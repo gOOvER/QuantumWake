@@ -20119,28 +20119,11 @@ function drawServiceBadges(group, x, y, radius, services) {
     const badge = svgEl('g', { class: `map-service-badge ${service}` });
     badge.append(svgEl('circle', { cx: bx, cy: by, r: badgeRadius }));
 
-    if (service === 'shop') {
-      badge.append(svgEl('rect', {
-        x: bx - badgeRadius * .52, y: by - badgeRadius * .52,
-        width: badgeRadius * 1.04, height: badgeRadius * 1.04, class: 'service-glyph',
-      }));
-      badge.append(svgEl('line', { x1: bx, y1: by - badgeRadius * .52, x2: bx, y2: by + badgeRadius * .52, class: 'service-glyph' }));
-    } else if (service === 'refuel') {
-      badge.append(svgEl('path', {
-        d: `M ${bx} ${by - badgeRadius * .68} C ${bx + badgeRadius * .56} ${by - badgeRadius * .14}, ${bx + badgeRadius * .42} ${by + badgeRadius * .56}, ${bx} ${by + badgeRadius * .62} C ${bx - badgeRadius * .42} ${by + badgeRadius * .56}, ${bx - badgeRadius * .56} ${by - badgeRadius * .14}, ${bx} ${by - badgeRadius * .68} Z`,
-        class: 'service-glyph',
-      }));
-    } else if (service === 'clinic') {
-      badge.append(svgEl('path', {
-        d: `M ${bx - badgeRadius * .22} ${by - badgeRadius * .64} H ${bx + badgeRadius * .22} V ${by - badgeRadius * .22} H ${bx + badgeRadius * .64} V ${by + badgeRadius * .22} H ${bx + badgeRadius * .22} V ${by + badgeRadius * .64} H ${bx - badgeRadius * .22} V ${by + badgeRadius * .22} H ${bx - badgeRadius * .64} V ${by - badgeRadius * .22} H ${bx - badgeRadius * .22} Z`,
-        class: 'service-glyph',
-      }));
-    } else {
-      badge.append(svgEl('path', {
-        d: `M ${bx - badgeRadius * .58} ${by} H ${bx + badgeRadius * .58} M ${bx} ${by - badgeRadius * .58} V ${by + badgeRadius * .58}`,
-        class: 'service-glyph',
-      }));
-    }
+    badge.append(svgEl('path', {
+      d: MAP_SERVICE_PATHS[service] || MAP_SERVICE_PATHS.repair,
+      transform: `translate(${bx - badgeRadius * .78} ${by - badgeRadius * .78}) scale(${badgeRadius * 1.56 / 24})`,
+      class: 'service-glyph',
+    }));
 
     const title = svgEl('title');
     title.textContent = SERVICE_META[service]?.label || service;
@@ -20298,7 +20281,29 @@ try { followHere = localStorage.getItem('qw-map-follow') === '1'; } catch { /* p
 /** Where the player is, kept in step with the live feed. */
 let hereId = null;
 
-const SYSTEM_COLOURS = { Stanton: '#ffdc9a', Pyro: '#ff8f66', Nyx: '#9fb8ff' };
+// Muted families keep the map quiet; shape identifies the place and saturated
+// colour stays available for the player, search results and commodity prices.
+const MAP_KIND_COLOURS = {
+  City: '#b6d2df', Station: '#8fbacb', RestStop: '#91bdb5',
+  Outpost: '#c7b89c', Mine: '#bba585', Asteroid: '#9da9b7',
+  Research: '#b3abc9', DistributionCentre: '#b4bdcb', JumpPoint: '#d4dfe8',
+  MissionBeacon: '#d6bb86', Unknown: '#8495a6',
+};
+
+// One path set is shared by toolbar icons, service badges and the legend.
+const MAP_SERVICE_PATHS = {
+  shop: 'M4 10h16v10H4z M3 10l2-6h14l2 6 M9 20v-6h6v6 M3 10h18',
+  refuel: 'M12 3C10 6 5 11 5 15a7 7 0 0 0 14 0c0-4-5-9-7-12Z',
+  clinic: 'M9 4h6v5h5v6h-5v5H9v-5H4V9h5Z',
+  repair: 'M14 5a5 5 0 0 0-6 6L3 16l5 5 5-5a5 5 0 0 0 6-6l-4 3-4-4Z',
+};
+function mapServiceIcon(service) {
+  const icon = svgEl('svg', { viewBox: '0 0 24 24', class: 'map-ui-icon', 'aria-hidden': 'true' });
+  icon.append(svgEl('path', { d: MAP_SERVICE_PATHS[service] || MAP_SERVICE_PATHS.repair }));
+  return icon;
+}
+
+const SYSTEM_COLOURS = { Stanton: '#d6c39e', Pyro: '#c39988', Nyx: '#a6b3d0' };
 
 /** Jump lanes, drawn between the stars they connect. */
 const JUMP_LANES = [
@@ -20910,6 +20915,9 @@ function drawHere() {
 
 /** Wheel zoom, drag pan, and the toolbar. Wired once. */
 function initMap() {
+  for (const button of $$('#map-service-filter [data-service]')) {
+    if (button.dataset.service) button.prepend(mapServiceIcon(button.dataset.service));
+  }
   const map = $('#starmap');
 
   map.addEventListener('wheel', (e) => {
@@ -23255,7 +23263,7 @@ function showMapTip(location) {
   const services = servicesAt(location);
   if (services.length)
     tip.append(el('span', 'service-tip', services
-      .map((service) => `${SERVICE_META[service]?.icon || '•'} ${SERVICE_META[service]?.label || service}`)
+      .map((service) => `${SERVICE_META[service]?.label || service}`)
       .join(' · ')));
 
   tip.hidden = false;
@@ -23303,7 +23311,7 @@ function showBodyTip(bodyName, system, sites) {
       serviceCounts.set(service, (serviceCounts.get(service) || 0) + 1);
   if (serviceCounts.size) {
     const summary = [...serviceCounts.entries()]
-      .map(([service, count]) => `${SERVICE_META[service]?.icon || '•'} ${count} ${SERVICE_META[service]?.label || service}`)
+      .map(([service, count]) => `${count} ${SERVICE_META[service]?.label || service}`)
       .join(' · ');
     tip.append(el('span', 'service-tip', summary));
   }
@@ -23573,7 +23581,7 @@ function renderMapInfoServices(location) {
     const chip = el('button', 'map-service-chip');
     chip.type = 'button';
     chip.title = `Filter the map to ${meta.label.toLowerCase()}`;
-    chip.append(el('span', 'service-icon', meta.icon));
+    chip.append(mapServiceIcon(service));
     chip.append(el('span', 'service-text', meta.label));
     chip.addEventListener('click', () => selectMapService(service));
     host.append(chip);
@@ -23938,7 +23946,7 @@ function drawMap() {
 
       map.append(svgEl('line', {
         x1: place.from.x, y1: place.from.y, x2: bx, y2: by,
-        stroke: 'rgba(53,200,240,.13)', 'stroke-width': '1',
+        stroke: 'rgba(150,172,194,.13)', 'stroke-width': '1',
       }));
 
       const sites = bodies.get(bodyName);
@@ -24074,9 +24082,8 @@ function drawMap() {
  * business.
  *
  * Colour alone was carrying the whole taxonomy: nine kinds, nine dots, and a
- * legend to memorise. A shape can be read without the legend - a headframe is a
- * mine whether or not you remember that mines are brown - and the colour stays
- * exactly as it was, so anyone who had learnt it loses nothing.
+ * legend to memorise. Distinct silhouettes carry the type even when the map
+ * switches from its muted place palette to commodity price shading.
  *
  * Deliberately blunt geometry. These are drawn between four and seventeen
  * pixels across, where a detailed glyph turns to mush; a silhouette that
@@ -24104,11 +24111,11 @@ const KIND_SHAPES = {
   // too much like a rest-stop berth at a glance.
   Asteroid: [{ tag: 'polygon', attrs: { points: '-.72,-.92 .5,-.72 1,.02 .42,.9 -.74,.62 -1,-.18' } }],
 
-  // A cross: legible at any size, and nothing else on the map is one.
-  Research: [{ tag: 'path', attrs: { d: 'M-.32 -1 L.32 -1 L.32 -.32 L1 -.32 L1 .32 L.32 .32 L.32 1 L-.32 1 L-.32 .32 L-1 .32 L-1 -.32 L-.32 -.32 Z' } }],
+  // A hexagonal lab keeps research distinct from the medical service cross.
+  Research: [{ tag: 'polygon', attrs: { points: '-.5,-.87 .5,-.87 1,0 .5,.87 -.5,.87 -1,0' } }],
 
-  // Cargo moving: an arrow, not a crate with a band nobody could see.
-  DistributionCentre: [{ tag: 'polygon', attrs: { points: '-1,-.85 .95,0 -1,.85 -1,.3 -.15,0 -1,-.3' } }],
+  // A cargo depot stays distinct from navigation arrows and jump diamonds.
+  DistributionCentre: [{ tag: 'rect', attrs: { x: -.85, y: -.85, width: 1.7, height: 1.7, rx: .1 } }],
 
   // The same diamond the jump lanes wear.
   JumpPoint: [{ tag: 'polygon', attrs: { points: '0,-1 1,0 0,1 -1,0' } }],
@@ -24138,7 +24145,7 @@ const SHAPE_WEIGHT = {
   Mine: 1.18,
   Asteroid: 1,
   Research: 1.06,
-  DistributionCentre: 1.12,
+  DistributionCentre: 1,
   JumpPoint: 1.15,
   MissionBeacon: 1.15,
 };
@@ -24165,7 +24172,7 @@ function kindMark(kind, x, y, radius, colour, solid) {
       'stroke-width': 0.22,
       'stroke-linejoin': 'round',
       'fill-rule': part.evenodd ? 'evenodd' : 'nonzero',
-      opacity: solid ? 0.92 : 0.6,
+      opacity: solid ? 1 : 0.78,
     }));
   }
 
@@ -24228,7 +24235,7 @@ const hitPad = (radius, room) => Math.max(radius + 1, Math.min(radius + 8, room)
  */
 function drawNode(map, x, y, location, radius, anchor = null, room = Infinity) {
 
-  const colour = KIND_COLOURS[location.kind] || KIND_COLOURS.Unknown;
+  const colour = MAP_KIND_COLOURS[location.kind] || MAP_KIND_COLOURS.Unknown;
   const been = location.visits > 0;
 
   let cls = been ? 'map-node' : 'map-node unvisited';
@@ -24465,7 +24472,7 @@ function drawLegend(locations) {
 
     for (const service of shown) {
       const item = el('div', 'item');
-      item.append(el('span', 'service-tip', SERVICE_META[service]?.icon || '•'));
+      item.append(mapServiceIcon(service));
       item.append(el('span', null, `${SERVICE_META[service]?.label || service} badge`));
       legend.append(item);
     }
@@ -24508,12 +24515,15 @@ function drawLegend(locations) {
     const swatch = document.createElementNS(SVG_NS, 'svg');
     swatch.setAttribute('viewBox', '-1.35 -1.35 2.7 2.7');
     swatch.setAttribute('class', 'swatch-mark');
-    swatch.append(kindMark(kind, 0, 0, 1, KIND_COLOURS[kind] || KIND_COLOURS.Unknown, true));
+    swatch.append(kindMark(kind, 0, 0, 1, MAP_KIND_COLOURS[kind] || MAP_KIND_COLOURS.Unknown, true));
     item.append(swatch);
     item.append(el('span', null, kind.replace(/([a-z])([A-Z])/g, '$1 $2')));
     legend.append(item);
   }
 
+  const historyKey = el('div', 'item map-history-key');
+  historyKey.append(el('span', null, 'Filled: visited · Outline: unvisited'));
+  legend.append(historyKey);
   appendPriceFreshness();
   appendServiceLegend();
 }

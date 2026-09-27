@@ -365,7 +365,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.34
+### 0.15.35
+
+- The star map uses a muted palette and matching service icons. Search and location controls lead the toolbar, with display settings under View options. Filled and outlined place markers keep visited history visible.
 
 - **Select the closest facility on the map.** Choose a facility or service,
   then select closest from your last known location. Body-based estimates are
