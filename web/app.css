@@ -431,7 +431,9 @@ body.overlay .feed .d { display: none; }
 
 .tabs button.active::after { opacity: 1; }
 
-.status { display: flex; align-items: center; gap: 13px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+.status { display: flex; align-items: center; gap: 9px; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+.status #install { max-width: 13ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status .dot { box-shadow: 0 0 9px currentColor; }
 
 /* The grouped tabs still need to fit alongside the live search on a normal
    narrow desktop window.  Letting the top bar determine the document width
@@ -1157,6 +1159,7 @@ thead th {
   border-bottom: 1px solid var(--rule-hot);
 }
 tbody td { padding: 9px 15px; border-top: 1px solid rgba(23, 41, 60, .55); white-space: nowrap; }
+tbody tr:nth-child(even) { background: rgba(14, 30, 44, .26); }
 tbody tr:hover { background: rgba(53, 200, 240, .05); }
 tbody td:first-child { color: var(--cyan); font-family: var(--mono); font-size: 12px; }
 .num, td.num { text-align: right; font-family: var(--mono); font-size: 12px; }
@@ -1571,7 +1574,39 @@ body.overlay .scan-file { display: none; }
 }
 .section-bar h2 { margin: 0; }
 .section-bar h2.spaced { margin-top: 32px; }
-.controls { display: flex; gap: 8px; align-items: center; }
+.section-bar:not(.mining-title) {
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--cyan-deep);
+  background: linear-gradient(90deg, rgba(16, 57, 73, .24), rgba(10, 18, 28, .15) 42%, transparent);
+}
+.section-bar h2::before {
+  content: "";
+  display: inline-block;
+  width: 7px; height: 7px;
+  margin: 0 9px 1px 0;
+  border: 1px solid var(--cyan);
+  transform: rotate(45deg);
+  box-shadow: 0 0 8px rgba(53, 200, 240, .55);
+}
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* A result that is empty still needs to say which part of the page answered.
+   These common classes cover feeds, searches and data panels without making a
+   missing signal look like an error. */
+.empty, .detail-empty, .search-empty, .cargo-empty, .loadout-empty-slot {
+  position: relative;
+  padding: 10px 12px 10px 25px;
+  border: 1px dashed var(--rule-hot);
+  border-left: 2px solid var(--cyan-deep);
+  background: rgba(10, 22, 33, .38);
+}
+.empty::before, .detail-empty::before, .search-empty::before, .cargo-empty::before, .loadout-empty-slot::before {
+  content: "◇";
+  position: absolute;
+  left: 9px;
+  color: var(--cyan);
+}
 .route-heading { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .route-header-status { display: flex; align-items: center; gap: 6px; color: var(--muted); font: 10px var(--mono); }
 .route-readiness { padding: 3px 6px; border: 1px solid var(--rule); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }

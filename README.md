@@ -365,7 +365,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.38
+### 0.15.39
+
+- **The dashboard has a calmer shared visual language.** Page headers, filters, tables, status and empty results now use matching spacing, hierarchy and visual cues, making dense screens easier to scan without hiding information.
 
 - **Navigation is organised around what you are doing.** Operations now holds shopping, routes, contracts and planning tools; Flight holds journeys and location history; Hangar holds ships and equipment. About now lives with Settings, leaving the frequent Now, Map and Log views directly available.
 
