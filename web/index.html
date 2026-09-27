@@ -188,50 +188,59 @@
     </div>
     <div class="now-grid">
 
-      <article class="card hero" data-card="location">
-        <div class="card-label">Location</div>
-        <div class="card-source source-slot" id="now-location-source" data-sources="logs"></div>
-        <div class="hero-value" id="now-location">—</div>
-        <div class="hero-sub" id="now-location-sub"></div>
-        <div class="confidence" id="now-confidence"></div>
-        <div class="travel" id="now-travel" hidden>
-          <span class="travel-arrow">▸</span>
-          <span id="now-travel-to"></span>
-        </div>
-      </article>
-
-      <article class="card now-flight-status" id="now-flight-card" data-card="flight">
-        <div class="card-label">Flight status</div>
-        <button class="ghost tiny now-flight-config" id="now-flight-config" type="button"
-                aria-expanded="false" aria-controls="now-flight-options">Configure</button>
-        <div class="now-flight-readings">
-          <section class="now-flight-field" data-flight-field="ship">
-            <div class="now-flight-label">Ship</div>
+      <article class="card now-status-card" id="now-status-card" data-card="status">
+        <div class="card-label">Current status</div>
+        <button class="now-status-config now-card-action" id="now-status-config" type="button"
+                title="Configure current status" aria-label="Configure current status"
+                aria-expanded="false" aria-controls="now-status-options">⚙</button>
+        <div class="now-status-readings">
+          <section class="now-status-field now-status-location" data-status-field="location">
+            <div class="now-status-label">Location</div>
+            <div class="card-source source-slot" id="now-location-source" data-sources="logs"></div>
+            <div class="hero-value" id="now-location">—</div>
+            <div class="hero-sub" id="now-location-sub"></div>
+            <div class="confidence" id="now-confidence"></div>
+            <div class="travel" id="now-travel" hidden>
+              <span class="travel-arrow">▸</span>
+              <span id="now-travel-to"></span>
+            </div>
+          </section>
+          <section class="now-status-field" data-status-field="ship">
+            <div class="now-status-label">Ship</div>
             <div class="card-source source-slot" id="now-ship-source" data-sources="logs"></div>
             <div class="now-ship-summary">
               <div class="now-ship-logo" id="now-ship-logo" hidden></div>
               <div class="value" id="now-ship">—</div>
             </div>
           </section>
-          <section class="now-flight-field" data-flight-field="session">
-            <div class="now-flight-label">Session</div>
+          <section class="now-status-field" data-status-field="session">
+            <div class="now-status-label">Session</div>
             <div class="card-source source-slot" id="now-session-source" data-sources="logs"></div>
             <div class="value" id="now-clock">—</div>
             <div class="sub" id="now-mode"></div>
           </section>
-          <section class="now-flight-field" data-flight-field="handle">
-            <div class="now-flight-label">Pilot</div>
+          <section class="now-status-field" data-status-field="handle">
+            <div class="now-status-label">Pilot</div>
             <div class="value" id="now-handle">—</div>
             <div class="sub" id="now-version"></div>
           </section>
+          <section class="now-status-field now-status-health" data-status-field="health">
+            <div class="now-status-label">This session</div>
+            <div class="card-source source-slot" id="now-stats-source" data-sources="logs" data-source-qualifier="INFERRED"></div>
+            <div class="statline"><span>Deaths</span><b id="now-deaths">0</b></div>
+            <div class="statline"><span>Incapacitations</span><b id="now-incaps">0</b></div>
+            <div class="note" id="combat-note"></div>
+          </section>
         </div>
-        <div class="now-flight-options" id="now-flight-options" hidden>
+        <div class="now-status-options" id="now-status-options" hidden>
           <span>Show</span>
-          <label><input type="checkbox" data-flight-field-toggle="ship" checked> Ship</label>
-          <label><input type="checkbox" data-flight-field-toggle="session" checked> Session</label>
-          <label><input type="checkbox" data-flight-field-toggle="handle" checked> Pilot</label>
+          <label><input type="checkbox" data-status-field-toggle="location" checked> Location</label>
+          <label><input type="checkbox" data-status-field-toggle="ship" checked> Ship</label>
+          <label><input type="checkbox" data-status-field-toggle="session" checked> Session</label>
+          <label><input type="checkbox" data-status-field-toggle="handle" checked> Pilot</label>
+          <label><input type="checkbox" data-status-field-toggle="health" checked> Session health</label>
         </div>
-        <div class="note" id="now-flight-empty" hidden>Choose at least one reading to show in this card.</div>
+        <div class="note" id="now-status-empty" hidden>Choose at least one reading to show in this card.</div>
       </article>
 
       <article class="card span2 now-briefing" id="now-briefing-card" data-card="briefing" hidden>
@@ -295,14 +304,6 @@
         <ul class="feed" id="now-feed">
           <li class="empty">Waiting for the game…</li>
         </ul>
-      </article>
-
-      <article class="card" data-card="stats">
-        <div class="card-label">This session</div>
-        <div class="card-source source-slot" id="now-stats-source" data-sources="logs" data-source-qualifier="INFERRED"></div>
-        <div class="statline"><span>Deaths</span><b id="now-deaths">0</b></div>
-        <div class="statline"><span>Incapacitations</span><b id="now-incaps">0</b></div>
-        <div class="note" id="combat-note"></div>
       </article>
 
       <article class="card" id="now-server-card" data-card="server" hidden>

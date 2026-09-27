@@ -596,23 +596,17 @@ body:not(.overlay) #view-now .card {
   min-height: 116px;
   background: linear-gradient(150deg, rgba(14, 25, 38, .98), var(--deep));
 }
-body:not(.overlay) #view-now .card.hero {
-  grid-row: span 2;
-  min-height: 154px;
-  padding: 20px 21px;
+body:not(.overlay) #view-now .now-status-card {
+  grid-column: 1 / -1;
+  min-height: 166px;
+  padding: 17px 20px;
   border-color: var(--cyan-deep);
   background:
     linear-gradient(135deg, rgba(53, 200, 240, .12), transparent 46%),
     linear-gradient(150deg, var(--panel-2), var(--deep));
 }
-body:not(.overlay) #view-now .card.hero::before { width: 68px; }
-body:not(.overlay) #view-now .now-flight-status {
-  grid-row: span 2;
-  min-height: 154px;
-  padding: 16px 17px;
-  background: linear-gradient(150deg, rgba(10, 18, 28, .96), rgba(7, 12, 20, .98));
-}
-body:not(.overlay) #view-now .now-flight-status .card-label { margin-bottom: 9px; }
+body:not(.overlay) #view-now .now-status-card::before { width: 68px; }
+body:not(.overlay) #view-now .now-status-card .card-label { margin-bottom: 9px; }
 body:not(.overlay) #view-now .card.now-briefing {
   border-color: var(--rule-hot);
   background:
@@ -631,11 +625,13 @@ body:not(.overlay) #view-now #now-feed { max-height: clamp(240px, 35vh, 420px); 
 
 @media (max-width: 1040px) {
   body:not(.overlay) #view-now .now-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  body:not(.overlay) #view-now .card.hero, body:not(.overlay) #view-now .now-flight-status { grid-row: auto; }
+  body:not(.overlay) #view-now .now-status-readings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body:not(.overlay) #view-now .now-status-location { grid-column: 1 / -1; grid-row: auto; }
 }
 @media (max-width: 780px) {
   body:not(.overlay) #view-now .now-grid { grid-template-columns: 1fr; }
-  body:not(.overlay) #view-now .card.hero { min-height: 132px; }
+  body:not(.overlay) #view-now .now-status-readings { grid-template-columns: 1fr; }
+  body:not(.overlay) #view-now .now-status-card { min-height: 132px; }
 }
 
 .card-label {
@@ -733,21 +729,24 @@ body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
    Now page that had nothing hidden. */
 .now-card-visibility[hidden] { display: none; }
 #now-hidden-card-list { display: flex; flex-wrap: wrap; gap: 5px; }
-.now-flight-status { position: relative; }
-.now-flight-config { position: absolute; top: 9px; right: 76px; }
-.now-flight-readings { display: flex; flex-direction: column; }
-.now-flight-field { min-width: 0; padding: 7px 0; border-top: 1px solid rgba(83, 128, 151, .28); }
-.now-flight-field:first-child { padding-top: 0; border-top: 0; }
-.now-flight-label { color: var(--dim); font-size: 8px; letter-spacing: .17em; text-transform: uppercase; }
-.now-flight-field .card-source { margin: 2px 0 5px; min-height: 0; }
-.now-flight-field .data-source { font-size: 7.5px; padding: 1px 4px; }
-.now-flight-field .value { font-size: 16px; }
-.now-flight-field .sub { margin-top: 2px; font-size: 10.5px; }
-.now-flight-options { display: flex; flex-wrap: wrap; gap: 5px 11px; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 10px; }
-.now-flight-options[hidden] { display: none; }
-.now-flight-options > span { color: var(--dim); font-size: 8.5px; letter-spacing: .15em; text-transform: uppercase; }
-.now-flight-options label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
-.now-flight-options input { accent-color: var(--cyan); }
+.now-status-card { position: relative; }
+.now-status-config { position: absolute; top: 9px; right: 76px; font-size: 13px; }
+.now-status-config:hover { color: var(--cyan-hot); }
+.now-status-readings { display: grid; grid-template-columns: minmax(260px, 1.45fr) repeat(2, minmax(180px, .72fr)); gap: 0 15px; }
+.now-status-field { min-width: 0; padding: 7px 0; border-top: 1px solid rgba(83, 128, 151, .28); }
+.now-status-location { grid-row: span 2; padding: 4px 17px 4px 0; border-top: 0; border-right: 1px solid var(--rule); }
+.now-status-label { color: var(--dim); font-size: 8px; letter-spacing: .17em; text-transform: uppercase; }
+.now-status-field .card-source { margin: 2px 0 5px; min-height: 0; }
+.now-status-field .data-source { font-size: 7.5px; padding: 1px 4px; }
+.now-status-field .value { font-size: 16px; }
+.now-status-field .sub { margin-top: 2px; font-size: 10.5px; }
+.now-status-location .hero-value { font-size: 27px; }
+.now-status-health .note { margin-top: 5px; font-size: 9px; line-height: 1.4; }
+.now-status-options { display: flex; flex-wrap: wrap; gap: 5px 11px; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 10px; }
+.now-status-options[hidden] { display: none; }
+.now-status-options > span { color: var(--dim); font-size: 8.5px; letter-spacing: .15em; text-transform: uppercase; }
+.now-status-options label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+.now-status-options input { accent-color: var(--cyan); }
 .now-ship-summary { display: flex; align-items: center; gap: 10px; }
 .now-ship-logo { flex: 0 0 44px; width: 44px; height: 30px; display: flex; align-items: center; justify-content: center; }
 .now-ship-logo img { max-width: 100%; max-height: 100%; opacity: .9; }
@@ -3794,11 +3793,13 @@ button.briefing-service:hover { border-color: var(--cyan); color: var(--cyan-hot
 .map-note-form .ghost { justify-self: start; }
 
 body.overlay .now-card-actions, body.overlay .now-card-visibility { display: none; }
-body.overlay .now-flight-config, body.overlay .now-flight-options { display: none; }
-body.overlay .now-flight-readings { gap: 0; }
-body.overlay .now-flight-field { padding: 4px 0; }
-body.overlay .now-flight-label { font-size: 7px; }
-body.overlay .now-flight-field .value { font-size: 12px; }
+body.overlay .now-status-card { grid-column: span 2; }
+body.overlay .now-status-config, body.overlay .now-status-options { display: none; }
+body.overlay .now-status-readings { grid-template-columns: 1.25fr 1fr; gap: 0 8px; }
+body.overlay .now-status-location { grid-column: 1 / -1; grid-row: auto; padding: 0 0 4px; border-right: 0; }
+body.overlay .now-status-field { padding: 4px 0; }
+body.overlay .now-status-label { font-size: 7px; }
+body.overlay .now-status-field .value { font-size: 12px; }
 body.overlay .briefing-head { margin-bottom: 6px; }
 body.overlay .briefing-title { font-size: 13px; }
 body.overlay .briefing-sub, body.overlay .briefing-detail { font-size: 9px; }

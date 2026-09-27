@@ -540,13 +540,13 @@ function initPageStatsCollapsers() {
 const NOW_COLLAPSED_KEY = 'qw-now-collapsed-cards';
 const NOW_HIDDEN_KEY = 'qw-now-hidden-cards';
 const NOW_ORDER_KEY = 'qw-now-card-order';
-const NOW_FLIGHT_FIELDS_KEY = 'qw-now-flight-fields';
-const NOW_FLIGHT_FIELDS = ['ship', 'session', 'handle'];
+const NOW_STATUS_FIELDS_KEY = 'qw-now-status-fields';
+const NOW_STATUS_FIELDS = ['location', 'ship', 'session', 'handle', 'health'];
 let collapsedNowCards = new Set();
 let hiddenNowCards = new Set();
 let nowCardOrder = [];
 let draggedNowCard = null;
-let visibleFlightFields = new Set(NOW_FLIGHT_FIELDS);
+let visibleStatusFields = new Set(NOW_STATUS_FIELDS);
 
 try {
   const saved = JSON.parse(localStorage.getItem(NOW_COLLAPSED_KEY) || '[]');
@@ -564,12 +564,12 @@ try {
 } catch { /* a bad preference must not scramble the dashboard */ }
 
 try {
-  const raw = localStorage.getItem(NOW_FLIGHT_FIELDS_KEY);
+  const raw = localStorage.getItem(NOW_STATUS_FIELDS_KEY);
   if (raw !== null) {
     const saved = JSON.parse(raw);
-    if (Array.isArray(saved)) visibleFlightFields = new Set(saved.filter((name) => NOW_FLIGHT_FIELDS.includes(name)));
+    if (Array.isArray(saved)) visibleStatusFields = new Set(saved.filter((name) => NOW_STATUS_FIELDS.includes(name)));
   }
-} catch { /* a bad preference must not empty the flight card */ }
+} catch { /* a bad preference must not empty the status card */ }
 
 function saveCollapsedNowCards() {
   try { localStorage.setItem(NOW_COLLAPSED_KEY, JSON.stringify([...collapsedNowCards])); } catch { /* optional */ }
@@ -583,24 +583,24 @@ function saveNowCardOrder() {
   try { localStorage.setItem(NOW_ORDER_KEY, JSON.stringify(nowCardOrder)); } catch { /* optional */ }
 }
 
-function saveVisibleFlightFields() {
-  try { localStorage.setItem(NOW_FLIGHT_FIELDS_KEY, JSON.stringify([...visibleFlightFields])); } catch { /* optional */ }
+function saveVisibleStatusFields() {
+  try { localStorage.setItem(NOW_STATUS_FIELDS_KEY, JSON.stringify([...visibleStatusFields])); } catch { /* optional */ }
 }
 
-function applyVisibleFlightFields() {
-  for (const name of NOW_FLIGHT_FIELDS) {
-    const field = $(`#now-flight-card [data-flight-field="${name}"]`);
-    const toggle = $(`#now-flight-options [data-flight-field-toggle="${name}"]`);
-    if (field) field.hidden = !visibleFlightFields.has(name);
-    if (toggle) toggle.checked = visibleFlightFields.has(name);
+function applyVisibleStatusFields() {
+  for (const name of NOW_STATUS_FIELDS) {
+    const field = $(`#now-status-card [data-status-field="${name}"]`);
+    const toggle = $(`#now-status-options [data-status-field-toggle="${name}"]`);
+    if (field) field.hidden = !visibleStatusFields.has(name);
+    if (toggle) toggle.checked = visibleStatusFields.has(name);
   }
-  const empty = $('#now-flight-empty');
-  if (empty) empty.hidden = visibleFlightFields.size !== 0;
+  const empty = $('#now-status-empty');
+  if (empty) empty.hidden = visibleStatusFields.size !== 0;
 }
 
-function initFlightStatusConfiguration() {
-  const button = $('#now-flight-config');
-  const options = $('#now-flight-options');
+function initCurrentStatusConfiguration() {
+  const button = $('#now-status-config');
+  const options = $('#now-status-options');
   if (!button || !options) return;
 
   button.addEventListener('click', () => {
@@ -608,18 +608,18 @@ function initFlightStatusConfiguration() {
     button.setAttribute('aria-expanded', String(!options.hidden));
   });
 
-  for (const toggle of $$('#now-flight-options [data-flight-field-toggle]')) {
+  for (const toggle of $$('#now-status-options [data-status-field-toggle]')) {
     toggle.addEventListener('change', () => {
-      const name = toggle.dataset.flightFieldToggle;
-      if (!NOW_FLIGHT_FIELDS.includes(name)) return;
-      if (toggle.checked) visibleFlightFields.add(name);
-      else visibleFlightFields.delete(name);
-      saveVisibleFlightFields();
-      applyVisibleFlightFields();
+      const name = toggle.dataset.statusFieldToggle;
+      if (!NOW_STATUS_FIELDS.includes(name)) return;
+      if (toggle.checked) visibleStatusFields.add(name);
+      else visibleStatusFields.delete(name);
+      saveVisibleStatusFields();
+      applyVisibleStatusFields();
     });
   }
 
-  applyVisibleFlightFields();
+  applyVisibleStatusFields();
 }
 
 /**
@@ -25631,7 +25631,7 @@ async function maybeShowSetup() {
 
 async function boot() {
   initNowCardCollapsers();
-  initFlightStatusConfiguration();
+  initCurrentStatusConfiguration();
   initPageStatsCollapsers();
 
   if (isOverlay) {
