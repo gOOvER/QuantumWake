@@ -2231,14 +2231,22 @@
   </section>
 
   <section id="view-garage" class="view">
-    <div class="section-bar">
+    <div class="section-bar garage-toolbar">
       <h2>Garage</h2>
-      <div class="controls">
-        <select id="garage-mine" class="select" title="Ships the logs have seen you fly"></select>
-        <select id="garage-all" class="select" title="Every ship in the reference"></select>
+      <div class="controls garage-pickers">
+        <label class="garage-picker">
+          <span>Flight log</span>
+          <select id="garage-mine" class="select" title="Ships the logs have seen you fly"></select>
+        </label>
+        <label class="garage-picker">
+          <span>Ship library</span>
+          <select id="garage-all" class="select" title="Every ship in the reference"></select>
+        </label>
       </div>
     </div>
-    <p class="muted caption">
+    <details class="garage-guide">
+      <summary>How these fitted figures work</summary>
+      <p class="muted caption">
       A ship's numbers, and what a part would do to them. Every figure here is
       recomputed from the fitted parts using the community dataset's own model
       &mdash; the same files and the same arithmetic that produced its published
@@ -2247,14 +2255,8 @@
       dataset and erkul publish; a pilot who has pulled power off the guns is
       quieter than this says. The logs name the ship you fly but not its parts,
       so the sheet starts from the stock fit.
-    </p>
-
-    <div class="garage-duty-legend" aria-label="Ship discipline legend">
-      <span class="legend-label">Ship discipline</span>
-      <span class="garage-duty civilian" title="Derived from the ship's community career and role">Civilian</span>
-      <span class="garage-duty industrial" title="Derived from the ship's community career and role">Industrial</span>
-      <span class="garage-duty military" title="Derived from the ship's community career and role">Military</span>
-    </div>
+      </p>
+    </details>
 
     <p class="muted" id="garage-unavailable" hidden></p>
 
@@ -2262,6 +2264,12 @@
       <div class="garage-title" id="garage-title"></div>
       <div class="muted" id="garage-sub"></div>
       <div class="muted small" id="garage-source"></div>
+      <div class="garage-duty-legend" aria-label="Ship discipline legend">
+        <span class="legend-label">Ship discipline</span>
+        <span class="garage-duty civilian" title="Derived from the ship's community career and role">Civilian</span>
+        <span class="garage-duty industrial" title="Derived from the ship's community career and role">Industrial</span>
+        <span class="garage-duty military" title="Derived from the ship's community career and role">Military</span>
+      </div>
     </div>
 
     <section id="garage-rig" class="garage-rig" hidden aria-label="Ship component layout">

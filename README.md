@@ -365,9 +365,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.47
+### 0.15.48
 
 - **Put the current situation in one place.** Wake-up location joins location, ship, session, pilot and session health in the configurable Current status card.
+
+- **Bring the Garage back to the ship.** Clearly labelled fleet and library pickers, a compact hull console and a collapsible explanation make the fitted layout the first thing you see.
 
 - **Find nearby support from the cockpit.** The MFD Flight menu now lists the closest refuel, clinic and refinery in the current system, using the same facility evidence as the star map and explaining that distances are based on bodies rather than travel time.
 
