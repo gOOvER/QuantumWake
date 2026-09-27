@@ -24085,46 +24085,72 @@ function drawMap() {
  * legend to memorise. Distinct silhouettes carry the type even when the map
  * switches from its muted place palette to commodity price shading.
  *
- * Deliberately blunt geometry. These are drawn between four and seventeen
- * pixels across, where a detailed glyph turns to mush; a silhouette that
- * survives being tiny beats one that looks good in a design tool.
+ * These are compact technical pictograms rather than arbitrary geometry. They
+ * have one recognisable detail at the smallest size and a little more character
+ * once zoomed in; intricate library icons lost that detail on dense bodies.
  */
 const KIND_SHAPES = {
-  // A skyline. Two steps rather than three: at eight pixels a third is a smudge.
-  City: [{ tag: 'path', attrs: { d: 'M-1 .9 L-1 -.15 L-.05 -.15 L-.05 -1 L1 -1 L1 .9 Z' } }],
+  // A city block with a central tower and a visible street line.
+  City: [
+    { tag: 'path', attrs: { d: 'M-1 .9V-.18H-.3V-1H.35V-.55H1V.9Z' } },
+    { tag: 'path', open: true, attrs: { d: 'M-.72 .32H.72 M0-.72V.6' } },
+  ],
 
-  // A ring - the one shape that reads as "you dock inside it".
-  Station: [{ tag: 'path', attrs: { d: 'M0 -1 A 1 1 0 1 1 0 1 A 1 1 0 1 1 0 -1 Z M0 -.42 A .42 .42 0 1 0 0 .42 A .42 .42 0 1 0 0 -.42 Z' }, evenodd: 1 }],
+  // A docking wheel, faceted instead of circular, with three unmistakable bays.
+  Station: [
+    { tag: 'path', attrs: { d: 'M0-1 .86-.5v1L0 1l-.86-.5v-1ZM0-.35l.3.18v.34L0 .35l-.3-.18v-.34Z' }, evenodd: 1 },
+    { tag: 'path', open: true, attrs: { d: 'M0-1v.3M.86-.5l-.26.15M.86.5 .6.35M0 1V.7M-.86.5l.26-.15M-.86-.5l.26.15' } },
+  ],
 
-  // A horizontal berth: it stays distinct from an asteroid's uneven rock
-  // silhouette even when a map icon is only a handful of pixels across.
-  RestStop: [{ tag: 'rect', attrs: { x: -1, y: -.62, width: 2, height: 1.24, rx: .34 } }],
+  // A pad marker: octagonal perimeter and a compact H for the landing berth.
+  RestStop: [
+    { tag: 'path', attrs: { d: 'M-.55-1H.55L1-.55V.55L.55 1H-.55L-1 .55V-.55Z' } },
+    { tag: 'path', open: true, attrs: { d: 'M-.38-.45V.45M.38-.45V.45M-.38 0H.38' } },
+  ],
 
-  // A dome on the ground.
-  Outpost: [{ tag: 'path', attrs: { d: 'M-1 .55 A 1 1 0 0 1 1 .55 L1 .8 L-1 .8 Z' } }],
+  // A staffed surface outpost: a low habitat, mast, and one status window.
+  Outpost: [
+    { tag: 'path', attrs: { d: 'M-1 .72V.22L-.38-.45V-1H.02V-.45L.68.08V.72Z' } },
+    { tag: 'path', open: true, attrs: { d: 'M-.7 .35H.42M-.18-1v-.22M.2 .1h.2' } },
+  ],
 
-  // A spoil heap. Nothing on top of it - the headframe it used to carry turned
-  // to mush at map size, which is the size it is always drawn at.
-  Mine: [{ tag: 'polygon', attrs: { points: '0,-1 1,.85 -1,.85' } }],
+  // An open headframe with a crossbeam reads as mining rather than a warning.
+  Mine: [
+    { tag: 'path', open: true, attrs: { d: 'M-1 .9 0-1 1 .9M-.62 .2H.62M-.32-.35H.32M-1 .9H1' } },
+  ],
 
-  // An uneven rock: the lopsided outline is intentional, otherwise it reads
-  // too much like a rest-stop berth at a glance.
-  Asteroid: [{ tag: 'polygon', attrs: { points: '-.72,-.92 .5,-.72 1,.02 .42,.9 -.74,.62 -1,-.18' } }],
+  // A chipped rock with two crater cuts. It stays asymmetric at map scale.
+  Asteroid: [
+    { tag: 'path', attrs: { d: 'M-.76-.84 .42-.73 1-.08.47.9-.72.63-1-.14ZM-.22-.3a.22.22 0 1 0 0 .44.22.22 0 1 0 0-.44ZM.43.2a.14.14 0 1 0 0 .28.14.14 0 1 0 0-.28Z' }, evenodd: 1 },
+  ],
 
-  // A hexagonal lab keeps research distinct from the medical service cross.
-  Research: [{ tag: 'polygon', attrs: { points: '-.5,-.87 .5,-.87 1,0 .5,.87 -.5,.87 -1,0' } }],
+  // A flask reads as research while leaving the medical cross exclusively to clinics.
+  Research: [
+    { tag: 'path', attrs: { d: 'M-.34-1H.34V-.34L.88.62Q.94.92.58.92H-.58Q-.94.92-.88.62L-.34-.34Z' } },
+    { tag: 'path', open: true, attrs: { d: 'M-.48 .4H.48M-.18-.68H.18' } },
+  ],
 
-  // A cargo depot stays distinct from navigation arrows and jump diamonds.
-  DistributionCentre: [{ tag: 'rect', attrs: { x: -.85, y: -.85, width: 1.7, height: 1.7, rx: .1 } }],
+  // Stacked containers plus a directional seam make a freight depot distinct from a city.
+  DistributionCentre: [
+    { tag: 'path', attrs: { d: 'M-1-.78H.3V-.1H1V.78H-.3V.1H-1Z' } },
+    { tag: 'path', open: true, attrs: { d: 'M-.72-.44H.02M-.02 .44H.72M-.36-.78V-.1M.36 .1V.78' } },
+  ],
 
-  // The same diamond the jump lanes wear.
-  JumpPoint: [{ tag: 'polygon', attrs: { points: '0,-1 1,0 0,1 -1,0' } }],
+  // A gate with a star cutout describes a jump point without reusing a diamond.
+  JumpPoint: [
+    { tag: 'path', attrs: { d: 'M-1 .85V-.35L-.35-1H.35L1-.35V.85H.5V-.18L.18-.55H-.18L-.5-.18V.85Z' } },
+    { tag: 'path', open: true, attrs: { d: 'M0-.35V.45M-.34.05H.34' } },
+  ],
 
-  MissionBeacon: [{ tag: 'polygon', attrs: { points: '0,1 -1,-.85 0,-.3 1,-.85' } }],
+  // A transmitter with two short waves gives mission beacons a different rhythm.
+  MissionBeacon: [
+    { tag: 'path', attrs: { d: 'M0-1 .5.72H-.5Z' } },
+    { tag: 'path', open: true, attrs: { d: 'M-.78-.56-.98-.35M.78-.56 .98-.35M-.9 .08-1 .28M.9 .08 1 .28M-.62.72H.62' } },
+  ],
 };
 
-/** Anything without a mark of its own keeps the dot it always had. */
-const PLAIN_MARK = [{ tag: 'circle', attrs: { cx: 0, cy: 0, r: 1 } }];
+/** Unknown places use a four-tick locator so every default is a real icon. */
+const PLAIN_MARK = [{ tag: 'path', open: true, attrs: { d: 'M0-1v.46M0 .54V1M-1 0h.46M.54 0H1' } }];
 
 /**
  * Draws a place's mark at a size.
@@ -24133,9 +24159,8 @@ const PLAIN_MARK = [{ tag: 'circle', attrs: { cx: 0, cy: 0, r: 1 } }];
  *   outline, exactly as when every kind was a circle.
  */
 /**
- * Equal radius is not equal weight: a triangle inside a circle covers under
- * half of it, so the same number drew a mine that looked half the size of a
- * rest stop beside it. Each shape is nudged until they read as one set.
+ * Equal radius is not equal visual weight: an open headframe reads lighter than
+ * a filled station, so the weights make the set feel intentional at a glance.
  */
 const SHAPE_WEIGHT = {
   City: 0.92,
@@ -24162,14 +24187,14 @@ function kindMark(kind, x, y, radius, colour, solid) {
     group.append(svgEl(part.tag, {
       ...part.attrs,
 
-      // Line parts are strokes whatever the history: a filled orbit or shaft is
-      // a blob. Everything else fills once the place has been visited.
-      fill: solid ? colour : 'none',
+      // Interior detail stays open. Filling it would turn windows, bays, and
+      // headframes into blobs exactly where a map mark has the fewest pixels.
+      fill: part.open ? 'none' : solid ? colour : 'none',
       stroke: colour,
 
       // Heavy enough to survive being drawn six pixels across, which is the
       // size these are actually used at; an outline at .14 disappeared.
-      'stroke-width': 0.22,
+      'stroke-width': part.open ? 0.19 : 0.22,
       'stroke-linejoin': 'round',
       'fill-rule': part.evenodd ? 'evenodd' : 'nonzero',
       opacity: solid ? 1 : 0.78,

@@ -151,11 +151,14 @@ public class MapModeTests
     }
 
     [Fact]
-    public void Rest_stops_and_asteroids_keep_distinct_silhouettes()
+    public void Place_icons_have_recognisable_details_beyond_basic_geometry()
     {
         var page = new Page();
 
-        Assert.Equal("rect", page.Text("KIND_SHAPES.RestStop[0].tag"));
-        Assert.Equal("polygon", page.Text("KIND_SHAPES.Asteroid[0].tag"));
+        Assert.Equal(2, page.Number("KIND_SHAPES.RestStop.length"));
+        Assert.Equal(2, page.Number("KIND_SHAPES.Station.length"));
+        Assert.True(page.Truth("KIND_SHAPES.Mine[0].open"));
+        Assert.True(page.Truth("KIND_SHAPES.Research[1].open"));
+        Assert.NotEqual("circle", page.Text("PLAIN_MARK[0].tag"));
     }
 }

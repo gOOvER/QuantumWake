@@ -365,7 +365,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.35
+### 0.15.36
+
+- Star-map places now use purpose-drawn technical icons: docks, landing pads, headframes, research flasks, cargo stacks and jump gates. Each keeps its own detail at close range and remains distinct in a dense cluster.
 
 - The star map uses a muted palette and matching service icons. Search and location controls lead the toolbar, with display settings under View options. Filled and outlined place markers keep visited history visible.
 
