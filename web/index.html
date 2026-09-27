@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -422,9 +422,10 @@
         <button type="button" data-service="refuel" title="Places with a UEX fuel price">⛽ Refuel</button>
         <button type="button" data-service="clinic" title="Places listed with a clinic">✚ Clinic</button>
       </div>
-      <select id="map-amenity" class="select" title="Light up places the game says have this">
+      <select id="map-amenity" class="select" aria-label="Facility" title="Choose a facility, then select the closest to your last known location">
         <option value="">Any facility</option>
       </select>
+      <button type="button" class="ghost" id="map-closest" title="Find the closest matching facility or service from your last known location">Select closest</button>
       <div class="map-focus-filter" id="map-focus-filter" role="group" aria-label="Focus the map on your work">
         <button type="button" class="active" data-focus="" title="Show every place">All</button>
         <button type="button" data-focus="plan" title="Stops on the active flight plan">Plan</button>
@@ -471,6 +472,7 @@
       <button class="ghost" id="map-reset">Reset view</button>
     </div>
     <p class="muted map-mode-note" id="map-mode-note"></p>
+    <div class="map-closest-result" id="map-closest-result" aria-live="polite" hidden></div>
 
     <div class="map-wrap">
       <svg id="starmap" preserveAspectRatio="xMidYMid meet"></svg>
@@ -1867,37 +1869,43 @@
     </p>
     <p class="muted" id="crack-unready" hidden></p>
     <div class="crack" id="crack" hidden>
-      <div class="crack-rock">
-        <label>Ship
-          <select id="crack-ship" class="select" title="The heads come from the ship's own loadout"></select>
-        </label>
-        <label>Mass
-          <input type="number" id="crack-mass" class="search" min="0" step="100" value="5000" title="Kilograms, as the scan HUD prints it">
-          <span class="unit">kg</span>
-        </label>
-        <label>Resistance
-          <input type="number" id="crack-resistance" class="search" min="0" max="100" step="1" value="0" title="The HUD's resistance, in percent">
-          <span class="unit">%</span>
-        </label>
-        <label>Instability
-          <input type="number" id="crack-instability" class="search" min="0" max="100" step="1" value="15" title="The HUD's instability, in percent">
-          <span class="unit">%</span>
-        </label>
-        <label>Deposit
-          <select id="crack-deposit" class="select" title="The kind of rock, as the game defines its mix; picks the likeliest mineral below"></select>
-        </label>
-        <label>Mineral
-          <select id="crack-mineral" class="select" title="What most of the rock is - for the notes; the HUD's figures above are what count"></select>
-        </label>
-        <label>Gadget
-          <select id="crack-gadget" class="select" title="A gadget placed on the rock"></select>
-        </label>
-        <button type="button" class="ghost tiny" id="crack-use-scan" title="Fill the rock from the newest scan-results screenshot the Log tab has read">Use the last scanned rock</button>
+      <div class="crack-inputs">
+        <section class="crack-fit-panel">
+          <h4>Ship and equipment</h4>
+          <label>Ship
+            <select id="crack-ship" class="select" title="The heads come from the ship's own loadout"></select>
+          </label>
+          <div class="crack-heads" id="crack-heads"></div>
+          <div class="crack-fit-summary" id="crack-fit-summary"></div>
+        </section>
+        <section class="crack-rock">
+          <h4>Scanned rock</h4>
+          <label>Mass
+            <input type="number" id="crack-mass" class="search" min="0" step="100" value="5000" title="Kilograms, as the scan HUD prints it">
+            <span class="unit">kg</span>
+          </label>
+          <label>Resistance
+            <input type="number" id="crack-resistance" class="search" min="0" max="100" step="1" value="0" title="The HUD's resistance, in percent">
+            <span class="unit">%</span>
+          </label>
+          <label>Instability
+            <input type="number" id="crack-instability" class="search" min="0" max="100" step="1" value="15" title="The HUD's instability, in percent">
+            <span class="unit">%</span>
+          </label>
+          <label>Deposit
+            <select id="crack-deposit" class="select" title="The kind of rock, as the game defines its mix; picks the likeliest mineral below"></select>
+          </label>
+          <label>Mineral
+            <select id="crack-mineral" class="select" title="What most of the rock is - for the notes; the HUD's figures above are what count"></select>
+          </label>
+          <label>Gadget
+            <select id="crack-gadget" class="select" title="A gadget placed on the rock"></select>
+          </label>
+          <button type="button" class="ghost tiny" id="crack-use-scan" title="Fill the rock from the newest scan-results screenshot the Log tab has read">Use the last scanned rock</button>
+        </section>
+        <div class="crack-verdict" id="crack-verdict"></div>
       </div>
       <p class="muted crack-note" id="crack-scan-note" hidden></p>
-      <div class="crack-heads" id="crack-heads"></div>
-      <div class="crack-fit-summary" id="crack-fit-summary"></div>
-      <div class="crack-verdict" id="crack-verdict"></div>
       <div class="crack-deposit" id="crack-deposit-panel" hidden>
         <div class="table-wrap">
           <table id="crack-mix">

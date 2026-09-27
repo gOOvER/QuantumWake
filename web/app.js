@@ -5166,17 +5166,22 @@ function renderCrackHeads() {
 
     const laser = document.createElement('select');
     laser.className = 'select crack-laser';
-    for (const l of crackModel.lasers.filter((l) => l.size === head.size)) {
+    const locked = head.editable === false || head.editable === null;
+    for (const l of crackModel.lasers.filter((l) => locked ? l.class === head.stock
+      : l.size === head.size && !l.bespoke)) {
       laser.append(new Option(`${l.name} · ${fmtInt(l.power)} · ${describeModifiers(l.modifiers) || 'no modifiers'}`, l.class));
     }
     if (head.stock && [...laser.options].some((o) => o.value === head.stock)) laser.value = head.stock;
-    laser.title = 'The head; the ship\'s own is picked first';
+    if (!laser.options.length && head.stock) laser.append(new Option(`${head.stock} · figures unavailable`, head.stock));
+    laser.disabled = locked;
+    laser.title = head.note || 'The head; the ship\'s own is picked first';
     laser.addEventListener('change', () => {
       renderCrackSlots(row);
       renderCrackFitSummary();
       assessCrack().catch(() => {});
     });
     row.append(laser);
+    if (head.note) row.append(el('span', 'crack-head-note', head.note));
     renderCrackSlots(row);
     host.append(row);
   });
@@ -5238,6 +5243,7 @@ function crackRequest() {
     modules: [...row.querySelectorAll('.crack-module')].map((s) => s.value).filter(Boolean),
   }));
   return {
+    ship: $('#crack-ship').value || null,
     massKg: Number($('#crack-mass').value) || 0,
     resistance: Number($('#crack-resistance').value) || 0,
     instability: Number($('#crack-instability').value) || 0,
@@ -5319,7 +5325,10 @@ async function assessCrack() {
     body.append(tr);
   }
   const heads = request.heads.length;
-  $('#crack-matrix-note').textContent = `Every S${crackModel.ships.find((s) => s.class === $('#crack-ship').value)?.heads[0]?.size ?? '?'} head on this rock, ${heads} to a fit with the same modules; only the laser changes, and a module is carried over even where the other head has no slot for it.`;
+  const hull = crackModel.ships.find((s) => s.class === $('#crack-ship').value);
+  $('#crack-matrix-note').textContent = hull?.heads.some((h) => h.editable === false || h.editable === null)
+    ? 'Stock head only: this fit has a fixed head or its replacement compatibility is not yet known. Modules and gadgets still affect the estimate.'
+    : `Compatible S${hull?.heads[0]?.size ?? '?'} heads on this rock, ${heads} to a fit with the same modules; only the laser changes, and a module is carried over even where the other head has no slot for it.`;
 }
 
 $('#crack-ship')?.addEventListener('change', () => { renderCrackHeads(); assessCrack().catch(() => {}); });
@@ -12947,6 +12956,7 @@ const GARAGE_GROUP_WORDS = {
   EMP: 'EMP',
   QuantumInterdictionGenerator: 'Quantum interdiction',
   WeaponMining: 'Mining laser',
+  SalvageHead: 'Salvage head',
   Armor: 'Armour',
   LifeSupportGenerator: 'Life support',
   FlightController: 'Flight controller',
@@ -13688,6 +13698,10 @@ function renderGarage(data, stock) {
   notes.textContent = '';
   notes.hidden = !(s.notes && s.notes.length);
   for (const note of s.notes || []) notes.append(el('div', null, note));
+  if (data.industrialPortsKnown === false && /mining|salvage/i.test(`${ship.role || ''} ${ship.career || ''}`)) {
+    notes.hidden = false;
+    notes.append(el('div', null, 'Replacement choices for mining and salvage heads are missing from this cached loadout. Refresh the community dataset in Settings to check their compatibility.'));
+  }
 
   renderBench(data);
 }
@@ -13763,6 +13777,8 @@ function garageRigSlot(port, ship) {
   const many = port.portIds.length > 1;
   const name = port.name || port.class || 'Empty port';
   button.title = `${garageWord(port.group)} · ${garagePortName(port.hardpoint)} · ${name}`;
+  button.disabled = !!port.fixedReason;
+  if (port.fixedReason) button.title = port.fixedReason;
   button.append(partMark(port.fitted, true));
 
   const body = el('span', 'garage-rig-slot-body');
@@ -13771,6 +13787,7 @@ function garageRigSlot(port, ship) {
   if (port.fitted) part.append(partChip(port.fitted));
   if (many) part.append(el('span', 'chip count', `×${port.portIds.length}`));
   body.append(part);
+  if (port.fixedReason) body.append(el('span', 'garage-rig-slot-spec', port.fixedReason));
   const figures = partFigures(port.fitted, ship).slice(0, 2);
   if (figures.length) body.append(el('span', 'garage-rig-slot-spec', figures.map((f) => `${f[2]} ${f[0]}`).join(' · ')));
   button.append(body);
@@ -13912,7 +13929,7 @@ let garageOptions = null;
 
 /** The kinds in the order a pilot thinks about them, and the figure that heads each. */
 const BENCH_KINDS = ['PowerPlant', 'Cooler', 'Shield', 'QuantumDrive', 'WeaponGun', 'MissileLauncher', 'Missile', 'Radar',
-  'EMP', 'QuantumInterdictionGenerator', 'WeaponMining'];
+  'EMP', 'QuantumInterdictionGenerator', 'WeaponMining', 'SalvageHead'];
 
 
 /**
@@ -14143,6 +14160,7 @@ function renderBench(data) {
       const sub = el('div', 'port-name', many ? `${garagePortName(port.hardpoint)} and ${port.portIds.length - 1} more` : garagePortName(port.hardpoint));
       if (port.changed) sub.append(el('span', 'was', `was ${port.stockName || port.stockClass || 'empty'}`));
       mid.append(sub);
+      if (port.fixedReason) mid.append(el('span', 'muted small', port.fixedReason));
       rowEl.append(mid);
 
       const figure = el('div', 'figure');
@@ -14151,7 +14169,7 @@ function renderBench(data) {
       if (second) figure.append(document.createTextNode(`${second[2]} ${second[0]}`));
       rowEl.append(figure);
 
-      rowEl.addEventListener('click', () => selectBenchPort(port.portIds[0]).catch(() => {}));
+      if (!port.fixedReason) rowEl.addEventListener('click', () => selectBenchPort(port.portIds[0]).catch(() => {}));
       list.append(rowEl);
     }
   }
@@ -14159,6 +14177,7 @@ function renderBench(data) {
 
 /** Opens the candidates for one port. */
 async function selectBenchPort(portId, revealChoices = false) {
+  if (garageBenchPorts.find((p) => p.portId === portId)?.fixedReason) return;
   const request = ++benchRequest;
   const cls = garageClass;
   garageSelectedPort = portId;
@@ -20000,12 +20019,91 @@ async function loadMapAmenities() {
   // Rarest first: a facility six places have is the one worth searching for,
   // and one that 231 places have barely narrows anything.
   for (const [amenity, count] of [...counts].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])))
-    select.append(new Option(`${amenity} (${count})`, amenity));
+    select.append(new Option(`${mapFacilityLabel(amenity)} (${count})`, amenity));
 }
+
+const mapFacilityLabel = (amenity) => ({
+  'Commodity Trading - Freight Elevator': 'Cargo · Freight elevator',
+  'Commodity Trading - Loading Dock': 'Cargo · Loading dock',
+}[amenity] || amenity);
 
 /** Whether the game lists a facility at a place, matched on the readable name. */
 const hasAmenity = (location, amenity) =>
   (amenitiesByPlace.get((location.name || '').toLowerCase()) || []).includes(amenity);
+
+function clearMapClosest() {
+  const result = $('#map-closest-result');
+  if (result) { result.textContent = ''; result.hidden = true; }
+}
+
+function closestMapFacilities(amenity, service) {
+  const here = currentMapLocation();
+  const label = mapFacilityLabel(amenity) || SERVICE_META[service]?.label;
+  if (!label) return { message: 'Choose a facility (such as Refinery or Cargo), or a service, then select closest.' };
+  if (!here?.system) return { message: 'Your last known location is unavailable. Wait for the log to name a place before finding the closest facility.' };
+  const same = (a, b) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
+  const matches = atlas.filter((location) => same(location.system, here.system)
+    && (amenity ? hasAmenity(location, amenity) : servicesAt(location).includes(service)));
+  if (!matches.length) return { message: `No ${label} facilities are listed in ${here.system}. Other systems cannot be compared by distance.` };
+  const atHere = matches.find((location) => location.rawId === here.rawId);
+  if (atHere) return { locations: [atHere], message: `${label} is listed at ${here.name}, your last known location.` };
+
+  // Display positions are compressed and spread out for labels. Only the
+  // source body coordinates can rank proximity; sites on one body stay tied.
+  const positions = Object.entries(bodyPositions).find(([system]) => same(system, here.system))?.[1] || {};
+  const position = (body) => Object.entries(positions).find(([name]) => same(name, body))?.[1];
+  const valid = (point) => Number.isFinite(point?.x) && Number.isFinite(point?.y);
+  const origin = position(here.body);
+  const ranked = matches.map((location) => {
+    const point = position(location.body);
+    const distance = same(location.body, here.body) ? 0
+      : valid(origin) && valid(point) ? Math.hypot(point.x - origin.x, point.y - origin.y) : null;
+    return { location, distance };
+  });
+  const known = ranked.filter((entry) => entry.distance !== null);
+  if (!known.length) return { message: `Cannot determine the closest ${label} from ${here.name}: body coordinates are missing and no matching facility is on the same body.` };
+  const best = Math.min(...known.map((entry) => entry.distance));
+  const locations = known.filter((entry) => entry.distance === best).map((entry) => entry.location)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  let message = `Approximate closest ${label} from ${here.name} (last known location), within ${here.system}. Based on body positions, not travel distance; exact facility coordinates are unavailable.`;
+  if (locations.length > 1) message += ' These places are tied; choose one below.';
+  if (known.length < matches.length) message += ' Some matching facilities lack body coordinates and could not be compared.';
+  return { locations, message };
+}
+
+function focusClosestFacility(location) {
+  $('#map-mode').value = 'system';
+  $('#map-system').value = location.system;
+  $('#map-visited-only').checked = false;
+  $('#map-search').value = '';
+  $('#map-results').hidden = true;
+  if (mapAmenityFilter) selectMapService('', false, false);
+  selectMapFocus('', false);
+  syncMapModeControls();
+  drawMap();
+  centreOn(location.rawId);
+  if (entityShown !== `place|${location.rawId}` || $('#entity-drawer').hidden)
+    showMapInfo(location);
+}
+
+function selectClosestMapFacility() {
+  const found = closestMapFacilities(mapAmenityFilter, mapServiceFilter);
+  if (found.locations?.length === 1) focusClosestFacility(found.locations[0]);
+  const result = $('#map-closest-result');
+  result.textContent = '';
+  result.hidden = false;
+  result.append(el('p', 'muted', found.message));
+  for (const location of found.locations || []) {
+    const button = el('button', 'ghost', location.name);
+    button.type = 'button';
+    button.addEventListener('click', () => {
+      focusClosestFacility(location);
+      for (const choice of result.querySelectorAll('button'))
+        choice.classList.toggle('active', choice === button);
+    });
+    result.append(button);
+  }
+}
 
 // Service is a property of a place, not its identity. Badges sit outside the
 // location glyph so a clinic at a station still reads as a station first.
@@ -20075,6 +20173,7 @@ function showServiceBadges(location, highlighted) {
 }
 
 function selectMapService(service, openMap = false, redraw = true) {
+  if (redraw) clearMapClosest();
   mapServiceFilter = service || '';
   for (const button of $$('#map-service-filter button'))
     button.classList.toggle('active', button.dataset.service === mapServiceFilter);
@@ -20609,6 +20708,7 @@ function fitToHighlights(term) {
 function setHere(rawId) {
   const changed = (rawId || null) !== hereId;
   hereId = rawId || null;
+  if (changed) clearMapClosest();
 
   /*
    * Only when it actually moves.
@@ -20918,8 +21018,10 @@ function initMap() {
 
   $('#map-amenity')?.addEventListener('change', (event) => {
     mapAmenityFilter = event.target.value;
+    clearMapClosest();
     drawMap();
   });
+  $('#map-closest')?.addEventListener('click', selectClosestMapFacility);
 
   const labelDensity = $('#map-label-density');
   try { labelDensity.value = localStorage.getItem(MAP_LABEL_DENSITY_KEY) || 'auto'; } catch { /* private mode */ }
@@ -23402,7 +23504,7 @@ async function showMapInfo(location) {
 
   // In commodity mode, say which side of the search this place is on.
   const trade = $('#map-info-trade');
-  if (highlightIds) {
+  if (highlightIds && commoditySites(($('#map-search')?.value || '').trim().toLowerCase())) {
     const sells = highlightIds.has(location.rawId);
     trade.textContent = sells ? 'sells the searched commodity' : 'does not sell it';
     trade.className = sells ? 'inward' : 'muted';
