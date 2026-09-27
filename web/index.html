@@ -422,9 +422,10 @@
         <button type="button" data-service="refuel" title="Places with a UEX fuel price">⛽ Refuel</button>
         <button type="button" data-service="clinic" title="Places listed with a clinic">✚ Clinic</button>
       </div>
-      <select id="map-amenity" class="select" title="Light up places the game says have this">
+      <select id="map-amenity" class="select" aria-label="Facility" title="Choose a facility, then select the closest to your last known location">
         <option value="">Any facility</option>
       </select>
+      <button type="button" class="ghost" id="map-closest" title="Find the closest matching facility or service from your last known location">Select closest</button>
       <div class="map-focus-filter" id="map-focus-filter" role="group" aria-label="Focus the map on your work">
         <button type="button" class="active" data-focus="" title="Show every place">All</button>
         <button type="button" data-focus="plan" title="Stops on the active flight plan">Plan</button>
@@ -471,6 +472,7 @@
       <button class="ghost" id="map-reset">Reset view</button>
     </div>
     <p class="muted map-mode-note" id="map-mode-note"></p>
+    <div class="map-closest-result" id="map-closest-result" aria-live="polite" hidden></div>
 
     <div class="map-wrap">
       <svg id="starmap" preserveAspectRatio="xMidYMid meet"></svg>

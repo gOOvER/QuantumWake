@@ -365,7 +365,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.32
+### 0.15.33
+
+- **Select the closest facility on the map.** Choose a facility or service,
+  then select closest from your last known location. Body-based estimates are
+  labelled approximate, tied places remain a choice, and missing coordinates
+  are explained. Selecting a result centres the map and opens its place card.
 
 - **Hauling runs start from your last known location.** A pickup where you
   already are comes first, with body and system used to group later stops.

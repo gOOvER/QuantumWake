@@ -1256,6 +1256,9 @@ td.outward { color: var(--amber); }
 .map-tools .toggle input { accent-color: var(--cyan); cursor: pointer; }
 .map-tools .toggle:hover { color: var(--fg); }
 .map-mode-note { margin: -2px 0 10px; font-size: 12px; }
+.map-closest-result { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--rule); }
+.map-closest-result p { margin: 0 0 8px; }
+.map-closest-result .ghost { margin: 0 8px 6px 0; }
 .map-unpositioned { fill: var(--amber) !important; }
 .map-player { white-space: nowrap; }
 .map-player.located { color: var(--cyan-hot); border-color: var(--cyan); }
