@@ -20019,12 +20019,91 @@ async function loadMapAmenities() {
   // Rarest first: a facility six places have is the one worth searching for,
   // and one that 231 places have barely narrows anything.
   for (const [amenity, count] of [...counts].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])))
-    select.append(new Option(`${amenity} (${count})`, amenity));
+    select.append(new Option(`${mapFacilityLabel(amenity)} (${count})`, amenity));
 }
+
+const mapFacilityLabel = (amenity) => ({
+  'Commodity Trading - Freight Elevator': 'Cargo · Freight elevator',
+  'Commodity Trading - Loading Dock': 'Cargo · Loading dock',
+}[amenity] || amenity);
 
 /** Whether the game lists a facility at a place, matched on the readable name. */
 const hasAmenity = (location, amenity) =>
   (amenitiesByPlace.get((location.name || '').toLowerCase()) || []).includes(amenity);
+
+function clearMapClosest() {
+  const result = $('#map-closest-result');
+  if (result) { result.textContent = ''; result.hidden = true; }
+}
+
+function closestMapFacilities(amenity, service) {
+  const here = currentMapLocation();
+  const label = mapFacilityLabel(amenity) || SERVICE_META[service]?.label;
+  if (!label) return { message: 'Choose a facility (such as Refinery or Cargo), or a service, then select closest.' };
+  if (!here?.system) return { message: 'Your last known location is unavailable. Wait for the log to name a place before finding the closest facility.' };
+  const same = (a, b) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
+  const matches = atlas.filter((location) => same(location.system, here.system)
+    && (amenity ? hasAmenity(location, amenity) : servicesAt(location).includes(service)));
+  if (!matches.length) return { message: `No ${label} facilities are listed in ${here.system}. Other systems cannot be compared by distance.` };
+  const atHere = matches.find((location) => location.rawId === here.rawId);
+  if (atHere) return { locations: [atHere], message: `${label} is listed at ${here.name}, your last known location.` };
+
+  // Display positions are compressed and spread out for labels. Only the
+  // source body coordinates can rank proximity; sites on one body stay tied.
+  const positions = Object.entries(bodyPositions).find(([system]) => same(system, here.system))?.[1] || {};
+  const position = (body) => Object.entries(positions).find(([name]) => same(name, body))?.[1];
+  const valid = (point) => Number.isFinite(point?.x) && Number.isFinite(point?.y);
+  const origin = position(here.body);
+  const ranked = matches.map((location) => {
+    const point = position(location.body);
+    const distance = same(location.body, here.body) ? 0
+      : valid(origin) && valid(point) ? Math.hypot(point.x - origin.x, point.y - origin.y) : null;
+    return { location, distance };
+  });
+  const known = ranked.filter((entry) => entry.distance !== null);
+  if (!known.length) return { message: `Cannot determine the closest ${label} from ${here.name}: body coordinates are missing and no matching facility is on the same body.` };
+  const best = Math.min(...known.map((entry) => entry.distance));
+  const locations = known.filter((entry) => entry.distance === best).map((entry) => entry.location)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  let message = `Approximate closest ${label} from ${here.name} (last known location), within ${here.system}. Based on body positions, not travel distance; exact facility coordinates are unavailable.`;
+  if (locations.length > 1) message += ' These places are tied; choose one below.';
+  if (known.length < matches.length) message += ' Some matching facilities lack body coordinates and could not be compared.';
+  return { locations, message };
+}
+
+function focusClosestFacility(location) {
+  $('#map-mode').value = 'system';
+  $('#map-system').value = location.system;
+  $('#map-visited-only').checked = false;
+  $('#map-search').value = '';
+  $('#map-results').hidden = true;
+  if (mapAmenityFilter) selectMapService('', false, false);
+  selectMapFocus('', false);
+  syncMapModeControls();
+  drawMap();
+  centreOn(location.rawId);
+  if (entityShown !== `place|${location.rawId}` || $('#entity-drawer').hidden)
+    showMapInfo(location);
+}
+
+function selectClosestMapFacility() {
+  const found = closestMapFacilities(mapAmenityFilter, mapServiceFilter);
+  if (found.locations?.length === 1) focusClosestFacility(found.locations[0]);
+  const result = $('#map-closest-result');
+  result.textContent = '';
+  result.hidden = false;
+  result.append(el('p', 'muted', found.message));
+  for (const location of found.locations || []) {
+    const button = el('button', 'ghost', location.name);
+    button.type = 'button';
+    button.addEventListener('click', () => {
+      focusClosestFacility(location);
+      for (const choice of result.querySelectorAll('button'))
+        choice.classList.toggle('active', choice === button);
+    });
+    result.append(button);
+  }
+}
 
 // Service is a property of a place, not its identity. Badges sit outside the
 // location glyph so a clinic at a station still reads as a station first.
@@ -20094,6 +20173,7 @@ function showServiceBadges(location, highlighted) {
 }
 
 function selectMapService(service, openMap = false, redraw = true) {
+  if (redraw) clearMapClosest();
   mapServiceFilter = service || '';
   for (const button of $$('#map-service-filter button'))
     button.classList.toggle('active', button.dataset.service === mapServiceFilter);
@@ -20628,6 +20708,7 @@ function fitToHighlights(term) {
 function setHere(rawId) {
   const changed = (rawId || null) !== hereId;
   hereId = rawId || null;
+  if (changed) clearMapClosest();
 
   /*
    * Only when it actually moves.
@@ -20937,8 +21018,10 @@ function initMap() {
 
   $('#map-amenity')?.addEventListener('change', (event) => {
     mapAmenityFilter = event.target.value;
+    clearMapClosest();
     drawMap();
   });
+  $('#map-closest')?.addEventListener('click', selectClosestMapFacility);
 
   const labelDensity = $('#map-label-density');
   try { labelDensity.value = localStorage.getItem(MAP_LABEL_DENSITY_KEY) || 'auto'; } catch { /* private mode */ }
@@ -23421,7 +23504,7 @@ async function showMapInfo(location) {
 
   // In commodity mode, say which side of the search this place is on.
   const trade = $('#map-info-trade');
-  if (highlightIds) {
+  if (highlightIds && commoditySites(($('#map-search')?.value || '').trim().toLowerCase())) {
     const sells = highlightIds.has(location.rawId);
     trade.textContent = sells ? 'sells the searched commodity' : 'does not sell it';
     trade.className = sells ? 'inward' : 'muted';
