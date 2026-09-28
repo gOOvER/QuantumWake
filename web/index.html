@@ -4172,12 +4172,28 @@
     <div class="part-tags" id="entity-tags" hidden></div>
     <div class="entity-where" id="entity-where" hidden></div>
     <div class="entity-place-extra" id="entity-place-extra" hidden>
-      <div class="map-info-services" id="map-info-services" hidden></div>
-      <div id="map-info-trade" hidden></div>
-      <div class="map-info-notes" id="map-info-notes"></div>
-      <div class="map-info-amenities" id="map-info-amenities" hidden></div>
-      <div class="map-info-lore muted" id="map-info-lore" hidden></div>
-      <div class="map-info-sold" id="map-info-sold" hidden></div>
+      <div class="map-place-ops" id="map-place-ops">
+        <div class="map-place-ops-head">
+          <span>Operations at this place</span>
+          <span class="map-place-plan-state" id="map-place-plan-state" hidden></span>
+        </div>
+        <div class="map-place-service-copy">UEX-listed counters and services. Select one to scan the map.</div>
+        <div class="map-info-services" id="map-info-services" hidden></div>
+        <div class="map-info-support" id="map-info-support" hidden></div>
+        <div class="map-info-plan" id="map-info-plan"></div>
+        <details class="map-place-detail" id="map-place-detail">
+          <summary>Market and place details</summary>
+          <div class="map-info-data" id="map-info-data"></div>
+          <div id="map-info-trade" hidden></div>
+          <div class="map-info-amenities" id="map-info-amenities" hidden></div>
+          <div class="map-info-sold" id="map-info-sold" hidden></div>
+          <div class="map-info-lore muted" id="map-info-lore" hidden></div>
+        </details>
+        <details class="map-place-detail map-place-notes-detail">
+          <summary>Personal notes</summary>
+          <div class="map-info-notes" id="map-info-notes"></div>
+        </details>
+      </div>
     </div>
     <div class="entity-actions" id="entity-actions"></div>
   </aside>

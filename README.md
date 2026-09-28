@@ -365,7 +365,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.10
+### 0.16.11
+
+- **Choose a destination from one map readout.** Selecting a place now groups its UEX-listed services, flight-plan state and next route action together. When refuel, clinic or repair is not listed there, the same panel can find the closest known support from your last recorded location; market facts, game facilities and personal notes stay available without crowding that decision.
 
 - **Choose personal gear by role, then compare the details.** Armoury now opens with a compact equipment board for firearms, protection and field kit. It keeps the number of families, pieces and available price data in view, puts the reading-method explanation away until needed, and turns the five detailed categories into a clearer workspace selector.
 

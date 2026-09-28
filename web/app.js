@@ -1892,6 +1892,7 @@ function entityTicket() {
 const PLACE_ONLY_NODES = [
   '#map-info-services', '#map-info-trade', '#map-info-notes',
   '#map-info-amenities', '#map-info-lore', '#map-info-sold',
+  '#map-info-support', '#map-info-plan', '#map-info-data', '#map-place-plan-state',
 ];
 
 const ENTITY_KICKER = {
@@ -1940,7 +1941,9 @@ async function openEntity(kind, id) {
 
 function closeEntity() {
   entityRequest++;
-  $('#entity-drawer').hidden = true;
+  const drawer = $('#entity-drawer');
+  drawer.hidden = true;
+  drawer.classList.remove('map-place-open');
   document.body.classList.remove('entity-open');
   entityShown = null;
 
@@ -1966,6 +1969,9 @@ function renderEntity(card) {
   const extra = $('#entity-place-extra');
   extra.hidden = card.kind !== 'place';
   for (const id of PLACE_ONLY_NODES) $(id).textContent = '';
+  $('#map-info-support').hidden = true;
+  $('#map-place-plan-state').hidden = true;
+  $('#entity-drawer').classList.remove('map-place-open');
 
   $('#entity-drawer').hidden = false;
   document.body.classList.add('entity-open');
@@ -23853,8 +23859,11 @@ async function showMapInfo(location) {
   if (!await openEntity('place', location.rawId)) return;
 
   mapInfoLocation = location;
+  $('#entity-drawer').classList.add('map-place-open');
 
   renderMapInfoServices(location);
+  renderMapInfoPlan(location);
+  renderMapInfoData();
   renderMapInfoNotes(location);
 
   // In commodity mode, say which side of the search this place is on.
@@ -23935,6 +23944,118 @@ function renderMapInfoServices(location) {
   }
 
   host.hidden = host.children.length === 0;
+  renderMapInfoSupport(location, services);
+}
+
+/**
+ * Keep the routine decision beside the selected location. The map's service
+ * data is reported by UEX, so an absent chip means "not listed", never that a
+ * facility cannot exist there. The closest-place action keeps that limit in
+ * view by calculating from the pilot's last known location, just as the main
+ * map control does.
+ */
+function renderMapInfoSupport(location, services) {
+  const host = $('#map-info-support');
+  host.textContent = '';
+
+  const missing = ['refuel', 'clinic', 'repair'].filter((service) => !services.includes(service));
+  if (!missing.length) {
+    host.hidden = true;
+    return;
+  }
+
+  host.append(el('div', 'map-support-copy', 'Need a service that is not listed here?'));
+  const choices = el('div', 'map-support-actions');
+  for (const service of missing) {
+    const meta = SERVICE_META[service];
+    const button = el('button', 'ghost tiny', `Find ${meta.label.toLowerCase()}`);
+    button.type = 'button';
+    button.title = `Find the closest ${meta.label.toLowerCase()} from your last known location`;
+    button.addEventListener('click', () => findMapSupport(service));
+    choices.append(button);
+  }
+  host.append(choices);
+  host.hidden = false;
+}
+
+function findMapSupport(service) {
+  mapAmenityFilter = '';
+  const amenity = $('#map-amenity');
+  if (amenity) amenity.value = '';
+  selectMapService(service, true, false);
+  selectClosestMapFacility();
+}
+
+/** The selected place's relationship to the tracked route, plus its next action. */
+function renderMapInfoPlan(location) {
+  const host = $('#map-info-plan');
+  const state = $('#map-place-plan-state');
+  const trip = tracked();
+  const stopIndex = trip?.stops.findIndex((stop) => stop.placeId === location.rawId) ?? -1;
+  const stop = stopIndex >= 0 ? trip.stops[stopIndex] : null;
+  host.textContent = '';
+  state.textContent = '';
+  state.hidden = true;
+
+  const copy = el('div', 'map-plan-copy');
+  if (stop) {
+    const next = nextStop(trip);
+    const complete = trip.stops.filter((item) => item.done).length;
+    state.textContent = stop.done ? 'Complete' : stop === next ? 'Next stop' : `Stop ${stopIndex + 1}`;
+    state.hidden = false;
+    copy.append(el('b', null, trip.title));
+    copy.append(el('span', null, stop.done
+      ? ` · completed stop ${stopIndex + 1} of ${trip.stops.length}`
+      : ` · stop ${stopIndex + 1} of ${trip.stops.length}, ${complete} complete`));
+  } else if (trip) {
+    copy.append(el('span', null, `${trip.title} · this place is not on the flight plan.`));
+  } else {
+    copy.append(el('span', null, 'No active flight plan. Add this place when you are ready to route it.'));
+  }
+  host.append(copy);
+
+  const button = el('button', 'map-plan-primary', stop ? 'Open flight plan' : 'Add to flight plan');
+  button.type = 'button';
+  button.addEventListener('click', async () => {
+    if (stop) {
+      showTripPanel();
+      drawMap();
+      return;
+    }
+    button.disabled = true;
+    try {
+      await fetch('/api/trips/stops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ placeId: location.rawId, place: location.name, note: null }),
+      });
+      await loadTrips();
+      if (mapInfoLocation === location) renderMapInfoPlan(location);
+    } catch {
+      button.textContent = 'Could not add stop';
+      button.disabled = false;
+    }
+  });
+  host.append(button);
+}
+
+/**
+ * Prices are optional evidence, not a promise every location has one. Keeping
+ * the source and collection age in the folded detail section makes a reported
+ * counter useful without giving it equal weight to the route decision above.
+ */
+function renderMapInfoData() {
+  const host = $('#map-info-data');
+  const price = $('#entity-price');
+  host.textContent = '';
+
+  if (price.hidden) {
+    host.append(el('span', 'muted', 'No reported price for this place. Service counters are listed by UEX; facilities below come from the game data.'));
+    return;
+  }
+
+  host.append(el('span', 'map-data-label', 'Reported price'));
+  host.append(el('span', null, price.textContent));
 }
 
 /** Lore paragraphs already asked for, name to promise of text-or-null. */

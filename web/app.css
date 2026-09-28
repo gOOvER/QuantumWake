@@ -3603,6 +3603,33 @@ body.entity-open .view { padding-right: 296px; }
 .entity-place-extra[hidden] { display: none; }
 .entity-actions { display: flex; flex-wrap: wrap; gap: 5px; border-top: 1px solid var(--rule); padding-top: 9px; margin-top: 9px; }
 
+/* A map place is a decision point. Its route and services belong in one short
+   operational readout; the generic drawer actions would repeat that same
+   route action below it. */
+body:has(#view-map.active) .entity-drawer.map-place-open { width: 304px; }
+body:has(#view-map.active) .entity-drawer.map-place-open .entity-actions { display: none; }
+.map-place-ops { border-top: 1px solid var(--rule); padding-top: 9px; }
+.map-place-ops-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--cyan); font: 9px var(--mono); letter-spacing: .14em; text-transform: uppercase; }
+.map-place-plan-state { flex: 0 0 auto; padding: 2px 5px; border: 1px solid rgba(79, 212, 138, .42); color: #9cf0bd; font-size: 8px; letter-spacing: .08em; }
+.map-place-service-copy, .map-support-copy { color: var(--dim); font-size: 10px; line-height: 1.4; }
+.map-place-service-copy { margin-top: 5px; }
+.map-info-services { margin-top: 7px; }
+.map-info-support { margin-top: 8px; padding: 7px 8px; border: 1px solid rgba(83, 128, 151, .35); background: rgba(14, 29, 41, .52); }
+.map-support-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.map-info-plan { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 9px; margin-top: 9px; padding: 8px; border-left: 2px solid var(--cyan-deep); background: rgba(19, 48, 61, .3); }
+.map-plan-copy { min-width: 0; color: var(--muted); font-size: 10.5px; line-height: 1.4; overflow-wrap: anywhere; }
+.map-plan-copy b { color: var(--text); }
+.map-plan-primary { border: 1px solid #3a8196; background: #173747; color: #caeef7; font: 600 9.5px var(--mono); letter-spacing: .04em; padding: 6px 7px; cursor: pointer; white-space: nowrap; }
+.map-plan-primary:hover { border-color: var(--cyan-hot); background: #1e4758; }
+.map-plan-primary:disabled { opacity: .65; cursor: wait; }
+.map-place-detail { margin-top: 8px; border-top: 1px solid rgba(83, 128, 151, .32); }
+.map-place-detail summary { padding: 8px 1px 1px; color: var(--dim); cursor: pointer; font: 9px var(--mono); letter-spacing: .11em; text-transform: uppercase; }
+.map-place-detail[open] summary { color: var(--cyan); padding-bottom: 5px; }
+.map-place-detail :is(.map-info-amenities, .map-info-sold, .map-info-lore) { margin-top: 6px; }
+.map-place-notes-detail .map-info-notes { border-top: 0; margin-top: 2px; padding-top: 2px; }
+.map-info-data { color: var(--dim); font-size: 10px; line-height: 1.45; }
+.map-data-label { display: block; color: var(--cyan); font: 8.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+
 .map-info {
   position: absolute;
   top: 14px;
