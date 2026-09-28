@@ -2308,6 +2308,39 @@ body.overlay .foot { display: none; }
 .option-block p { margin: 0 0 6px; font-size: 12.5px; line-height: 1.65; max-width: 72ch; }
 .option-block code { font-family: var(--mono); color: var(--muted); }
 
+/* Settings is a control room, not a long undifferentiated form. The first
+   choices are useful together, while the wipe boundary stays visibly separate
+   because it changes what every total means. */
+#view-settings { max-width: 1140px; }
+.settings-workspace-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0 0 16px;
+  padding: 0 12px 13px;
+  border-bottom: 1px solid var(--rule);
+}
+.settings-eyebrow { display: block; margin-bottom: 4px; color: var(--cyan); font: 10px var(--mono); letter-spacing: .16em; }
+.settings-workspace-head h2 { padding-left: 0; }
+.settings-workspace-head h2::before { display: none; }
+.settings-workspace-head p { max-width: 52ch; margin: 0; font-size: 12px; line-height: 1.55; text-align: right; }
+.settings-start-grid { display: grid; grid-template-columns: minmax(0, 1.18fr) minmax(290px, .82fr); gap: 12px; margin: 0 0 16px; }
+.settings-start-grid .option-block { max-width: none; min-height: 100%; margin: 0; }
+.settings-quick-card { position: relative; overflow: hidden; }
+.settings-quick-card::before { content: ""; position: absolute; inset: 0 0 auto; height: 2px; background: var(--cyan-deep); }
+.settings-share-card { background: linear-gradient(135deg, rgba(13, 45, 61, .84), var(--deep) 60%); }
+.settings-update-card { background: linear-gradient(135deg, rgba(32, 39, 49, .78), var(--deep) 65%); }
+.settings-update-card::before { background: var(--amber); }
+.settings-wipe-card { max-width: none; border-left: 3px solid var(--amber); background: linear-gradient(115deg, rgba(104, 68, 20, .11), var(--deep) 58%); }
+.settings-wipe-card .wipe-scope { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 20px; }
+@media (max-width: 760px) {
+  .settings-workspace-head { display: block; padding-inline: 0; }
+  .settings-workspace-head p { margin-top: 7px; text-align: left; }
+  .settings-start-grid { grid-template-columns: minmax(0, 1fr); }
+  .settings-wipe-card .wipe-scope { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* The toggle reads as a state, not just a verb. */
 #overlay-toggle.on { color: var(--green); border-color: var(--green); }
 

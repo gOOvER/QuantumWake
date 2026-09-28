@@ -3332,9 +3332,16 @@
   </section>
 
   <section id="view-settings" class="view">
-    <h2>Settings</h2>
+    <div class="settings-workspace-head">
+      <div>
+        <span class="settings-eyebrow">CONTROL ROOM</span>
+        <h2>Settings</h2>
+      </div>
+      <p class="muted">Choose what stays current, protect the history your totals use, and make a recap when you want to share one.</p>
+    </div>
 
-    <div class="option-block">
+    <div class="settings-start-grid">
+    <div class="option-block settings-quick-card settings-share-card">
       <div class="option-head">
         <h3>Share a recap</h3>
         <button class="ghost" id="share-open">Preview recap</button>
@@ -3359,7 +3366,7 @@
       <span class="muted" id="share-status"></span>
     </div>
 
-    <div class="option-block">
+    <div class="option-block settings-quick-card settings-update-card">
       <div class="option-head">
         <h3>New versions</h3>
         <button class="ghost" id="update-check">Check now</button>
@@ -3378,7 +3385,9 @@
       <span class="muted" id="update-status"></span>
     </div>
 
-    <div class="option-block">
+    </div>
+
+    <div class="option-block settings-wipe-card">
       <div class="option-head">
         <h3>Last wipe</h3>
         <button class="ghost" id="wipe-save">Save</button>
