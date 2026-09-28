@@ -5783,6 +5783,10 @@ body.overlay .ship-picture { display: none; }
 
 /* ---------- armoury ---------- */
 .armoury-eyebrow { margin-bottom: 3px; color: var(--cyan); font: 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+/* The shared section-heading tick belongs to a lone heading. Here the eyebrow
+   already anchors the title, so the tick read as a stray diamond beside it. */
+#view-armoury > .section-bar h2 { padding-left: 0; }
+#view-armoury > .section-bar h2::before { display: none; }
 .armoury-deck { display: grid; grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(190px, .82fr)); gap: 10px; margin: 0 0 10px; }
 .armoury-deck-card { position: relative; display: flex; flex-direction: column; align-items: flex-start; min-width: 0; min-height: 92px; padding: 13px 15px; border: 1px solid var(--rule); border-left: 3px solid var(--cyan-deep); background: linear-gradient(145deg, rgba(13, 35, 50, .72), rgba(6, 16, 25, .55)); color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: border-color .15s ease, background .15s ease, transform .15s ease; }
 .armoury-deck-card:hover { border-color: var(--cyan-deep); background: linear-gradient(145deg, rgba(19, 71, 91, .72), rgba(6, 16, 25, .55)); transform: translateY(-1px); }
