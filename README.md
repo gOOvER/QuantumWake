@@ -365,29 +365,29 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.52
+### 0.16.0
 
-- **Find reference data faster.** Ships and parts now keep their filters, live match count, and table together, with names anchored while you inspect prices and specifications.
+A dashboard redesign. Nothing about how logs are read has changed, so your history, fleet and receipts carry over as they are. Pages have moved, though, so expect a moment of looking for things.
 
-- **Read the evidence without wading through it.** Log keeps the newest capture open, compacts earlier screenshots into an expandable timeline, and folds capture and saved-point controls away until needed.
+- **Navigation is organised around what you are doing.** Operations holds shopping, routes, contracts and planning tools; Flight holds journeys and location history; Hangar holds ships and equipment. About now lives with Settings, leaving Now, Map and Log one click away.
 
-- **Make the Fleet useful at a glance.** The roster now leads the page with clearer ship cards, recent-flight signals and a dedicated action row; the historical fleet trace is available when you want it.
+- **The dashboard has a calmer shared visual language.** Page headers, filters, tables, status and empty results use matching spacing, hierarchy and visual cues, so dense screens are easier to scan without hiding information.
 
-- **Put the current situation in one place.** Wake-up location joins location, ship, session, pilot and session health in the configurable Current status card.
+- **Put the current situation in one place.** The Now page leads with a configurable Current status card: location, ship, session, pilot, session health and now where you will wake up.
+
+- **The star map is easier to read.** A muted palette, with search and location controls leading the toolbar and display settings under View options. Places use purpose-drawn icons — docks, landing pads, headframes, research flasks, cargo stacks, jump gates, and stronger tower and orbital-hub silhouettes for cities and stations — that stay distinct in a dense cluster and recognisable at ordinary zoom. Filled and outlined markers still show where you have been.
+
+- **Find nearby support from the cockpit.** The MFD Flight menu lists the closest refuel, clinic and refinery in the current system, using the same facility evidence as the star map, and says that distances are based on bodies rather than travel time.
+
+- **Make the Fleet useful at a glance.** The roster leads the page with clearer ship cards, recent-flight signals and a dedicated action row; the historical fleet trace is there when you want it.
 
 - **Bring the Garage back to the ship.** Clearly labelled fleet and library pickers, a compact hull console and a collapsible explanation make the fitted layout the first thing you see.
 
-- **Find nearby support from the cockpit.** The MFD Flight menu now lists the closest refuel, clinic and refinery in the current system, using the same facility evidence as the star map and explaining that distances are based on bodies rather than travel time.
+- **Read the evidence without wading through it.** Log keeps the newest capture open, compacts earlier screenshots into an expandable timeline, and folds capture and saved-point controls away until needed.
 
-- **The dashboard has a calmer shared visual language.** Page headers, filters, tables, status and empty results now use matching spacing, hierarchy and visual cues, making dense screens easier to scan without hiding information.
+- **Find reference data faster.** Ships and parts keep their filters, live match count and table together, with names anchored while you inspect prices and specifications.
 
-- **Navigation is organised around what you are doing.** Operations now holds shopping, routes, contracts and planning tools; Flight holds journeys and location history; Hangar holds ships and equipment. About now lives with Settings, leaving the frequent Now, Map and Log views directly available.
-
-- City and station marks now have stronger tower and orbital-hub silhouettes. Every filled map icon keeps dark inset detail, so landing pads, headframes, research flasks, cargo stacks and jump gates remain recognisable at ordinary zoom.
-
-- Star-map places now use purpose-drawn technical icons: docks, landing pads, headframes, research flasks, cargo stacks and jump gates. Each keeps its own detail at close range and remains distinct in a dense cluster.
-
-- The star map uses a muted palette and matching service icons. Search and location controls lead the toolbar, with display settings under View options. Filled and outlined place markers keep visited history visible.
+### 0.15.34
 
 - **Select the closest facility on the map.** Choose a facility or service,
   then select closest from your last known location. Body-based estimates are
