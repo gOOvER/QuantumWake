@@ -139,7 +139,8 @@ body::before {
 
 body.overlay::after { display: none; }
 body.overlay .railmark,
-body.overlay .brandmark { display: none; }
+body.overlay .brandmark,
+body.overlay .context-rail { display: none; }
 
 /* ---------- overlay mode ---------- */
 
@@ -346,6 +347,70 @@ body.overlay .feed .d { display: none; }
   box-shadow: 0 1px 0 rgba(53, 200, 240, .18), 0 6px 22px rgba(0, 0, 0, .6);
 }
 
+/* A single selected thing can travel between pages without turning the header
+   into a second dashboard. The rail exists only after an explicit choice. */
+.context-rail {
+  position: sticky;
+  top: 56px;
+  z-index: 9;
+  background: rgba(7, 15, 24, .96);
+  border-bottom: 1px solid rgba(53, 200, 240, .3);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, .24);
+}
+
+.context-rail-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: var(--page);
+  min-height: 38px;
+  padding: 5px 22px;
+  margin: 0 auto;
+}
+
+.context-rail-kicker {
+  flex: 0 0 auto;
+  color: var(--cyan);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+}
+
+.context-rail-copy {
+  display: flex;
+  min-width: 0;
+  gap: 7px;
+  align-items: baseline;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+.context-rail-copy b,
+.context-rail-copy .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-rail-copy .muted { font-size: 11px; }
+.context-rail-inner .tiny { margin-left: auto; }
+
+.context-rail-clear {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.context-rail-clear:hover { color: var(--text); }
+
 .brand { display: flex; align-items: center; gap: 11px; }
 
 /* The wake mark. Same file the browser tab uses, so they cannot drift apart. */
@@ -453,6 +518,14 @@ body.overlay .feed .d { display: none; }
   .tabs button { padding-inline: 8px; font-size: 10px; letter-spacing: .1em; }
   .status { gap: 8px; font-size: 10px; }
   .search-box .search { width: 140px; }
+  .context-rail-inner { padding-inline: 14px; }
+}
+
+@media (max-width: 620px) {
+  .context-rail-inner { gap: 8px; }
+  .context-rail-kicker { display: none; }
+  .context-rail-copy { flex: 1; }
+  .context-rail-copy .muted { display: none; }
 }
 
 .dot {

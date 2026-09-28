@@ -111,6 +111,21 @@
   </div>
 </header>
 
+<!-- A chosen place, hull, list or flight plan stays available while the pilot
+     moves through the workspaces. It is absent until there is a real choice,
+     so the shared navigation does not become another dashboard. -->
+<aside class="context-rail" id="context-rail" hidden aria-live="polite">
+  <div class="context-rail-inner">
+    <span class="context-rail-kicker">In focus</span>
+    <div class="context-rail-copy">
+      <b id="context-title"></b>
+      <span id="context-detail" class="muted"></span>
+    </div>
+    <button type="button" class="ghost tiny" id="context-action"></button>
+    <button type="button" class="context-rail-clear" id="context-clear" title="Clear current focus" aria-label="Clear current focus">×</button>
+  </div>
+</aside>
+
 <main>
 
   <!-- Shown only when no Star Citizen install could be found: without one

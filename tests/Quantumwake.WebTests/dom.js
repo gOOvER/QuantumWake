@@ -277,8 +277,8 @@ const GROUPS = {
   'select.period': ['#map-window'],
   '#map-side button': ['#side-sell', '#side-buy'],
   '[data-stats-toggle]': ['#contracts-stats-toggle'],
-  '#tabs button': ['#test-tab-now', '#test-tab-about', '#test-tab-fleet', '#test-tab-garage', '#test-tab-mining'],
-  '.view': ['#view-now', '#view-about', '#view-help', '#view-fleet', '#view-garage', '#view-mining'],
+  '#tabs button': ['#test-tab-now', '#test-tab-about', '#test-tab-fleet', '#test-tab-garage', '#test-tab-mining', '#test-tab-jobs'],
+  '.view': ['#view-now', '#view-about', '#view-help', '#view-fleet', '#view-garage', '#view-mining', '#view-jobs'],
   '#tabs .tab-group': [],
   '#view-now .card[data-card]': [
     '#now-status-card', '#now-briefing-card', '#now-feed-card',
@@ -354,6 +354,7 @@ node('#test-tab-fleet').dataset.view = 'fleet';
    land there rather than only to set the class it will show. */
 node('#test-tab-garage').dataset.view = 'garage';
 node('#test-tab-mining').dataset.view = 'mining';
+node('#test-tab-jobs').dataset.view = 'jobs';
 
 node('#side-sell').dataset.side = 'sell';
 node('#side-buy').dataset.side = 'buy';

@@ -365,7 +365,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.11
+### 0.16.12
+
+- **Keep the current operation with you.** Selecting a map place, planning ship, pinned shopping list, live contract, or new flight plan now opens a compact “In focus” rail. It remains available as you move through the app, returns directly to the relevant workspace, and clears when the work is no longer useful.
 
 - **Choose a destination from one map readout.** Selecting a place now groups its UEX-listed services, flight-plan state and next route action together. When refuel, clinic or repair is not listed there, the same panel can find the closest known support from your last recorded location; market facts, game facilities and personal notes stay available without crowding that decision.
 

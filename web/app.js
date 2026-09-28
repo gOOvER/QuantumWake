@@ -224,6 +224,63 @@ function buildPeriodSelects() {
 
 buildPeriodSelects();
 
+/* ---------- current focus ---------- */
+
+/*
+ * This is browser-session context, not another saved plan. A place, ship or
+ * list becomes useful because the next workspace can pick it up; keeping it
+ * in memory means an old choice never returns as if it were current work.
+ */
+let contextFocus = null;
+
+function setContextFocus(focus) {
+  contextFocus = focus ? { ...focus } : null;
+  renderContextRail();
+}
+
+function clearContextFocus() {
+  contextFocus = null;
+  renderContextRail();
+}
+
+/** One compact way back to the thing a pilot deliberately chose. */
+function renderContextRail() {
+  const rail = $('#context-rail');
+  const title = $('#context-title');
+  const detail = $('#context-detail');
+  const action = $('#context-action');
+  if (!rail || !title || !detail || !action) return;
+
+  const focus = contextFocus;
+  rail.hidden = !focus;
+  if (!focus) return;
+
+  title.textContent = focus.title || 'Current focus';
+  detail.textContent = focus.detail || '';
+  action.textContent = focus.action || 'Open';
+  action.onclick = () => {
+    if (focus.anchor) jobsLandOn = focus.anchor;
+    showView(focus.view || 'now');
+
+    // The map can reopen a chosen place after the view has its dimensions.
+    // A flight plan is its own map panel, while a place keeps its readout.
+    if (focus.plan) showTripPanel();
+    if (focus.placeId) {
+      const place = atlas.find((item) => item.rawId === focus.placeId);
+      if (place) {
+        // Reopening the same drawer normally means close. The rail promises a
+        // return, so reset that toggle before asking the map for the place.
+        if (entityShown === `place|${place.rawId}` && !$('#entity-drawer').hidden)
+          closeEntity();
+        centreOn(place.rawId);
+        showMapInfo(place).catch(() => {});
+      }
+    }
+  };
+}
+
+$('#context-clear')?.addEventListener('click', clearContextFocus);
+
 /* ---------- tabs ---------- */
 
 /** The pages where a stale price is a wrong number rather than a fact about a feed. */
@@ -256,6 +313,11 @@ function showView(name) {
     (b) => b.dataset.view === (name === 'commodity' ? 'market' : name === 'help' ? 'about' : name === 'share' ? 'settings' : name));
 
   if (!target) return;
+
+  // A map drawer is useful beside the map, but it is not the cross-page
+  // context. Leaving it over another workspace hid the work the pilot chose
+  // to open; the focus rail now carries the deliberate return path instead.
+  if (name !== 'map' && !$('#entity-drawer').hidden) closeEntity();
 
   // Leaving the drill-down forgets its subject. The name alone is not enough
   // for the hash handler to know the page is up: keep it after a tab click and
@@ -363,6 +425,10 @@ function showView(name) {
   // replaceState, not assignment: cycling views with the arrow keys should not
   // fill the back button with thirty entries.
   if (location.hash !== `#${name}`) history.replaceState(null, '', `#${name}`);
+
+  // Page changes never clear a deliberate choice. The rail is the small thread
+  // that makes Map, Routes and Shopping feel like one operation.
+  renderContextRail();
 }
 
 /* The view lives in the URL fragment, so #map is a link that can be sent to
@@ -1975,6 +2041,24 @@ function renderEntity(card) {
 
   $('#entity-drawer').hidden = false;
   document.body.classList.add('entity-open');
+
+  if (card.kind === 'ship') {
+    setContextFocus({
+      kind: 'ship',
+      title: card.name,
+      detail: card.subtitle || 'Ship reference',
+      view: 'routes',
+      action: 'Plan with ship',
+    });
+  } else if (card.kind === 'place') {
+    setContextFocus({
+      kind: 'place',
+      title: card.name,
+      detail: card.subtitle || 'Map place',
+      view: 'map',
+      action: 'Open map',
+    });
+  }
 
   // The map sizes itself from the space it has, so it has to be told the space
   // just changed - otherwise the dots stay where they were and the place that
@@ -11883,6 +11967,19 @@ function choosePlanningShip(name) {
   planningShipName = name || '';
   try { localStorage.setItem(PLANNING_SHIP_KEY, planningShipName); } catch { /* optional */ }
   renderShipPlan();
+  const ship = activePlanningShip();
+  if (ship) {
+    const cargo = planningCargo(ship);
+    setContextFocus({
+      kind: 'ship',
+      title: ship.ship.name,
+      detail: cargo > 0 ? `${cargo.toLocaleString()} SCU selected for route planning` : 'Selected for route planning',
+      view: 'routes',
+      action: 'Open routes',
+    });
+  } else if (contextFocus?.kind === 'ship') {
+    clearContextFocus();
+  }
   refreshTradeAdvice(nowState?.location).catch(() => {});
   reloadPilotBriefing().catch(() => {});
   loadRoutes().catch(() => {});
@@ -15695,6 +15792,17 @@ async function loadJobContracts() {
     const head = el('div', 'job-head');
     head.append(el('b', null, contract.name || `${contract.issuer} · ${contract.type}`));
     if (contract.difficulty) head.append(el('span', 'job-kind', contract.difficulty));
+    const focus = el('button', 'ghost tiny', 'Focus');
+    focus.title = 'Keep this contract available while you plan';
+    focus.addEventListener('click', () => setContextFocus({
+      kind: 'contract',
+      title: contract.name || `${contract.issuer} · ${contract.type}`,
+      detail: [contract.issuer, contract.type, contract.system].filter(Boolean).join(' · ') || 'Live contract',
+      view: 'jobs',
+      anchor: '#jobs-contracts',
+      action: 'Open contracts',
+    }));
+    head.append(focus);
     card.append(head);
 
     const sub = [contract.issuer, contract.type, contract.system, `taken ${relative(contract.at)}`]
@@ -16145,6 +16253,18 @@ async function loadJobList() {
 
     pin.addEventListener('click', async () => {
       await fetch(`/api/jobs/${job.id}/pin`, { method: 'POST' });
+      if (!job.pinned) {
+        setContextFocus({
+          kind: 'shopping',
+          title: job.title,
+          detail: `${job.haveCount} of ${job.totalCount} items in hand`,
+          view: 'jobs',
+          anchor: '#jobs-list',
+          action: 'Open list',
+        });
+      } else if (contextFocus?.kind === 'shopping' && contextFocus.title === job.title) {
+        clearContextFocus();
+      }
       loadJobList();
     });
     head.append(pin);
@@ -22317,6 +22437,14 @@ async function addStop(placeId, place, note) {
 
 /** Starts a plan from a list of stops - a trade run, or a shopping trip. */
 async function planTrip(title, stops) {
+  setContextFocus({
+    kind: 'flight-plan',
+    title,
+    detail: `${stops.length} stop${stops.length === 1 ? '' : 's'} ready to route`,
+    view: 'map',
+    plan: true,
+    action: 'Open plan',
+  });
   await fetch('/api/trips', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -23859,6 +23987,14 @@ async function showMapInfo(location) {
   if (!await openEntity('place', location.rawId)) return;
 
   mapInfoLocation = location;
+  setContextFocus({
+    kind: 'place',
+    title: location.name,
+    detail: [location.body, location.system].filter(Boolean).join(' · ') || 'Map place',
+    view: 'map',
+    placeId: location.rawId,
+    action: 'Open map',
+  });
   $('#entity-drawer').classList.add('map-place-open');
 
   renderMapInfoServices(location);
