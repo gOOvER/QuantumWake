@@ -2334,11 +2334,40 @@ body.overlay .foot { display: none; }
 .settings-update-card::before { background: var(--amber); }
 .settings-wipe-card { max-width: none; border-left: 3px solid var(--amber); background: linear-gradient(115deg, rgba(104, 68, 20, .11), var(--deep) 58%); }
 .settings-wipe-card .wipe-scope { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 20px; }
+.settings-group {
+  display: block;
+  max-width: 1140px;
+  margin: 0 0 10px;
+  border: 1px solid var(--rule);
+  background: linear-gradient(105deg, rgba(10, 28, 40, .65), rgba(6, 16, 25, .54));
+  clip-path: var(--chamfer);
+}
+.settings-group > summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 10px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+.settings-group > summary::-webkit-details-marker { display: none; }
+.settings-group > summary::after { content: "+"; color: var(--cyan); font: 20px/1 var(--mono); }
+.settings-group[open] > summary { border-bottom: 1px solid var(--rule); background: rgba(53, 200, 240, .055); }
+.settings-group[open] > summary::after { content: "−"; }
+.settings-group-index { color: var(--cyan); font: 10px var(--mono); letter-spacing: .12em; }
+.settings-group-copy { display: grid; gap: 2px; }
+.settings-group-copy strong { color: var(--text); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; }
+.settings-group-copy span { color: var(--dim); font-size: 11.5px; }
+.settings-group-content { padding: 12px 0 0; }
+.settings-group-content .option-block { margin-inline: 0; }
 @media (max-width: 760px) {
   .settings-workspace-head { display: block; padding-inline: 0; }
   .settings-workspace-head p { margin-top: 7px; text-align: left; }
   .settings-start-grid { grid-template-columns: minmax(0, 1fr); }
   .settings-wipe-card .wipe-scope { grid-template-columns: minmax(0, 1fr); }
+  .settings-group > summary { grid-template-columns: auto minmax(0, 1fr) auto; gap: 9px; padding-inline: 10px; }
 }
 
 /* The toggle reads as a state, not just a verb. */

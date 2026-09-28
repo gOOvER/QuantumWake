@@ -365,7 +365,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.9
+### 0.16.10
 
 - **Choose personal gear by role, then compare the details.** Armoury now opens with a compact equipment board for firearms, protection and field kit. It keeps the number of families, pieces and available price data in view, puts the reading-method explanation away until needed, and turns the five detailed categories into a clearer workspace selector.
 
@@ -376,6 +376,8 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 - **Global notices give workspaces more room.** A patch-wipe prompt stays expanded on Now and Settings, where its context matters; elsewhere it becomes a compact, still-actionable status line.
 
 - **Settings now opens as a control room.** Sharing and update choices sit together in a compact start deck, while the history-wipe boundary has its own distinct panel before the data and maintenance controls below.
+
+- **Settings detail now stays out of the way until you need it.** Data sources, account care, and log maintenance each have a concise summary rail that opens its controls and explanations on demand.
 
 - **Start each operation from one place.** The Operations menu now opens a command deck for supplies, routes, contracts, departure checks, blueprints, and Wikelo trades, with your active shopping and live contract state shown at a glance.
 
