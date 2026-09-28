@@ -365,13 +365,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.3
+### 0.16.4
 
 - **Start each operation from one place.** The Operations menu now opens a command deck for supplies, routes, contracts, departure checks, blueprints, and Wikelo trades, with your active shopping and live contract state shown at a glance.
 
 - **Prepare the full flight, then choose the cargo run.** Routes now opens as a flight plan: choose a ship, see the active plan's next stop and progress, find nearby refuel support, and keep cargo filters out of the way until you need them.
 
 - **Review the run without wading through the timeline.** The Logbook now leads with its newest recorded event, the selected range's sessions, trades and discoveries, and its recorded trade net before the detailed timeline.
+
+- **Start a session review with the flight that matters.** Play history now opens as a session-debrief workspace: the latest flight's ship, duration, progress and health lead into the retained full history and detailed route, activity and economy evidence.
 
 A dashboard redesign. Nothing about how logs are read has changed, so your history, fleet and receipts carry over as they are. Pages have moved, though, so expect a moment of looking for things.
 

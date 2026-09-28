@@ -1304,6 +1304,21 @@ td.inward { color: var(--green); }
 td.outward { color: var(--amber); }
 
 .session-row { cursor: pointer; }
+.sessions-toolbar { align-items: center; }
+.sessions-period-picker { display: grid; gap: 4px; color: var(--dim); font: 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.sessions-period-picker .select { min-width: 142px; }
+.sessions-deck { display: grid; grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(190px, .82fr)); gap: 10px; margin: 0 0 12px; }
+.sessions-brief-card { display: flex; flex-direction: column; min-width: 0; min-height: 118px; padding: 14px; border: 1px solid var(--rule); border-left: 2px solid var(--cyan-deep); background: linear-gradient(145deg, rgba(13, 35, 50, .78), rgba(6, 16, 25, .52)); }
+.sessions-brief-card h3 { margin: 7px 0 7px; color: var(--text); font-size: 14px; }
+.sessions-brief-card p { margin: 0; font-size: 11px; line-height: 1.45; }
+.sessions-brief-card .ghost { align-self: flex-start; margin-top: auto; padding-top: 12px; }
+.sessions-latest-card { border-left-color: var(--green); background: linear-gradient(145deg, rgba(25, 65, 55, .26), rgba(6, 16, 25, .52)); }
+.sessions-health-card { border-left-color: var(--violet); }
+.sessions-workspace { margin: 0; padding: 13px 15px; border: 1px solid var(--rule); border-left: 2px solid var(--cyan-deep); background: rgba(8, 22, 33, .62); }
+.sessions-workspace-head { display: flex; justify-content: space-between; gap: 16px; align-items: start; padding-bottom: 9px; border-bottom: 1px solid rgba(45, 82, 109, .5); }
+.sessions-workspace-head h3 { margin: 3px 0 0; color: var(--text); font-size: 15px; }
+.sessions-period-summary { max-width: 58ch; color: var(--muted); font: 10.5px/1.4 var(--mono); text-align: right; }
+.sessions-workspace .caption { margin: 10px 0 12px; line-height: 1.5; }
 .session-row:focus-visible { outline: 1px solid var(--cyan); outline-offset: -2px; }
 .session-row.open { background: rgba(53, 200, 240, .08); }
 .session-row-toggle { display: inline-block; width: 16px; color: var(--cyan-hot); font-size: 16px; }
@@ -1333,7 +1348,8 @@ td.outward { color: var(--amber); }
 .session-debrief-note { margin: 13px 0 0; font-size: 10px; }
 .session-debrief-loading { padding: 18px; }
 @media (max-width: 1300px) { .session-debrief-grid { grid-template-columns: repeat(2, minmax(220px, 1fr)); } }
-@media (max-width: 760px) { .session-debrief-grid { grid-template-columns: 1fr; } .session-debrief-head { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 900px) { .sessions-deck { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sessions-latest-card { grid-column: 1 / -1; } }
+@media (max-width: 760px) { .session-debrief-grid { grid-template-columns: 1fr; } .session-debrief-head, .sessions-toolbar, .sessions-workspace-head { align-items: flex-start; flex-direction: column; } .sessions-period-summary { text-align: left; } .sessions-deck { grid-template-columns: 1fr; } .sessions-latest-card { grid-column: auto; } }
 
 /* ---------- map ---------- */
 

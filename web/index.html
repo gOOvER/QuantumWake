@@ -1149,17 +1149,48 @@
 
   <!-- SESSIONS -->
   <section id="view-sessions" class="view">
-    <div class="section-bar">
-      <h2>Play history</h2>
+    <div class="section-bar sessions-toolbar">
+      <div>
+        <span class="operations-kicker">Flight</span>
+        <h2>Session debriefs</h2>
+      </div>
       <div class="controls">
         <input type="search" id="sessions-search" class="search" placeholder="Search ship or place…"
                autocomplete="off" spellcheck="false">
-        <select id="sessions-period" class="select period" title="Filter by date"></select>
+        <label class="sessions-period-picker">
+          <span>Record range</span>
+          <select id="sessions-period" class="select period" title="Filter sessions by date"></select>
+        </label>
       </div>
     </div>
-    <p class="muted caption">Select a session to open its route, activity and recorded economy debrief.</p>
-    <div class="summary-strip" id="lib-summary"></div>
-    <div class="table-wrap">
+    <div class="sessions-deck" aria-live="polite">
+      <article class="sessions-brief-card sessions-latest-card">
+        <span class="operations-kicker">Latest flight</span>
+        <h3 id="sessions-latest-title">Loading latest session…</h3>
+        <p class="muted" id="sessions-latest-detail"></p>
+        <button id="sessions-open-latest" class="ghost tiny" type="button">Open session debrief</button>
+      </article>
+      <article class="sessions-brief-card">
+        <span class="operations-kicker">Flight time</span>
+        <h3 id="sessions-duration-title">Loading duration…</h3>
+        <p class="muted" id="sessions-duration-detail"></p>
+      </article>
+      <article class="sessions-brief-card sessions-health-card">
+        <span class="operations-kicker">Session health</span>
+        <h3 id="sessions-health-title">Loading health…</h3>
+        <p class="muted" id="sessions-health-detail"></p>
+      </article>
+    </div>
+    <section class="sessions-workspace" aria-labelledby="sessions-history-title">
+      <div class="sessions-workspace-head">
+        <div>
+          <span class="operations-kicker">History</span>
+          <h3 id="sessions-history-title">Recorded sessions</h3>
+        </div>
+        <div class="sessions-period-summary" id="lib-summary"></div>
+      </div>
+      <p class="muted caption">Open a session to inspect its route, activity and recorded economy debrief.</p>
+      <div class="table-wrap">
       <table id="sessions-table">
         <thead>
           <tr>
@@ -1171,8 +1202,9 @@
         </thead>
         <tbody></tbody>
       </table>
-    </div>
-    <div class="pager" id="sessions-pager"></div>
+      </div>
+      <div class="pager" id="sessions-pager"></div>
+    </section>
   </section>
 
   <!-- SHIPS -->

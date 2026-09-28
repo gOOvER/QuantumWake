@@ -2573,6 +2573,47 @@ let sessionPage = 0;
 let expandedSessionId = null;
 const sessionDetails = new Map();
 
+function latestSession(sessions) {
+  return [...sessions].sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))[0] || null;
+}
+
+/** Gives the history page one useful answer before its dense evidence table. */
+function renderSessionBrief(sessions) {
+  const latestTitle = $('#sessions-latest-title');
+  const latestDetail = $('#sessions-latest-detail');
+  const durationTitle = $('#sessions-duration-title');
+  const durationDetail = $('#sessions-duration-detail');
+  const healthTitle = $('#sessions-health-title');
+  const healthDetail = $('#sessions-health-detail');
+  const open = $('#sessions-open-latest');
+  const latest = latestSession(sessions);
+
+  if (!latest) {
+    latestTitle.textContent = 'No sessions in this range';
+    latestDetail.textContent = 'Choose a wider record range to revisit earlier flights.';
+    durationTitle.textContent = 'No flight time recorded';
+    durationDetail.textContent = 'In-game time appears when a session enters the persistent universe.';
+    healthTitle.textContent = 'No session health data';
+    healthDetail.textContent = 'Deaths and incapacitations are shown when the game writes them.';
+    open.disabled = true;
+    return;
+  }
+
+  latestTitle.textContent = latest.primaryShip || 'Session on foot';
+  latestDetail.textContent = `${dateOf(latest.startedAt)} · ${latest.lastLocation || 'No last location recorded'}`;
+  durationTitle.textContent = duration(latest.inGame);
+  durationDetail.textContent = `${duration(latest.menu)} in menus · ${latest.jumps || 0} jump${latest.jumps === 1 ? '' : 's'} · ${latest.contracts || 0} contract${latest.contracts === 1 ? '' : 's'}`;
+
+  const deaths = Number(latest.deaths || 0);
+  const incap = Number(latest.incapacitations || 0);
+  const server = latest.shard
+    ? `${sessionShardLabel(latest)} · ${latest.shards || 1} server${latest.shards === 1 ? '' : 's'} recorded`
+    : 'No server recorded';
+  healthTitle.textContent = deaths ? `${deaths} death${deaths === 1 ? '' : 's'}` : 'No deaths recorded';
+  healthDetail.textContent = `${incap} incapacitation${incap === 1 ? '' : 's'} · ${server}`;
+  open.disabled = false;
+}
+
 /** Applies the period and search filters. */
 function filteredSessions() {
   const term = ($('#sessions-search').value || '').trim().toLowerCase();
@@ -2830,6 +2871,7 @@ function renderSessions() {
   body.textContent = '';
 
   const sessions = filteredSessions();
+  renderSessionBrief(sessions);
 
   // Totals reflect the selected period, so the tiles answer "how much did I
   // play this month" rather than always restating the lifetime figures.
@@ -2887,15 +2929,14 @@ function renderSessions() {
 function summariseSessions(sessions) {
   const sum = (pick) => sessions.reduce((total, s) => total + (pick(s) || 0), 0);
 
-  tiles('#lib-summary', [
-    ['Sessions', sessions.length],
-    ['In game', duration(sum((s) => s.inGame))],
-    ['In menus', duration(sum((s) => s.menu))],
-    ['Quantum jumps', sum((s) => s.jumps)],
-    ['Contracts', sum((s) => s.contracts)],
-    ['Deaths', sum((s) => s.deaths)],
-  ]);
+  const host = $('#lib-summary');
+  host.textContent = `${sessions.length} session${sessions.length === 1 ? '' : 's'} · ${duration(sum((s) => s.inGame))} in game · ${sum((s) => s.jumps)} jump${sum((s) => s.jumps) === 1 ? '' : 's'} · ${sum((s) => s.contracts)} contract${sum((s) => s.contracts) === 1 ? '' : 's'}`;
 }
+
+$('#sessions-open-latest')?.addEventListener('click', () => {
+  const latest = latestSession(filteredSessions());
+  if (latest) toggleSessionDebrief(latest.id);
+});
 
 function renderPager(pages, start, shown, total) {
   const pager = $('#sessions-pager');
