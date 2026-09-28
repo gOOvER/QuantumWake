@@ -1755,22 +1755,31 @@
   </section>
 
   <section id="view-ships" class="view">
-    <div class="section-bar">
-      <h2>Ship catalogue</h2>
-      <div class="controls">
+    <div class="section-bar reference-toolbar-bar">
+      <div class="reference-title">
+        <span class="reference-kicker">Reference library</span>
+        <h2>Ship catalogue</h2>
+      </div>
+      <div class="controls reference-toolbar">
         <select id="ships-career" class="select" title="Filter by career"></select>
         <input type="search" id="ships-search" class="search" placeholder="Search ships…"
                autocomplete="off" spellcheck="false">
       </div>
     </div>
-    <p class="muted caption">
-      Every flyable the community dataset describes — career, crew and what an
-      insurance claim costs — priced at UEX in-game purchase prices where a
-      shop sells one; hover a price for every shop and rental desk, cheapest
-      first. Pure reference: your own hangar lives on the Fleet page.
-      Needs the community dataset (and UEX for prices) in Settings.
-    </p>
-    <div class="table-wrap">
+    <details class="reference-note">
+      <summary>About this catalogue</summary>
+      <p>Every flyable the community dataset describes — career, crew and what an
+        insurance claim costs — priced at UEX in-game purchase prices where a
+        shop sells one. Hover a price for every shop and rental desk, cheapest
+        first. Your own hangar lives on the Fleet page. Needs the community dataset
+        and UEX for prices in Settings.</p>
+    </details>
+    <div class="reference-results">
+      <div class="reference-results-head">
+        <span>Matching hulls</span>
+        <span class="muted" id="ships-count" aria-live="polite"></span>
+      </div>
+    <div class="table-wrap reference-table-wrap">
       <table id="ships-table">
         <thead>
           <tr>
@@ -1788,23 +1797,33 @@
         <tbody></tbody>
       </table>
     </div>
+    </div>
   </section>
 
   <!-- REFERENCE: parts and gear -->
   <section id="view-parts" class="view">
-    <div class="section-bar">
-      <h2>Parts &amp; gear catalogue</h2>
-      <div class="controls">
+    <div class="section-bar reference-toolbar-bar">
+      <div class="reference-title">
+        <span class="reference-kicker">Reference library</span>
+        <h2>Parts &amp; gear catalogue</h2>
+      </div>
+      <div class="controls reference-toolbar">
         <select id="parts-type" class="select" title="Filter by type"></select>
         <input type="search" id="parts-search" class="search" placeholder="Search parts and gear…"
                autocomplete="off" spellcheck="false">
       </div>
     </div>
-    <p class="muted caption" id="parts-caption">
-      Every ship component and piece of personal gear — type, size, grade, maker
-      — with UEX in-game prices joined by entity uuid where a shop stocks one.
-    </p>
-    <div class="table-wrap">
+    <details class="reference-note">
+      <summary>About this catalogue</summary>
+      <p class="muted caption" id="parts-caption">Every ship component and piece of personal gear — type,
+        size, grade and maker — with UEX in-game prices joined where a shop stocks one.</p>
+    </details>
+    <div class="reference-results">
+      <div class="reference-results-head">
+        <span>Matching items</span>
+        <span class="muted" id="parts-count" aria-live="polite"></span>
+      </div>
+    <div class="table-wrap reference-table-wrap">
       <table id="parts-table">
         <thead>
           <tr>
@@ -1818,7 +1837,7 @@
         <tbody></tbody>
       </table>
     </div>
-    <p class="muted caption" id="parts-count"></p>
+    </div>
   </section>
 
   <!-- REFERENCE: mining and salvage spawns -->

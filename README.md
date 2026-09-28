@@ -365,9 +365,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.51
+### 0.15.52
 
-- **See your economy as a ledger.** Income leads the page, net gain or loss is called out in the summary, and purchase locations and items are grouped into compact panels with the lower-ranked results available on demand.
+- **Find reference data faster.** Ships and parts now keep their filters, live match count, and table together, with names anchored while you inspect prices and specifications.
 
 - **Read the evidence without wading through it.** Log keeps the newest capture open, compacts earlier screenshots into an expandable timeline, and folds capture and saved-point controls away until needed.
 

@@ -4183,6 +4183,13 @@ function renderShipsRef() {
     && (!term || s.name.toLowerCase().includes(term)
       || (s.role || '').toLowerCase().includes(term)));
 
+  const counter = $('#ships-count');
+  if (counter) {
+    counter.textContent = rows.length
+      ? `${rows.length.toLocaleString()} ${rows.length === 1 ? 'hull' : 'hulls'}`
+      : shipCatalogue.length ? 'No matches' : 'Waiting for catalogue';
+  }
+
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted', shipCatalogue.length
@@ -4322,8 +4329,10 @@ function renderPartsRef() {
 
   const counter = $('#parts-count');
   counter.textContent = rows.length > PARTS_CAP
-    ? `Showing ${PARTS_CAP.toLocaleString()} of ${rows.length.toLocaleString()} matches — refine the search or pick a type.`
-    : '';
+    ? `${PARTS_CAP.toLocaleString()} of ${rows.length.toLocaleString()} items shown — refine to see the rest.`
+    : rows.length
+      ? `${rows.length.toLocaleString()} ${rows.length === 1 ? 'item' : 'items'}`
+      : partCatalogue.length ? 'No matches' : 'Waiting for catalogue';
 
   if (!rows.length) {
     const tr = el('tr');
