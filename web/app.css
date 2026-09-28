@@ -863,8 +863,22 @@ body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
 
 /* ---------- logbook page ---------- */
 
-/* The full-page timeline: same anatomy as the live feed, sized for reading
-   rather than glancing, and never capped - the page scrolls. */
+.logbook-toolbar { align-items: center; }
+.logbook-period-picker { display: grid; gap: 4px; color: var(--dim); font: 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.logbook-period-picker .select { min-width: 142px; }
+.logbook-deck { display: grid; grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(190px, .82fr)); gap: 10px; margin: 0 0 12px; }
+.logbook-brief-card { display: flex; flex-direction: column; min-width: 0; min-height: 118px; padding: 14px; border: 1px solid var(--rule); border-left: 2px solid var(--cyan-deep); background: linear-gradient(145deg, rgba(13, 35, 50, .78), rgba(6, 16, 25, .52)); }
+.logbook-brief-card h3 { margin: 7px 0 7px; color: var(--text); font-size: 14px; }
+.logbook-brief-card p { margin: 0; font-size: 11px; line-height: 1.45; }
+.logbook-latest-card { border-left-color: var(--green); background: linear-gradient(145deg, rgba(25, 65, 55, .26), rgba(6, 16, 25, .52)); }
+.logbook-net-card { border-left-color: var(--violet); }
+.logbook-workspace { margin: 0; padding: 13px 15px; border: 1px solid var(--rule); border-left: 2px solid var(--cyan-deep); background: rgba(8, 22, 33, .62); }
+.logbook-workspace-head { display: flex; justify-content: space-between; gap: 16px; align-items: start; padding-bottom: 9px; border-bottom: 1px solid rgba(45, 82, 109, .5); }
+.logbook-workspace-head h3 { margin: 3px 0 0; color: var(--text); font-size: 15px; }
+.logbook-workspace-head > .muted { max-width: 440px; margin: 0; text-align: right; font-size: 10.5px; line-height: 1.4; }
+
+/* The full-page timeline is sized for reading rather than glancing and is
+   never capped: the page scrolls, so no part of the pilot's record is hidden. */
 .feed.logbook { max-height: none; overflow: visible; }
 .feed.logbook li { padding: 8px 4px 8px 10px; gap: 12px; align-items: baseline; }
 .feed.logbook .t { font-size: 11px; flex: 0 0 178px; white-space: nowrap; }
@@ -879,6 +893,9 @@ body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
 .feed .k.payout { color: var(--green); border-color: #1f5c3d; }
 .feed .k.bought { color: var(--amber); border-color: #6d4715; }
 .feed .k.loot { color: var(--violet); border-color: #4a3670; }
+
+@media (max-width: 900px) { .logbook-deck { grid-template-columns: repeat(2, minmax(0, 1fr)); } .logbook-latest-card { grid-column: 1 / -1; } }
+@media (max-width: 620px) { .logbook-toolbar, .logbook-workspace-head { align-items: stretch; flex-direction: column; } .logbook-period-picker { justify-items: start; } .logbook-workspace-head > .muted { text-align: left; } .logbook-deck { grid-template-columns: 1fr; } .logbook-latest-card { grid-column: auto; } }
 
 /* ---------- bars ---------- */
 

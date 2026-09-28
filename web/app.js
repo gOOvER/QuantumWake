@@ -16909,9 +16909,55 @@ function initStarStrings() {
  * The logbook page: one merged timeline of what the pilot actually did -
  * sessions, trades, purchases, first-seen loot - straight from /api/logbook.
  */
+function renderLogbookBrief(rows) {
+  const latestTitle = $('#logbook-latest-title');
+  const latestDetail = $('#logbook-latest-detail');
+  const activityTitle = $('#logbook-activity-title');
+  const activityDetail = $('#logbook-activity-detail');
+  const netTitle = $('#logbook-net-title');
+  const netDetail = $('#logbook-net-detail');
+
+  if (!rows.length) {
+    latestTitle.textContent = 'No activity recorded';
+    latestDetail.textContent = 'Fly a session, make a trade or discover an item to begin this record.';
+    activityTitle.textContent = 'Nothing in this range';
+    activityDetail.textContent = 'Choose a wider record range to revisit earlier activity.';
+    netTitle.textContent = 'No recorded trade value';
+    netDetail.textContent = 'Receipts appear here when the log records a purchase or sale.';
+    return;
+  }
+
+  const latest = rows[0];
+  const latestText = latest.kind === 'session' ? latest.what : prettyItem(latest.what);
+  latestTitle.textContent = latestText;
+  latestDetail.textContent = `${latest.kind} · ${dateOf(latest.at)}${latest.place ? ` · ${latest.place}` : ''}`;
+
+  const sessions = rows.filter(row => row.kind === 'session').length;
+  const trades = rows.filter(row => row.kind === 'sold' || row.kind === 'bought').length;
+  const discoveries = rows.filter(row => row.kind === 'loot').length;
+  const activity = [];
+  if (sessions) activity.push(`${sessions} session${sessions === 1 ? '' : 's'}`);
+  if (trades) activity.push(`${trades} trade record${trades === 1 ? '' : 's'}`);
+  if (discoveries) activity.push(`${discoveries} discover${discoveries === 1 ? 'y' : 'ies'}`);
+  activityTitle.textContent = activity.length ? activity.join(' · ') : `${rows.length} recorded event${rows.length === 1 ? '' : 's'}`;
+  activityDetail.textContent = `${rows.length} event${rows.length === 1 ? '' : 's'} in the selected range.`;
+
+  const valued = rows.filter(row => row.amount != null && Number(row.amount) !== 0);
+  if (!valued.length) {
+    netTitle.textContent = 'No recorded trade value';
+    netDetail.textContent = 'There are no purchases or sales with a recorded amount in this range.';
+    return;
+  }
+
+  const net = valued.reduce((total, row) => total + Number(row.amount), 0);
+  netTitle.textContent = `${net < 0 ? '−' : '+'}${money(Math.abs(net))}`;
+  netDetail.textContent = `Net of ${valued.length} recorded trade ${valued.length === 1 ? 'entry' : 'entries'} in this range.`;
+}
+
 async function loadLogbook() {
   const days = Number($('#logbook-period').value) || 0;
   const rows = await getJson(`/api/logbook?days=${days}`);
+  renderLogbookBrief(rows);
 
   const feed = $('#logbook-feed');
   feed.textContent = '';

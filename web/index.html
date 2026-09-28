@@ -1104,20 +1104,47 @@
 
   <!-- LOGBOOK -->
   <section id="view-logbook" class="view">
-    <div class="section-bar">
-      <h2>Logbook</h2>
+    <div class="section-bar logbook-toolbar">
+      <div>
+        <span class="operations-kicker">Flight</span>
+        <h2>After-action log</h2>
+      </div>
       <div class="controls">
-        <select id="logbook-period" class="select period" title="Filter by date"></select>
+        <label class="logbook-period-picker">
+          <span>Record range</span>
+          <select id="logbook-period" class="select period" title="Filter the logbook by date"></select>
+        </label>
       </div>
     </div>
-    <p class="muted caption">
-      The record itself: the latest things you did in the verse — sessions
-      flown, cargo and gear traded, items first seen — one timeline, newest
-      first. Places fly to the map.
-    </p>
-    <ul class="feed logbook" id="logbook-feed">
-      <li class="empty">Nothing yet.</li>
-    </ul>
+    <div class="logbook-deck" aria-live="polite">
+      <article class="logbook-brief-card logbook-latest-card">
+        <span class="operations-kicker">Latest recorded</span>
+        <h3 id="logbook-latest-title">Loading recent activity…</h3>
+        <p class="muted" id="logbook-latest-detail"></p>
+      </article>
+      <article class="logbook-brief-card">
+        <span class="operations-kicker">Activity</span>
+        <h3 id="logbook-activity-title">Loading activity…</h3>
+        <p class="muted" id="logbook-activity-detail"></p>
+      </article>
+      <article class="logbook-brief-card logbook-net-card">
+        <span class="operations-kicker">Recorded trade net</span>
+        <h3 id="logbook-net-title">Loading receipts…</h3>
+        <p class="muted" id="logbook-net-detail"></p>
+      </article>
+    </div>
+    <section class="logbook-workspace" aria-labelledby="logbook-timeline-title">
+      <div class="logbook-workspace-head">
+        <div>
+          <span class="operations-kicker">Timeline</span>
+          <h3 id="logbook-timeline-title">Recorded activity</h3>
+        </div>
+        <p class="muted">Sessions, trades and first-seen items, newest first. Places open on the map.</p>
+      </div>
+      <ul class="feed logbook" id="logbook-feed">
+        <li class="empty">Nothing yet.</li>
+      </ul>
+    </section>
   </section>
 
   <!-- SESSIONS -->
