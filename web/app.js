@@ -19351,6 +19351,9 @@ function renderSpending(stats) {
     ['Purchases', stats.purchaseCount],
     ['Cargo trades', stats.tradeCount],
   ]);
+  const netTile = $('#spend-summary')?.children[3];
+  if (netTile) netTile.classList.toggle('net-negative', net < 0);
+  if (netTile) netTile.classList.toggle('net-positive', net > 0);
 
   if (stats.tradeShops && stats.tradeShops.length) {
     bars('#trade-chart',
@@ -19365,17 +19368,28 @@ function renderSpending(stats) {
     $('#trade-chart').append(el('p', 'muted', 'No commodity sales recorded yet.'));
   }
 
-  bars('#shops-chart',
-    stats.shops.slice(0, 15).map((s) => ({ label: s.name, value: s.count })),
-    (v) => `${v} buy${v === 1 ? '' : 's'}`);
+  const shopRows = stats.shops.slice(0, 15).map((s) => ({ label: s.name, value: s.count }));
+  const shopFormat = (v) => `${v} buy${v === 1 ? '' : 's'}`;
+  bars('#shops-chart', shopRows.slice(0, 7), shopFormat);
+  const moreShops = $('#shops-more');
+  if (moreShops) {
+    moreShops.hidden = shopRows.length <= 7;
+    $('#shops-more-count').textContent = shopRows.length > 7 ? `${shopRows.length - 7} more` : '';
+    bars('#shops-more-chart', shopRows.slice(7), shopFormat);
+  }
 
-  bars('#items-chart',
-    stats.items.slice(0, 20).map((i) => ({
+  const itemRows = stats.items.slice(0, 20).map((i) => ({
       label: i.name,
       value: Number(i.total),
       note: i.quantity > 1 ? `×${i.quantity}` : null,
-    })),
-    money);
+    }));
+  bars('#items-chart', itemRows.slice(0, 9), money);
+  const moreItems = $('#items-more');
+  if (moreItems) {
+    moreItems.hidden = itemRows.length <= 9;
+    $('#items-more-count').textContent = itemRows.length > 9 ? `${itemRows.length - 9} more` : '';
+    bars('#items-more-chart', itemRows.slice(9), money);
+  }
 }
 
 /* ---------- loadout ---------- */

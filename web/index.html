@@ -1149,26 +1149,62 @@
 
   <!-- SPENDING -->
   <section id="view-spending" class="view">
-    <div class="section-bar">
-      <h2>Economy</h2>
+    <div class="section-bar economy-toolbar">
+      <div>
+        <p class="economy-kicker">Flight ledger</p>
+        <h2>Economy</h2>
+        <p class="economy-status">Income, purchases and cargo movement from your recorded sessions.</p>
+      </div>
       <div class="controls">
         <select id="spending-period" class="select period" title="Filter by date"></select>
       </div>
     </div>
     <div class="summary-strip" id="spend-summary"></div>
 
-    <h2 class="spaced">Cargo sales</h2>
-    <p class="muted caption">
-      The only income the logs record. Commodity trades carry no server
-      confirmation, unlike item purchases, so these are amounts requested at the
-      kiosk rather than settled transactions.
-    </p>
-    <div id="trade-chart" class="bars"></div>
+    <section class="economy-primary">
+      <div class="economy-section-head">
+        <div>
+          <p class="economy-kicker">Income trail</p>
+          <h2>Cargo sales</h2>
+        </div>
+        <span class="economy-section-note">Requested at kiosk</span>
+      </div>
+      <p class="muted caption">
+        The only income the logs record. Commodity trades carry no server
+        confirmation, unlike item purchases, so these are amounts requested at the
+        kiosk rather than settled transactions.
+      </p>
+      <div id="trade-chart" class="bars"></div>
+    </section>
 
-    <h2 class="spaced">Where it went</h2>
-    <div id="shops-chart" class="bars"></div>
-    <h2 class="spaced">Most bought</h2>
-    <div id="items-chart" class="bars"></div>
+    <div class="economy-breakdown">
+      <section class="economy-panel">
+        <div class="economy-section-head">
+          <div>
+            <p class="economy-kicker">Purchase frequency</p>
+            <h2>Where it went</h2>
+          </div>
+        </div>
+        <div id="shops-chart" class="bars"></div>
+        <details class="economy-more" id="shops-more" hidden>
+          <summary>More locations <span id="shops-more-count"></span></summary>
+          <div id="shops-more-chart" class="bars"></div>
+        </details>
+      </section>
+      <section class="economy-panel">
+        <div class="economy-section-head">
+          <div>
+            <p class="economy-kicker">Purchase value</p>
+            <h2>Most bought</h2>
+          </div>
+        </div>
+        <div id="items-chart" class="bars"></div>
+        <details class="economy-more" id="items-more" hidden>
+          <summary>More purchases <span id="items-more-count"></span></summary>
+          <div id="items-more-chart" class="bars"></div>
+        </details>
+      </section>
+    </div>
   </section>
 
   <!-- LEDGER -->

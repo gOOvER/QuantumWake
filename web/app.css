@@ -1640,6 +1640,43 @@ body:has(#view-map.active)::before { opacity: .2; }
 .ship-stats { font-size: 12px; color: var(--muted); font-family: var(--mono); }
 .ship-stats b { color: var(--cyan-hot); }
 
+/* Economy starts with the ledger's answer, then lets each kind of spending
+   keep its own frame. The long tail remains available without making routine
+   purchases look as important as the leading result. */
+.economy-toolbar { align-items: center; }
+.economy-kicker { margin: 0 0 3px; color: var(--cyan); font: 9.5px var(--mono); letter-spacing: .16em; text-transform: uppercase; }
+.economy-status { margin: 5px 0 0; color: var(--muted); font-size: 11px; }
+#view-spending #spend-summary { margin-bottom: 20px; }
+#view-spending #spend-summary .tile.net-negative { border-color: rgba(225, 91, 91, .48); background: linear-gradient(158deg, rgba(69, 24, 28, .46), var(--deep)); }
+#view-spending #spend-summary .tile.net-negative::before { background: var(--red); }
+#view-spending #spend-summary .tile.net-negative .n { color: #ffaaa1; }
+#view-spending #spend-summary .tile.net-positive { border-color: rgba(79, 212, 138, .48); }
+#view-spending #spend-summary .tile.net-positive::before { background: var(--green); }
+#view-spending #spend-summary .tile.net-positive .n { color: #9cf0bd; }
+.economy-primary, .economy-panel {
+  border: 1px solid var(--rule);
+  background: linear-gradient(150deg, rgba(16, 47, 62, .26), rgba(8, 15, 23, .56) 58%);
+  padding: 14px;
+}
+.economy-primary { margin-bottom: 16px; border-left: 3px solid var(--cyan-deep); }
+.economy-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.economy-section-head h2 { margin: 0; }
+.economy-section-note { padding-top: 3px; color: var(--dim); font: 10px var(--mono); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+#view-spending .economy-primary .caption { margin: 7px 0 13px; padding-left: 0; }
+.economy-breakdown { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+#view-spending .economy-panel .bars { margin-top: 12px; }
+#view-spending .bar-row { grid-template-columns: minmax(110px, 185px) 1fr auto; gap: 9px; font-size: 11.5px; }
+#view-spending .bar-track { height: 15px; }
+#view-spending .bar-row .amount { font-size: 10.5px; }
+.economy-more { margin-top: 12px; border-top: 1px solid var(--rule); }
+.economy-more summary { display: flex; justify-content: space-between; gap: 10px; padding: 9px 1px 2px; cursor: pointer; color: var(--cyan); font: 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.economy-more summary span { color: var(--dim); }
+.economy-more[open] summary { padding-bottom: 9px; }
+@media (max-width: 780px) {
+  .economy-breakdown { grid-template-columns: 1fr; }
+  #view-spending .bar-row { grid-template-columns: minmax(100px, 150px) 1fr auto; }
+}
+
 /* Fleet cards read as a compact readiness dossier: an image stage anchors the
    ship, the middle carries evidence from the log, and actions never blend into
    pricing or claim information. Other uses of .ship-card keep their denser
