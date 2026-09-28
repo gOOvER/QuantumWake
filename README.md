@@ -365,7 +365,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.48
+### 0.15.49
+
+- **Make the Fleet useful at a glance.** The roster now leads the page with clearer ship cards, recent-flight signals and a dedicated action row; the historical fleet trace is available when you want it.
 
 - **Put the current situation in one place.** Wake-up location joins location, ship, session, pilot and session health in the configurable Current status card.
 

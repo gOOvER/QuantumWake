@@ -1568,6 +1568,33 @@ body:has(#view-map.active)::before { opacity: .2; }
 .fleet-chart-wrap { margin-bottom: 6px; height: auto; }
 #fleet-chart { width: 100%; height: 220px; display: block; }
 
+/* The roster is the action surface. The historical entitlement trace remains
+   available, but does not take the first screen away from the ships. */
+.fleet-history {
+  margin: 0 0 18px;
+  border: 1px solid var(--rule);
+  background: linear-gradient(90deg, rgba(13, 44, 58, .22), rgba(8, 16, 25, .08));
+}
+.fleet-history summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 13px;
+  cursor: pointer;
+  color: var(--cyan-hot);
+  font: 600 10.5px var(--mono);
+  letter-spacing: .15em;
+  text-transform: uppercase;
+}
+.fleet-history summary::marker { color: var(--cyan); }
+.fleet-history .caption { max-width: 760px; margin: 1px 13px 10px; line-height: 1.55; }
+.fleet-history .fleet-chart-wrap { margin: 0 13px 13px; }
+.fleet-history-hint { color: var(--dim); font-weight: 400; letter-spacing: .06em; }
+.fleet-roster-bar { align-items: center; }
+.fleet-kicker { margin: 0 0 3px; color: var(--cyan); font: 9.5px var(--mono); letter-spacing: .16em; text-transform: uppercase; }
+.fleet-roster-status { margin: 5px 0 0; color: var(--muted); font: 10.5px var(--mono); }
+
 .ship-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
@@ -1612,6 +1639,84 @@ body:has(#view-map.active)::before { opacity: .2; }
 }
 .ship-stats { font-size: 12px; color: var(--muted); font-family: var(--mono); }
 .ship-stats b { color: var(--cyan-hot); }
+
+/* Fleet cards read as a compact readiness dossier: an image stage anchors the
+   ship, the middle carries evidence from the log, and actions never blend into
+   pricing or claim information. Other uses of .ship-card keep their denser
+   document layout. */
+#fleet-ships .fleet-roster-card, #fleet-vehicles .fleet-roster-card {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 11px 12px;
+  min-height: 236px;
+  padding: 12px;
+  overflow: hidden;
+  background:
+    linear-gradient(160deg, rgba(20, 42, 56, .42), rgba(8, 15, 23, .94) 58%),
+    var(--deep);
+}
+#fleet-ships .fleet-roster-card::after, #fleet-vehicles .fleet-roster-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-top: 2px solid rgba(53, 200, 240, .22);
+}
+#fleet-ships .fleet-roster-card.recent::after, #fleet-vehicles .fleet-roster-card.recent::after { border-top-color: rgba(79, 212, 138, .75); }
+#fleet-ships .fleet-roster-card .ship-picture, #fleet-vehicles .fleet-roster-card .ship-picture {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  position: relative;
+  width: 100%;
+  min-height: 93px;
+  display: flex;
+  justify-content: center;
+  padding: 7px 42px 6px;
+  box-sizing: border-box;
+  border-bottom: 1px solid rgba(91, 138, 157, .24);
+  background: radial-gradient(ellipse at 50% 68%, rgba(53, 200, 240, .13), transparent 63%);
+}
+#fleet-ships .fleet-roster-card .ship-render-wrap, #fleet-vehicles .fleet-roster-card .ship-render-wrap { flex: 0 0 152px; width: 152px; height: 83px; }
+#fleet-ships .fleet-roster-card .ship-outline, #fleet-vehicles .fleet-roster-card .ship-outline { width: 144px; height: 77px; }
+#fleet-ships .fleet-roster-card .ship-paint, #fleet-vehicles .fleet-roster-card .ship-paint { position: absolute; right: 4px; bottom: 6px; }
+#fleet-ships .fleet-roster-card .ship-paint-select, #fleet-vehicles .fleet-roster-card .ship-paint-select { position: absolute; right: 4px; bottom: 6px; max-width: 118px; }
+#fleet-ships .fleet-roster-card .ship-logo, #fleet-vehicles .fleet-roster-card .ship-logo {
+  grid-column: 1;
+  grid-row: 2;
+  width: 46px;
+  height: 46px;
+  flex-basis: 46px;
+  margin-top: 4px;
+  padding: 5px;
+  box-sizing: border-box;
+  border: 1px solid var(--rule);
+  background: rgba(4, 11, 18, .58);
+}
+#fleet-ships .fleet-roster-card .ship-body, #fleet-vehicles .fleet-roster-card .ship-body { grid-column: 2; grid-row: 2; min-width: 0; }
+#fleet-ships .fleet-roster-card .ship-name, #fleet-vehicles .fleet-roster-card .ship-name { font-size: 16px; font-weight: 600; }
+#fleet-ships .fleet-roster-card .ship-maker, #fleet-vehicles .fleet-roster-card .ship-maker { margin: 3px 0 5px; }
+#fleet-ships .fleet-roster-card .ship-stats, #fleet-vehicles .fleet-roster-card .ship-stats { font-size: 12px; }
+#fleet-ships .fleet-roster-card .ship-readiness, #fleet-vehicles .fleet-roster-card .ship-readiness {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 8px;
+  padding: 3px 6px;
+  border: 1px solid rgba(111, 142, 157, .42);
+  color: var(--muted);
+  background: rgba(7, 17, 26, .58);
+}
+#fleet-ships .fleet-roster-card .ship-readiness.active, #fleet-vehicles .fleet-roster-card .ship-readiness.active { color: var(--green); border-color: rgba(79, 212, 138, .52); }
+#fleet-ships .fleet-roster-card .ship-status, #fleet-vehicles .fleet-roster-card .ship-status { margin-top: 6px; }
+#fleet-ships .fleet-roster-card .ship-ref, #fleet-vehicles .fleet-roster-card .ship-ref { padding-top: 6px; border-top: 1px solid rgba(91, 138, 157, .18); }
+#fleet-ships .fleet-roster-card .ship-price, #fleet-vehicles .fleet-roster-card .ship-price { margin-top: 6px; }
+#fleet-ships .fleet-roster-card .ship-rental, #fleet-vehicles .fleet-roster-card .ship-rental { line-height: 1.35; }
+#fleet-ships .fleet-roster-card .ship-actions, #fleet-vehicles .fleet-roster-card .ship-actions { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 11px; }
+#fleet-ships .fleet-roster-card .ship-actions .ship-upgrade, #fleet-vehicles .fleet-roster-card .ship-actions .ship-upgrade { margin-top: 0; }
+#fleet-ships .fleet-roster-card .ship-actions .ghost, #fleet-vehicles .fleet-roster-card .ship-actions .ghost { min-height: 26px; }
+#fleet-ships .fleet-roster-card .ship-favourite, #fleet-vehicles .fleet-roster-card .ship-favourite { z-index: 1; right: 31px; }
+#fleet-ships .fleet-roster-card .own-tick, #fleet-vehicles .fleet-roster-card .own-tick { z-index: 1; }
 
 /* ---------- loadout & stash ---------- */
 

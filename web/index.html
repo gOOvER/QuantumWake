@@ -1063,18 +1063,27 @@
   <section id="view-fleet" class="view">
     <div class="summary-strip" id="fleet-summary"></div>
 
-    <h2>Fleet size over time</h2>
-    <p class="muted caption">
-      Owned-vehicle count reported by the game's entitlement query each
-      session — ships <em>and</em> ground vehicles together, which is why it can
-      sit above the ticked roster below. Names are not logged, only the total.
-    </p>
-    <div class="map-wrap fleet-chart-wrap">
-      <svg id="fleet-chart" viewBox="0 0 1000 220" preserveAspectRatio="none"></svg>
-    </div>
+    <details class="fleet-history">
+      <summary>
+        <span>Fleet history</span>
+        <span class="fleet-history-hint">Entitlement count over time</span>
+      </summary>
+      <p class="muted caption">
+        Owned-vehicle count reported by the game's entitlement query each
+        session — ships <em>and</em> ground vehicles together, which is why it can
+        sit above the ticked roster below. Names are not logged, only the total.
+      </p>
+      <div class="map-wrap fleet-chart-wrap">
+        <svg id="fleet-chart" viewBox="0 0 1000 220" preserveAspectRatio="none"></svg>
+      </div>
+    </details>
 
-    <div class="section-bar">
-      <h2 class="spaced">Ships</h2>
+    <div class="section-bar fleet-roster-bar">
+      <div>
+        <p class="fleet-kicker">Operational roster</p>
+        <h2>Ships</h2>
+        <p class="fleet-roster-status" id="fleet-roster-status"></p>
+      </div>
       <div class="controls">
         <input type="search" id="fleet-search" class="search" placeholder="Search ships…"
                autocomplete="off" spellcheck="false">

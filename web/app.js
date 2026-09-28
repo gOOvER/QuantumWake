@@ -19060,6 +19060,16 @@ function renderFleetShips() {
   // unmatched is assumed to fly.
   const vehicles = ships.filter((s) => s.reference && !s.reference.isSpaceship);
   $('#fleet-vehicles-title').hidden = vehicles.length === 0;
+  const shipCount = ships.length - vehicles.length;
+  const recentCount = ships.filter((s) => isRecentlyFlown(s)).length;
+  const rosterStatus = $('#fleet-roster-status');
+  if (rosterStatus) {
+    const shown = filter === 'ground'
+      ? `${vehicles.length} ground vehicle${vehicles.length === 1 ? '' : 's'} shown`
+      : `${shipCount} ship${shipCount === 1 ? '' : 's'} shown`;
+    rosterStatus.textContent = shown
+      + (recentCount ? ` · ${recentCount} active this week` : ' · no flights this week');
+  }
 
   if (!ships.length) {
     grid.append(el('p', 'muted',
@@ -19074,7 +19084,8 @@ function renderFleetShips() {
     const off = excludedShips.has(ship.name);
 
     const maker = makerOf(ship.name);
-    const card = el('article', off ? 'ship-card excluded' : 'ship-card');
+    const card = el('article', off ? 'ship-card fleet-roster-card excluded' : 'ship-card fleet-roster-card');
+    if (isRecentlyFlown(ship)) card.classList.add('recent');
 
     // The Owned tick: untick a rental or a ship since sold and it leaves
     // every total on this page. Remembered per browser.
@@ -19142,7 +19153,7 @@ function renderFleetShips() {
     if (seconds > 0) stat.append(el('span', 'note-inline', ` · ~${duration(seconds)}`));
 
     body.append(stat);
-    body.append(el('div', 'ship-seen', ship.photographedAt
+    body.append(el('div', isRecentlyFlown(ship) ? 'ship-seen ship-readiness active' : 'ship-seen ship-readiness', ship.photographedAt
       ? `fit photographed ${relative(ship.photographedAt)} · no flights logged`
       : `last flown ${relative(ship.lastFlown)}`));
 
@@ -19193,11 +19204,12 @@ function renderFleetShips() {
 
     // Ground vehicles have no ports anyone sells parts for, so the offer is
     // made only where it can be kept.
+    const actions = el('div', 'ship-actions');
     if (!grounded) {
       const garage = el('button', 'ghost ship-upgrade', 'Garage');
       garage.title = `${ship.name}'s numbers, what fits it, and what a part would change`;
       garage.addEventListener('click', () => openGarageFor(ship.className || ship.name));
-      body.append(garage);
+      actions.append(garage);
     }
 
     const compare = el('button', hangarComparison.has(ship.name) ? 'ghost tiny ship-compare active' : 'ghost tiny ship-compare', hangarComparison.has(ship.name) ? 'Selected to compare' : 'Compare');
@@ -19216,7 +19228,8 @@ function renderFleetShips() {
       }
       renderFleetShips();
     });
-    body.append(compare);
+    actions.append(compare);
+    body.append(actions);
 
     card.append(body);
     (grounded ? vehicleGrid : grid).append(card);
