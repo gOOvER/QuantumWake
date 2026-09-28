@@ -4585,12 +4585,26 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 
 #ledger-kinds { flex-wrap: wrap; align-items: baseline; }
 
-/* ---- the screen panel: a reading, and the verdicts beside it ---- */
-.screen-reading { padding: 8px 0; border-top: 1px solid var(--rule); }
-.screen-reading:first-child { border-top: 0; }
+/* ---- the screen panel: newest evidence open, prior captures in a compact timeline ---- */
+.screen-reading {
+  margin-top: 7px;
+  border: 1px solid var(--rule);
+  background: linear-gradient(100deg, rgba(13, 31, 42, .7), rgba(7, 14, 22, .56));
+}
+.screen-reading-latest { margin-top: 10px; padding: 13px 14px; border-left: 3px solid var(--cyan); }
+.screen-reading > summary {
+  padding: 9px 12px;
+  cursor: pointer;
+  color: var(--muted);
+  font: 10.5px/1.45 var(--mono);
+}
+.screen-reading > summary::marker { color: var(--cyan); }
+.screen-reading[open] > summary { border-bottom: 1px solid var(--rule); color: var(--text); }
+.screen-reading-body { padding: 11px 13px 12px; }
+.screen-reading-kicker { margin: 0 0 7px; color: var(--cyan); font: 9.5px var(--mono); letter-spacing: .16em; text-transform: uppercase; }
 /* Still legible - the point of keeping it is that the misreading can be seen -
    but plainly not in force. */
-.screen-reading.dismissed > :not(.screen-dismiss) { opacity: .45; }
+.screen-reading.dismissed > :not(.screen-dismiss), .screen-reading.dismissed .screen-reading-body { opacity: .45; }
 .screen-reading.dismissed .strong { text-decoration: line-through; }
 .screen-actions { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 8px; }
 
@@ -4617,6 +4631,23 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 .log-overview { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(250px, .8fr); gap: 14px; margin: 0 0 16px; }
 .log-card, .log-history { border: 1px solid var(--rule); background: var(--panel); padding: 14px; }
 .log-card > :last-child, .log-history > :last-child { margin-bottom: 0; }
+.log-capture, .pinned-points { padding: 0; }
+.log-capture > summary, .pinned-points > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  color: var(--text);
+  font: 600 10.5px var(--mono);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.log-capture > summary::marker, .pinned-points > summary::marker { color: var(--cyan); }
+.log-capture[open] > summary, .pinned-points[open] > summary { border-bottom: 1px solid var(--rule); }
+.log-card-body { padding: 0 14px 14px; }
+.log-card-body > :first-child { margin-top: 12px; }
 .pinned-points { border-color: var(--cyan-deep); }
 .pinned-location { padding: 9px 0; border-top: 1px solid var(--rule); }
 .pinned-location:first-child { border-top: 0; }

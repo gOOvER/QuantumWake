@@ -891,11 +891,12 @@
 
     <div class="log-pane active" id="log-pane-readings">
     <div class="log-overview">
-      <div class="log-card">
-        <div class="option-head">
-          <h3>Read from the game</h3>
+      <details class="log-card log-capture">
+        <summary>
+          <span>Read from the game</span>
           <span class="muted" id="screen-mode-status"></span>
-        </div>
+        </summary>
+        <div class="log-card-body">
         <p class="muted">Copy a <code>/showlocation</code> result or take a screenshot. Both land below;
           copied coordinates can be kept as a point of interest.</p>
         <div class="option-head">
@@ -927,17 +928,20 @@
           <p class="muted" id="screen-status" aria-live="polite"></p>
           <div id="screen-result"></div>
         </div>
-      </div>
-
-      <aside class="log-card pinned-points" aria-labelledby="pinned-points-title">
-        <div class="option-head">
-          <h3 id="pinned-points-title">Pinned points</h3>
-          <span class="muted" id="screen-pin-count"></span>
         </div>
+      </details>
+
+      <details class="log-card pinned-points" aria-labelledby="pinned-points-title">
+        <summary>
+          <span id="pinned-points-title">Pinned points</span>
+          <span class="muted" id="screen-pin-count"></span>
+        </summary>
+        <div class="log-card-body">
         <p class="muted">A pin preserves the exact copied coordinates when you clear routine readings.
           Notes and the full list live on the <a href="#points">Points page</a>.</p>
         <div id="screen-pins"></div>
-      </aside>
+        </div>
+      </details>
     </div>
 
     <div class="log-history">

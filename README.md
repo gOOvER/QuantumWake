@@ -365,7 +365,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.49
+### 0.15.50
+
+- **Read the evidence without wading through it.** Log keeps the newest capture open, compacts earlier screenshots into an expandable timeline, and folds capture and saved-point controls away until needed.
 
 - **Make the Fleet useful at a glance.** The roster now leads the page with clearer ship cards, recent-flight signals and a dedicated action row; the historical fleet trace is available when you want it.
 

@@ -7192,25 +7192,37 @@ async function renderScreenLog() {
     return;
   }
 
-  let first = true;
+  let latest = true;
 
   for (const entry of entries) {
-    const row = el('div', 'screen-reading');
+    const row = document.createElement(latest ? 'article' : 'details');
+    row.className = latest ? 'screen-reading screen-reading-latest' : 'screen-reading';
+    const body = latest ? row : el('div', 'screen-reading-body');
+
+    if (!latest) {
+      const summary = document.createElement('summary');
+      summary.textContent = entry.paste
+        ? `${new Date(entry.paste.at).toLocaleString()} · copied location · ${entry.paste.gigametres.toFixed(4)} Gm from system centre`
+        : screenReadingTimelineLabel(entry.shot);
+      row.append(summary);
+    } else {
+      body.append(el('div', 'screen-reading-kicker', 'Latest reading'));
+    }
 
     if (entry.paste) {
       const p = entry.paste;
       const repeats = Math.max(1, Number(p.timesSeen) || 1);
       const lastSeen = p.lastSeenAt && repeats > 1
         ? ` · seen ${repeats} times, last ${new Date(p.lastSeenAt).toLocaleString()}` : '';
-      row.append(el('div', 'muted', `${new Date(p.at).toLocaleString()} · pasted${lastSeen}`));
-      row.append(el('div', 'strong', `${p.gigametres.toFixed(4)} Gm from the system centre`));
+      body.append(el('div', 'muted', `${new Date(p.at).toLocaleString()} · pasted${lastSeen}`));
+      body.append(el('div', 'strong', `${p.gigametres.toFixed(4)} Gm from the system centre`));
 
       // The raw numbers are the exact part and the only part.
-      row.append(el('div', 'muted',
+      body.append(el('div', 'muted',
         `x ${Math.round(p.x).toLocaleString()} · y ${Math.round(p.y).toLocaleString()} · z ${Math.round(p.z).toLocaleString()}`));
 
       // Where the logs put you then. The reading itself names nowhere.
-      row.append(el('div', 'muted', p.believed
+      body.append(el('div', 'muted', p.believed
         ? `Your logs had you at ${p.system ? `${p.system} > ` : ''}${p.believed}.`
         : 'Your logs had no session running, so there is nothing to place it against.'));
 
@@ -7221,20 +7233,19 @@ async function renderScreenLog() {
       action.textContent = saved ? 'Pinned as POI' : 'Pin as POI';
       action.disabled = saved;
       if (!saved) action.addEventListener('click', () => pinClipboardLocation(p, action));
-      row.append(action);
+      body.append(action);
     } else {
       const s = entry.shot;
       if (s.dismissed) row.classList.add('dismissed');
-      row.append(el('div', 'muted',
+      body.append(el('div', 'muted',
         `${new Date(s.shotAt).toLocaleString()} · ${SCREEN_KINDS[s.kind] || s.kind} · ${s.shot}${s.dismissed ? ' · invalidated' : ''}`));
-      renderSighting(row, s, { full: first });
-      first = false;
+      renderSighting(body, s, { full: latest });
 
       // Kept in the log either way: the misreading is worth seeing, and the
       // file must not be read a second time. What changes is whether the
       // wallet, the fleet and the fittings believe it.
       if (s.dismissed)
-        row.append(el('div', 'muted', 'Invalidated — kept here, believed by nothing.'));
+        body.append(el('div', 'muted', 'Invalidated — kept here, believed by nothing.'));
 
       const action = document.createElement('button');
       action.type = 'button';
@@ -7257,11 +7268,29 @@ async function renderScreenLog() {
 
       const actions = el('div', 'screen-actions');
       actions.append(action, again);
-      row.append(actions);
+      body.append(actions);
     }
 
+    if (!latest) row.append(body);
     list.append(row);
+    latest = false;
   }
+}
+
+/** A closed timeline entry still says what the reader found before it asks for attention. */
+function screenReadingTimelineLabel(reading) {
+  const kind = SCREEN_KINDS[reading.kind] || reading.kind;
+  let finding = reading.summary || '';
+  if (!finding && reading.contracts)
+    finding = reading.contracts.accepted != null
+      ? `${reading.contracts.accepted} accepted${reading.contracts.capacity != null ? ` of ${reading.contracts.capacity}` : ''}`
+      : `${(reading.contracts.cards || []).length} contracts read`;
+  if (!finding && reading.loadout) finding = reading.loadout.ship || reading.loadout.shipRead || 'loadout read';
+  if (!finding && reading.fleet) finding = `${(reading.fleet.ships || []).length} ships at the Fleet Manager`;
+  if (!finding && reading.map) finding = reading.map.placeRead || reading.map.systemRead || 'place read';
+  if (!finding && reading.wallet?.balance != null) finding = `wallet ${Number(reading.wallet.balance).toLocaleString()} aUEC`;
+  if (!finding) finding = 'nothing this app knows how to read';
+  return `${new Date(reading.shotAt).toLocaleString()} · ${kind} · ${finding}${reading.dismissed ? ' · invalidated' : ''}`;
 }
 
 /** The saved locations are separate from the disposable reading history. */
