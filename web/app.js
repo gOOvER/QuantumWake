@@ -229,6 +229,9 @@ buildPeriodSelects();
 /** The pages where a stale price is a wrong number rather than a fact about a feed. */
 const STALE_MATTERS_ON = new Set(['market', 'commodity', 'garage', 'jobs', 'routes']);
 
+/** A possible wipe needs its full explanation only where a pilot reviews their current history. */
+const PATCH_MATTERS_ON = new Set(['now', 'settings']);
+
 function showView(name) {
   // Assets merged into Fleet; old #assets links and habits still land somewhere.
   if (name === 'assets') name = 'fleet';
@@ -238,6 +241,11 @@ function showView(name) {
   // Everywhere else it is a chip: the fact stays in view, the paragraph and
   // the buttons do not crowd a page that is not about prices.
   $('#stale')?.classList.toggle('compact', !STALE_MATTERS_ON.has(name));
+
+  // A patch decision belongs to the current-status and Settings pages. It
+  // remains actionable everywhere, but other workspaces keep it to one line
+  // so the global notices do not become a second page header.
+  $('#patch')?.classList.toggle('compact', !PATCH_MATTERS_ON.has(name));
 
   const buttons = $$('#tabs button');
 

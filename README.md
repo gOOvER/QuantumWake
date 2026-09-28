@@ -365,13 +365,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.7
+### 0.16.8
 
 - **Choose personal gear by role, then compare the details.** Armoury now opens with a compact equipment board for firearms, protection and field kit. It keeps the number of families, pieces and available price data in view, puts the reading-method explanation away until needed, and turns the five detailed categories into a clearer workspace selector.
 
 - **A cleaner Armoury heading.** Its title now follows the equipment eyebrow directly, without a stray marker beside the wordmark.
 
 - **Kicker-led headings now use one cue.** Flight, Operations, Logbook, Fleet, Economy, Reference, Mining and Help drop the repeated heading marker when their own kicker or workspace icon already establishes the title.
+
+- **Global notices give workspaces more room.** A patch-wipe prompt stays expanded on Now and Settings, where its context matters; elsewhere it becomes a compact, still-actionable status line.
 
 - **Start each operation from one place.** The Operations menu now opens a command deck for supplies, routes, contracts, departure checks, blueprints, and Wikelo trades, with your active shopping and live contract state shown at a glance.
 

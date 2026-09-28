@@ -142,4 +142,23 @@ public class PriceAgeTests
 
         Assert.Equal(compact, page.Truth("__dom.node('#stale').classList.contains('compact')"));
     }
+
+    /// <summary>
+    /// A possible patch wipe still needs its full explanation where someone
+    /// reads their current state or changes the history boundary. Elsewhere it
+    /// remains one-click actionable without becoming a second page header.
+    /// </summary>
+    [Theory]
+    [InlineData("now", false)]
+    [InlineData("settings", false)]
+    [InlineData("routes", true)]
+    [InlineData("fleet", true)]
+    [InlineData("mining", true)]
+    public void The_patch_prompt_is_compact_outside_current_status_and_settings(string view, bool compact)
+    {
+        var page = new Page();
+        page.Do($"window.scrollTo = () => {{}}; showView('{view}');");
+
+        Assert.Equal(compact, page.Truth("__dom.node('#patch').classList.contains('compact')"));
+    }
 }
