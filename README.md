@@ -365,7 +365,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.0
+### 0.16.1
+
+- **Start each operation from one place.** The Operations menu now opens a command deck for supplies, routes, contracts, departure checks, blueprints, and Wikelo trades, with your active shopping and live contract state shown at a glance.
 
 A dashboard redesign. Nothing about how logs are read has changed, so your history, fleet and receipts carry over as they are. Pages have moved, though, so expect a moment of looking for things.
 
