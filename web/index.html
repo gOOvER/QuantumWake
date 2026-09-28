@@ -2627,30 +2627,50 @@
 
   <section id="view-armoury" class="view">
     <div class="section-bar">
-      <h2>Armoury</h2>
+      <div>
+        <div class="armoury-eyebrow">Hangar / personal equipment</div>
+        <h2>Armoury</h2>
+      </div>
       <div class="controls">
         <input type="search" id="armoury-search" class="search" placeholder="Search guns, armour, attachments…"
                autocomplete="off" spellcheck="false">
       </div>
     </div>
-    <p class="muted caption">
-      Which rifle, what armour, where to buy it. Every figure is read from your
-      own game files &mdash; a gun's damage sits on the ammunition its magazine
-      loads, a fire mode's rate on the gun, a piece of armour's resistance on a
-      table its class shares &mdash; and the price is UEX's cheapest terminal
-      for the item, as the Garage prices a part. <b>Nothing here is from your
-      logs</b>: they name what you had attached, never what it does.
-      Rates and damage a second are derived by holding the trigger down, and
-      say so; the game publishes neither. (<code>docs/armoury.md</code>)
-    </p>
+    <div class="armoury-deck" id="armoury-deck">
+      <button class="armoury-deck-card armoury-deck-primary active" id="armoury-open-guns" type="button">
+        <span class="armoury-deck-label">Firearms</span>
+        <strong id="armoury-guns-brief-title">Reading weapons…</strong>
+        <span class="muted" id="armoury-guns-brief-detail">Damage, fire modes and terminal prices</span>
+      </button>
+      <button class="armoury-deck-card" id="armoury-open-armour" type="button">
+        <span class="armoury-deck-label">Protection</span>
+        <strong id="armoury-armour-brief-title">Reading armour…</strong>
+        <span class="muted" id="armoury-armour-brief-detail">Resistance, environment and carry space</span>
+      </button>
+      <button class="armoury-deck-card" id="armoury-open-kit" type="button">
+        <span class="armoury-deck-label">Field kit</span>
+        <strong id="armoury-kit-brief-title">Reading field kit…</strong>
+        <span class="muted" id="armoury-kit-brief-detail">Attachments, grenades and knives</span>
+      </button>
+    </div>
+    <details class="armoury-evidence">
+      <summary>How these figures are read</summary>
+      <p class="muted small">
+        Every figure comes from your game files: a gun's damage sits on the ammunition its magazine loads,
+        a fire mode's rate on the gun, and armour resistance on the table its class shares. UEX provides the
+        cheapest recorded terminal. Your logs name equipped items, but do not say what they do. Rates and
+        damage per second are derived by holding the trigger down, and are labelled as such.
+        (<code>docs/armoury.md</code>)
+      </p>
+    </details>
     <p class="muted" id="armoury-unready" hidden></p>
 
     <nav class="subtabs" id="armoury-tabs" aria-label="Armoury pages">
-      <button type="button" data-pane="guns" class="active">Guns</button>
-      <button type="button" data-pane="armour">Armour</button>
-      <button type="button" data-pane="attachments">Attachments</button>
-      <button type="button" data-pane="grenades">Grenades</button>
-      <button type="button" data-pane="knives">Knives</button>
+      <button type="button" data-pane="guns" class="active"><span>01</span> Firearms</button>
+      <button type="button" data-pane="armour"><span>02</span> Armour</button>
+      <button type="button" data-pane="attachments"><span>03</span> Attachments</button>
+      <button type="button" data-pane="grenades"><span>04</span> Grenades</button>
+      <button type="button" data-pane="knives"><span>05</span> Knives</button>
     </nav>
 
     <div class="armoury-pane active" id="armoury-pane-guns">

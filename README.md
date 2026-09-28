@@ -365,7 +365,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.4
+### 0.16.5
+
+- **Choose personal gear by role, then compare the details.** Armoury now opens with a compact equipment board for firearms, protection and field kit. It keeps the number of families, pieces and available price data in view, puts the reading-method explanation away until needed, and turns the five detailed categories into a clearer workspace selector.
 
 - **Start each operation from one place.** The Operations menu now opens a command deck for supplies, routes, contracts, departure checks, blueprints, and Wikelo trades, with your active shopping and live contract state shown at a glance.
 

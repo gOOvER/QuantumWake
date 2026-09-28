@@ -57,6 +57,27 @@ public class ArmouryPageTests
     }
 
     [Fact]
+    public void The_command_deck_says_what_each_gear_workspace_contains()
+    {
+        var page = KitOpened("guns");
+
+        Assert.Contains("3 weapon families", page.NodeText("#armoury-guns-brief-title"));
+        Assert.Contains("327 finishes read", page.NodeText("#armoury-guns-brief-detail"));
+        Assert.Contains("3 armour sets", page.NodeText("#armoury-armour-brief-title"));
+        Assert.Contains("2,349 pieces read", page.NodeText("#armoury-armour-brief-detail"));
+        Assert.Contains("3 attachments", page.NodeText("#armoury-kit-brief-title"));
+        Assert.Contains("2 grenades · 2 knives", page.NodeText("#armoury-kit-brief-detail"));
+        Assert.True(page.Truth("__dom.node('#armoury-open-guns').classList.contains('active')"));
+
+        page.Do("showArmouryPane('grenades');");
+        Assert.True(page.Truth("__dom.node('#armoury-open-kit').classList.contains('active')"));
+        Assert.False(page.Truth("__dom.node('#armoury-open-guns').classList.contains('active')"));
+
+        page.Do("showArmouryPane('armour');");
+        Assert.True(page.Truth("__dom.node('#armoury-open-armour').classList.contains('active')"));
+    }
+
+    [Fact]
     public void Guns_are_ranked_by_derived_dps_with_every_mode_and_the_price_beside()
     {
         var page = Opened();

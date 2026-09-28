@@ -5721,12 +5721,40 @@ function showArmouryPane(name) {
   }
   for (const button of $('#armoury-tabs')?.querySelectorAll('button') || [])
     button.classList.toggle('active', button.dataset.pane === name);
+  const deck = name === 'guns' ? 'guns' : name === 'armour' ? 'armour' : 'kit';
+  for (const key of ['guns', 'armour', 'kit'])
+    $(`#armoury-open-${key}`)?.classList.toggle('active', key === deck);
 }
 
 $('#armoury-tabs')?.addEventListener('click', (e) => {
   const button = e.target.closest('button[data-pane]');
   if (button) showArmouryPane(button.dataset.pane);
 });
+
+$('#armoury-open-guns')?.addEventListener('click', () => showArmouryPane('guns'));
+$('#armoury-open-armour')?.addEventListener('click', () => showArmouryPane('armour'));
+$('#armoury-open-kit')?.addEventListener('click', () => showArmouryPane('attachments'));
+
+function renderArmouryBrief() {
+  if (!armouryModel?.ready) return;
+  const counts = armouryModel.counts || {};
+  const weapons = armouryModel.weapons || [];
+  const armour = armouryModel.armour || [];
+  const attachments = armouryModel.attachments || [];
+  const throwables = armouryModel.throwables || [];
+  const knives = armouryModel.melee || [];
+  const weaponFamilies = counts.plain ?? weapons.length;
+  const armourSets = counts.sets ?? armour.length;
+  const pricedWeapons = weapons.filter((w) => w.market?.price).length;
+
+  const write = (id, text) => { const node = $(id); if (node) node.textContent = text; };
+  write('#armoury-guns-brief-title', `${fmtInt(weaponFamilies)} weapon ${weaponFamilies === 1 ? 'family' : 'families'}`);
+  write('#armoury-guns-brief-detail', `${fmtInt(counts.weapons ?? weapons.length)} finishes read${armouryModel.itemPricesKnown ? ` · UEX prices ${fmtInt(pricedWeapons)}` : ' · UEX prices unavailable'}`);
+  write('#armoury-armour-brief-title', `${fmtInt(armourSets)} armour ${armourSets === 1 ? 'set' : 'sets'}`);
+  write('#armoury-armour-brief-detail', `${fmtInt(counts.armour ?? armour.length)} pieces read · compare protection and carry space`);
+  write('#armoury-kit-brief-title', `${fmtInt(attachments.length)} attachments`);
+  write('#armoury-kit-brief-detail', `${fmtInt(throwables.length)} grenades · ${fmtInt(knives.length)} knives`);
+}
 
 async function loadArmoury() {
   const unready = $('#armoury-unready');
@@ -5736,7 +5764,7 @@ async function loadArmoury() {
     armouryModel = null;
   }
 
-  const panes = [...ARMOURY_PANES.map((p) => $(`#armoury-pane-${p}`)), $('#armoury-tabs')];
+  const panes = [...ARMOURY_PANES.map((p) => $(`#armoury-pane-${p}`)), $('#armoury-tabs'), $('#armoury-deck')];
   if (!armouryModel?.ready) {
     for (const p of panes) if (p) p.hidden = true;
     if (unready) {
@@ -5774,6 +5802,7 @@ async function loadArmoury() {
     slot.value = slots.includes(keep) ? keep : '';
   }
 
+  renderArmouryBrief();
   showArmouryPane(armouryPane);
   renderArmouryGuns();
   renderArmouryArmour();
