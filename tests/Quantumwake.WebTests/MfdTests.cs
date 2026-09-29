@@ -549,7 +549,7 @@ public class MfdTests
     public void EveryPageIsReachableThroughADeepMenuAndHasAWayBack()
     {
         var e = Engine();
-        Assert.Equal(17, e.Evaluate("QwMfd.pageIds.length").AsNumber());
+        Assert.Equal(18, e.Evaluate("QwMfd.pageIds.length").AsNumber());
         Assert.True(e.Evaluate(
             "QwMfd.pageIds.every(id => QwMfd.trail(id)[0] === 'home'"
             + " && QwMfd.trail(id)[QwMfd.trail(id).length - 1] === id"
@@ -574,7 +574,8 @@ public class MfdTests
         var e = Engine();
         Assert.Equal("flight", e.Evaluate("QwMfd.resolveCommand('menu-1','home')").AsString());
         Assert.Equal("map", e.Evaluate("QwMfd.resolveCommand('menu-2','flight')").AsString());
-        Assert.Equal("here", e.Evaluate("QwMfd.resolveCommand('menu-4','flight')").AsString());
+        Assert.Equal("services", e.Evaluate("QwMfd.resolveCommand('menu-3','flight')").AsString());
+        Assert.Equal("here", e.Evaluate("QwMfd.resolveCommand('menu-5','flight')").AsString());
 
         // Standing on a screen, the row still offers its siblings.
         Assert.Equal("map", e.Evaluate("QwMfd.resolveCommand('menu-2','nav')").AsString());

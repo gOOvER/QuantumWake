@@ -34,6 +34,17 @@ public sealed class SessionStore : IDisposable
 
     private readonly SqliteConnection _connection;
 
+    private long _revision;
+
+    /// <summary>Moves on every write, so a reader can keep an answer until it does.</summary>
+    /// <remarks>
+    /// Reading the store means deserialising every session, and the atlas asks
+    /// for that once per terminal it resolves - a few hundred full reads for one
+    /// map request. A counter is enough to say "nothing changed" because this
+    /// instance is the only writer its library has.
+    /// </remarks>
+    public long Revision => Interlocked.Read(ref _revision);
+
     /// <param name="databasePath">File path, or <c>:memory:</c> for a transient store.</param>
     public SessionStore(string databasePath)
     {
@@ -250,6 +261,7 @@ public sealed class SessionStore : IDisposable
         command.Parameters.AddWithValue("$scanned", DateTimeOffset.UtcNow.ToString("o"));
 
         command.ExecuteNonQuery();
+        Interlocked.Increment(ref _revision);
     }
 
     /// <summary>
@@ -379,6 +391,7 @@ public sealed class SessionStore : IDisposable
         using var command = _connection.CreateCommand();
         command.CommandText = "DELETE FROM sessions";
         command.ExecuteNonQuery();
+        Interlocked.Increment(ref _revision);
     }
 
     public void Dispose() => _connection.Dispose();

@@ -135,7 +135,7 @@ public class PilotBriefingTests
 
         Assert.Equal("clinic", page.Text("mapServiceFilter"));
         Assert.Equal(1, page.Count("__dom.node('#starmap').byClass('map-node').length"));
-        Assert.Contains("✚", page.NodeText("#map-info-services"));
+        Assert.Equal(1, page.Count("__dom.node('#map-info-services').byClass('map-ui-icon').length"));
         Assert.Contains("Clinic", page.NodeText("#map-info-services"));
     }
 

@@ -139,7 +139,8 @@ body::before {
 
 body.overlay::after { display: none; }
 body.overlay .railmark,
-body.overlay .brandmark { display: none; }
+body.overlay .brandmark,
+body.overlay .context-rail { display: none; }
 
 /* ---------- overlay mode ---------- */
 
@@ -275,6 +276,12 @@ body.overlay.density-tiny .tabs button[data-view] { padding: 3px 5px; font-size:
 
 /* The layout editor's tick grids. */
 .layout-group { margin-top: 12px; }
+.overlay-presets { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0 4px; }
+.overlay-presets .ghost { min-width: 88px; }
+.overlay-customize, .mfd-guide { margin-top: 12px; border-top: 1px solid var(--rule); }
+.overlay-customize > summary, .mfd-guide > summary { cursor: pointer; padding: 10px 0; color: var(--muted); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+.overlay-customize[open] > summary, .mfd-guide[open] > summary { color: var(--cyan); }
+.overlay-unavailable { padding: 8px 10px; border-left: 2px solid var(--amber); background: rgba(255,171,61,.06); }
 .layout-label {
   color: var(--dim);
   font-size: 10px;
@@ -340,6 +347,70 @@ body.overlay .feed .d { display: none; }
   box-shadow: 0 1px 0 rgba(53, 200, 240, .18), 0 6px 22px rgba(0, 0, 0, .6);
 }
 
+/* A single selected thing can travel between pages without turning the header
+   into a second dashboard. The rail exists only after an explicit choice. */
+.context-rail {
+  position: sticky;
+  top: 56px;
+  z-index: 9;
+  background: rgba(7, 15, 24, .96);
+  border-bottom: 1px solid rgba(53, 200, 240, .3);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, .24);
+}
+
+.context-rail-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: var(--page);
+  min-height: 38px;
+  padding: 5px 22px;
+  margin: 0 auto;
+}
+
+.context-rail-kicker {
+  flex: 0 0 auto;
+  color: var(--cyan);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+}
+
+.context-rail-copy {
+  display: flex;
+  min-width: 0;
+  gap: 7px;
+  align-items: baseline;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+.context-rail-copy b,
+.context-rail-copy .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-rail-copy .muted { font-size: 11px; }
+.context-rail-inner .tiny { margin-left: auto; }
+
+.context-rail-clear {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.context-rail-clear:hover { color: var(--text); }
+
 .brand { display: flex; align-items: center; gap: 11px; }
 
 /* The wake mark. Same file the browser tab uses, so they cannot drift apart. */
@@ -367,9 +438,9 @@ body.overlay .feed .d { display: none; }
   border-left: 1px solid var(--rule-hot);
 }
 
-/* Grouped since sixteen flat tabs got crowded: seven top-level items, three
-   of them dropdowns. No overflow scrolling here - a scrollable strip would
-   clip the dropdowns; the overlay keeps its own scrolling flat strip. */
+/* Direct views are followed by purpose-based groups. No overflow scrolling
+   here - a scrollable strip would clip the dropdowns; the overlay keeps its
+   own scrolling flat strip. */
 .tabs {
   display: flex;
   gap: 4px;
@@ -428,14 +499,17 @@ body.overlay .feed .d { display: none; }
 }
 .tabs button:hover { color: var(--muted); }
 .tabs button.active { color: var(--cyan-hot); }
+
 .tabs button.active::after { opacity: 1; }
 
-.status { display: flex; align-items: center; gap: 13px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+.status { display: flex; align-items: center; gap: 9px; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+.status #install { max-width: 13ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status .dot { box-shadow: 0 0 9px currentColor; }
 
 /* The grouped tabs still need to fit alongside the live search on a normal
    narrow desktop window.  Letting the top bar determine the document width
    gave the Hangar a horizontal scrollbar even when its scale drawing fitted. */
-@media (max-width: 1200px) {
+@media (max-width: 1320px) {
   .topbar { gap: 10px; padding-inline: 14px; }
   .brand { gap: 7px; }
   .brand .by { display: none; }
@@ -444,6 +518,14 @@ body.overlay .feed .d { display: none; }
   .tabs button { padding-inline: 8px; font-size: 10px; letter-spacing: .1em; }
   .status { gap: 8px; font-size: 10px; }
   .search-box .search { width: 140px; }
+  .context-rail-inner { padding-inline: 14px; }
+}
+
+@media (max-width: 620px) {
+  .context-rail-inner { gap: 8px; }
+  .context-rail-kicker { display: none; }
+  .context-rail-copy { flex: 1; }
+  .context-rail-copy .muted { display: none; }
 }
 
 .dot {
@@ -494,15 +576,61 @@ h2.spaced { margin-top: 32px; }
   align-items: start;
 }
 
-/* The hub starts with one decision. Cards stay below for the pilots who want
-   the context, but a glance should not require sorting a grid first. */
-.now-focus { display: flex; align-items: center; gap: 14px; margin: 0 0 var(--gap); padding: 11px 15px;
-  border: 1px solid var(--cyan-deep); background: linear-gradient(90deg, rgba(24, 98, 122, .18), var(--panel)); }
-.now-focus-mark { color: var(--cyan-hot); font-size: 9px; letter-spacing: .23em; text-transform: uppercase; }
-.now-focus-copy { min-width: 0; flex: 1; }
-.now-focus-title { color: var(--text); font-weight: 600; }
-.now-focus .tiny { flex: 0 0 auto; }
-@media (max-width: 620px) { .now-focus { align-items: flex-start; flex-wrap: wrap; } .now-focus .tiny { margin-left: auto; } }
+/* The hub starts with one decision. It is deliberately a command strip, not
+   another card: current intent is the one thing that should survive a glance. */
+.now-focus {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  min-height: 76px;
+  margin: 0 0 var(--gap);
+  padding: 15px 17px 15px 20px;
+  overflow: hidden;
+  border: 1px solid var(--cyan-deep);
+  border-left: 3px solid var(--cyan);
+  clip-path: var(--chamfer);
+  background:
+    linear-gradient(90deg, rgba(53, 200, 240, .13), rgba(10, 18, 28, .94) 48%, var(--panel));
+  box-shadow: inset 0 0 24px rgba(53, 200, 240, .035), 0 0 18px rgba(13, 92, 120, .12);
+}
+.now-focus::after {
+  content: "";
+  position: absolute;
+  width: 230px;
+  height: 230px;
+  right: -96px;
+  top: -190px;
+  border: 1px solid rgba(127, 228, 255, .14);
+  border-radius: 50%;
+  box-shadow: 0 0 0 24px rgba(127, 228, 255, .025), 0 0 0 48px rgba(127, 228, 255, .018);
+  pointer-events: none;
+}
+.now-focus-mark {
+  position: relative;
+  z-index: 1;
+  color: var(--cyan-hot);
+  font: 700 9px var(--mono);
+  letter-spacing: .23em;
+  text-transform: uppercase;
+}
+.now-focus-copy { position: relative; z-index: 1; min-width: 0; }
+.now-focus-title { color: var(--text); font-size: 18px; font-weight: 650; line-height: 1.1; }
+#now-focus-detail { margin-top: 3px; font-size: 12px; overflow-wrap: anywhere; }
+.now-focus .tiny {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  min-width: 70px;
+  border-color: var(--cyan-deep);
+  color: var(--cyan-hot);
+}
+@media (max-width: 620px) {
+  .now-focus { grid-template-columns: 1fr auto; gap: 8px 12px; align-items: start; }
+  .now-focus-mark { grid-column: 1 / -1; }
+  .now-focus .tiny { align-self: center; }
+}
 
 .card {
   position: relative;
@@ -530,6 +658,55 @@ h2.spaced { margin-top: 32px; }
    row lets the compact status cards fill the first row instead of stretching
    Location into a large empty panel beside it. */
 .card.now-briefing { grid-column: 1 / -1; }
+
+/* The standard card system stays available to every page, while Now uses a
+   denser instrument deck. Location has enough room to name where the pilot is;
+   the neighbouring cards stay deliberately quiet until they are needed. */
+body:not(.overlay) #view-now .now-grid {
+  grid-template-columns: minmax(330px, 1.45fr) minmax(235px, .8fr) minmax(235px, .8fr);
+}
+body:not(.overlay) #view-now .card {
+  min-height: 116px;
+  background: linear-gradient(150deg, rgba(14, 25, 38, .98), var(--deep));
+}
+body:not(.overlay) #view-now .now-status-card {
+  grid-column: 1 / -1;
+  min-height: 166px;
+  padding: 17px 20px;
+  border-color: var(--cyan-deep);
+  background:
+    linear-gradient(135deg, rgba(53, 200, 240, .12), transparent 46%),
+    linear-gradient(150deg, var(--panel-2), var(--deep));
+}
+body:not(.overlay) #view-now .now-status-card::before { width: 68px; }
+body:not(.overlay) #view-now .now-status-card .card-label { margin-bottom: 9px; }
+body:not(.overlay) #view-now .card.now-briefing {
+  border-color: var(--rule-hot);
+  background:
+    linear-gradient(90deg, rgba(53, 200, 240, .075), transparent 42%),
+    linear-gradient(150deg, var(--panel), var(--deep));
+}
+body:not(.overlay) #view-now .card.now-briefing::before { width: 76px; background: var(--amber); box-shadow: 0 0 8px rgba(255, 171, 61, .35); }
+body:not(.overlay) #view-now .card.now-briefing .card-label { color: var(--amber); }
+body:not(.overlay) #view-now .card[data-card="job"],
+body:not(.overlay) #view-now .card[data-card="checklist"],
+body:not(.overlay) #view-now .card[data-card="trip"] { border-left: 2px solid var(--rule-hot); }
+body:not(.overlay) #view-now .card[data-card="feed"] { background: linear-gradient(150deg, rgba(8, 16, 25, .96), var(--deep)); }
+/* The feed is a glanceable timeline. Letting it claim an ultrawide's whole
+   height strands the adjacent status card and delays the next useful panel. */
+body:not(.overlay) #view-now #now-feed { max-height: clamp(240px, 35vh, 420px); }
+
+@media (max-width: 1040px) {
+  body:not(.overlay) #view-now .now-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body:not(.overlay) #view-now .now-status-readings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body:not(.overlay) #view-now .now-status-location { grid-column: 1 / -1; grid-row: auto; }
+}
+@media (max-width: 780px) {
+  body:not(.overlay) #view-now .now-grid { grid-template-columns: 1fr; }
+  body:not(.overlay) #view-now .now-status-readings { grid-template-columns: 1fr; }
+  body:not(.overlay) #view-now .now-status-respawn { grid-column: auto; }
+  body:not(.overlay) #view-now .now-status-card { min-height: 132px; }
+}
 
 .card-label {
   font-size: 9.5px;
@@ -626,6 +803,25 @@ body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
    Now page that had nothing hidden. */
 .now-card-visibility[hidden] { display: none; }
 #now-hidden-card-list { display: flex; flex-wrap: wrap; gap: 5px; }
+.now-status-card { position: relative; }
+.now-status-config { position: absolute; top: 9px; right: 76px; font-size: 13px; }
+.now-status-config:hover { color: var(--cyan-hot); }
+.now-status-readings { display: grid; grid-template-columns: minmax(260px, 1.45fr) repeat(2, minmax(180px, .72fr)); gap: 0 15px; }
+.now-status-field { min-width: 0; padding: 7px 0; border-top: 1px solid rgba(83, 128, 151, .28); }
+.now-status-location { grid-row: span 3; padding: 4px 17px 4px 0; border-top: 0; border-right: 1px solid var(--rule); }
+.now-status-respawn { grid-column: span 2; }
+.now-status-label { color: var(--dim); font-size: 8px; letter-spacing: .17em; text-transform: uppercase; }
+.now-status-field .card-source { margin: 2px 0 5px; min-height: 0; }
+.now-status-field .data-source { font-size: 7.5px; padding: 1px 4px; }
+.now-status-field .value { font-size: 16px; }
+.now-status-field .sub { margin-top: 2px; font-size: 10.5px; }
+.now-status-location .hero-value { font-size: 27px; }
+.now-status-health .note { margin-top: 5px; font-size: 9px; line-height: 1.4; }
+.now-status-options { display: flex; flex-wrap: wrap; gap: 5px 11px; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 10px; }
+.now-status-options[hidden] { display: none; }
+.now-status-options > span { color: var(--dim); font-size: 8.5px; letter-spacing: .15em; text-transform: uppercase; }
+.now-status-options label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+.now-status-options input { accent-color: var(--cyan); }
 .now-ship-summary { display: flex; align-items: center; gap: 10px; }
 .now-ship-logo { flex: 0 0 44px; width: 44px; height: 30px; display: flex; align-items: center; justify-content: center; }
 .now-ship-logo img { max-width: 100%; max-height: 100%; opacity: .9; }
@@ -740,8 +936,22 @@ body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
 
 /* ---------- logbook page ---------- */
 
-/* The full-page timeline: same anatomy as the live feed, sized for reading
-   rather than glancing, and never capped - the page scrolls. */
+.logbook-toolbar { align-items: center; }
+.logbook-period-picker { display: grid; gap: 4px; color: var(--dim); font: 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.logbook-period-picker .select { min-width: 142px; }
+.logbook-deck { display: grid; grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(190px, .82fr)); gap: 10px; margin: 0 0 12px; }
+.logbook-brief-card { display: flex; flex-direction: column; min-width: 0; min-height: 118px; padding: 14px; border: 1px solid var(--rule); border-left: 2px solid var(--cyan-deep); background: linear-gradient(145deg, rgba(13, 35, 50, .78), rgba(6, 16, 25, .52)); }
+.logbook-brief-card h3 { margin: 7px 0 7px; color: var(--text); font-size: 14px; }
+.logbook-brief-card p { margin: 0; font-size: 11px; line-height: 1.45; }
+.logbook-latest-card { border-left-color: var(--green); background: linear-gradient(145deg, rgba(25, 65, 55, .26), rgba(6, 16, 25, .52)); }
+.logbook-net-card { border-left-color: var(--violet); }
+.logbook-workspace { margin: 0; padding: 13px 15px; border: 1px solid var(--rule); border-left: 2px solid var(--cyan-deep); background: rgba(8, 22, 33, .62); }
+.logbook-workspace-head { display: flex; justify-content: space-between; gap: 16px; align-items: start; padding-bottom: 9px; border-bottom: 1px solid rgba(45, 82, 109, .5); }
+.logbook-workspace-head h3 { margin: 3px 0 0; color: var(--text); font-size: 15px; }
+.logbook-workspace-head > .muted { max-width: 440px; margin: 0; text-align: right; font-size: 10.5px; line-height: 1.4; }
+
+/* The full-page timeline is sized for reading rather than glancing and is
+   never capped: the page scrolls, so no part of the pilot's record is hidden. */
 .feed.logbook { max-height: none; overflow: visible; }
 .feed.logbook li { padding: 8px 4px 8px 10px; gap: 12px; align-items: baseline; }
 .feed.logbook .t { font-size: 11px; flex: 0 0 178px; white-space: nowrap; }
@@ -756,6 +966,18 @@ body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
 .feed .k.payout { color: var(--green); border-color: #1f5c3d; }
 .feed .k.bought { color: var(--amber); border-color: #6d4715; }
 .feed .k.loot { color: var(--violet); border-color: #4a3670; }
+
+@media (max-width: 900px) { .logbook-deck { grid-template-columns: repeat(2, minmax(0, 1fr)); } .logbook-latest-card { grid-column: 1 / -1; } }
+@media (max-width: 620px) { .logbook-toolbar, .logbook-workspace-head { align-items: stretch; flex-direction: column; } .logbook-period-picker { justify-items: start; } .logbook-workspace-head > .muted { text-align: left; } .logbook-deck { grid-template-columns: 1fr; } .logbook-latest-card { grid-column: auto; } }
+
+@media (max-width: 760px) {
+  .feed.logbook li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 8px; align-items: start; padding: 10px 2px 10px 9px; }
+  .feed.logbook .t { grid-column: 1 / -1; flex: none; font-size: 10px; }
+  .feed.logbook .k { grid-column: 1; grid-row: 2; }
+  .feed.logbook .what { grid-column: 2; grid-row: 2; font-size: 12px; }
+  .feed.logbook .detail, .feed.logbook .d:not(.what) { grid-column: 2; }
+  .feed.logbook .amt { grid-column: 3; grid-row: 2; margin-left: 0; align-self: start; }
+}
 
 /* ---------- bars ---------- */
 
@@ -1143,6 +1365,26 @@ button.primary:disabled { opacity: .55; cursor: default; }
 .table-wrap { overflow-x: auto; border: 1px solid var(--rule); background: var(--deep); }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 
+/* Each data workspace speaks with the same small status line while its own
+   table or cards are loading, empty, or unavailable. */
+.workspace-state {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  box-sizing: border-box;
+  margin: 10px 0;
+  padding: 7px 10px;
+  border-left: 2px solid var(--cyan-deep);
+  background: rgba(13, 35, 50, .34);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.workspace-state[data-state="loading"] { color: var(--cyan); }
+.workspace-state[data-state="empty"] { border-left-color: var(--dim); color: var(--dim); }
+.workspace-state[data-state="offline"] { border-left-color: var(--amber); color: var(--amber); background: rgba(94, 57, 18, .16); }
+.workspace-state[hidden] { display: none; }
+
 thead th {
   text-align: left;
   padding: 10px 15px;
@@ -1156,13 +1398,36 @@ thead th {
   border-bottom: 1px solid var(--rule-hot);
 }
 tbody td { padding: 9px 15px; border-top: 1px solid rgba(23, 41, 60, .55); white-space: nowrap; }
+tbody tr:nth-child(even) { background: rgba(14, 30, 44, .26); }
 tbody tr:hover { background: rgba(53, 200, 240, .05); }
 tbody td:first-child { color: var(--cyan); font-family: var(--mono); font-size: 12px; }
 .num, td.num { text-align: right; font-family: var(--mono); font-size: 12px; }
 td.inward { color: var(--green); }
 td.outward { color: var(--amber); }
 
+/* Contract issuer and market commodity are the row's anchors. Giving them a
+   little more contrast leaves the supporting classifications easy to scan. */
+#contracts-table td:nth-child(2), #market-table td:first-child { color: var(--text); font-family: inherit; font-weight: 600; }
+#contracts-table td:nth-child(3), #contracts-table td:nth-child(4), #contracts-table td:nth-child(5),
+#market-table td:nth-child(2) { color: var(--dim); font-size: 11px; }
+#contracts-table tbody tr:hover, #market-table tbody tr:hover { background: rgba(53, 200, 240, .09); }
+
 .session-row { cursor: pointer; }
+.sessions-toolbar { align-items: center; }
+.sessions-period-picker { display: grid; gap: 4px; color: var(--dim); font: 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.sessions-period-picker .select { min-width: 142px; }
+.sessions-deck { display: grid; grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(190px, .82fr)); gap: 10px; margin: 0 0 12px; }
+.sessions-brief-card { display: flex; flex-direction: column; min-width: 0; min-height: 118px; padding: 14px; border: 1px solid var(--rule); border-left: 2px solid var(--cyan-deep); background: linear-gradient(145deg, rgba(13, 35, 50, .78), rgba(6, 16, 25, .52)); }
+.sessions-brief-card h3 { margin: 7px 0 7px; color: var(--text); font-size: 14px; }
+.sessions-brief-card p { margin: 0; font-size: 11px; line-height: 1.45; }
+.sessions-brief-card .ghost { align-self: flex-start; margin-top: auto; padding-top: 12px; }
+.sessions-latest-card { border-left-color: var(--green); background: linear-gradient(145deg, rgba(25, 65, 55, .26), rgba(6, 16, 25, .52)); }
+.sessions-health-card { border-left-color: var(--violet); }
+.sessions-workspace { margin: 0; padding: 13px 15px; border: 1px solid var(--rule); border-left: 2px solid var(--cyan-deep); background: rgba(8, 22, 33, .62); }
+.sessions-workspace-head { display: flex; justify-content: space-between; gap: 16px; align-items: start; padding-bottom: 9px; border-bottom: 1px solid rgba(45, 82, 109, .5); }
+.sessions-workspace-head h3 { margin: 3px 0 0; color: var(--text); font-size: 15px; }
+.sessions-period-summary { max-width: 58ch; color: var(--muted); font: 10.5px/1.4 var(--mono); text-align: right; }
+.sessions-workspace .caption { margin: 10px 0 12px; line-height: 1.5; }
 .session-row:focus-visible { outline: 1px solid var(--cyan); outline-offset: -2px; }
 .session-row.open { background: rgba(53, 200, 240, .08); }
 .session-row-toggle { display: inline-block; width: 16px; color: var(--cyan-hot); font-size: 16px; }
@@ -1192,7 +1457,8 @@ td.outward { color: var(--amber); }
 .session-debrief-note { margin: 13px 0 0; font-size: 10px; }
 .session-debrief-loading { padding: 18px; }
 @media (max-width: 1300px) { .session-debrief-grid { grid-template-columns: repeat(2, minmax(220px, 1fr)); } }
-@media (max-width: 760px) { .session-debrief-grid { grid-template-columns: 1fr; } .session-debrief-head { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 900px) { .sessions-deck { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sessions-latest-card { grid-column: 1 / -1; } }
+@media (max-width: 760px) { .session-debrief-grid { grid-template-columns: 1fr; } .session-debrief-head, .sessions-toolbar, .sessions-workspace-head { align-items: flex-start; flex-direction: column; } .sessions-period-summary { text-align: left; } .sessions-deck { grid-template-columns: 1fr; } .sessions-latest-card { grid-column: auto; } }
 
 /* ---------- map ---------- */
 
@@ -1386,12 +1652,103 @@ td.outward { color: var(--amber); }
 .map-mark { transition: opacity .15s; }
 
 
+/* Map controls use a quieter surface so the plotted information leads. */
+body:has(#view-map.active)::before { opacity: .2; }
+#view-map { --map-accent: #91c9d6; --map-rule: #283747; }
+#view-map .map-tools { display: block; border: 1px solid var(--map-rule); border-radius: 8px; background: #0c141e; gap: 0; }
+.map-toolbar-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+.map-toolbar-row + .map-toolbar-row { border-top: 1px solid #202e3c; }
+.map-primary-tools .map-search-box { flex: 1 1 260px; }
+#view-map #map-search { width: 100%; min-width: 0; box-sizing: border-box; }
+#view-map .map-tools :is(.select, .ghost, input[type="search"]) { min-height: 32px; border-radius: 4px; border-color: var(--map-rule); background-color: #111d29; font-size: 11px; letter-spacing: .025em; }
+#view-map .map-tools .ghost { box-shadow: none; }
+#view-map .map-tools .ghost::before, #view-map .map-tools .ghost::after { display: none; }
+#view-map .map-player.located { border-color: #527d8b; color: #b2e1eb; background: #172c37; }
+.map-tool-label { color: #8b9caf; font: 10px var(--mono); letter-spacing: .07em; text-transform: uppercase; }
+.map-focus-label { margin-left: 10px; }
+#view-map :is(.map-service-filter, .map-focus-filter) { border-color: var(--map-rule); border-radius: 4px; overflow: hidden; }
+#view-map :is(.map-service-filter, .map-focus-filter) button { min-height: 30px; padding: 5px 10px; display: inline-flex; align-items: center; gap: 6px; border-color: var(--map-rule); color: #99aaba; letter-spacing: .02em; }
+#view-map :is(.map-service-filter, .map-focus-filter) button.active { background: #213541; color: #c3e3ea; }
+#view-map .map-tools :is(button, summary, select, input):focus-visible { outline: 2px solid var(--map-accent); outline-offset: 3px; }
+.map-ui-icon { display: inline-block; width: 15px; height: 15px; flex: 0 0 15px; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; }
+#view-map #map-amenity { max-width: 270px; }
+.map-action-tools { padding-top: 7px; padding-bottom: 7px; }
+#view-map #map-count { font: 10px var(--mono); color: #91a3b6; }
+.map-view-options { position: relative; }
+.map-view-options summary { padding: 8px 5px; color: #afc0d0; font-size: 11px; cursor: pointer; }
+.map-options-panel { position: absolute; z-index: 15; left: 0; top: calc(100% + 10px); width: 250px; max-width: calc(100vw - 70px); box-sizing: border-box; display: grid; gap: 12px; padding: 16px; border: 1px solid #354b5e; border-radius: 6px; background: #101c28; box-shadow: 0 12px 30px #0008; }
+#view-map .map-options-panel .toggle { font-size: 11px; letter-spacing: .03em; text-transform: none; color: #afc0d0; }
+#view-map .map-wrap { border-color: var(--map-rule); border-radius: 8px; background: radial-gradient(ellipse at 45% 35%, #142130 0%, #0a121c 65%, #080f18 100%); }
+#view-map .map-wrap::before { background: radial-gradient(circle, #9eafc11c 1px, transparent 1px); background-size: 36px 36px; }
+#view-map .map-orbit { stroke: #8b9fb51c; stroke-dasharray: none; }
+#view-map .map-body { fill-opacity: .035; stroke: #819ab52e; }
+#view-map .map-body.lit { fill-opacity: .09; stroke: #8cbed177; }
+#view-map .map-label { fill: #a7b9ca; letter-spacing: .025em; }
+#view-map #map-search::placeholder { color: #8b9caf; }
+#view-map .map-here .here-label { fill: var(--cyan); }
+#view-map .map-node.hl .map-label { fill: #a9f5c9; }
+#view-map .map-sys-label { fill: #90a6bb; letter-spacing: .25em; }
+#view-map .map-hint { opacity: 1; color: #8599ad; background: #0a121ce8; border: 1px solid #283747; border-radius: 4px; padding: 6px 9px; max-width: calc(100% - 40px); line-height: 1.5; text-transform: none; letter-spacing: .015em; }
+#view-map .map-service-badge circle { fill: #101c28; stroke: #6e899e; }
+#view-map .map-service-badge .service-glyph { fill: none; stroke: #b5c8d8; stroke-width: 1.8; }
+#map-legend { gap: 12px 20px; padding: 12px 4px; margin-top: 0; color: #9eafbf; font-size: 10px; text-transform: none; letter-spacing: .015em; }
+#map-legend .swatch-mark { width: 14px; height: 14px; }
+#map-legend .map-history-key { color: #8b9caf; }
+@media (max-width: 760px) {
+  .map-primary-tools .map-search-box { flex-basis: 100%; order: -1; }
+  #view-map .map-primary-tools .map-player { margin-left: auto; }
+  #view-map #map-amenity { flex: 1 1 150px; max-width: 100%; min-width: 0; }
+  .map-focus-label { margin-left: 0; }
+  #view-map #map-count { flex-basis: 100%; order: 2; }
+  #view-map .map-wrap { height: 65vh; }
+  #view-map .map-toolbar-row { gap: 6px; padding: 8px; }
+  #view-map .map-primary-tools > .select { flex: 1 1 calc(50% - 4px); min-width: 0; }
+  #view-map .map-primary-tools .map-player { flex: 1 1 100%; margin-left: 0; }
+  #view-map :is(.map-service-filter, .map-focus-filter) { max-width: 100%; overflow-x: auto; }
+  #view-map :is(.map-service-filter, .map-focus-filter) button { flex: 0 0 auto; padding-inline: 8px; }
+  #view-map #map-closest { flex: 1 1 auto; }
+  #view-map .map-action-tools .spacer { display: none; }
+  #view-map .map-action-tools > .ghost { flex: 1 1 auto; }
+  body.entity-open .view { padding-right: 0; }
+  .entity-drawer, body:has(#view-map.active) .entity-drawer.map-place-open { top: auto; right: 10px; bottom: 10px; left: 10px; width: auto; max-height: min(48vh, 430px); }
+  .cargo-panel { top: auto; right: 8px; bottom: 8px; left: 8px; width: auto; max-height: min(52vh, 460px); }
+  .map-info-plan { grid-template-columns: 1fr; }
+  .map-plan-primary { justify-self: start; }
+}
+
 /* ---------- fleet ---------- */
 
 /* Height override: this borrows .map-wrap for the frame styling, but the
    chart is 220px of content and must not inherit the map's 76vh box. */
 .fleet-chart-wrap { margin-bottom: 6px; height: auto; }
 #fleet-chart { width: 100%; height: 220px; display: block; }
+
+/* The roster is the action surface. The historical entitlement trace remains
+   available, but does not take the first screen away from the ships. */
+.fleet-history {
+  margin: 0 0 18px;
+  border: 1px solid var(--rule);
+  background: linear-gradient(90deg, rgba(13, 44, 58, .22), rgba(8, 16, 25, .08));
+}
+.fleet-history summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 13px;
+  cursor: pointer;
+  color: var(--cyan-hot);
+  font: 600 10.5px var(--mono);
+  letter-spacing: .15em;
+  text-transform: uppercase;
+}
+.fleet-history summary::marker { color: var(--cyan); }
+.fleet-history .caption { max-width: 760px; margin: 1px 13px 10px; line-height: 1.55; }
+.fleet-history .fleet-chart-wrap { margin: 0 13px 13px; }
+.fleet-history-hint { color: var(--dim); font-weight: 400; letter-spacing: .06em; }
+.fleet-roster-bar { align-items: center; }
+.fleet-kicker { margin: 0 0 3px; color: var(--cyan); font: 9.5px var(--mono); letter-spacing: .16em; text-transform: uppercase; }
+.fleet-roster-status { margin: 5px 0 0; color: var(--muted); font: 10.5px var(--mono); }
 
 .ship-grid {
   display: grid;
@@ -1437,6 +1794,121 @@ td.outward { color: var(--amber); }
 }
 .ship-stats { font-size: 12px; color: var(--muted); font-family: var(--mono); }
 .ship-stats b { color: var(--cyan-hot); }
+
+/* Economy starts with the ledger's answer, then lets each kind of spending
+   keep its own frame. The long tail remains available without making routine
+   purchases look as important as the leading result. */
+.economy-toolbar { align-items: center; }
+.economy-kicker { margin: 0 0 3px; color: var(--cyan); font: 9.5px var(--mono); letter-spacing: .16em; text-transform: uppercase; }
+.economy-status { margin: 5px 0 0; color: var(--muted); font-size: 11px; }
+#view-spending #spend-summary { margin-bottom: 20px; }
+#view-spending #spend-summary .tile.net-negative { border-color: rgba(225, 91, 91, .48); background: linear-gradient(158deg, rgba(69, 24, 28, .46), var(--deep)); }
+#view-spending #spend-summary .tile.net-negative::before { background: var(--red); }
+#view-spending #spend-summary .tile.net-negative .n { color: #ffaaa1; }
+#view-spending #spend-summary .tile.net-positive { border-color: rgba(79, 212, 138, .48); }
+#view-spending #spend-summary .tile.net-positive::before { background: var(--green); }
+#view-spending #spend-summary .tile.net-positive .n { color: #9cf0bd; }
+.economy-primary, .economy-panel {
+  border: 1px solid var(--rule);
+  background: linear-gradient(150deg, rgba(16, 47, 62, .26), rgba(8, 15, 23, .56) 58%);
+  padding: 14px;
+}
+.economy-primary { margin-bottom: 16px; border-left: 3px solid var(--cyan-deep); }
+.economy-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.economy-section-head h2 { margin: 0; }
+.economy-section-note { padding-top: 3px; color: var(--dim); font: 10px var(--mono); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+#view-spending .economy-primary .caption { margin: 7px 0 13px; padding-left: 0; }
+.economy-breakdown { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+#view-spending .economy-panel .bars { margin-top: 12px; }
+#view-spending .bar-row { grid-template-columns: minmax(110px, 185px) 1fr auto; gap: 9px; font-size: 11.5px; }
+#view-spending .bar-track { height: 15px; }
+#view-spending .bar-row .amount { font-size: 10.5px; }
+.economy-more { margin-top: 12px; border-top: 1px solid var(--rule); }
+.economy-more summary { display: flex; justify-content: space-between; gap: 10px; padding: 9px 1px 2px; cursor: pointer; color: var(--cyan); font: 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.economy-more summary span { color: var(--dim); }
+.economy-more[open] summary { padding-bottom: 9px; }
+@media (max-width: 780px) {
+  .economy-breakdown { grid-template-columns: 1fr; }
+  #view-spending .bar-row { grid-template-columns: minmax(100px, 150px) 1fr auto; }
+}
+
+/* Fleet cards read as a compact readiness dossier: an image stage anchors the
+   ship, the middle carries evidence from the log, and actions never blend into
+   pricing or claim information. Other uses of .ship-card keep their denser
+   document layout. */
+#fleet-ships .fleet-roster-card, #fleet-vehicles .fleet-roster-card {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 11px 12px;
+  min-height: 236px;
+  padding: 12px;
+  overflow: hidden;
+  background:
+    linear-gradient(160deg, rgba(20, 42, 56, .42), rgba(8, 15, 23, .94) 58%),
+    var(--deep);
+}
+#fleet-ships .fleet-roster-card::after, #fleet-vehicles .fleet-roster-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-top: 2px solid rgba(53, 200, 240, .22);
+}
+#fleet-ships .fleet-roster-card.recent::after, #fleet-vehicles .fleet-roster-card.recent::after { border-top-color: rgba(79, 212, 138, .75); }
+#fleet-ships .fleet-roster-card .ship-picture, #fleet-vehicles .fleet-roster-card .ship-picture {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  position: relative;
+  width: 100%;
+  min-height: 93px;
+  display: flex;
+  justify-content: center;
+  padding: 7px 42px 6px;
+  box-sizing: border-box;
+  border-bottom: 1px solid rgba(91, 138, 157, .24);
+  background: radial-gradient(ellipse at 50% 68%, rgba(53, 200, 240, .13), transparent 63%);
+}
+#fleet-ships .fleet-roster-card .ship-render-wrap, #fleet-vehicles .fleet-roster-card .ship-render-wrap { flex: 0 0 152px; width: 152px; height: 83px; }
+#fleet-ships .fleet-roster-card .ship-outline, #fleet-vehicles .fleet-roster-card .ship-outline { width: 144px; height: 77px; }
+#fleet-ships .fleet-roster-card .ship-paint, #fleet-vehicles .fleet-roster-card .ship-paint { position: absolute; right: 4px; bottom: 6px; }
+#fleet-ships .fleet-roster-card .ship-paint-select, #fleet-vehicles .fleet-roster-card .ship-paint-select { position: absolute; right: 4px; bottom: 6px; max-width: 118px; }
+#fleet-ships .fleet-roster-card .ship-logo, #fleet-vehicles .fleet-roster-card .ship-logo {
+  grid-column: 1;
+  grid-row: 2;
+  width: 46px;
+  height: 46px;
+  flex-basis: 46px;
+  margin-top: 4px;
+  padding: 5px;
+  box-sizing: border-box;
+  border: 1px solid var(--rule);
+  background: rgba(4, 11, 18, .58);
+}
+#fleet-ships .fleet-roster-card .ship-body, #fleet-vehicles .fleet-roster-card .ship-body { grid-column: 2; grid-row: 2; min-width: 0; }
+#fleet-ships .fleet-roster-card .ship-name, #fleet-vehicles .fleet-roster-card .ship-name { font-size: 16px; font-weight: 600; }
+#fleet-ships .fleet-roster-card .ship-maker, #fleet-vehicles .fleet-roster-card .ship-maker { margin: 3px 0 5px; }
+#fleet-ships .fleet-roster-card .ship-stats, #fleet-vehicles .fleet-roster-card .ship-stats { font-size: 12px; }
+#fleet-ships .fleet-roster-card .ship-readiness, #fleet-vehicles .fleet-roster-card .ship-readiness {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 8px;
+  padding: 3px 6px;
+  border: 1px solid rgba(111, 142, 157, .42);
+  color: var(--muted);
+  background: rgba(7, 17, 26, .58);
+}
+#fleet-ships .fleet-roster-card .ship-readiness.active, #fleet-vehicles .fleet-roster-card .ship-readiness.active { color: var(--green); border-color: rgba(79, 212, 138, .52); }
+#fleet-ships .fleet-roster-card .ship-status, #fleet-vehicles .fleet-roster-card .ship-status { margin-top: 6px; }
+#fleet-ships .fleet-roster-card .ship-ref, #fleet-vehicles .fleet-roster-card .ship-ref { padding-top: 6px; border-top: 1px solid rgba(91, 138, 157, .18); }
+#fleet-ships .fleet-roster-card .ship-price, #fleet-vehicles .fleet-roster-card .ship-price { margin-top: 6px; }
+#fleet-ships .fleet-roster-card .ship-rental, #fleet-vehicles .fleet-roster-card .ship-rental { line-height: 1.35; }
+#fleet-ships .fleet-roster-card .ship-actions, #fleet-vehicles .fleet-roster-card .ship-actions { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 11px; }
+#fleet-ships .fleet-roster-card .ship-actions .ship-upgrade, #fleet-vehicles .fleet-roster-card .ship-actions .ship-upgrade { margin-top: 0; }
+#fleet-ships .fleet-roster-card .ship-actions .ghost, #fleet-vehicles .fleet-roster-card .ship-actions .ghost { min-height: 26px; }
+#fleet-ships .fleet-roster-card .ship-favourite, #fleet-vehicles .fleet-roster-card .ship-favourite { z-index: 1; right: 31px; }
+#fleet-ships .fleet-roster-card .own-tick, #fleet-vehicles .fleet-roster-card .own-tick { z-index: 1; }
 
 /* ---------- loadout & stash ---------- */
 
@@ -1519,7 +1991,77 @@ body.overlay .scan-file { display: none; }
 }
 .section-bar h2 { margin: 0; }
 .section-bar h2.spaced { margin-top: 32px; }
-.controls { display: flex; gap: 8px; align-items: center; }
+.section-bar:not(.mining-title) {
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--cyan-deep);
+  background: linear-gradient(90deg, rgba(16, 57, 73, .24), rgba(10, 18, 28, .15) 42%, transparent);
+}
+.section-bar h2::before {
+  content: "";
+  display: inline-block;
+  width: 7px; height: 7px;
+  margin: 0 9px 1px 0;
+  border: 1px solid var(--cyan);
+  transform: rotate(45deg);
+  box-shadow: 0 0 8px rgba(53, 200, 240, .55);
+}
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* Reference is a lookup surface. The controls and result state need to read as
+   one instrument, while the longer explanation stays nearby without taking the
+   first screen away from the search. */
+.reference-toolbar-bar.section-bar { align-items: stretch; gap: 0; padding: 0; border-left-width: 1px; }
+.reference-title { flex: 1 1 260px; min-width: 0; padding: 11px 14px; }
+.reference-title h2 { margin: 2px 0 0; }
+.reference-kicker { display: block; color: var(--cyan); font: 9px var(--mono); letter-spacing: .17em; text-transform: uppercase; }
+.reference-toolbar { flex: 1 1 360px; justify-content: flex-end; align-content: center; padding: 10px 12px; border-left: 1px solid var(--rule); background: rgba(3, 13, 22, .42); }
+.reference-toolbar .search { min-width: min(250px, 100%); }
+.reference-note { margin: -4px 0 12px; border-bottom: 1px solid var(--rule); color: var(--dim); font-size: 11px; }
+.reference-note summary { padding: 7px 2px; color: var(--muted); font: 10px var(--mono); letter-spacing: .09em; text-transform: uppercase; cursor: pointer; }
+.reference-note summary::marker { color: var(--cyan); }
+.reference-note p { max-width: 82ch; margin: 0 0 10px; line-height: 1.55; }
+.reference-note .caption { padding: 0; }
+.reference-results { margin-top: 2px; }
+.reference-results-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 0 1px 7px; color: var(--text); font: 10px var(--mono); letter-spacing: .13em; text-transform: uppercase; }
+.reference-results-head .muted { font-size: 10px; letter-spacing: .06em; text-align: right; text-transform: none; }
+.reference-table-wrap { border-color: var(--rule-hot); box-shadow: 0 10px 24px rgba(0, 0, 0, .15), inset 0 1px 0 rgba(53, 200, 240, .06); }
+#ships-table { min-width: 1260px; }
+#parts-table { min-width: 930px; }
+#ships-table th:first-child, #ships-table td:first-child,
+#parts-table th:first-child, #parts-table td:first-child { position: sticky; left: 0; z-index: 1; border-right: 1px solid var(--rule); }
+#ships-table th:first-child, #parts-table th:first-child { z-index: 2; background: var(--panel-2); }
+#ships-table tbody tr:nth-child(odd) td:first-child,
+#parts-table tbody tr:nth-child(odd) td:first-child { background: var(--deep); }
+#ships-table tbody tr:nth-child(even) td:first-child,
+#parts-table tbody tr:nth-child(even) td:first-child { background: #0d1c2b; }
+#ships-table tbody tr:hover td:first-child,
+#parts-table tbody tr:hover td:first-child { background: #102738; }
+#ships-table th:nth-child(n+9), #ships-table td:nth-child(n+9) { background-image: linear-gradient(90deg, rgba(53, 200, 240, .025), transparent); }
+#ships-table td:nth-child(11), #parts-table td:nth-child(7) { color: var(--cyan-hot); }
+@media (max-width: 720px) {
+  .reference-toolbar { justify-content: stretch; border-top: 1px solid var(--rule); border-left: 0; }
+  .reference-toolbar .search, .reference-toolbar .select { flex: 1 1 170px; min-width: 0; }
+  .reference-results-head { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .reference-results-head .muted { text-align: left; }
+}
+
+/* A result that is empty still needs to say which part of the page answered.
+   These common classes cover feeds, searches and data panels without making a
+   missing signal look like an error. */
+.empty, .detail-empty, .search-empty, .cargo-empty, .loadout-empty-slot {
+  position: relative;
+  padding: 10px 12px 10px 25px;
+  border: 1px dashed var(--rule-hot);
+  border-left: 2px solid var(--cyan-deep);
+  background: rgba(10, 22, 33, .38);
+}
+.empty::before, .detail-empty::before, .search-empty::before, .cargo-empty::before, .loadout-empty-slot::before {
+  content: "◇";
+  position: absolute;
+  left: 9px;
+  color: var(--cyan);
+}
 .route-heading { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .route-header-status { display: flex; align-items: center; gap: 6px; color: var(--muted); font: 10px var(--mono); }
 .route-readiness { padding: 3px 6px; border: 1px solid var(--rule); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
@@ -1887,6 +2429,68 @@ body.overlay .foot { display: none; }
 }
 .option-block p { margin: 0 0 6px; font-size: 12.5px; line-height: 1.65; max-width: 72ch; }
 .option-block code { font-family: var(--mono); color: var(--muted); }
+
+/* Settings is a control room, not a long undifferentiated form. The first
+   choices are useful together, while the wipe boundary stays visibly separate
+   because it changes what every total means. */
+#view-settings { max-width: 1140px; }
+.settings-workspace-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0 0 16px;
+  padding: 0 12px 13px;
+  border-bottom: 1px solid var(--rule);
+}
+.settings-eyebrow { display: block; margin-bottom: 4px; color: var(--cyan); font: 10px var(--mono); letter-spacing: .16em; }
+.settings-workspace-head h2 { padding-left: 0; }
+.settings-workspace-head h2::before { display: none; }
+.settings-workspace-head p { max-width: 52ch; margin: 0; font-size: 12px; line-height: 1.55; text-align: right; }
+.settings-start-grid { display: grid; grid-template-columns: minmax(0, 1.18fr) minmax(290px, .82fr); gap: 12px; margin: 0 0 16px; }
+.settings-start-grid .option-block { max-width: none; min-height: 100%; margin: 0; }
+.settings-quick-card { position: relative; overflow: hidden; }
+.settings-quick-card::before { content: ""; position: absolute; inset: 0 0 auto; height: 2px; background: var(--cyan-deep); }
+.settings-share-card { background: linear-gradient(135deg, rgba(13, 45, 61, .84), var(--deep) 60%); }
+.settings-update-card { background: linear-gradient(135deg, rgba(32, 39, 49, .78), var(--deep) 65%); }
+.settings-update-card::before { background: var(--amber); }
+.settings-wipe-card { max-width: none; border-left: 3px solid var(--amber); background: linear-gradient(115deg, rgba(104, 68, 20, .11), var(--deep) 58%); }
+.settings-wipe-card .wipe-scope { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 20px; }
+.settings-group {
+  display: block;
+  max-width: 1140px;
+  margin: 0 0 10px;
+  border: 1px solid var(--rule);
+  background: linear-gradient(105deg, rgba(10, 28, 40, .65), rgba(6, 16, 25, .54));
+  clip-path: var(--chamfer);
+}
+.settings-group > summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 10px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+.settings-group > summary::-webkit-details-marker { display: none; }
+.settings-group > summary::after { content: "+"; color: var(--cyan); font: 20px/1 var(--mono); }
+.settings-group[open] > summary { border-bottom: 1px solid var(--rule); background: rgba(53, 200, 240, .055); }
+.settings-group[open] > summary::after { content: "−"; }
+.settings-group-index { color: var(--cyan); font: 10px var(--mono); letter-spacing: .12em; }
+.settings-group-copy { display: grid; gap: 2px; }
+.settings-group-copy strong { color: var(--text); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; }
+.settings-group-copy span { color: var(--dim); font-size: 11.5px; }
+.settings-group-content { padding: 12px 0 0; }
+.settings-group-content .option-block { margin-inline: 0; }
+@media (max-width: 760px) {
+  .settings-workspace-head { display: block; padding-inline: 0; }
+  .settings-workspace-head p { margin-top: 7px; text-align: left; }
+  .settings-start-grid { grid-template-columns: minmax(0, 1fr); }
+  .settings-wipe-card .wipe-scope { grid-template-columns: minmax(0, 1fr); }
+  .settings-group > summary { grid-template-columns: auto minmax(0, 1fr) auto; gap: 9px; padding-inline: 10px; }
+}
 
 /* The toggle reads as a state, not just a verb. */
 #overlay-toggle.on { color: var(--green); border-color: var(--green); }
@@ -2641,6 +3245,34 @@ td.with-track .track:focus-visible { opacity: 1; }
 
 /* ---------- jobs ---------- */
 
+/* Operations has six capable tools. The deck names the action before the
+   implementation, so an empty shopping list is still a useful first screen. */
+.operations-toolbar { align-items: center; }
+.operations-kicker { display: block; color: var(--cyan); font: 9px var(--mono); letter-spacing: .17em; text-transform: uppercase; }
+.operations-toolbar h2 { margin-top: 3px; }
+.operations-deck { margin: 0 0 18px; padding: 14px; border: 1px solid var(--rule-hot); background: linear-gradient(145deg, rgba(12, 49, 65, .22), rgba(5, 12, 20, .48) 48%, rgba(5, 12, 20, .22)); box-shadow: inset 0 1px 0 rgba(53, 200, 240, .08), 0 12px 28px rgba(0, 0, 0, .13); }
+.operations-deck-head { display: flex; justify-content: space-between; gap: 18px; align-items: end; padding: 1px 2px 12px; border-bottom: 1px solid var(--rule); }
+.operations-deck-head h3, .operations-workspace-head h3 { margin: 3px 0 0; font-size: 15px; }
+.operations-deck-head p { max-width: 53ch; margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.45; text-align: right; }
+.operations-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.operation-card { position: relative; display: grid; grid-template-columns: 33px minmax(0, 1fr); gap: 0 10px; min-height: 118px; padding: 12px; border: 1px solid var(--rule); border-left: 3px solid var(--cyan-deep); background: linear-gradient(140deg, rgba(12, 39, 53, .6), rgba(5, 12, 20, .34)); color: var(--text); text-align: left; text-decoration: none; font: inherit; cursor: pointer; transition: border-color .14s ease, transform .14s ease, background .14s ease; }
+.operation-card::after { content: ''; position: absolute; right: 10px; bottom: 10px; width: 18px; height: 1px; background: var(--rule-hot); transition: width .14s ease, background .14s ease; }
+.operation-card:hover, .operation-card:focus-visible { border-color: var(--cyan); background: linear-gradient(140deg, rgba(18, 69, 88, .72), rgba(5, 12, 20, .44)); transform: translateY(-1px); outline: none; }
+.operation-card:hover::after, .operation-card:focus-visible::after { width: 34px; background: var(--cyan); }
+.operation-card-primary { border-left-color: var(--cyan); background: linear-gradient(140deg, rgba(17, 75, 94, .64), rgba(6, 17, 27, .5)); }
+.operation-icon { display: flex; align-items: center; justify-content: center; width: 27px; height: 27px; border: 1px solid var(--cyan-deep); background: rgba(53, 200, 240, .08); color: var(--cyan-hot); font: 16px/1 var(--mono); clip-path: var(--chamfer); }
+.operation-card-main { display: grid; align-content: start; gap: 4px; min-width: 0; }
+.operation-card-main b { color: var(--text); font-size: 13px; }
+.operation-card-main span { color: var(--muted); font-size: 11px; line-height: 1.42; }
+.operation-status { grid-column: 1 / -1; align-self: end; margin-top: 10px; padding-top: 7px; border-top: 1px solid rgba(53, 200, 240, .12); color: var(--dim); font: 9.5px var(--mono); letter-spacing: .06em; }
+.operation-status[data-state="active"] { color: var(--green); }
+.operations-workspace { margin-top: 14px; border: 1px solid var(--rule); border-left: 3px solid var(--cyan-deep); background: linear-gradient(150deg, rgba(9, 27, 39, .32), rgba(5, 12, 20, .18)); padding: 12px 14px 14px; }
+.operations-live-workspace { border-left-color: var(--green); }
+.operations-workspace-head { display: flex; justify-content: space-between; gap: 16px; align-items: end; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--rule); }
+.operations-workspace-head > .muted { max-width: 56ch; font-size: 11px; line-height: 1.42; text-align: right; }
+@media (max-width: 980px) { .operations-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .operations-deck-head, .operations-workspace-head { align-items: start; flex-direction: column; gap: 7px; } .operations-deck-head p, .operations-workspace-head > .muted { text-align: left; } .operations-grid { grid-template-columns: 1fr; } .operation-card { min-height: 102px; } }
+
 /* The pinned job on Now, and so in the overlay: title, bar, what is missing. */
 .now-job-title { font-size: 15px; color: var(--cyan-hot, #7fe4ff); margin-bottom: 2px; }
 
@@ -2793,6 +3425,21 @@ body.overlay .checklist-attachments, body.overlay .checklist-due { display: none
 }
 .job-form input:focus, .job-form textarea:focus { border-color: var(--cyan); }
 .job-form-actions { display: flex; gap: 8px; }
+
+@media (max-width: 620px) {
+  .job-card { padding: 11px; }
+  .job-head { flex-wrap: wrap; align-items: center; gap: 7px; }
+  .job-head > b { flex: 1 1 15ch; }
+  .job-head .spacer { display: none; }
+  .job-place-edit { order: 3; flex: 1 1 100%; max-width: none; }
+  .job-items { table-layout: fixed; }
+  .job-items td { padding: 4px; overflow-wrap: anywhere; }
+  .job-items .job-mark { width: 16px; }
+  .job-items td:nth-child(2) { width: 33%; }
+  .job-items td:nth-child(3) { width: 14%; white-space: normal; }
+  .job-items td:nth-child(4) { width: 31%; }
+  .job-items td:nth-child(5) { width: 18%; white-space: normal; }
+}
 
 /* ---------- optional UEX feeds ---------- */
 
@@ -3092,6 +3739,33 @@ body.entity-open .view { padding-right: 296px; }
 .entity-place-extra { margin-top: 7px; }
 .entity-place-extra[hidden] { display: none; }
 .entity-actions { display: flex; flex-wrap: wrap; gap: 5px; border-top: 1px solid var(--rule); padding-top: 9px; margin-top: 9px; }
+
+/* A map place is a decision point. Its route and services belong in one short
+   operational readout; the generic drawer actions would repeat that same
+   route action below it. */
+body:has(#view-map.active) .entity-drawer.map-place-open { width: 304px; }
+body:has(#view-map.active) .entity-drawer.map-place-open .entity-actions { display: none; }
+.map-place-ops { border-top: 1px solid var(--rule); padding-top: 9px; }
+.map-place-ops-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--cyan); font: 9px var(--mono); letter-spacing: .14em; text-transform: uppercase; }
+.map-place-plan-state { flex: 0 0 auto; padding: 2px 5px; border: 1px solid rgba(79, 212, 138, .42); color: #9cf0bd; font-size: 8px; letter-spacing: .08em; }
+.map-place-service-copy, .map-support-copy { color: var(--dim); font-size: 10px; line-height: 1.4; }
+.map-place-service-copy { margin-top: 5px; }
+.map-info-services { margin-top: 7px; }
+.map-info-support { margin-top: 8px; padding: 7px 8px; border: 1px solid rgba(83, 128, 151, .35); background: rgba(14, 29, 41, .52); }
+.map-support-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.map-info-plan { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 9px; margin-top: 9px; padding: 8px; border-left: 2px solid var(--cyan-deep); background: rgba(19, 48, 61, .3); }
+.map-plan-copy { min-width: 0; color: var(--muted); font-size: 10.5px; line-height: 1.4; overflow-wrap: anywhere; }
+.map-plan-copy b { color: var(--text); }
+.map-plan-primary { border: 1px solid #3a8196; background: #173747; color: #caeef7; font: 600 9.5px var(--mono); letter-spacing: .04em; padding: 6px 7px; cursor: pointer; white-space: nowrap; }
+.map-plan-primary:hover { border-color: var(--cyan-hot); background: #1e4758; }
+.map-plan-primary:disabled { opacity: .65; cursor: wait; }
+.map-place-detail { margin-top: 8px; border-top: 1px solid rgba(83, 128, 151, .32); }
+.map-place-detail summary { padding: 8px 1px 1px; color: var(--dim); cursor: pointer; font: 9px var(--mono); letter-spacing: .11em; text-transform: uppercase; }
+.map-place-detail[open] summary { color: var(--cyan); padding-bottom: 5px; }
+.map-place-detail :is(.map-info-amenities, .map-info-sold, .map-info-lore) { margin-top: 6px; }
+.map-place-notes-detail .map-info-notes { border-top: 0; margin-top: 2px; padding-top: 2px; }
+.map-info-data { color: var(--dim); font-size: 10px; line-height: 1.45; }
+.map-data-label { display: block; color: var(--cyan); font: 8.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 
 .map-info {
   position: absolute;
@@ -3528,10 +4202,21 @@ button.ghost.tiny.wide { width: 100%; padding: 5px; margin: 2px 0 6px; }
 .briefing-actions { display: flex; justify-content: flex-end; gap: 5px; flex-wrap: wrap; padding-right: 58px; }
 .briefing-why { color: var(--cyan); font-size: 10px; margin-top: 4px; }
 .briefing-actions .select { min-width: 0; font-size: 10px; padding: 3px 5px; }
-.briefing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 9px; }
-.briefing-section { min-width: 0; border: 1px solid var(--rule); background: rgba(53, 200, 240, .025); padding: 8px 9px; }
+.briefing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 9px;
+  align-items: start;
+}
+.briefing-section { align-self: start; min-width: 0; border: 1px solid var(--rule); background: rgba(53, 200, 240, .025); padding: 8px 9px; }
 .briefing-label { color: var(--dim); font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; margin-bottom: 5px; }
 .briefing-list { display: flex; flex-direction: column; gap: 3px; }
+.briefing-section#briefing-stash-section .briefing-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 12px;
+}
+.briefing-section#briefing-stash-section .briefing-row:nth-child(-n + 2) { border-top: 0; padding-top: 0; }
 .briefing-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid rgba(83, 128, 151, .28); padding-top: 5px; min-width: 0; }
 .briefing-row:first-child { border-top: 0; padding-top: 0; }
 .briefing-main { min-width: 0; overflow-wrap: anywhere; }
@@ -3577,11 +4262,20 @@ button.briefing-service:hover { border-color: var(--cyan); color: var(--cyan-hot
 .map-note-form .ghost { justify-self: start; }
 
 body.overlay .now-card-actions, body.overlay .now-card-visibility { display: none; }
+body.overlay .now-status-card { grid-column: span 2; }
+body.overlay .now-status-config, body.overlay .now-status-options { display: none; }
+body.overlay .now-status-readings { grid-template-columns: 1.25fr 1fr; gap: 0 8px; }
+body.overlay .now-status-location { grid-column: 1 / -1; grid-row: auto; padding: 0 0 4px; border-right: 0; }
+body.overlay .now-status-field { padding: 4px 0; }
+body.overlay .now-status-label { font-size: 7px; }
+body.overlay .now-status-field .value { font-size: 12px; }
 body.overlay .briefing-head { margin-bottom: 6px; }
 body.overlay .briefing-title { font-size: 13px; }
 body.overlay .briefing-sub, body.overlay .briefing-detail { font-size: 9px; }
 body.overlay .briefing-grid { grid-template-columns: 1fr 1fr; gap: 5px; }
 body.overlay .briefing-section { padding: 5px 6px; }
+body.overlay .briefing-section#briefing-stash-section .briefing-list { grid-template-columns: 1fr; }
+body.overlay .briefing-section#briefing-stash-section .briefing-row:nth-child(2) { border-top: 1px solid rgba(83, 128, 151, .28); padding-top: 5px; }
 body.overlay .briefing-actions { padding-right: 0; }
 body.overlay .briefing-services { gap: 3px; }
 body.overlay .briefing-service { font-size: 8px; padding: 2px 4px; }
@@ -3720,6 +4414,56 @@ th.sortable.sort-asc::after { content: " ▴"; color: var(--cyan); }
 .ship-plan-option .data-sources { grid-column: 1 / -1; margin-top: 2px; }
 .ship-plan-limit { margin: 10px 0 0; max-width: 90ch; font-size: 10.5px; line-height: 1.45; }
 @media (max-width: 640px) { .ship-plan-head { align-items: stretch; flex-direction: column; } .ship-plan-picker { min-width: 0; } }
+
+/* Routes are a decision point between a ship, a current plan and the price
+   feed. Keeping those three answers together makes the page useful even when
+   the selected hull cannot carry cargo, instead of ending at an empty table. */
+.flight-toolbar { align-items: center; }
+.flight-toolbar-actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.flight-deck { display: grid; grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(220px, .75fr)); gap: 10px; margin: 0 0 12px; align-items: stretch; }
+.flight-ship-card { margin: 0; box-shadow: inset 2px 0 0 var(--cyan-deep); }
+.flight-deck-card { display: flex; flex-direction: column; min-width: 0; padding: 14px; border: 1px solid var(--rule); border-left: 2px solid var(--cyan-deep); background: linear-gradient(145deg, rgba(13, 35, 50, .78), rgba(6, 16, 25, .52)); }
+.flight-deck-card h3 { margin: 7px 0 7px; color: var(--text); font-size: 14px; }
+.flight-deck-card p { margin: 0; line-height: 1.45; font-size: 11px; }
+.flight-deck-card .ghost { align-self: flex-start; margin-top: auto; padding-top: 12px; }
+.flight-active-plan { border-left-color: var(--green); background: linear-gradient(145deg, rgba(25, 65, 55, .26), rgba(6, 16, 25, .52)); }
+.flight-active-plan[data-state="waiting"] { border-left-color: var(--amber); background: linear-gradient(145deg, rgba(76, 56, 22, .25), rgba(6, 16, 25, .52)); }
+.flight-support-card { border-left-color: var(--violet); }
+
+.route-run-controls, .route-results-workspace { margin: 0 0 12px; padding: 13px 15px; border: 1px solid var(--rule); background: rgba(8, 22, 33, .62); }
+.route-run-controls { border-top: 2px solid var(--cyan-deep); }
+.route-run-controls-head, .route-results-head { display: flex; justify-content: space-between; gap: 16px; align-items: start; }
+.route-run-controls h3, .route-results-workspace h3 { margin: 3px 0 0; color: var(--text); font-size: 15px; }
+.route-run-controls-head > .muted, .route-results-head > .muted { max-width: 440px; margin: 0; text-align: right; font-size: 10.5px; line-height: 1.4; }
+.route-run-primary { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 12px; }
+.route-run-primary .search { width: 178px; }
+.route-advanced-controls { margin-top: 11px; border-top: 1px solid rgba(45, 82, 109, .55); }
+.route-advanced-controls summary { display: flex; gap: 8px; padding: 9px 0 2px; color: var(--cyan); cursor: pointer; font: 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.route-advanced-controls summary span { color: var(--dim); letter-spacing: 0; text-transform: none; }
+.route-advanced-controls .controls { padding: 10px 0 2px; }
+.route-results-workspace { border-left: 2px solid var(--cyan-deep); }
+.route-results-head { padding-bottom: 9px; border-bottom: 1px solid rgba(45, 82, 109, .5); }
+.route-results-workspace .caption { max-width: 112ch; margin: 10px 0 12px; line-height: 1.5; }
+
+@media (max-width: 1180px) {
+  .flight-deck { grid-template-columns: minmax(0, 1fr) minmax(220px, .72fr); }
+  .flight-ship-card { grid-column: 1 / -1; }
+}
+@media (max-width: 720px) {
+  .flight-toolbar, .route-run-controls-head, .route-results-head { align-items: stretch; flex-direction: column; }
+  .flight-toolbar-actions { justify-content: flex-start; }
+  .flight-deck { grid-template-columns: 1fr; }
+  .route-run-controls-head > .muted, .route-results-head > .muted { text-align: left; }
+  .route-run-primary .search { width: min(100%, 240px); }
+  .route-advanced-controls summary { align-items: flex-start; flex-direction: column; gap: 2px; }
+  #routes-table { min-width: 1080px; }
+  #contracts-table { min-width: 780px; }
+  #market-table { min-width: 860px; }
+  #routes-table th:first-child, #routes-table td:first-child,
+  #contracts-table th:first-child, #contracts-table td:first-child,
+  #market-table th:first-child, #market-table td:first-child { position: sticky; left: 0; z-index: 1; background: var(--deep); box-shadow: 1px 0 0 var(--rule); }
+  #routes-table thead th:first-child, #contracts-table thead th:first-child, #market-table thead th:first-child { background: var(--panel-2); }
+}
 
 .advice { list-style: none; margin: 6px 0 0; padding: 0; }
 .advice li {
@@ -4253,12 +4997,26 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 
 #ledger-kinds { flex-wrap: wrap; align-items: baseline; }
 
-/* ---- the screen panel: a reading, and the verdicts beside it ---- */
-.screen-reading { padding: 8px 0; border-top: 1px solid var(--rule); }
-.screen-reading:first-child { border-top: 0; }
+/* ---- the screen panel: newest evidence open, prior captures in a compact timeline ---- */
+.screen-reading {
+  margin-top: 7px;
+  border: 1px solid var(--rule);
+  background: linear-gradient(100deg, rgba(13, 31, 42, .7), rgba(7, 14, 22, .56));
+}
+.screen-reading-latest { margin-top: 10px; padding: 13px 14px; border-left: 3px solid var(--cyan); }
+.screen-reading > summary {
+  padding: 9px 12px;
+  cursor: pointer;
+  color: var(--muted);
+  font: 10.5px/1.45 var(--mono);
+}
+.screen-reading > summary::marker { color: var(--cyan); }
+.screen-reading[open] > summary { border-bottom: 1px solid var(--rule); color: var(--text); }
+.screen-reading-body { padding: 11px 13px 12px; }
+.screen-reading-kicker { margin: 0 0 7px; color: var(--cyan); font: 9.5px var(--mono); letter-spacing: .16em; text-transform: uppercase; }
 /* Still legible - the point of keeping it is that the misreading can be seen -
    but plainly not in force. */
-.screen-reading.dismissed > :not(.screen-dismiss) { opacity: .45; }
+.screen-reading.dismissed > :not(.screen-dismiss), .screen-reading.dismissed .screen-reading-body { opacity: .45; }
 .screen-reading.dismissed .strong { text-decoration: line-through; }
 .screen-actions { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 8px; }
 
@@ -4285,6 +5043,23 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 .log-overview { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(250px, .8fr); gap: 14px; margin: 0 0 16px; }
 .log-card, .log-history { border: 1px solid var(--rule); background: var(--panel); padding: 14px; }
 .log-card > :last-child, .log-history > :last-child { margin-bottom: 0; }
+.log-capture, .pinned-points { padding: 0; }
+.log-capture > summary, .pinned-points > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  color: var(--text);
+  font: 600 10.5px var(--mono);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.log-capture > summary::marker, .pinned-points > summary::marker { color: var(--cyan); }
+.log-capture[open] > summary, .pinned-points[open] > summary { border-bottom: 1px solid var(--rule); }
+.log-card-body { padding: 0 14px 14px; }
+.log-card-body > :first-child { margin-top: 12px; }
 .pinned-points { border-color: var(--cyan-deep); }
 .pinned-location { padding: 9px 0; border-top: 1px solid var(--rule); }
 .pinned-location:first-child { border-top: 0; }
@@ -4548,9 +5323,22 @@ body.overlay .ship-picture { display: none; }
 
 /* ---------- garage ---------- */
 
-.garage-head { margin: 4px 0 14px; }
-.garage-title { font-family: var(--display); font-size: 24px; letter-spacing: .02em; color: var(--text); }
-.garage-head .small { font-size: 11.5px; margin-top: 2px; }
+/* Choosing a hull used to read as two unexplained dropdowns followed by a
+   methods page. The console names each source and leaves the reference detail
+   close by without putting it between the pilot and their ship. */
+#view-garage > .garage-toolbar { align-items: end; padding: 10px 12px; border-color: var(--rule-hot); background: linear-gradient(90deg, rgba(53, 200, 240, .08), rgba(4, 10, 17, .35) 48%, transparent); }
+#view-garage > .garage-toolbar h2 { margin-bottom: 3px; }
+.garage-pickers { gap: 8px; }
+.garage-picker { display: grid; gap: 3px; min-width: min(100%, 230px); color: var(--dim); font: 8.5px var(--mono); letter-spacing: .13em; text-transform: uppercase; }
+.garage-picker .select { min-width: 230px; }
+.garage-guide { margin: 7px 0; color: var(--muted); font-size: 11px; }
+.garage-guide summary { width: max-content; max-width: 100%; cursor: pointer; color: var(--dim); font: 9.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.garage-guide summary:hover { color: var(--cyan-hot); }
+.garage-guide .caption { max-width: 76ch; margin: 8px 0 0; line-height: 1.55; }
+.garage-head { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 18px; margin: 10px 0 14px; padding: 14px 16px; overflow: hidden; border: 1px solid var(--cyan-deep); background: linear-gradient(110deg, rgba(53, 200, 240, .13), rgba(11, 24, 36, .9) 42%, rgba(4, 10, 17, .8)); clip-path: var(--chamfer); }
+.garage-head::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--cyan-hot); box-shadow: 0 0 14px var(--cyan); }
+.garage-title { align-self: center; font-family: var(--display); font-size: 29px; letter-spacing: .02em; color: var(--text); }
+.garage-head .small { grid-column: 1 / -1; font-size: 10px; margin-top: 1px; }
 .garage-head #garage-sub { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .garage-subline { min-width: 0; }
 .garage-duty {
@@ -4580,7 +5368,8 @@ body.overlay .ship-picture { display: none; }
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  margin: 8px 0 10px;
+  justify-content: flex-end;
+  margin: 0;
 }
 
 .garage-duty-legend .legend-label {
@@ -4592,6 +5381,13 @@ body.overlay .ship-picture { display: none; }
 }
 
 .garage-duty-legend .garage-duty { cursor: help; }
+@media (max-width: 780px) {
+  #view-garage > .garage-toolbar { align-items: stretch; }
+  .garage-pickers { width: 100%; }
+  .garage-picker, .garage-picker .select { min-width: 0; width: 100%; }
+  .garage-head { grid-template-columns: 1fr; gap: 6px; }
+  .garage-duty-legend { justify-content: flex-start; }
+}
 
 /* The fitted layout is an instrument panel, not a fictional cutaway. The
    game data gives us the real component ports but not their 3D coordinates,
@@ -5219,9 +6015,53 @@ body.overlay .ship-picture { display: none; }
 .ship-card.unflown .ship-name::after { content: " · never flown"; font-size: 10px; color: var(--muted); font-weight: 400; }
 
 /* ---------- armoury ---------- */
+.armoury-eyebrow { margin-bottom: 3px; color: var(--cyan); font: 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+/* The shared section-heading tick belongs to a lone heading. These titles
+   already have a kicker or a workspace icon, so a second marker only repeats
+   the same cue and reads as a stray diamond beside the title. */
+#view-armoury > .section-bar h2,
+.flight-toolbar h2,
+.operations-toolbar h2,
+.logbook-toolbar h2,
+.sessions-toolbar h2,
+.fleet-roster-bar h2,
+.economy-toolbar h2,
+.economy-section-head h2,
+.reference-title h2,
+.mining-title h2,
+.help-head h2 { padding-left: 0; }
+#view-armoury > .section-bar h2::before,
+.flight-toolbar h2::before,
+.operations-toolbar h2::before,
+.logbook-toolbar h2::before,
+.sessions-toolbar h2::before,
+.fleet-roster-bar h2::before,
+.economy-toolbar h2::before,
+.economy-section-head h2::before,
+.reference-title h2::before,
+.mining-title h2::before,
+.help-head h2::before { display: none; }
+.armoury-deck { display: grid; grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(190px, .82fr)); gap: 10px; margin: 0 0 10px; }
+.armoury-deck-card { position: relative; display: flex; flex-direction: column; align-items: flex-start; min-width: 0; min-height: 92px; padding: 13px 15px; border: 1px solid var(--rule); border-left: 3px solid var(--cyan-deep); background: linear-gradient(145deg, rgba(13, 35, 50, .72), rgba(6, 16, 25, .55)); color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: border-color .15s ease, background .15s ease, transform .15s ease; }
+.armoury-deck-card:hover { border-color: var(--cyan-deep); background: linear-gradient(145deg, rgba(19, 71, 91, .72), rgba(6, 16, 25, .55)); transform: translateY(-1px); }
+.armoury-deck-card.active { border-color: var(--cyan); box-shadow: inset 0 0 20px rgba(53, 200, 240, .1), 0 0 14px rgba(53, 200, 240, .06); }
+.armoury-deck-card.active::after { content: ''; position: absolute; right: 12px; top: 12px; width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 9px rgba(53, 200, 240, .75); }
+.armoury-deck-label { color: var(--cyan); font: 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.armoury-deck-card strong { margin: 7px 0 4px; font-size: 15px; line-height: 1.2; }
+.armoury-deck-card .muted { font-size: 11px; line-height: 1.35; }
+.armoury-evidence { margin: 0 0 12px; padding: 7px 10px; border: 1px solid var(--rule); background: rgba(11, 31, 43, .36); }
+.armoury-evidence summary { color: var(--muted); font-size: 11px; cursor: pointer; }
+.armoury-evidence[open] summary { color: var(--cyan); }
+.armoury-evidence p { margin: 8px 0 1px; max-width: 950px; line-height: 1.5; }
 .armoury-pane { display: none; }
 .armoury-pane.active { display: block; }
-.armoury-pane[hidden], #armoury-tabs[hidden] { display: none; }
+.armoury-pane[hidden], #armoury-tabs[hidden], #armoury-deck[hidden] { display: none; }
+#armoury-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin: 0 0 12px; padding: 4px; border: 1px solid var(--rule); background: rgba(7, 20, 30, .58); }
+#armoury-tabs button { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; margin: 0; padding: 6px 8px; border: 1px solid transparent; border-bottom: 1px solid transparent; color: var(--muted); }
+#armoury-tabs button > span { color: var(--dim); font: 10px var(--mono); }
+#armoury-tabs button:hover { border-color: var(--rule-hot); background: rgba(30, 73, 91, .22); }
+#armoury-tabs button.active { border-color: var(--cyan-deep); border-bottom-color: var(--cyan); background: rgba(26, 91, 116, .26); color: var(--cyan-hot); }
+#armoury-tabs button.active > span { color: var(--cyan); }
 .armoury-filters { flex-wrap: wrap; margin: 0 0 8px; }
 #armoury-guns tbody tr, #armoury-armour tbody tr { cursor: pointer; }
 #armoury-guns tbody tr.open, #armoury-armour tbody tr.open { background: rgba(53, 200, 240, .09); }
@@ -5259,6 +6099,8 @@ td.armoury-cost { color: var(--amber); }
 .armoury-finish.clickable { cursor: pointer; }
 .armoury-finish.clickable:hover { border-color: var(--cyan-deep); }
 .armoury-detail::after { content: ""; display: block; clear: both; }
+@media (max-width: 900px) { .armoury-deck { grid-template-columns: repeat(2, minmax(0, 1fr)); } .armoury-deck-primary { grid-column: 1 / -1; } #armoury-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .armoury-deck { grid-template-columns: 1fr; } .armoury-deck-primary { grid-column: auto; } .armoury-deck-card { min-height: 78px; } #armoury-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* ---------- cargo fit ---------- */
 .garage-cargo { margin: 14px 0 12px; padding: 12px 14px; border: 1px solid var(--rule-hot); background: linear-gradient(90deg, rgba(20, 55, 71, .3), rgba(4, 10, 17, .5)); }

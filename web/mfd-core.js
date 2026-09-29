@@ -84,9 +84,9 @@ window.QwMfd = (() => {
   const OSBS = 20, BUTTONS = 28;
   // Keep these indices stable for displays saved before menu navigation.
   const pageIds = ['nav', 'task', 'act', 'cargo', 'contract', 'status', 'feed', 'crew', 'money', 'list',
-    'ship', 'here', 'ledger', 'mine', 'map', 'log', 'server'];
+    'ship', 'here', 'ledger', 'mine', 'map', 'services', 'log', 'server'];
   const pages = ['NAV', 'TASK', 'ACT', 'CARGO', 'CONTRACT', 'STATUS', 'FEED', 'CREW', 'MONEY', 'LIST',
-    'SHIP', 'HERE', 'LEDGER', 'MINE', 'MAP', 'LOG', 'SERVER'];
+    'SHIP', 'HERE', 'LEDGER', 'MINE', 'MAP', 'SERVICES', 'LOG', 'SERVER'];
 
   /* One vocabulary for the display, the setup editor and the stored profile.
      Ids rather than page numbers in the file: a profile saved today still
@@ -134,6 +134,8 @@ window.QwMfd = (() => {
       icon: 'M4 20.5 12 12.5M6.2 8.2c3-3 8.2-4.1 12.2-3-1 4-2.1 9.2-5.1 12.2M14.2 6.2l4 4' },
     { id: 'map', label: 'Page · Map', caption: 'MAP', short: 'MAP',
       icon: 'M2.5 5.8 9 3.4v14.8L2.5 20.6zM9 3.4l6 2.4v14.8l-6-2.4M15 5.8l6.5-2.4v14.8L15 20.6' },
+    { id: 'services', label: 'Page · Nearest services', caption: 'SERVICES', short: 'SVC',
+      icon: 'M14.6 6.2a4.2 4.2 0 0 0-5.7 5.2L3.6 16.7l2.9 2.9 5.3-5.3a4.2 4.2 0 0 0 5.2-5.7l-2.6 2.6-2.1-2.1z' },
     { id: 'map-prev', label: 'Radar · previous body', caption: 'PREV', short: 'PRV',
       icon: 'M15 4L7 12l8 8' },
     { id: 'map-next', label: 'Radar · next body', caption: 'NEXT', short: 'NXT',
@@ -181,7 +183,7 @@ window.QwMfd = (() => {
      five. The tree still nests to any depth if a branch ever earns it. */
   const groups = [
     { id: 'flight', title: 'Flight', short: 'FLT', icon: 'nav', hint: 'Where you are, and what you fly',
-      children: ['nav', 'map', 'ship', 'here'] },
+      children: ['nav', 'map', 'services', 'ship', 'here'] },
     { id: 'operations', title: 'Operations', short: 'OPS', icon: 'task', hint: 'Plan, checklist, jobs',
       children: ['task', 'act', 'contract', 'list'] },
     { id: 'resources', title: 'Resources', short: 'RSRC', icon: 'cargo', hint: 'Cargo, money, mining',
@@ -191,7 +193,7 @@ window.QwMfd = (() => {
   ];
   const titles = { home: 'Cockpit', nav: 'Navigation', task: 'Mission', act: 'Checklist',
     cargo: 'Cargo & trade', contract: 'Contract', status: 'Session', feed: 'Activity', crew: 'Crew',
-    money: 'Earnings', list: 'Shopping', ship: 'Ship', here: 'Local intel', ledger: 'Ledger', mine: 'Mining', map: 'System map', log: 'Log',
+    money: 'Earnings', list: 'Shopping', ship: 'Ship', here: 'Local intel', ledger: 'Ledger', mine: 'Mining', map: 'System map', services: 'Nearest services', log: 'Log',
     server: 'Server' };
   const menuNodes = {}, leafParents = {};
   function indexMenu(nodes, parentId = 'home') {
@@ -901,6 +903,11 @@ window.QwMfd = (() => {
           ...(stash.length ? [['SEEN HERE BEFORE',
             stash.slice(0, 4).map(i => i.name).join(' · '), stash[0].lastSeen]] : []),
         ];
+      }
+      case 'services': {
+        const services = view.extra?.nearestServices;
+        if (!services) return [['NEAREST SERVICES', 'Reading the place directory…']];
+        return services.map(service => [service.label.toUpperCase(), service.message]);
       }
       case 'ledger': {
         const ledger = view.extra?.ledger;

@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1827 tests](https://img.shields.io/badge/tests-1827%20passing-4fd48a)
+![2517 tests](https://img.shields.io/badge/tests-2517%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a private local logbook for Star Citizen. It
@@ -136,39 +136,53 @@ those from the app first, or the game keeps the marked text file.
 
 ![The star map](docs/images/map.png)
 
-*Visited places are solid and sized by visit count. Empty nodes are known but
-unvisited. The map uses logged locations and quantum travel; it is not a live
-position tracker.*
+*Places are drawn by purpose — stations, cities, outposts, research sites,
+jump points — and filled markers are the ones you have visited. Bodies sit at
+their real bearing and relative orbit; one without a community coordinate is
+drawn amber and says so. The map is built from logged locations and quantum
+travel; it is not a live position tracker.*
 
-| Surface or view | What it answers |
+The dashboard is organised around what you are doing. Now, Map and Log are one
+click away; everything else sits in a menu.
+
+| Menu | What it answers |
 |---|---|
-| **Now and overlay** | Where am I, what am I flying, and what changed during this session? |
-| **Map, places and points** | Where have I been, where is a place or commodity, and how far is a point from the last copied location? |
-| **Flight plan and checklist** | What is my next stop, what has to happen there, and what can be checked off? |
-| **Sessions, contracts and crew** | How long did I play, which contracts changed, and who did the log name? |
-| **Fleet, loadout and stash** | Which ships and gear have appeared, what fits, and where something was last seen? |
-| **Hangar and Garage** | How big is each ship against the others, how do two compare on every number, and what would a different part do to a ship's sheet - DPS, shields, signatures, power - before buying it? |
-| **Ledger, cargo and market** | Which transactions were confirmed, what did a counter record, and where is a commodity traded? |
-| **Mining, crafting and items** | What the installed game data says about deposits, recipes, parts and shops. |
-| **Screen readings** | What a saved screenshot or copied `/showlocation` says, checked against the logbook where possible. |
+| **Now** | Where am I, what am I flying, where will I wake up, and what changed this session? The overlay carries the same answers into the game. |
+| **Map** | Where have I been, what does a place offer, and which refuel, clinic or repair is closest to my last known location? |
+| **Log** | What did a saved screenshot or a copied `/showlocation` say, checked against the logbook where possible? |
+| **Operations** | A command deck for shopping lists, cargo runs and flight plans, live contracts, departure checklists, blueprints and Wikelo trades. |
+| **Flight** | What happened on each run: the after-action logbook, session debriefs, servers, places, pinned points, crew and casualties. |
+| **Economy** | Which transactions were confirmed, where the money went, what a counter recorded, and where a commodity is traded. |
+| **Reference** | What the installed game data says about ships, parts, mining deposits and crafting recipes. |
+| **Hangar** | Which ships and gear have appeared and where they were last seen; how two hulls compare; what a different part would do to a ship's DPS, shields, signatures and power before buying it; and personal weapons and armour in the Armoury. |
+| **Settings** | Data sources, the overlay, controls, item labels, shared files, backups and the problem report. |
 | **Cockpit HUD** | Optional paired Cougar MFD pages for navigation, tasks, cargo, contracts, money and the live feed. |
 | **Item labels** | Optional in-game marks for component size, grade, armour class and hard-to-buy gear. |
 
-Tables can be sorted by their column headings. Dashboard cards can be hidden,
-collapsed and rearranged.
+Selecting a map place, a planning ship, a shopping list or a live contract puts
+it in an *In focus* rail that follows you between pages. Tables can be sorted by
+their column headings. Now-page cards can be hidden, collapsed and rearranged.
 
 <table>
   <tr>
-    <td width="50%"><a href="docs/images/fleet.png"><img src="docs/images/fleet.png" alt="Fleet"></a><br><sub><b>Fleet</b> — ships seen on the account and how often they flew</sub></td>
-    <td width="50%"><a href="docs/images/ledger.png"><img src="docs/images/ledger.png" alt="Ledger"></a><br><sub><b>Ledger</b> — confirmed transactions with their source</sub></td>
+    <td width="50%"><a href="docs/images/now.png"><img src="docs/images/now.png" alt="Now"></a><br><sub><b>Now</b> — location, wake-up point, live feed and the last screenshot's checks</sub></td>
+    <td width="50%"><a href="docs/images/operations.png"><img src="docs/images/operations.png" alt="Operations"></a><br><sub><b>Operations</b> — one command deck for supplies, runs, contracts and projects</sub></td>
   </tr>
   <tr>
-    <td width="50%"><a href="docs/images/sessions.png"><img src="docs/images/sessions.png" alt="Sessions"></a><br><sub><b>Sessions</b> — game time separated from menu time</sub></td>
-    <td width="50%"><a href="docs/images/stash.png"><img src="docs/images/stash.png" alt="Stash"></a><br><sub><b>Stash</b> — gear and its last recorded location</sub></td>
+    <td width="50%"><a href="docs/images/routes.png"><img src="docs/images/routes.png" alt="Routes"></a><br><sub><b>Routes</b> — the flight plan, its next stop, nearby refuel and cargo runs</sub></td>
+    <td width="50%"><a href="docs/images/logbook.png"><img src="docs/images/logbook.png" alt="Logbook"></a><br><sub><b>Logbook</b> — sessions, trades and first sightings, newest first</sub></td>
   </tr>
   <tr>
-    <td width="50%"><a href="docs/images/upgrades.png"><img src="docs/images/upgrades.png" alt="Upgrades"></a><br><sub><b>Upgrades</b> — compatible parts, prices and shops</sub></td>
-    <td width="50%"><a href="docs/images/market.png"><img src="docs/images/market.png" alt="Market"></a><br><sub><b>Market</b> — commodities and the counters that trade them</sub></td>
+    <td width="50%"><a href="docs/images/sessions.png"><img src="docs/images/sessions.png" alt="Sessions"></a><br><sub><b>Sessions</b> — a debrief of the latest flight above the full history</sub></td>
+    <td width="50%"><a href="docs/images/fleet.png"><img src="docs/images/fleet.png" alt="Fleet"></a><br><sub><b>Fleet</b> — ships seen on the account, how often they flew and what they are worth</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="docs/images/garage.png"><img src="docs/images/garage.png" alt="Garage"></a><br><sub><b>Garage</b> — a ship's fitted sheet, power budget, cargo fit and photographed loadout</sub></td>
+    <td width="50%"><a href="docs/images/armoury.png"><img src="docs/images/armoury.png" alt="Armoury"></a><br><sub><b>Armoury</b> — firearms, armour and field kit read from the install</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="docs/images/ledger.png"><img src="docs/images/ledger.png" alt="Ledger"></a><br><sub><b>Ledger</b> — confirmed transactions, and cash on hand carried forward from a screenshot</sub></td>
+    <td width="50%"><a href="docs/images/market.png"><img src="docs/images/market.png" alt="Market"></a><br><sub><b>Market</b> — commodities, your own trading record and the best reported price</sub></td>
   </tr>
 </table>
 
@@ -181,7 +195,7 @@ telemetry.*
 
 ## Data sources
 
-Quantum Wake reads three kinds of data:
+Quantum Wake reads four kinds of data:
 
 1. **Your logs.** `Game.log` and its backups provide sessions, travel, ships,
    contracts, party activity, inventory sightings and confirmed transactions.
@@ -329,9 +343,11 @@ Only the overlay is Windows-specific. The other projects target `net10.0`.
 dotnet test Quantumwake.slnx -c Release
 ```
 
-The repository currently has 1,815 tests. `Quantumwake.Tests` covers parsing,
-session state, stores and game-data readers. `Quantumwake.WebTests` executes the
-dashboard and MFD JavaScript against a stub DOM.
+The repository currently has 2,517 tests in three suites. `Quantumwake.Tests`
+covers parsing, session state, stores and game-data readers.
+`Quantumwake.WebTests` executes the dashboard and MFD JavaScript against a stub
+DOM. `Quantumwake.OcrTests` exercises the screenshot reader against fixtures it
+draws itself, and stands down on a Windows install with no OCR engine.
 
 Parser fixtures are copied from real log lines. The CLI is then run against the
 local backup corpus before a release to catch format changes that fixtures do
@@ -345,9 +361,13 @@ not contain.
 - [Architecture decisions](docs/architecture.md)
 - [Cockpit HUD / Cougar MFD mode](docs/mfd-mode.md)
 - [Screenshot and clipboard reading](docs/screen-insight.md)
+- [Garage](docs/garage.md), [Armoury](docs/armoury.md), [cargo fit](docs/cargo-fit.md) and [hauling runs](docs/hauling.md)
+- [Mining](docs/mining.md), [salvage](docs/salvage.md) and [Wikelo](docs/wikelo.md)
 - [Problem-report contents](docs/bug-reports.md)
 - [Release process](docs/releasing.md)
 - [Credits and external sources](docs/credits.md)
+
+Every document is listed with a summary in [docs/README.md](docs/README.md).
 
 ## Licence and credits
 
@@ -364,6 +384,60 @@ trademarks of Cloud Imperium Rights LLC. Quantum Wake is an unofficial fan
 project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
+
+### 0.16.15
+
+**Keep dense workspaces clear at any width.** Map controls and place panels now fold into a phone-width layout; Routes, Contracts, and Market retain their row identity while scrolling. Map, Routes, Shopping, Contracts, Market, and Logbook also distinguish loading, an empty result, and an unavailable local source.
+
+- **The star map opens in a moment.** It used to sit on *Loading known places…* for 25 to 35 seconds on a well-travelled install, because every shop, fuel and clinic listing re-read your whole session history to find its place. That history is now read once and kept until a new session lands or the wipe line moves, and the map draws in well under a second.
+
+- **The map remembers the system you were looking at.** A system you picked is where it reopens, instead of always jumping back to the one you are in. The line under the toolbar now names the system on screen; it used to keep the previous one's name after switching.
+
+- **Keep the current operation with you.** Selecting a map place, planning ship, pinned shopping list, live contract, or new flight plan now opens a compact “In focus” rail. It remains available as you move through the app, returns directly to the relevant workspace, and clears when the work is no longer useful.
+
+- **Choose a destination from one map readout.** Selecting a place now groups its UEX-listed services, flight-plan state and next route action together. When refuel, clinic or repair is not listed there, the same panel can find the closest known support from your last recorded location; market facts, game facilities and personal notes stay available without crowding that decision.
+
+- **Choose personal gear by role, then compare the details.** Armoury now opens with a compact equipment board for firearms, protection and field kit. It keeps the number of families, pieces and available price data in view, puts the reading-method explanation away until needed, and turns the five detailed categories into a clearer workspace selector.
+
+- **A cleaner Armoury heading.** Its title now follows the equipment eyebrow directly, without a stray marker beside the wordmark.
+
+- **Kicker-led headings now use one cue.** Flight, Operations, Logbook, Fleet, Economy, Reference, Mining and Help drop the repeated heading marker when their own kicker or workspace icon already establishes the title.
+
+- **Global notices give workspaces more room.** A patch-wipe prompt stays expanded on Now and Settings, where its context matters; elsewhere it becomes a compact, still-actionable status line.
+
+- **Settings now opens as a control room.** Sharing and update choices sit together in a compact start deck, while the history-wipe boundary has its own distinct panel before the data and maintenance controls below.
+
+- **Settings detail now stays out of the way until you need it.** Data sources, account care, and log maintenance each have a concise summary rail that opens its controls and explanations on demand.
+
+- **Start each operation from one place.** The Operations menu now opens a command deck for supplies, routes, contracts, departure checks, blueprints, and Wikelo trades, with your active shopping and live contract state shown at a glance.
+
+- **Prepare the full flight, then choose the cargo run.** Routes now opens as a flight plan: choose a ship, see the active plan's next stop and progress, find nearby refuel support, and keep cargo filters out of the way until you need them.
+
+- **Review the run without wading through the timeline.** The Logbook now leads with its newest recorded event, the selected range's sessions, trades and discoveries, and its recorded trade net before the detailed timeline.
+
+- **Start a session review with the flight that matters.** Play history now opens as a session-debrief workspace: the latest flight's ship, duration, progress and health lead into the retained full history and detailed route, activity and economy evidence.
+
+A dashboard redesign. Nothing about how logs are read has changed, so your history, fleet and receipts carry over as they are. Pages have moved, though, so expect a moment of looking for things.
+
+- **Navigation is organised around what you are doing.** Operations holds shopping, routes, contracts and planning tools; Flight holds journeys and location history; Hangar holds ships and equipment. About now lives with Settings, leaving Now, Map and Log one click away.
+
+- **The dashboard has a calmer shared visual language.** Page headers, filters, tables, status and empty results use matching spacing, hierarchy and visual cues, so dense screens are easier to scan without hiding information.
+
+- **Put the current situation in one place.** The Now page leads with a configurable Current status card: location, ship, session, pilot, session health and now where you will wake up.
+
+- **The star map is easier to read.** A muted palette, with search and location controls leading the toolbar and display settings under View options. Places use purpose-drawn icons — docks, landing pads, headframes, research flasks, cargo stacks, jump gates, and stronger tower and orbital-hub silhouettes for cities and stations — that stay distinct in a dense cluster and recognisable at ordinary zoom. Filled and outlined markers still show where you have been.
+
+- **Find nearby support from the cockpit.** The MFD Flight menu lists the closest refuel, clinic and refinery in the current system, using the same facility evidence as the star map, and says that distances are based on bodies rather than travel time.
+
+- **Make the Fleet useful at a glance.** The roster leads the page with clearer ship cards, recent-flight signals and a dedicated action row; the historical fleet trace is there when you want it.
+
+- **Bring the Garage back to the ship.** Clearly labelled fleet and library pickers, a compact hull console and a collapsible explanation make the fitted layout the first thing you see.
+
+- **Read the evidence without wading through it.** Log keeps the newest capture open, compacts earlier screenshots into an expandable timeline, and folds capture and saved-point controls away until needed.
+
+- **Find reference data faster.** Ships and parts keep their filters, live match count and table together, with names anchored while you inspect prices and specifications.
+
+- **Directions point to the new menus.** Help and the Wikelo page now send you to Operations for blueprints and shopping lists, rather than the old Jobs page.
 
 ### 0.15.34
 

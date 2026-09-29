@@ -1347,6 +1347,33 @@ public sealed class LogLibrary : IDisposable
     /// </remarks>
     public IReadOnlyList<PlaceTotal> Atlas()
     {
+        // Everything the atlas is made of: the stored sessions, the wipe line
+        // that decides which of them count, and the names the resolver reads.
+        // Terminals asks for it on every lookup, and the map's services resolve
+        // every known terminal, so recomputing it each time cost the map a
+        // 25-second wait before it drew anything.
+        var revision = _store.Revision;
+        var wipe = Wipe;
+        var names = Names;
+
+        if (_atlas is { } cached && cached.Revision == revision
+            && Equals(cached.Wipe, wipe) && ReferenceEquals(cached.Names, names))
+            return cached.Places;
+
+        var places = BuildAtlas();
+        _atlas = new AtlasSnapshot(revision, wipe, names, places);
+        return places;
+    }
+
+    /// <summary>One computed atlas and what it was computed from.</summary>
+    /// <remarks>A class, so swapping it in is one reference write another request cannot see half of.</remarks>
+    private sealed record AtlasSnapshot(
+        long Revision, Wipe? Wipe, GameNames Names, IReadOnlyList<PlaceTotal> Places);
+
+    private AtlasSnapshot? _atlas;
+
+    private IReadOnlyList<PlaceTotal> BuildAtlas()
+    {
         var visited = Stats().Locations.ToDictionary(p => p.RawId, StringComparer.OrdinalIgnoreCase);
         var atlas = new List<PlaceTotal>(visited.Values);
 

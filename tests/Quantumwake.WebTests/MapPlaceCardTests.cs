@@ -58,4 +58,36 @@ public class MapPlaceCardTests
         Assert.True(page.Truth("__dom.node('#map-info-lore').hidden"));
         Assert.True(page.Truth("__dom.node('#map-info-amenities').hidden"));
     }
+
+    /// <summary>
+    /// A selected place is a decision point: it says whether the route already
+    /// reaches it, and offers only support that UEX does not list there. The
+    /// missing labels deliberately say "not listed" in the UI rather than
+    /// claiming a facility is absent from the game.
+    /// </summary>
+    [Fact]
+    public void The_operational_readout_combines_route_state_and_missing_support()
+    {
+        var page = new Page();
+
+        page.Do("""
+            const place = { rawId: 'clinic', name: 'Seraphim' };
+            trips = [{ tracked: true, title: 'Hurston service run', stops: [
+              { placeId: 'clinic', place: 'Seraphim', done: false, actions: [] },
+              { placeId: 'shop', place: 'Area18', done: false, actions: [] }
+            ] }];
+            mapServicesByPlace.set('clinic', ['clinic']);
+            renderMapInfoServices(place);
+            renderMapInfoPlan(place);
+            renderMapInfoData();
+            """);
+
+        Assert.Contains("Find refuel", page.NodeText("#map-info-support"));
+        Assert.Contains("Find repair", page.NodeText("#map-info-support"));
+        Assert.DoesNotContain("Find clinic", page.NodeText("#map-info-support"));
+        Assert.Contains("Hurston service run", page.NodeText("#map-info-plan"));
+        Assert.Contains("Open flight plan", page.NodeText("#map-info-plan"));
+        Assert.Contains("No reported price", page.NodeText("#map-info-data"));
+        Assert.Equal("Next stop", page.NodeText("#map-place-plan-state"));
+    }
 }

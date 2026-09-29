@@ -224,10 +224,80 @@ function buildPeriodSelects() {
 
 buildPeriodSelects();
 
+/** Names the difference between a view still loading, having no records, and losing its source. */
+function setWorkspaceState(selector, state, text = '') {
+  const node = $(selector);
+  if (!node) return;
+
+  node.hidden = state === 'ready';
+  node.dataset.state = state;
+  if (text) node.textContent = text;
+}
+
+/* ---------- current focus ---------- */
+
+/*
+ * This is browser-session context, not another saved plan. A place, ship or
+ * list becomes useful because the next workspace can pick it up; keeping it
+ * in memory means an old choice never returns as if it were current work.
+ */
+let contextFocus = null;
+
+function setContextFocus(focus) {
+  contextFocus = focus ? { ...focus } : null;
+  renderContextRail();
+}
+
+function clearContextFocus() {
+  contextFocus = null;
+  renderContextRail();
+}
+
+/** One compact way back to the thing a pilot deliberately chose. */
+function renderContextRail() {
+  const rail = $('#context-rail');
+  const title = $('#context-title');
+  const detail = $('#context-detail');
+  const action = $('#context-action');
+  if (!rail || !title || !detail || !action) return;
+
+  const focus = contextFocus;
+  rail.hidden = !focus;
+  if (!focus) return;
+
+  title.textContent = focus.title || 'Current focus';
+  detail.textContent = focus.detail || '';
+  action.textContent = focus.action || 'Open';
+  action.onclick = () => {
+    if (focus.anchor) jobsLandOn = focus.anchor;
+    showView(focus.view || 'now');
+
+    // The map can reopen a chosen place after the view has its dimensions.
+    // A flight plan is its own map panel, while a place keeps its readout.
+    if (focus.plan) showTripPanel();
+    if (focus.placeId) {
+      const place = atlas.find((item) => item.rawId === focus.placeId);
+      if (place) {
+        // Reopening the same drawer normally means close. The rail promises a
+        // return, so reset that toggle before asking the map for the place.
+        if (entityShown === `place|${place.rawId}` && !$('#entity-drawer').hidden)
+          closeEntity();
+        centreOn(place.rawId);
+        showMapInfo(place).catch(() => {});
+      }
+    }
+  };
+}
+
+$('#context-clear')?.addEventListener('click', clearContextFocus);
+
 /* ---------- tabs ---------- */
 
 /** The pages where a stale price is a wrong number rather than a fact about a feed. */
 const STALE_MATTERS_ON = new Set(['market', 'commodity', 'garage', 'jobs', 'routes']);
+
+/** A possible wipe needs its full explanation only where a pilot reviews their current history. */
+const PATCH_MATTERS_ON = new Set(['now', 'settings']);
 
 function showView(name) {
   // Assets merged into Fleet; old #assets links and habits still land somewhere.
@@ -239,6 +309,11 @@ function showView(name) {
   // the buttons do not crowd a page that is not about prices.
   $('#stale')?.classList.toggle('compact', !STALE_MATTERS_ON.has(name));
 
+  // A patch decision belongs to the current-status and Settings pages. It
+  // remains actionable everywhere, but other workspaces keep it to one line
+  // so the global notices do not become a second page header.
+  $('#patch')?.classList.toggle('compact', !PATCH_MATTERS_ON.has(name));
+
   const buttons = $$('#tabs button');
 
   // Commodity, Help and a share recap are drill-downs rather than tabs. Their
@@ -248,6 +323,11 @@ function showView(name) {
     (b) => b.dataset.view === (name === 'commodity' ? 'market' : name === 'help' ? 'about' : name === 'share' ? 'settings' : name));
 
   if (!target) return;
+
+  // A map drawer is useful beside the map, but it is not the cross-page
+  // context. Leaving it over another workspace hid the work the pilot chose
+  // to open; the focus rail now carries the deliberate return path instead.
+  if (name !== 'map' && !$('#entity-drawer').hidden) closeEntity();
 
   // Leaving the drill-down forgets its subject. The name alone is not enough
   // for the hash handler to know the page is up: keep it after a tab click and
@@ -347,7 +427,7 @@ function showView(name) {
   // and the browser would anchor-scroll to it after load, leaving the header
   // stranded mid-screen. Fragments name views here, so no element may share a
   // view's name.
-  window.scrollTo(0, 0);
+  window.scrollTo?.(0, 0);
 
   // Keep the active tab in view when the strip scrolls, as it does in overlay mode.
   target.scrollIntoView({ block: 'nearest', inline: 'center' });
@@ -355,6 +435,10 @@ function showView(name) {
   // replaceState, not assignment: cycling views with the arrow keys should not
   // fill the back button with thirty entries.
   if (location.hash !== `#${name}`) history.replaceState(null, '', `#${name}`);
+
+  // Page changes never clear a deliberate choice. The rail is the small thread
+  // that makes Map, Routes and Shopping feel like one operation.
+  renderContextRail();
 }
 
 /* The view lives in the URL fragment, so #map is a link that can be sent to
@@ -540,10 +624,13 @@ function initPageStatsCollapsers() {
 const NOW_COLLAPSED_KEY = 'qw-now-collapsed-cards';
 const NOW_HIDDEN_KEY = 'qw-now-hidden-cards';
 const NOW_ORDER_KEY = 'qw-now-card-order';
+const NOW_STATUS_FIELDS_KEY = 'qw-now-status-fields';
+const NOW_STATUS_FIELDS = ['location', 'ship', 'session', 'handle', 'health', 'respawn'];
 let collapsedNowCards = new Set();
 let hiddenNowCards = new Set();
 let nowCardOrder = [];
 let draggedNowCard = null;
+let visibleStatusFields = new Set(NOW_STATUS_FIELDS);
 
 try {
   const saved = JSON.parse(localStorage.getItem(NOW_COLLAPSED_KEY) || '[]');
@@ -560,6 +647,19 @@ try {
   if (Array.isArray(saved)) nowCardOrder = saved.filter((n) => typeof n === 'string');
 } catch { /* a bad preference must not scramble the dashboard */ }
 
+try {
+  const raw = localStorage.getItem(NOW_STATUS_FIELDS_KEY);
+  if (raw !== null) {
+    const saved = JSON.parse(raw);
+    if (Array.isArray(saved)) {
+      visibleStatusFields = new Set(saved.filter((name) => NOW_STATUS_FIELDS.includes(name)));
+      // A new reading belongs in a status card by default, even for pilots who
+      // configured it before that reading existed.
+      visibleStatusFields.add('respawn');
+    }
+  }
+} catch { /* a bad preference must not empty the status card */ }
+
 function saveCollapsedNowCards() {
   try { localStorage.setItem(NOW_COLLAPSED_KEY, JSON.stringify([...collapsedNowCards])); } catch { /* optional */ }
 }
@@ -570,6 +670,51 @@ function saveHiddenNowCards() {
 
 function saveNowCardOrder() {
   try { localStorage.setItem(NOW_ORDER_KEY, JSON.stringify(nowCardOrder)); } catch { /* optional */ }
+}
+
+function saveVisibleStatusFields() {
+  try { localStorage.setItem(NOW_STATUS_FIELDS_KEY, JSON.stringify([...visibleStatusFields])); } catch { /* optional */ }
+}
+
+function applyVisibleStatusFields() {
+  for (const name of NOW_STATUS_FIELDS) {
+    const field = $(`#now-status-card [data-status-field="${name}"]`);
+    const toggle = $(`#now-status-options [data-status-field-toggle="${name}"]`);
+    if (field) field.hidden = !visibleStatusFields.has(name) || field.dataset.statusAvailable === 'false';
+    if (toggle) toggle.checked = visibleStatusFields.has(name);
+  }
+  const empty = $('#now-status-empty');
+  if (empty) {
+    const hasVisibleReading = NOW_STATUS_FIELDS.some((name) => {
+      const field = $(`#now-status-card [data-status-field="${name}"]`);
+      return visibleStatusFields.has(name) && field?.dataset.statusAvailable !== 'false';
+    });
+    empty.hidden = hasVisibleReading;
+  }
+}
+
+function initCurrentStatusConfiguration() {
+  const button = $('#now-status-config');
+  const options = $('#now-status-options');
+  if (!button || !options) return;
+
+  button.addEventListener('click', () => {
+    options.hidden = !options.hidden;
+    button.setAttribute('aria-expanded', String(!options.hidden));
+  });
+
+  for (const toggle of $$('#now-status-options [data-status-field-toggle]')) {
+    toggle.addEventListener('change', () => {
+      const name = toggle.dataset.statusFieldToggle;
+      if (!NOW_STATUS_FIELDS.includes(name)) return;
+      if (toggle.checked) visibleStatusFields.add(name);
+      else visibleStatusFields.delete(name);
+      saveVisibleStatusFields();
+      applyVisibleStatusFields();
+    });
+  }
+
+  applyVisibleStatusFields();
 }
 
 /**
@@ -1823,6 +1968,7 @@ function entityTicket() {
 const PLACE_ONLY_NODES = [
   '#map-info-services', '#map-info-trade', '#map-info-notes',
   '#map-info-amenities', '#map-info-lore', '#map-info-sold',
+  '#map-info-support', '#map-info-plan', '#map-info-data', '#map-place-plan-state',
 ];
 
 const ENTITY_KICKER = {
@@ -1871,7 +2017,9 @@ async function openEntity(kind, id) {
 
 function closeEntity() {
   entityRequest++;
-  $('#entity-drawer').hidden = true;
+  const drawer = $('#entity-drawer');
+  drawer.hidden = true;
+  drawer.classList.remove('map-place-open');
   document.body.classList.remove('entity-open');
   entityShown = null;
 
@@ -1897,9 +2045,30 @@ function renderEntity(card) {
   const extra = $('#entity-place-extra');
   extra.hidden = card.kind !== 'place';
   for (const id of PLACE_ONLY_NODES) $(id).textContent = '';
+  $('#map-info-support').hidden = true;
+  $('#map-place-plan-state').hidden = true;
+  $('#entity-drawer').classList.remove('map-place-open');
 
   $('#entity-drawer').hidden = false;
   document.body.classList.add('entity-open');
+
+  if (card.kind === 'ship') {
+    setContextFocus({
+      kind: 'ship',
+      title: card.name,
+      detail: card.subtitle || 'Ship reference',
+      view: 'routes',
+      action: 'Plan with ship',
+    });
+  } else if (card.kind === 'place') {
+    setContextFocus({
+      kind: 'place',
+      title: card.name,
+      detail: card.subtitle || 'Map place',
+      view: 'map',
+      action: 'Open map',
+    });
+  }
 
   // The map sizes itself from the space it has, so it has to be told the space
   // just changed - otherwise the dots stay where they were and the place that
@@ -2384,11 +2553,25 @@ async function loadStanding() {
 
 async function loadContractList() {
   const days = Number($('#contracts-period').value) || 0;
-  const rows = await getJson(`/api/contracts?days=${days}`);
   const body = $('#contracts-table tbody');
+  setWorkspaceState('#contracts-state', 'loading', 'Loading contract history…');
   body.textContent = '';
 
+  let rows;
+  try {
+    rows = await getJson(`/api/contracts?days=${days}`);
+  } catch {
+    setWorkspaceState('#contracts-state', 'offline', 'Contract history is unavailable. Refresh after the local server reconnects.');
+    const tr = el('tr');
+    const td = el('td', 'muted', 'Contract history is unavailable.');
+    td.colSpan = 9;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
   if (!rows.length) {
+    setWorkspaceState('#contracts-state', 'empty', 'No contracts match this range.');
     const tr = el('tr');
     const td = el('td', 'muted', 'No contracts in that range.');
     td.colSpan = 9;
@@ -2396,6 +2579,8 @@ async function loadContractList() {
     body.append(tr);
     return;
   }
+
+  setWorkspaceState('#contracts-state', 'ready');
 
   const OUTCOMES = {
     Completed: ['done', 'completed'],
@@ -2511,6 +2696,47 @@ let allSessions = [];
 let sessionPage = 0;
 let expandedSessionId = null;
 const sessionDetails = new Map();
+
+function latestSession(sessions) {
+  return [...sessions].sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))[0] || null;
+}
+
+/** Gives the history page one useful answer before its dense evidence table. */
+function renderSessionBrief(sessions) {
+  const latestTitle = $('#sessions-latest-title');
+  const latestDetail = $('#sessions-latest-detail');
+  const durationTitle = $('#sessions-duration-title');
+  const durationDetail = $('#sessions-duration-detail');
+  const healthTitle = $('#sessions-health-title');
+  const healthDetail = $('#sessions-health-detail');
+  const open = $('#sessions-open-latest');
+  const latest = latestSession(sessions);
+
+  if (!latest) {
+    latestTitle.textContent = 'No sessions in this range';
+    latestDetail.textContent = 'Choose a wider record range to revisit earlier flights.';
+    durationTitle.textContent = 'No flight time recorded';
+    durationDetail.textContent = 'In-game time appears when a session enters the persistent universe.';
+    healthTitle.textContent = 'No session health data';
+    healthDetail.textContent = 'Deaths and incapacitations are shown when the game writes them.';
+    open.disabled = true;
+    return;
+  }
+
+  latestTitle.textContent = latest.primaryShip || 'Session on foot';
+  latestDetail.textContent = `${dateOf(latest.startedAt)} · ${latest.lastLocation || 'No last location recorded'}`;
+  durationTitle.textContent = duration(latest.inGame);
+  durationDetail.textContent = `${duration(latest.menu)} in menus · ${latest.jumps || 0} jump${latest.jumps === 1 ? '' : 's'} · ${latest.contracts || 0} contract${latest.contracts === 1 ? '' : 's'}`;
+
+  const deaths = Number(latest.deaths || 0);
+  const incap = Number(latest.incapacitations || 0);
+  const server = latest.shard
+    ? `${sessionShardLabel(latest)} · ${latest.shards || 1} server${latest.shards === 1 ? '' : 's'} recorded`
+    : 'No server recorded';
+  healthTitle.textContent = deaths ? `${deaths} death${deaths === 1 ? '' : 's'}` : 'No deaths recorded';
+  healthDetail.textContent = `${incap} incapacitation${incap === 1 ? '' : 's'} · ${server}`;
+  open.disabled = false;
+}
 
 /** Applies the period and search filters. */
 function filteredSessions() {
@@ -2769,6 +2995,7 @@ function renderSessions() {
   body.textContent = '';
 
   const sessions = filteredSessions();
+  renderSessionBrief(sessions);
 
   // Totals reflect the selected period, so the tiles answer "how much did I
   // play this month" rather than always restating the lifetime figures.
@@ -2826,15 +3053,14 @@ function renderSessions() {
 function summariseSessions(sessions) {
   const sum = (pick) => sessions.reduce((total, s) => total + (pick(s) || 0), 0);
 
-  tiles('#lib-summary', [
-    ['Sessions', sessions.length],
-    ['In game', duration(sum((s) => s.inGame))],
-    ['In menus', duration(sum((s) => s.menu))],
-    ['Quantum jumps', sum((s) => s.jumps)],
-    ['Contracts', sum((s) => s.contracts)],
-    ['Deaths', sum((s) => s.deaths)],
-  ]);
+  const host = $('#lib-summary');
+  host.textContent = `${sessions.length} session${sessions.length === 1 ? '' : 's'} · ${duration(sum((s) => s.inGame))} in game · ${sum((s) => s.jumps)} jump${sum((s) => s.jumps) === 1 ? '' : 's'} · ${sum((s) => s.contracts)} contract${sum((s) => s.contracts) === 1 ? '' : 's'}`;
 }
+
+$('#sessions-open-latest')?.addEventListener('click', () => {
+  const latest = latestSession(filteredSessions());
+  if (latest) toggleSessionDebrief(latest.id);
+});
 
 function renderPager(pages, start, shown, total) {
   const pager = $('#sessions-pager');
@@ -3459,10 +3685,13 @@ function ago(iso) {
 }
 
 async function loadMarket() {
+  setWorkspaceState('#market-state', 'loading', 'Loading commodity catalogue…');
+  let marketUnavailable = false;
   try {
     marketEntries = await getJson('/api/market');
   } catch {
     marketEntries = [];
+    marketUnavailable = true;
   }
 
   // Fuel, when that feed is on: cheapest refill per terminal.
@@ -3522,6 +3751,10 @@ async function loadMarket() {
   if (groups.includes(previous)) groupSelect.value = previous;
 
   renderMarket();
+  setWorkspaceState('#market-state', marketUnavailable ? 'offline' : marketEntries.length ? 'ready' : 'empty',
+    marketUnavailable
+      ? 'Commodity data is unavailable. Refresh after the local server reconnects.'
+      : 'No commodities are available in the current catalogue.');
 
   // The map's commodity search reads this catalogue, and the map usually draws
   // first. A search already standing (a ?q= link opened cold) would have found
@@ -4122,6 +4355,13 @@ function renderShipsRef() {
     && (!term || s.name.toLowerCase().includes(term)
       || (s.role || '').toLowerCase().includes(term)));
 
+  const counter = $('#ships-count');
+  if (counter) {
+    counter.textContent = rows.length
+      ? `${rows.length.toLocaleString()} ${rows.length === 1 ? 'hull' : 'hulls'}`
+      : shipCatalogue.length ? 'No matches' : 'Waiting for catalogue';
+  }
+
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted', shipCatalogue.length
@@ -4261,8 +4501,10 @@ function renderPartsRef() {
 
   const counter = $('#parts-count');
   counter.textContent = rows.length > PARTS_CAP
-    ? `Showing ${PARTS_CAP.toLocaleString()} of ${rows.length.toLocaleString()} matches — refine the search or pick a type.`
-    : '';
+    ? `${PARTS_CAP.toLocaleString()} of ${rows.length.toLocaleString()} items shown — refine to see the rest.`
+    : rows.length
+      ? `${rows.length.toLocaleString()} ${rows.length === 1 ? 'item' : 'items'}`
+      : partCatalogue.length ? 'No matches' : 'Waiting for catalogue';
 
   if (!rows.length) {
     const tr = el('tr');
@@ -5610,12 +5852,40 @@ function showArmouryPane(name) {
   }
   for (const button of $('#armoury-tabs')?.querySelectorAll('button') || [])
     button.classList.toggle('active', button.dataset.pane === name);
+  const deck = name === 'guns' ? 'guns' : name === 'armour' ? 'armour' : 'kit';
+  for (const key of ['guns', 'armour', 'kit'])
+    $(`#armoury-open-${key}`)?.classList.toggle('active', key === deck);
 }
 
 $('#armoury-tabs')?.addEventListener('click', (e) => {
   const button = e.target.closest('button[data-pane]');
   if (button) showArmouryPane(button.dataset.pane);
 });
+
+$('#armoury-open-guns')?.addEventListener('click', () => showArmouryPane('guns'));
+$('#armoury-open-armour')?.addEventListener('click', () => showArmouryPane('armour'));
+$('#armoury-open-kit')?.addEventListener('click', () => showArmouryPane('attachments'));
+
+function renderArmouryBrief() {
+  if (!armouryModel?.ready) return;
+  const counts = armouryModel.counts || {};
+  const weapons = armouryModel.weapons || [];
+  const armour = armouryModel.armour || [];
+  const attachments = armouryModel.attachments || [];
+  const throwables = armouryModel.throwables || [];
+  const knives = armouryModel.melee || [];
+  const weaponFamilies = counts.plain ?? weapons.length;
+  const armourSets = counts.sets ?? armour.length;
+  const pricedWeapons = weapons.filter((w) => w.market?.price).length;
+
+  const write = (id, text) => { const node = $(id); if (node) node.textContent = text; };
+  write('#armoury-guns-brief-title', `${fmtInt(weaponFamilies)} weapon ${weaponFamilies === 1 ? 'family' : 'families'}`);
+  write('#armoury-guns-brief-detail', `${fmtInt(counts.weapons ?? weapons.length)} finishes read${armouryModel.itemPricesKnown ? ` · UEX prices ${fmtInt(pricedWeapons)}` : ' · UEX prices unavailable'}`);
+  write('#armoury-armour-brief-title', `${fmtInt(armourSets)} armour ${armourSets === 1 ? 'set' : 'sets'}`);
+  write('#armoury-armour-brief-detail', `${fmtInt(counts.armour ?? armour.length)} pieces read · compare protection and carry space`);
+  write('#armoury-kit-brief-title', `${fmtInt(attachments.length)} attachments`);
+  write('#armoury-kit-brief-detail', `${fmtInt(throwables.length)} grenades · ${fmtInt(knives.length)} knives`);
+}
 
 async function loadArmoury() {
   const unready = $('#armoury-unready');
@@ -5625,7 +5895,7 @@ async function loadArmoury() {
     armouryModel = null;
   }
 
-  const panes = [...ARMOURY_PANES.map((p) => $(`#armoury-pane-${p}`)), $('#armoury-tabs')];
+  const panes = [...ARMOURY_PANES.map((p) => $(`#armoury-pane-${p}`)), $('#armoury-tabs'), $('#armoury-deck')];
   if (!armouryModel?.ready) {
     for (const p of panes) if (p) p.hidden = true;
     if (unready) {
@@ -5663,6 +5933,7 @@ async function loadArmoury() {
     slot.value = slots.includes(keep) ? keep : '';
   }
 
+  renderArmouryBrief();
   showArmouryPane(armouryPane);
   renderArmouryGuns();
   renderArmouryArmour();
@@ -7131,25 +7402,37 @@ async function renderScreenLog() {
     return;
   }
 
-  let first = true;
+  let latest = true;
 
   for (const entry of entries) {
-    const row = el('div', 'screen-reading');
+    const row = document.createElement(latest ? 'article' : 'details');
+    row.className = latest ? 'screen-reading screen-reading-latest' : 'screen-reading';
+    const body = latest ? row : el('div', 'screen-reading-body');
+
+    if (!latest) {
+      const summary = document.createElement('summary');
+      summary.textContent = entry.paste
+        ? `${new Date(entry.paste.at).toLocaleString()} · copied location · ${entry.paste.gigametres.toFixed(4)} Gm from system centre`
+        : screenReadingTimelineLabel(entry.shot);
+      row.append(summary);
+    } else {
+      body.append(el('div', 'screen-reading-kicker', 'Latest reading'));
+    }
 
     if (entry.paste) {
       const p = entry.paste;
       const repeats = Math.max(1, Number(p.timesSeen) || 1);
       const lastSeen = p.lastSeenAt && repeats > 1
         ? ` · seen ${repeats} times, last ${new Date(p.lastSeenAt).toLocaleString()}` : '';
-      row.append(el('div', 'muted', `${new Date(p.at).toLocaleString()} · pasted${lastSeen}`));
-      row.append(el('div', 'strong', `${p.gigametres.toFixed(4)} Gm from the system centre`));
+      body.append(el('div', 'muted', `${new Date(p.at).toLocaleString()} · pasted${lastSeen}`));
+      body.append(el('div', 'strong', `${p.gigametres.toFixed(4)} Gm from the system centre`));
 
       // The raw numbers are the exact part and the only part.
-      row.append(el('div', 'muted',
+      body.append(el('div', 'muted',
         `x ${Math.round(p.x).toLocaleString()} · y ${Math.round(p.y).toLocaleString()} · z ${Math.round(p.z).toLocaleString()}`));
 
       // Where the logs put you then. The reading itself names nowhere.
-      row.append(el('div', 'muted', p.believed
+      body.append(el('div', 'muted', p.believed
         ? `Your logs had you at ${p.system ? `${p.system} > ` : ''}${p.believed}.`
         : 'Your logs had no session running, so there is nothing to place it against.'));
 
@@ -7160,20 +7443,19 @@ async function renderScreenLog() {
       action.textContent = saved ? 'Pinned as POI' : 'Pin as POI';
       action.disabled = saved;
       if (!saved) action.addEventListener('click', () => pinClipboardLocation(p, action));
-      row.append(action);
+      body.append(action);
     } else {
       const s = entry.shot;
       if (s.dismissed) row.classList.add('dismissed');
-      row.append(el('div', 'muted',
+      body.append(el('div', 'muted',
         `${new Date(s.shotAt).toLocaleString()} · ${SCREEN_KINDS[s.kind] || s.kind} · ${s.shot}${s.dismissed ? ' · invalidated' : ''}`));
-      renderSighting(row, s, { full: first });
-      first = false;
+      renderSighting(body, s, { full: latest });
 
       // Kept in the log either way: the misreading is worth seeing, and the
       // file must not be read a second time. What changes is whether the
       // wallet, the fleet and the fittings believe it.
       if (s.dismissed)
-        row.append(el('div', 'muted', 'Invalidated — kept here, believed by nothing.'));
+        body.append(el('div', 'muted', 'Invalidated — kept here, believed by nothing.'));
 
       const action = document.createElement('button');
       action.type = 'button';
@@ -7196,11 +7478,29 @@ async function renderScreenLog() {
 
       const actions = el('div', 'screen-actions');
       actions.append(action, again);
-      row.append(actions);
+      body.append(actions);
     }
 
+    if (!latest) row.append(body);
     list.append(row);
+    latest = false;
   }
+}
+
+/** A closed timeline entry still says what the reader found before it asks for attention. */
+function screenReadingTimelineLabel(reading) {
+  const kind = SCREEN_KINDS[reading.kind] || reading.kind;
+  let finding = reading.summary || '';
+  if (!finding && reading.contracts)
+    finding = reading.contracts.accepted != null
+      ? `${reading.contracts.accepted} accepted${reading.contracts.capacity != null ? ` of ${reading.contracts.capacity}` : ''}`
+      : `${(reading.contracts.cards || []).length} contracts read`;
+  if (!finding && reading.loadout) finding = reading.loadout.ship || reading.loadout.shipRead || 'loadout read';
+  if (!finding && reading.fleet) finding = `${(reading.fleet.ships || []).length} ships at the Fleet Manager`;
+  if (!finding && reading.map) finding = reading.map.placeRead || reading.map.systemRead || 'place read';
+  if (!finding && reading.wallet?.balance != null) finding = `wallet ${Number(reading.wallet.balance).toLocaleString()} aUEC`;
+  if (!finding) finding = 'nothing this app knows how to read';
+  return `${new Date(reading.shotAt).toLocaleString()} · ${kind} · ${finding}${reading.dismissed ? ' · invalidated' : ''}`;
 }
 
 /** The saved locations are separate from the disposable reading history. */
@@ -11221,6 +11521,7 @@ $('#screen-read-older')?.addEventListener('click', async (e) => {
   }
 });
 
+let overlayLayoutData = null;
 async function renderOverlayLayout() {
   let data;
   try {
@@ -11228,6 +11529,7 @@ async function renderOverlayLayout() {
   } catch {
     return;
   }
+  overlayLayoutData = data;
 
   const draw = (host, names, chosen) => {
     const node = $(host);
@@ -11323,6 +11625,22 @@ async function saveOverlayLayout() {
     status.textContent = 'could not save';
   }
 }
+
+const OVERLAY_PRESETS = {
+  flight: { tabs: ['now', 'map', 'logbook'], cards: ['location', 'briefing', 'ship', 'session', 'feed'], density: 'compact' },
+  trading: { tabs: ['now', 'jobs', 'cargo', 'market'], cards: ['location', 'briefing', 'ship', 'trip', 'trade'], density: 'compact' },
+  minimal: { tabs: ['now', 'map'], cards: ['location', 'ship', 'session'], density: 'tiny' },
+  full: null,
+};
+$('#overlay-presets')?.addEventListener('click', event => {
+  const preset = OVERLAY_PRESETS[event.target?.dataset?.preset];
+  if (preset === undefined) return;
+  const all = (host, values) => $$(`${host} input`).forEach(box => { box.checked = values.includes(box.value); });
+  const next = preset || { tabs: overlayLayoutData?.tabs || [], cards: overlayLayoutData?.cards || [], density: 'normal' };
+  all('#overlay-tabs', next.tabs); all('#overlay-cards', next.cards);
+  $$('#overlay-density input').forEach(box => { box.checked = box.value === next.density; });
+  saveOverlayLayout();
+});
 
 /**
  * In the widget, applies the chosen layout: which tabs appear, which Now cards
@@ -11534,6 +11852,35 @@ function renderRouteHeader() {
     cargo > 0 ? 'The selected ship has a cargo constraint, so routes can be sized.' : 'No verified cargo capacity is available for the selected ship.');
 }
 
+/** The plan is authored work, so give it equal weight with the price feed.
+ *  A ship without a cargo grid can still fly a useful multi-stop plan. */
+function renderRouteFlightBrief() {
+  const card = $('#route-active-plan');
+  const status = $('#route-active-plan-status');
+  const detail = $('#route-active-plan-detail');
+  const actions = [$('#routes-open-plan'), $('#routes-open-plan-card')].filter(Boolean);
+  if (!card || !status || !detail) return;
+
+  const trip = tracked();
+  if (!trip || !trip.stops?.length) {
+    card.dataset.state = 'waiting';
+    status.textContent = 'No active plan';
+    detail.textContent = 'Choose a trade run, a shopping list, or map stops to create a shared flight plan.';
+    for (const action of actions) action.textContent = 'Start on map';
+    return;
+  }
+
+  const complete = trip.stops.filter((stop) => stop.done).length;
+  const next = nextStop(trip);
+  card.dataset.state = trip.flying ? 'flying' : complete === trip.stops.length ? 'complete' : 'ready';
+  status.textContent = trip.flying ? 'Run in progress'
+    : complete === trip.stops.length ? 'Flight plan complete' : 'Plan ready';
+  detail.textContent = next
+    ? `${trip.title} · next: ${next.place} · ${complete} of ${trip.stops.length} stops complete`
+    : `${trip.title} · every stop is crossed off`;
+  for (const action of actions) action.textContent = 'Open active plan';
+}
+
 let planningHangarLoad = null;
 async function loadPlanningInstallData() {
   if (hangarShips) return hangarShips;
@@ -11653,6 +12000,19 @@ function choosePlanningShip(name) {
   planningShipName = name || '';
   try { localStorage.setItem(PLANNING_SHIP_KEY, planningShipName); } catch { /* optional */ }
   renderShipPlan();
+  const ship = activePlanningShip();
+  if (ship) {
+    const cargo = planningCargo(ship);
+    setContextFocus({
+      kind: 'ship',
+      title: ship.ship.name,
+      detail: cargo > 0 ? `${cargo.toLocaleString()} SCU selected for route planning` : 'Selected for route planning',
+      view: 'routes',
+      action: 'Open routes',
+    });
+  } else if (contextFocus?.kind === 'ship') {
+    clearContextFocus();
+  }
   refreshTradeAdvice(nowState?.location).catch(() => {});
   reloadPilotBriefing().catch(() => {});
   loadRoutes().catch(() => {});
@@ -11889,7 +12249,10 @@ async function loadRoutes() {
   const select = $('#routes-ship');
   if (!select) return;
 
+  setWorkspaceState('#routes-state', 'loading', 'Checking current price reports…');
+
   if (libraryStats) renderShipPlan();
+  renderRouteFlightBrief();
   let active = activePlanningShip();
   // The Hangar page may never have been opened this session. Fetch the same
   // installed hull record here so an optional-community-data outage does not
@@ -11934,6 +12297,7 @@ async function loadRoutes() {
   // per-SCU table would look like a viable haul despite the selected ship.
   // Only a known zero does this; an unknown hold is sized per SCU above.
   if (planningBlocksCargo(active)) {
+    setWorkspaceState('#routes-state', 'empty', 'This selected vehicle cannot carry cargo.');
     const tr = el('tr');
     const td = el('td', 'muted', planningIsGroundVehicle(active)
       ? `${active.ship.name} is a ground vehicle, so cargo routes are hidden for this plan.`
@@ -11951,9 +12315,15 @@ async function loadRoutes() {
   }
 
   let rows = [];
+  let routesUnavailable = false;
   try {
     rows = await getJson(`/api/routes?${routeQuery(query)}`);
-  } catch { /* UEX off */ }
+  } catch (error) {
+    // A missing optional UEX route endpoint is the long-standing "no prices"
+    // answer; an answering server failure or dropped connection is the state
+    // that needs a reconnect instruction.
+    routesUnavailable = !String(error?.message || '').endsWith('-> 404');
+  }
 
   // The initial per-SCU request often leaves before the fleet has loaded. It
   // must not win the race back and overwrite the later request for the ship
@@ -11965,7 +12335,9 @@ async function loadRoutes() {
     // Name the filter that emptied the table. "No route from here" is the
     // wrong explanation for a table that a tickbox hid every row from, and
     // there are now two tickboxes that can do it.
-    const td = el('td', 'muted', safety === 'monitored'
+    const reason = routesUnavailable
+      ? 'Current route prices are unavailable. Refresh after the local server reconnects.'
+      : safety === 'monitored'
       ? 'No route keeps both ends in monitored space. Try Avoid lawless or Any security.'
       : safety === 'avoid-lawless'
         ? 'No route keeps both ends out of lawless space. Try Any security.'
@@ -11983,7 +12355,9 @@ async function loadRoutes() {
           ? 'No route has both sides reporting enough capacity for this load. Try Reported capacity or Include unknown capacity.'
           : evidence === 'reported'
             ? 'No route has stock and demand reported on both sides. Try Include unknown capacity to see price-only estimates.'
-            : 'Nothing to show. Enable UEX prices on the Settings page.');
+            : 'Nothing to show. Enable UEX prices on the Settings page.';
+    setWorkspaceState('#routes-state', routesUnavailable ? 'offline' : 'empty', reason);
+    const td = el('td', 'muted', reason);
     td.colSpan = 12;
     tr.append(td);
     body.append(tr);
@@ -12107,6 +12481,7 @@ async function loadRoutes() {
   }
 
   setRouteReadiness('ready', 'Ready', 'At least one route meets the selected ship, wallet, safety, pad, and evidence filters.');
+  setWorkspaceState('#routes-state', 'ready');
   highlightBestRoute = false;
   renderRouteDashboard(rows);
   loadRouteCircuits(query).catch(() => {});
@@ -12125,6 +12500,20 @@ $('#routes-profile')?.addEventListener('change', () => {
 });
 $('#routes-profile-save')?.addEventListener('click', saveRouteProfile);
 $('#routes-best-safe')?.addEventListener('click', chooseBestSafeRoute);
+function openRoutePlanOnMap() {
+  showTripPanel();
+}
+
+$('#routes-open-plan')?.addEventListener('click', openRoutePlanOnMap);
+$('#routes-open-plan-card')?.addEventListener('click', openRoutePlanOnMap);
+$('#routes-open-support')?.addEventListener('click', () => {
+  window.location.hash = 'map';
+  // The map owns its service rules and closest-place explanation. Enter it
+  // through the same controls a pilot would use rather than duplicating an
+  // approximate facility answer here.
+  document.querySelector('#map-service-filter button[data-service="refuel"]')?.click();
+  $('#map-closest')?.click();
+});
 $('#routes-history-clear')?.addEventListener('click', () => {
   routeHistory = [];
   routeWatches = [];
@@ -12140,19 +12529,21 @@ renderRouteProfiles();
  * answer, and honest about how sure it is.
  */
 async function loadRespawn() {
-  const card = $('#now-respawn-card');
-  if (!card) return;
+  const field = $('#now-status-card [data-status-field="respawn"]');
+  if (!field) return;
 
   let data;
   try {
     data = await getJson('/api/respawn');
   } catch {
-    card.hidden = true;
+    field.dataset.statusAvailable = 'false';
+    applyVisibleStatusFields();
     return;
   }
 
   if (!data.known) {
-    card.hidden = true;
+    field.dataset.statusAvailable = 'false';
+    applyVisibleStatusFields();
     return;
   }
 
@@ -12179,7 +12570,8 @@ async function loadRespawn() {
       : `last woke · ${data.place}, ${relative(data.at)}`)
     : '';
 
-  card.hidden = false;
+  field.dataset.statusAvailable = 'true';
+  applyVisibleStatusFields();
 }
 
 /* ---------- casualties ---------- */
@@ -15256,6 +15648,14 @@ async function loadJobs() {
   await Promise.all([loadJobContracts(), loadJobList(), fillBlueprintGoals()]);
 }
 
+/** The command deck is a door into the existing tools, not a second data model. */
+function setOperationsStatus(id, text, state = '') {
+  const status = $(id);
+  if (!status) return;
+  status.textContent = text;
+  status.dataset.state = state;
+}
+
 /**
  * The goal picker: blueprints the game has actually given you, so a craft can
  * be started from the page where progress is tracked rather than by hunting
@@ -15365,15 +15765,21 @@ async function renderPinnedJob(jobs) {
  * the next load so a later tab click lands at the top as usual.
  */
 let jobsLandOn = null;
+let jobContractsRequest = 0;
 
 /** Scroll to the panel a button promised, once it has something to show. */
 function landOnJobs() {
   if (!jobsLandOn) return;
-  $(jobsLandOn)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Entering Shopping starts its own refresh while the focus action may also
+  // be loading the contract panel. Spend the landing instruction before the
+  // scroll, so both completions cannot use the same one.
+  const anchor = jobsLandOn;
   jobsLandOn = null;
+  $(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function loadJobContracts() {
+  const request = ++jobContractsRequest;
   const host = $('#jobs-contracts');
   host.textContent = '';
 
@@ -15384,8 +15790,10 @@ async function loadJobContracts() {
   try {
     live = await getJson('/api/now');
   } catch { /* server not answering; treat as not playing */ }
+  if (request !== jobContractsRequest) return;
 
   if (!live?.inGame) {
+    setOperationsStatus('#operations-contract-status', 'Waiting for a game session');
     host.append(el('p', 'muted',
       'Nothing active — the game is not running. Contracts are dropped when you leave, '
       + 'so only a live session can have any.'));
@@ -15401,6 +15809,7 @@ async function loadJobContracts() {
       getJson('/api/haul/plan').catch(() => null),
     ]);
   } catch { /* nothing to show */ }
+  if (request !== jobContractsRequest) return;
 
   // This session only: anything taken before it started belongs to the past.
   const since = live.sessionStarted ? new Date(live.sessionStarted).getTime() : 0;
@@ -15408,12 +15817,17 @@ async function loadJobContracts() {
     c.outcome === 'InProgress' && new Date(c.at).getTime() >= since);
 
   if (!open.length && !plan?.contracts?.length) {
+    setOperationsStatus('#operations-contract-status', 'No live contracts');
     host.append(el('p', 'muted', 'No contract open in this session.'));
     landOnJobs();
     return;
   }
 
   if (plan?.contracts?.length) renderHaulPlan(host, plan);
+
+  const activeCount = Math.max(open.length, plan?.contracts?.length || 0);
+  setOperationsStatus('#operations-contract-status',
+    `${activeCount} live contract${activeCount === 1 ? '' : 's'}`, 'active');
 
   // Everything that is not a haul keeps its plain card; the hauls are on
   // the run above, with their legs.
@@ -15433,6 +15847,17 @@ async function loadJobContracts() {
     const head = el('div', 'job-head');
     head.append(el('b', null, contract.name || `${contract.issuer} · ${contract.type}`));
     if (contract.difficulty) head.append(el('span', 'job-kind', contract.difficulty));
+    const focus = el('button', 'ghost tiny', 'Focus');
+    focus.title = 'Keep this contract available while you plan';
+    focus.addEventListener('click', () => setContextFocus({
+      kind: 'contract',
+      title: contract.name || `${contract.issuer} · ${contract.type}`,
+      detail: [contract.issuer, contract.type, contract.system].filter(Boolean).join(' · ') || 'Live contract',
+      view: 'jobs',
+      anchor: '#jobs-contracts',
+      action: 'Open contracts',
+    }));
+    head.append(focus);
     card.append(head);
 
     const sub = [contract.issuer, contract.type, contract.system, `taken ${relative(contract.at)}`]
@@ -15791,11 +16216,13 @@ async function loadJobList() {
   const craftHost = $('#blueprint-jobs');
   host.textContent = '';
   if (craftHost) craftHost.textContent = '';
+  setWorkspaceState('#jobs-state', 'loading', 'Loading shopping lists…');
 
   let jobs = [];
+  let jobsUnavailable = false;
   try {
     jobs = await getJson(`/api/jobs${importedQuery()}`);
-  } catch { /* server down; the page still shows contracts */ }
+  } catch { jobsUnavailable = true; }
 
   renderPinnedJob(jobs);
   refreshMapFocusContext(mapFocusFilter === 'shopping' || mapFocusFilter === 'stash').catch(() => {});
@@ -15805,10 +16232,23 @@ async function loadJobList() {
   // pages; the cards themselves are identical.
   const lists = jobs.filter((j) => j.kind !== 'craft');
   const builds = jobs.filter((j) => j.kind === 'craft');
+  const openLists = lists.filter((j) => !j.done);
+  const missing = openLists.reduce((sum, j) => sum + Math.max(0, (j.totalCount || 0) - (j.haveCount || 0)), 0);
+  setOperationsStatus('#operations-shopping-status', jobsUnavailable
+    ? 'Shopping lists unavailable'
+    : openLists.length
+    ? `${openLists.length} active ${openLists.length === 1 ? 'list' : 'lists'}${missing ? ` · ${missing} item${missing === 1 ? '' : 's'} to find` : ' · all items in hand'}`
+    : 'Start a shopping list', jobsUnavailable ? 'outward' : openLists.length ? 'active' : '');
+  setWorkspaceState('#jobs-state', jobsUnavailable ? 'offline' : openLists.length ? 'ready' : 'empty',
+    jobsUnavailable
+      ? 'Shopping lists are unavailable. Refresh after the local server reconnects.'
+      : 'No active shopping lists. Start one here or add items from Market, Parts, or Mining.');
 
   if (!lists.length) {
     host.append(el('p', 'muted',
-      'No lists yet. Start one here, or add anything from Market, Parts or Mining with "+ list".'));
+      jobsUnavailable
+        ? 'Shopping lists are temporarily unavailable.'
+        : 'No lists yet. Start one here, or add anything from Market, Parts or Mining with "+ list".'));
   }
 
   if (craftHost && !builds.length) {
@@ -15878,6 +16318,18 @@ async function loadJobList() {
 
     pin.addEventListener('click', async () => {
       await fetch(`/api/jobs/${job.id}/pin`, { method: 'POST' });
+      if (!job.pinned) {
+        setContextFocus({
+          kind: 'shopping',
+          title: job.title,
+          detail: `${job.haveCount} of ${job.totalCount} items in hand`,
+          view: 'jobs',
+          anchor: '#jobs-list',
+          action: 'Open list',
+        });
+      } else if (contextFocus?.kind === 'shopping' && contextFocus.title === job.title) {
+        clearContextFocus();
+      }
       loadJobList();
     });
     head.append(pin);
@@ -16048,13 +16500,25 @@ async function fillItemOptions(select) {
   add('Ship parts and gear', catalogue.items);
 }
 
-$('#jobs-new')?.addEventListener('click', () => {
+function openJobForm() {
   const form = $('#job-form');
-  form.hidden = !form.hidden;
+  form.hidden = false;
   fillPlaceOptions($('#job-place'), '');
   fillItemOptions($('#job-add'));
   if (!form.hidden) $('#job-title').focus();
-});
+}
+
+function toggleJobForm() {
+  const form = $('#job-form');
+  if (!form.hidden) {
+    form.hidden = true;
+    return;
+  }
+  openJobForm();
+}
+
+$('#jobs-new')?.addEventListener('click', toggleJobForm);
+$('#operations-new-list')?.addEventListener('click', openJobForm);
 
 // Picking a name writes it into the box, where it can be given a quantity like
 // any other line. The box stays the list; this only spells things.
@@ -16714,17 +17178,75 @@ function initStarStrings() {
  * The logbook page: one merged timeline of what the pilot actually did -
  * sessions, trades, purchases, first-seen loot - straight from /api/logbook.
  */
-async function loadLogbook() {
-  const days = Number($('#logbook-period').value) || 0;
-  const rows = await getJson(`/api/logbook?days=${days}`);
-
-  const feed = $('#logbook-feed');
-  feed.textContent = '';
+function renderLogbookBrief(rows) {
+  const latestTitle = $('#logbook-latest-title');
+  const latestDetail = $('#logbook-latest-detail');
+  const activityTitle = $('#logbook-activity-title');
+  const activityDetail = $('#logbook-activity-detail');
+  const netTitle = $('#logbook-net-title');
+  const netDetail = $('#logbook-net-detail');
 
   if (!rows.length) {
+    latestTitle.textContent = 'No activity recorded';
+    latestDetail.textContent = 'Fly a session, make a trade or discover an item to begin this record.';
+    activityTitle.textContent = 'Nothing in this range';
+    activityDetail.textContent = 'Choose a wider record range to revisit earlier activity.';
+    netTitle.textContent = 'No recorded trade value';
+    netDetail.textContent = 'Receipts appear here when the log records a purchase or sale.';
+    return;
+  }
+
+  const latest = rows[0];
+  const latestText = latest.kind === 'session' ? latest.what : prettyItem(latest.what);
+  latestTitle.textContent = latestText;
+  latestDetail.textContent = `${latest.kind} · ${dateOf(latest.at)}${latest.place ? ` · ${latest.place}` : ''}`;
+
+  const sessions = rows.filter(row => row.kind === 'session').length;
+  const trades = rows.filter(row => row.kind === 'sold' || row.kind === 'bought').length;
+  const discoveries = rows.filter(row => row.kind === 'loot').length;
+  const activity = [];
+  if (sessions) activity.push(`${sessions} session${sessions === 1 ? '' : 's'}`);
+  if (trades) activity.push(`${trades} trade record${trades === 1 ? '' : 's'}`);
+  if (discoveries) activity.push(`${discoveries} discover${discoveries === 1 ? 'y' : 'ies'}`);
+  activityTitle.textContent = activity.length ? activity.join(' · ') : `${rows.length} recorded event${rows.length === 1 ? '' : 's'}`;
+  activityDetail.textContent = `${rows.length} event${rows.length === 1 ? '' : 's'} in the selected range.`;
+
+  const valued = rows.filter(row => row.amount != null && Number(row.amount) !== 0);
+  if (!valued.length) {
+    netTitle.textContent = 'No recorded trade value';
+    netDetail.textContent = 'There are no purchases or sales with a recorded amount in this range.';
+    return;
+  }
+
+  const net = valued.reduce((total, row) => total + Number(row.amount), 0);
+  netTitle.textContent = `${net < 0 ? '−' : '+'}${money(Math.abs(net))}`;
+  netDetail.textContent = `Net of ${valued.length} recorded trade ${valued.length === 1 ? 'entry' : 'entries'} in this range.`;
+}
+
+async function loadLogbook() {
+  const days = Number($('#logbook-period').value) || 0;
+  const feed = $('#logbook-feed');
+  setWorkspaceState('#logbook-state', 'loading', 'Loading recorded activity…');
+  feed.textContent = '';
+
+  let rows;
+  try {
+    rows = await getJson(`/api/logbook?days=${days}`);
+  } catch {
+    renderLogbookBrief([]);
+    setWorkspaceState('#logbook-state', 'offline', 'Recorded activity is unavailable. Refresh after the local server reconnects.');
+    feed.append(el('li', 'empty', 'Recorded activity is unavailable.'));
+    return;
+  }
+  renderLogbookBrief(rows);
+
+  if (!rows.length) {
+    setWorkspaceState('#logbook-state', 'empty', 'No recorded activity matches this range.');
     feed.append(el('li', 'empty', 'Nothing in that range.'));
     return;
   }
+
+  setWorkspaceState('#logbook-state', 'ready');
 
   for (const row of rows) {
     const li = el('li');
@@ -18978,6 +19500,16 @@ function renderFleetShips() {
   // unmatched is assumed to fly.
   const vehicles = ships.filter((s) => s.reference && !s.reference.isSpaceship);
   $('#fleet-vehicles-title').hidden = vehicles.length === 0;
+  const shipCount = ships.length - vehicles.length;
+  const recentCount = ships.filter((s) => isRecentlyFlown(s)).length;
+  const rosterStatus = $('#fleet-roster-status');
+  if (rosterStatus) {
+    const shown = filter === 'ground'
+      ? `${vehicles.length} ground vehicle${vehicles.length === 1 ? '' : 's'} shown`
+      : `${shipCount} ship${shipCount === 1 ? '' : 's'} shown`;
+    rosterStatus.textContent = shown
+      + (recentCount ? ` · ${recentCount} active this week` : ' · no flights this week');
+  }
 
   if (!ships.length) {
     grid.append(el('p', 'muted',
@@ -18992,7 +19524,8 @@ function renderFleetShips() {
     const off = excludedShips.has(ship.name);
 
     const maker = makerOf(ship.name);
-    const card = el('article', off ? 'ship-card excluded' : 'ship-card');
+    const card = el('article', off ? 'ship-card fleet-roster-card excluded' : 'ship-card fleet-roster-card');
+    if (isRecentlyFlown(ship)) card.classList.add('recent');
 
     // The Owned tick: untick a rental or a ship since sold and it leaves
     // every total on this page. Remembered per browser.
@@ -19060,7 +19593,7 @@ function renderFleetShips() {
     if (seconds > 0) stat.append(el('span', 'note-inline', ` · ~${duration(seconds)}`));
 
     body.append(stat);
-    body.append(el('div', 'ship-seen', ship.photographedAt
+    body.append(el('div', isRecentlyFlown(ship) ? 'ship-seen ship-readiness active' : 'ship-seen ship-readiness', ship.photographedAt
       ? `fit photographed ${relative(ship.photographedAt)} · no flights logged`
       : `last flown ${relative(ship.lastFlown)}`));
 
@@ -19111,11 +19644,12 @@ function renderFleetShips() {
 
     // Ground vehicles have no ports anyone sells parts for, so the offer is
     // made only where it can be kept.
+    const actions = el('div', 'ship-actions');
     if (!grounded) {
       const garage = el('button', 'ghost ship-upgrade', 'Garage');
       garage.title = `${ship.name}'s numbers, what fits it, and what a part would change`;
       garage.addEventListener('click', () => openGarageFor(ship.className || ship.name));
-      body.append(garage);
+      actions.append(garage);
     }
 
     const compare = el('button', hangarComparison.has(ship.name) ? 'ghost tiny ship-compare active' : 'ghost tiny ship-compare', hangarComparison.has(ship.name) ? 'Selected to compare' : 'Compare');
@@ -19134,7 +19668,8 @@ function renderFleetShips() {
       }
       renderFleetShips();
     });
-    body.append(compare);
+    actions.append(compare);
+    body.append(actions);
 
     card.append(body);
     (grounded ? vehicleGrid : grid).append(card);
@@ -19227,6 +19762,9 @@ function renderSpending(stats) {
     ['Purchases', stats.purchaseCount],
     ['Cargo trades', stats.tradeCount],
   ]);
+  const netTile = $('#spend-summary')?.children[3];
+  if (netTile) netTile.classList.toggle('net-negative', net < 0);
+  if (netTile) netTile.classList.toggle('net-positive', net > 0);
 
   if (stats.tradeShops && stats.tradeShops.length) {
     bars('#trade-chart',
@@ -19241,17 +19779,28 @@ function renderSpending(stats) {
     $('#trade-chart').append(el('p', 'muted', 'No commodity sales recorded yet.'));
   }
 
-  bars('#shops-chart',
-    stats.shops.slice(0, 15).map((s) => ({ label: s.name, value: s.count })),
-    (v) => `${v} buy${v === 1 ? '' : 's'}`);
+  const shopRows = stats.shops.slice(0, 15).map((s) => ({ label: s.name, value: s.count }));
+  const shopFormat = (v) => `${v} buy${v === 1 ? '' : 's'}`;
+  bars('#shops-chart', shopRows.slice(0, 7), shopFormat);
+  const moreShops = $('#shops-more');
+  if (moreShops) {
+    moreShops.hidden = shopRows.length <= 7;
+    $('#shops-more-count').textContent = shopRows.length > 7 ? `${shopRows.length - 7} more` : '';
+    bars('#shops-more-chart', shopRows.slice(7), shopFormat);
+  }
 
-  bars('#items-chart',
-    stats.items.slice(0, 20).map((i) => ({
+  const itemRows = stats.items.slice(0, 20).map((i) => ({
       label: i.name,
       value: Number(i.total),
       note: i.quantity > 1 ? `×${i.quantity}` : null,
-    })),
-    money);
+    }));
+  bars('#items-chart', itemRows.slice(0, 9), money);
+  const moreItems = $('#items-more');
+  if (moreItems) {
+    moreItems.hidden = itemRows.length <= 9;
+    $('#items-more-count').textContent = itemRows.length > 9 ? `${itemRows.length - 9} more` : '';
+    bars('#items-more-chart', itemRows.slice(9), money);
+  }
 }
 
 /* ---------- loadout ---------- */
@@ -19806,6 +20355,14 @@ function preferredMapSystem() {
   return here && SYSTEM_COLOURS[here] ? here : 'Stanton';
 }
 
+/* The system picked last time. Read when the list is filled rather than at
+   start-up: a select with no options yet refuses any value, so assigning it
+   early was silently dropped and the map always opened on the player's own
+   system, whatever had been chosen. */
+function rememberedMapSystem() {
+  try { return localStorage.getItem(MAP_SYSTEM_KEY) || ''; } catch { return ''; }
+}
+
 function currentMapLocation() {
   return hereId ? atlas.find((location) => location.rawId === hereId) || null : null;
 }
@@ -19858,10 +20415,10 @@ function syncMapModeControls() {
     .filter((name) => SYSTEM_COLOURS[name]))].sort();
 
   if (!system.dataset.filled || [...system.options].map((option) => option.value).join('|') !== systems.join('|')) {
-    const selected = system.value || preferredMapSystem();
+    const wanted = [system.value, rememberedMapSystem(), preferredMapSystem()];
     system.textContent = '';
     for (const name of systems) system.append(new Option(name, name));
-    system.value = systems.includes(selected) ? selected : (systems[0] || '');
+    system.value = wanted.find((name) => systems.includes(name)) || systems[0] || '';
     system.dataset.filled = '1';
   }
 
@@ -20119,28 +20676,11 @@ function drawServiceBadges(group, x, y, radius, services) {
     const badge = svgEl('g', { class: `map-service-badge ${service}` });
     badge.append(svgEl('circle', { cx: bx, cy: by, r: badgeRadius }));
 
-    if (service === 'shop') {
-      badge.append(svgEl('rect', {
-        x: bx - badgeRadius * .52, y: by - badgeRadius * .52,
-        width: badgeRadius * 1.04, height: badgeRadius * 1.04, class: 'service-glyph',
-      }));
-      badge.append(svgEl('line', { x1: bx, y1: by - badgeRadius * .52, x2: bx, y2: by + badgeRadius * .52, class: 'service-glyph' }));
-    } else if (service === 'refuel') {
-      badge.append(svgEl('path', {
-        d: `M ${bx} ${by - badgeRadius * .68} C ${bx + badgeRadius * .56} ${by - badgeRadius * .14}, ${bx + badgeRadius * .42} ${by + badgeRadius * .56}, ${bx} ${by + badgeRadius * .62} C ${bx - badgeRadius * .42} ${by + badgeRadius * .56}, ${bx - badgeRadius * .56} ${by - badgeRadius * .14}, ${bx} ${by - badgeRadius * .68} Z`,
-        class: 'service-glyph',
-      }));
-    } else if (service === 'clinic') {
-      badge.append(svgEl('path', {
-        d: `M ${bx - badgeRadius * .22} ${by - badgeRadius * .64} H ${bx + badgeRadius * .22} V ${by - badgeRadius * .22} H ${bx + badgeRadius * .64} V ${by + badgeRadius * .22} H ${bx + badgeRadius * .22} V ${by + badgeRadius * .64} H ${bx - badgeRadius * .22} V ${by + badgeRadius * .22} H ${bx - badgeRadius * .64} V ${by - badgeRadius * .22} H ${bx - badgeRadius * .22} Z`,
-        class: 'service-glyph',
-      }));
-    } else {
-      badge.append(svgEl('path', {
-        d: `M ${bx - badgeRadius * .58} ${by} H ${bx + badgeRadius * .58} M ${bx} ${by - badgeRadius * .58} V ${by + badgeRadius * .58}`,
-        class: 'service-glyph',
-      }));
-    }
+    badge.append(svgEl('path', {
+      d: MAP_SERVICE_PATHS[service] || MAP_SERVICE_PATHS.repair,
+      transform: `translate(${bx - badgeRadius * .78} ${by - badgeRadius * .78}) scale(${badgeRadius * 1.56 / 24})`,
+      class: 'service-glyph',
+    }));
 
     const title = svgEl('title');
     title.textContent = SERVICE_META[service]?.label || service;
@@ -20298,7 +20838,29 @@ try { followHere = localStorage.getItem('qw-map-follow') === '1'; } catch { /* p
 /** Where the player is, kept in step with the live feed. */
 let hereId = null;
 
-const SYSTEM_COLOURS = { Stanton: '#ffdc9a', Pyro: '#ff8f66', Nyx: '#9fb8ff' };
+// Muted families keep the map quiet; shape identifies the place and saturated
+// colour stays available for the player, search results and commodity prices.
+const MAP_KIND_COLOURS = {
+  City: '#b6d2df', Station: '#8fbacb', RestStop: '#91bdb5',
+  Outpost: '#c7b89c', Mine: '#bba585', Asteroid: '#9da9b7',
+  Research: '#b3abc9', DistributionCentre: '#b4bdcb', JumpPoint: '#d4dfe8',
+  MissionBeacon: '#d6bb86', Unknown: '#8495a6',
+};
+
+// One path set is shared by toolbar icons, service badges and the legend.
+const MAP_SERVICE_PATHS = {
+  shop: 'M4 10h16v10H4z M3 10l2-6h14l2 6 M9 20v-6h6v6 M3 10h18',
+  refuel: 'M12 3C10 6 5 11 5 15a7 7 0 0 0 14 0c0-4-5-9-7-12Z',
+  clinic: 'M9 4h6v5h5v6h-5v5H9v-5H4V9h5Z',
+  repair: 'M14 5a5 5 0 0 0-6 6L3 16l5 5 5-5a5 5 0 0 0 6-6l-4 3-4-4Z',
+};
+function mapServiceIcon(service) {
+  const icon = svgEl('svg', { viewBox: '0 0 24 24', class: 'map-ui-icon', 'aria-hidden': 'true' });
+  icon.append(svgEl('path', { d: MAP_SERVICE_PATHS[service] || MAP_SERVICE_PATHS.repair }));
+  return icon;
+}
+
+const SYSTEM_COLOURS = { Stanton: '#d6c39e', Pyro: '#c39988', Nyx: '#a6b3d0' };
 
 /** Jump lanes, drawn between the stars they connect. */
 const JUMP_LANES = [
@@ -20394,8 +20956,13 @@ let view = { ...HOME_VIEW };
 const labelSize = (scale = 1) => (view.w / HOME_VIEW.w) * 9.5 * scale;
 
 async function loadAtlas() {
+  setWorkspaceState('#map-state', 'loading', 'Loading known places…');
+  let mapUnavailable = false;
   const [data, servicePlaces] = await Promise.all([
-    getJson('/api/map'),
+    getJson('/api/map').catch(() => {
+      mapUnavailable = true;
+      return { nodes: [], positions: {} };
+    }),
     getJson('/api/map/services').catch(() => []),
   ]);
   atlas = data.nodes || [];
@@ -20410,6 +20977,10 @@ async function loadAtlas() {
   // A detail card can stay open while the history refreshes. Its facts should
   // catch up when the supporting service map does.
   if (mapInfoLocation) renderMapInfoServices(mapInfoLocation);
+  setWorkspaceState('#map-state', mapUnavailable ? 'offline' : atlas.length ? 'ready' : 'empty',
+    mapUnavailable
+      ? 'Map data is unavailable. Refresh after the local server reconnects.'
+      : 'No known places are available yet.');
 }
 
 /** Real body coordinates per system, when the community dataset supplies them. */
@@ -20910,6 +21481,9 @@ function drawHere() {
 
 /** Wheel zoom, drag pan, and the toolbar. Wired once. */
 function initMap() {
+  for (const button of $$('#map-service-filter [data-service]')) {
+    if (button.dataset.service) button.prepend(mapServiceIcon(button.dataset.service));
+  }
   const map = $('#starmap');
 
   map.addEventListener('wheel', (e) => {
@@ -20998,7 +21572,6 @@ function initMap() {
   const system = $('#map-system');
   try {
     mode.value = localStorage.getItem(MAP_MODE_KEY) || 'system';
-    system.value = localStorage.getItem(MAP_SYSTEM_KEY) || '';
   } catch { /* private mode */ }
   mode.addEventListener('change', () => {
     syncMapModeControls();
@@ -21007,6 +21580,8 @@ function initMap() {
   });
   system.addEventListener('change', () => {
     try { localStorage.setItem(MAP_SYSTEM_KEY, system.value); } catch { /* fine */ }
+    // The note under the toolbar names the system, so it moves with the pick.
+    syncMapModeControls();
     drawMap();
   });
   for (const button of $$('#map-service-filter button'))
@@ -21833,6 +22408,7 @@ const nextStop = (trip) => trip?.stops.find((s) =>
 async function loadTrips() {
   trips = await getJson(`/api/trips${importedQuery()}`);
   renderTripCard();
+  renderRouteFlightBrief();
   reloadPilotBriefing().catch(() => {});
   if (!$('#cargo-panel').hidden && cargo.trip) renderTripPanel();
   // A plan can itself be the active map layer; rebuild then so adding,
@@ -21956,6 +22532,14 @@ async function addStop(placeId, place, note) {
 
 /** Starts a plan from a list of stops - a trade run, or a shopping trip. */
 async function planTrip(title, stops) {
+  setContextFocus({
+    kind: 'flight-plan',
+    title,
+    detail: `${stops.length} stop${stops.length === 1 ? '' : 's'} ready to route`,
+    view: 'map',
+    plan: true,
+    action: 'Open plan',
+  });
   await fetch('/api/trips', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -23255,7 +23839,7 @@ function showMapTip(location) {
   const services = servicesAt(location);
   if (services.length)
     tip.append(el('span', 'service-tip', services
-      .map((service) => `${SERVICE_META[service]?.icon || '•'} ${SERVICE_META[service]?.label || service}`)
+      .map((service) => `${SERVICE_META[service]?.label || service}`)
       .join(' · ')));
 
   tip.hidden = false;
@@ -23303,7 +23887,7 @@ function showBodyTip(bodyName, system, sites) {
       serviceCounts.set(service, (serviceCounts.get(service) || 0) + 1);
   if (serviceCounts.size) {
     const summary = [...serviceCounts.entries()]
-      .map(([service, count]) => `${SERVICE_META[service]?.icon || '•'} ${count} ${SERVICE_META[service]?.label || service}`)
+      .map(([service, count]) => `${count} ${SERVICE_META[service]?.label || service}`)
       .join(' · ');
     tip.append(el('span', 'service-tip', summary));
   }
@@ -23498,8 +24082,19 @@ async function showMapInfo(location) {
   if (!await openEntity('place', location.rawId)) return;
 
   mapInfoLocation = location;
+  setContextFocus({
+    kind: 'place',
+    title: location.name,
+    detail: [location.body, location.system].filter(Boolean).join(' · ') || 'Map place',
+    view: 'map',
+    placeId: location.rawId,
+    action: 'Open map',
+  });
+  $('#entity-drawer').classList.add('map-place-open');
 
   renderMapInfoServices(location);
+  renderMapInfoPlan(location);
+  renderMapInfoData();
   renderMapInfoNotes(location);
 
   // In commodity mode, say which side of the search this place is on.
@@ -23573,13 +24168,125 @@ function renderMapInfoServices(location) {
     const chip = el('button', 'map-service-chip');
     chip.type = 'button';
     chip.title = `Filter the map to ${meta.label.toLowerCase()}`;
-    chip.append(el('span', 'service-icon', meta.icon));
+    chip.append(mapServiceIcon(service));
     chip.append(el('span', 'service-text', meta.label));
     chip.addEventListener('click', () => selectMapService(service));
     host.append(chip);
   }
 
   host.hidden = host.children.length === 0;
+  renderMapInfoSupport(location, services);
+}
+
+/**
+ * Keep the routine decision beside the selected location. The map's service
+ * data is reported by UEX, so an absent chip means "not listed", never that a
+ * facility cannot exist there. The closest-place action keeps that limit in
+ * view by calculating from the pilot's last known location, just as the main
+ * map control does.
+ */
+function renderMapInfoSupport(location, services) {
+  const host = $('#map-info-support');
+  host.textContent = '';
+
+  const missing = ['refuel', 'clinic', 'repair'].filter((service) => !services.includes(service));
+  if (!missing.length) {
+    host.hidden = true;
+    return;
+  }
+
+  host.append(el('div', 'map-support-copy', 'Need a service that is not listed here?'));
+  const choices = el('div', 'map-support-actions');
+  for (const service of missing) {
+    const meta = SERVICE_META[service];
+    const button = el('button', 'ghost tiny', `Find ${meta.label.toLowerCase()}`);
+    button.type = 'button';
+    button.title = `Find the closest ${meta.label.toLowerCase()} from your last known location`;
+    button.addEventListener('click', () => findMapSupport(service));
+    choices.append(button);
+  }
+  host.append(choices);
+  host.hidden = false;
+}
+
+function findMapSupport(service) {
+  mapAmenityFilter = '';
+  const amenity = $('#map-amenity');
+  if (amenity) amenity.value = '';
+  selectMapService(service, true, false);
+  selectClosestMapFacility();
+}
+
+/** The selected place's relationship to the tracked route, plus its next action. */
+function renderMapInfoPlan(location) {
+  const host = $('#map-info-plan');
+  const state = $('#map-place-plan-state');
+  const trip = tracked();
+  const stopIndex = trip?.stops.findIndex((stop) => stop.placeId === location.rawId) ?? -1;
+  const stop = stopIndex >= 0 ? trip.stops[stopIndex] : null;
+  host.textContent = '';
+  state.textContent = '';
+  state.hidden = true;
+
+  const copy = el('div', 'map-plan-copy');
+  if (stop) {
+    const next = nextStop(trip);
+    const complete = trip.stops.filter((item) => item.done).length;
+    state.textContent = stop.done ? 'Complete' : stop === next ? 'Next stop' : `Stop ${stopIndex + 1}`;
+    state.hidden = false;
+    copy.append(el('b', null, trip.title));
+    copy.append(el('span', null, stop.done
+      ? ` · completed stop ${stopIndex + 1} of ${trip.stops.length}`
+      : ` · stop ${stopIndex + 1} of ${trip.stops.length}, ${complete} complete`));
+  } else if (trip) {
+    copy.append(el('span', null, `${trip.title} · this place is not on the flight plan.`));
+  } else {
+    copy.append(el('span', null, 'No active flight plan. Add this place when you are ready to route it.'));
+  }
+  host.append(copy);
+
+  const button = el('button', 'map-plan-primary', stop ? 'Open flight plan' : 'Add to flight plan');
+  button.type = 'button';
+  button.addEventListener('click', async () => {
+    if (stop) {
+      showTripPanel();
+      drawMap();
+      return;
+    }
+    button.disabled = true;
+    try {
+      await fetch('/api/trips/stops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ placeId: location.rawId, place: location.name, note: null }),
+      });
+      await loadTrips();
+      if (mapInfoLocation === location) renderMapInfoPlan(location);
+    } catch {
+      button.textContent = 'Could not add stop';
+      button.disabled = false;
+    }
+  });
+  host.append(button);
+}
+
+/**
+ * Prices are optional evidence, not a promise every location has one. Keeping
+ * the source and collection age in the folded detail section makes a reported
+ * counter useful without giving it equal weight to the route decision above.
+ */
+function renderMapInfoData() {
+  const host = $('#map-info-data');
+  const price = $('#entity-price');
+  host.textContent = '';
+
+  if (price.hidden) {
+    host.append(el('span', 'muted', 'No reported price for this place. Service counters are listed by UEX; facilities below come from the game data.'));
+    return;
+  }
+
+  host.append(el('span', 'map-data-label', 'Reported price'));
+  host.append(el('span', null, price.textContent));
 }
 
 /** Lore paragraphs already asked for, name to promise of text-or-null. */
@@ -23938,7 +24645,7 @@ function drawMap() {
 
       map.append(svgEl('line', {
         x1: place.from.x, y1: place.from.y, x2: bx, y2: by,
-        stroke: 'rgba(53,200,240,.13)', 'stroke-width': '1',
+        stroke: 'rgba(150,172,194,.13)', 'stroke-width': '1',
       }));
 
       const sites = bodies.get(bodyName);
@@ -24074,50 +24781,77 @@ function drawMap() {
  * business.
  *
  * Colour alone was carrying the whole taxonomy: nine kinds, nine dots, and a
- * legend to memorise. A shape can be read without the legend - a headframe is a
- * mine whether or not you remember that mines are brown - and the colour stays
- * exactly as it was, so anyone who had learnt it loses nothing.
+ * legend to memorise. Distinct silhouettes carry the type even when the map
+ * switches from its muted place palette to commodity price shading.
  *
- * Deliberately blunt geometry. These are drawn between four and seventeen
- * pixels across, where a detailed glyph turns to mush; a silhouette that
- * survives being tiny beats one that looks good in a design tool.
+ * These are compact technical pictograms rather than arbitrary geometry. They
+ * have one recognisable detail at the smallest size and a little more character
+ * once zoomed in; intricate library icons lost that detail on dense bodies.
  */
 const KIND_SHAPES = {
-  // A skyline. Two steps rather than three: at eight pixels a third is a smudge.
-  City: [{ tag: 'path', attrs: { d: 'M-1 .9 L-1 -.15 L-.05 -.15 L-.05 -1 L1 -1 L1 .9 Z' } }],
+  // A skyline with three distinct towers. The stepped outline survives a dense
+  // cluster while the inset reads as streets when the map frames a city.
+  City: [
+    { tag: 'path', attrs: { d: 'M-1 .9V-.2H-.58V-1H-.16V.2H.18V-.68H.64V.04H1V.9Z' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.8 .34H.8M-.37-.7V.68M.4-.35V.68' } },
+  ],
 
-  // A ring - the one shape that reads as "you dock inside it".
-  Station: [{ tag: 'path', attrs: { d: 'M0 -1 A 1 1 0 1 1 0 1 A 1 1 0 1 1 0 -1 Z M0 -.42 A .42 .42 0 1 0 0 .42 A .42 .42 0 1 0 0 -.42 Z' }, evenodd: 1 }],
+  // A top-down docking spine with lateral berths. It reads as a built station
+  // rather than a face-like cluster of lobes when a highlighted mark is large.
+  Station: [
+    { tag: 'path', attrs: { d: 'M-.22-1H.22V-.44H.68L1-.16V.16L.68.44H.22V1H-.22V.44H-.68L-1 .16V-.16L-.68-.44H-.22Z' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.22-.7H.22M-.52 0H.52M-.22 .7H.22' } },
+  ],
 
-  // A horizontal berth: it stays distinct from an asteroid's uneven rock
-  // silhouette even when a map icon is only a handful of pixels across.
-  RestStop: [{ tag: 'rect', attrs: { x: -1, y: -.62, width: 2, height: 1.24, rx: .34 } }],
+  // A pad marker: octagonal perimeter and a compact H for the landing berth.
+  RestStop: [
+    { tag: 'path', attrs: { d: 'M-.55-1H.55L1-.55V.55L.55 1H-.55L-1 .55V-.55Z' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.38-.45V.45M.38-.45V.45M-.38 0H.38' } },
+  ],
 
-  // A dome on the ground.
-  Outpost: [{ tag: 'path', attrs: { d: 'M-1 .55 A 1 1 0 0 1 1 .55 L1 .8 L-1 .8 Z' } }],
+  // A staffed surface outpost: a low habitat, mast, and one status window.
+  Outpost: [
+    { tag: 'path', attrs: { d: 'M-1 .72V.22L-.38-.45V-1H.02V-.45L.68.08V.72Z' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.7 .35H.42M-.18-1v-.22M.2 .1h.2' } },
+  ],
 
-  // A spoil heap. Nothing on top of it - the headframe it used to carry turned
-  // to mush at map size, which is the size it is always drawn at.
-  Mine: [{ tag: 'polygon', attrs: { points: '0,-1 1,.85 -1,.85' } }],
+  // An open headframe with a crossbeam reads as mining rather than a warning.
+  Mine: [
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-1 .9 0-1 1 .9M-.62 .2H.62M-.32-.35H.32M-1 .9H1' } },
+  ],
 
-  // An uneven rock: the lopsided outline is intentional, otherwise it reads
-  // too much like a rest-stop berth at a glance.
-  Asteroid: [{ tag: 'polygon', attrs: { points: '-.72,-.92 .5,-.72 1,.02 .42,.9 -.74,.62 -1,-.18' } }],
+  // A chipped rock with two crater cuts. It stays asymmetric at map scale.
+  Asteroid: [
+    { tag: 'path', attrs: { d: 'M-.76-.84 .42-.73 1-.08.47.9-.72.63-1-.14ZM-.22-.3a.22.22 0 1 0 0 .44.22.22 0 1 0 0-.44ZM.43.2a.14.14 0 1 0 0 .28.14.14 0 1 0 0-.28Z' }, evenodd: 1 },
+  ],
 
-  // A cross: legible at any size, and nothing else on the map is one.
-  Research: [{ tag: 'path', attrs: { d: 'M-.32 -1 L.32 -1 L.32 -.32 L1 -.32 L1 .32 L.32 .32 L.32 1 L-.32 1 L-.32 .32 L-1 .32 L-1 -.32 L-.32 -.32 Z' } }],
+  // A flask reads as research while leaving the medical cross exclusively to clinics.
+  Research: [
+    { tag: 'path', attrs: { d: 'M-.34-1H.34V-.34L.88.62Q.94.92.58.92H-.58Q-.94.92-.88.62L-.34-.34Z' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.48 .4H.48M-.18-.68H.18' } },
+  ],
 
-  // Cargo moving: an arrow, not a crate with a band nobody could see.
-  DistributionCentre: [{ tag: 'polygon', attrs: { points: '-1,-.85 .95,0 -1,.85 -1,.3 -.15,0 -1,-.3' } }],
+  // Stacked containers plus a directional seam make a freight depot distinct from a city.
+  DistributionCentre: [
+    { tag: 'path', attrs: { d: 'M-1-.78H.3V-.1H1V.78H-.3V.1H-1Z' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.72-.44H.02M-.02 .44H.72M-.36-.78V-.1M.36 .1V.78' } },
+  ],
 
-  // The same diamond the jump lanes wear.
-  JumpPoint: [{ tag: 'polygon', attrs: { points: '0,-1 1,0 0,1 -1,0' } }],
+  // A gate with a star cutout describes a jump point without reusing a diamond.
+  JumpPoint: [
+    { tag: 'path', attrs: { d: 'M-1 .85V-.35L-.35-1H.35L1-.35V.85H.5V-.18L.18-.55H-.18L-.5-.18V.85Z' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M0-.35V.45M-.34.05H.34' } },
+  ],
 
-  MissionBeacon: [{ tag: 'polygon', attrs: { points: '0,1 -1,-.85 0,-.3 1,-.85' } }],
+  // A transmitter with two short waves gives mission beacons a different rhythm.
+  MissionBeacon: [
+    { tag: 'path', attrs: { d: 'M0-1 .5.72H-.5Z' } },
+    { tag: 'path', open: true, inset: true, attrs: { d: 'M-.78-.56-.98-.35M.78-.56 .98-.35M-.9 .08-1 .28M.9 .08 1 .28M-.62.72H.62' } },
+  ],
 };
 
-/** Anything without a mark of its own keeps the dot it always had. */
-const PLAIN_MARK = [{ tag: 'circle', attrs: { cx: 0, cy: 0, r: 1 } }];
+/** Unknown places use a four-tick locator so every default is a real icon. */
+const PLAIN_MARK = [{ tag: 'path', open: true, attrs: { d: 'M0-1v.46M0 .54V1M-1 0h.46M.54 0H1' } }];
 
 /**
  * Draws a place's mark at a size.
@@ -24126,9 +24860,8 @@ const PLAIN_MARK = [{ tag: 'circle', attrs: { cx: 0, cy: 0, r: 1 } }];
  *   outline, exactly as when every kind was a circle.
  */
 /**
- * Equal radius is not equal weight: a triangle inside a circle covers under
- * half of it, so the same number drew a mine that looked half the size of a
- * rest stop beside it. Each shape is nudged until they read as one set.
+ * Equal radius is not equal visual weight: an open headframe reads lighter than
+ * a filled station, so the weights make the set feel intentional at a glance.
  */
 const SHAPE_WEIGHT = {
   City: 0.92,
@@ -24138,7 +24871,7 @@ const SHAPE_WEIGHT = {
   Mine: 1.18,
   Asteroid: 1,
   Research: 1.06,
-  DistributionCentre: 1.12,
+  DistributionCentre: 1,
   JumpPoint: 1.15,
   MissionBeacon: 1.15,
 };
@@ -24155,17 +24888,18 @@ function kindMark(kind, x, y, radius, colour, solid) {
     group.append(svgEl(part.tag, {
       ...part.attrs,
 
-      // Line parts are strokes whatever the history: a filled orbit or shaft is
-      // a blob. Everything else fills once the place has been visited.
-      fill: solid ? colour : 'none',
-      stroke: colour,
+      // Interior detail stays open. On a filled icon it is darkened so the
+      // streets, docking collars, and cargo seams remain visible at normal zoom.
+      fill: part.open ? 'none' : solid ? colour : 'none',
+      stroke: part.inset && solid ? '#08131b' : colour,
 
       // Heavy enough to survive being drawn six pixels across, which is the
       // size these are actually used at; an outline at .14 disappeared.
-      'stroke-width': 0.22,
+      'stroke-width': part.open ? 0.19 : 0.22,
+      'stroke-linecap': 'round',
       'stroke-linejoin': 'round',
       'fill-rule': part.evenodd ? 'evenodd' : 'nonzero',
-      opacity: solid ? 0.92 : 0.6,
+      opacity: solid ? 1 : 0.78,
     }));
   }
 
@@ -24228,7 +24962,7 @@ const hitPad = (radius, room) => Math.max(radius + 1, Math.min(radius + 8, room)
  */
 function drawNode(map, x, y, location, radius, anchor = null, room = Infinity) {
 
-  const colour = KIND_COLOURS[location.kind] || KIND_COLOURS.Unknown;
+  const colour = MAP_KIND_COLOURS[location.kind] || MAP_KIND_COLOURS.Unknown;
   const been = location.visits > 0;
 
   let cls = been ? 'map-node' : 'map-node unvisited';
@@ -24465,7 +25199,7 @@ function drawLegend(locations) {
 
     for (const service of shown) {
       const item = el('div', 'item');
-      item.append(el('span', 'service-tip', SERVICE_META[service]?.icon || '•'));
+      item.append(mapServiceIcon(service));
       item.append(el('span', null, `${SERVICE_META[service]?.label || service} badge`));
       legend.append(item);
     }
@@ -24508,12 +25242,15 @@ function drawLegend(locations) {
     const swatch = document.createElementNS(SVG_NS, 'svg');
     swatch.setAttribute('viewBox', '-1.35 -1.35 2.7 2.7');
     swatch.setAttribute('class', 'swatch-mark');
-    swatch.append(kindMark(kind, 0, 0, 1, KIND_COLOURS[kind] || KIND_COLOURS.Unknown, true));
+    swatch.append(kindMark(kind, 0, 0, 1, MAP_KIND_COLOURS[kind] || MAP_KIND_COLOURS.Unknown, true));
     item.append(swatch);
     item.append(el('span', null, kind.replace(/([a-z])([A-Z])/g, '$1 $2')));
     legend.append(item);
   }
 
+  const historyKey = el('div', 'item map-history-key');
+  historyKey.append(el('span', null, 'Filled: visited · Outline: unvisited'));
+  legend.append(historyKey);
   appendPriceFreshness();
   appendServiceLegend();
 }
@@ -25525,6 +26262,7 @@ async function maybeShowSetup() {
 
 async function boot() {
   initNowCardCollapsers();
+  initCurrentStatusConfiguration();
   initPageStatsCollapsers();
 
   if (isOverlay) {

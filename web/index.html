@@ -19,21 +19,22 @@
     <span class="by">by nekron</span>
   </div>
 
-  <!-- Sixteen flat tabs got crowded; the strip is grouped instead. The
-       overlay flattens the groups back out with display:contents and keeps
-       its own six-tab whitelist. -->
+  <!-- Frequent views stay direct. Related work sits under a small set of
+       clear areas; the overlay flattens those groups back out with
+       display:contents and keeps its own six-tab whitelist. -->
   <nav class="tabs" id="tabs">
     <button data-view="now" class="active">Now</button>
     <button data-view="map">Map</button>
     <button data-view="log">Log</button>
     <div class="tab-group">
-      <button type="button" class="group-btn">Jobs<span class="caret">▾</span></button>
+      <button type="button" class="group-btn">Operations<span class="caret">▾</span></button>
       <div class="group-menu">
-        <button data-view="jobs">Shopping</button>
+        <button data-view="jobs">Command deck</button>
+        <button data-view="routes">Routes</button>
+        <button data-view="contracts">Contracts</button>
         <button data-view="checklists">Checklists</button>
         <button data-view="blueprints">Blueprints</button>
         <button data-view="wikelo">Wikelo</button>
-        <button data-view="routes">Routes</button>
       </div>
     </div>
     <div class="tab-group">
@@ -42,11 +43,8 @@
         <button data-view="logbook">Logbook</button>
         <button data-view="sessions">Sessions</button>
         <button data-view="servers">Servers</button>
-        <button data-view="fleet">Fleet</button>
-        <button data-view="hangar">Hangar</button>
         <button data-view="places">Places</button>
         <button data-view="points">Points</button>
-        <button data-view="contracts">Contracts</button>
         <button data-view="crew">Crew</button>
         <button data-view="casualties">Casualties</button>
       </div>
@@ -70,8 +68,10 @@
       </div>
     </div>
     <div class="tab-group">
-      <button type="button" class="group-btn">Gear<span class="caret">▾</span></button>
+      <button type="button" class="group-btn">Hangar<span class="caret">▾</span></button>
       <div class="group-menu">
+        <button data-view="fleet">Fleet</button>
+        <button data-view="hangar">Hangar</button>
         <button data-view="loadout">Loadout</button>
         <button data-view="stash">Stash</button>
         <button data-view="loot">Loot</button>
@@ -92,9 +92,9 @@
              runs its own click instead; menu-action keeps it out of the
              overlay, whose every button rule is scoped to [data-view]. -->
         <button type="button" class="menu-action" id="menu-update-check">Check for updates</button>
+        <button data-view="about">About</button>
       </div>
     </div>
-    <button data-view="about">About</button>
   </nav>
 
   <div class="status">
@@ -110,6 +110,21 @@
     <span id="link" class="dot" title="disconnected"></span>
   </div>
 </header>
+
+<!-- A chosen place, hull, list or flight plan stays available while the pilot
+     moves through the workspaces. It is absent until there is a real choice,
+     so the shared navigation does not become another dashboard. -->
+<aside class="context-rail" id="context-rail" hidden aria-live="polite">
+  <div class="context-rail-inner">
+    <span class="context-rail-kicker">In focus</span>
+    <div class="context-rail-copy">
+      <b id="context-title"></b>
+      <span id="context-detail" class="muted"></span>
+    </div>
+    <button type="button" class="ghost tiny" id="context-action"></button>
+    <button type="button" class="context-rail-clear" id="context-clear" title="Clear current focus" aria-label="Clear current focus">×</button>
+  </div>
+</aside>
 
 <main>
 
@@ -188,32 +203,66 @@
     </div>
     <div class="now-grid">
 
-      <article class="card hero" data-card="location">
-        <div class="card-label">Location</div>
-        <div class="card-source source-slot" id="now-location-source" data-sources="logs"></div>
-        <div class="hero-value" id="now-location">—</div>
-        <div class="hero-sub" id="now-location-sub"></div>
-        <div class="confidence" id="now-confidence"></div>
-        <div class="travel" id="now-travel" hidden>
-          <span class="travel-arrow">▸</span>
-          <span id="now-travel-to"></span>
+      <article class="card now-status-card" id="now-status-card" data-card="status">
+        <div class="card-label">Current status</div>
+        <button class="now-status-config now-card-action" id="now-status-config" type="button"
+                title="Configure current status" aria-label="Configure current status"
+                aria-expanded="false" aria-controls="now-status-options">⚙</button>
+        <div class="now-status-readings">
+          <section class="now-status-field now-status-location" data-status-field="location">
+            <div class="now-status-label">Location</div>
+            <div class="card-source source-slot" id="now-location-source" data-sources="logs"></div>
+            <div class="hero-value" id="now-location">—</div>
+            <div class="hero-sub" id="now-location-sub"></div>
+            <div class="confidence" id="now-confidence"></div>
+            <div class="travel" id="now-travel" hidden>
+              <span class="travel-arrow">▸</span>
+              <span id="now-travel-to"></span>
+            </div>
+          </section>
+          <section class="now-status-field" data-status-field="ship">
+            <div class="now-status-label">Ship</div>
+            <div class="card-source source-slot" id="now-ship-source" data-sources="logs"></div>
+            <div class="now-ship-summary">
+              <div class="now-ship-logo" id="now-ship-logo" hidden></div>
+              <div class="value" id="now-ship">—</div>
+            </div>
+          </section>
+          <section class="now-status-field" data-status-field="session">
+            <div class="now-status-label">Session</div>
+            <div class="card-source source-slot" id="now-session-source" data-sources="logs"></div>
+            <div class="value" id="now-clock">—</div>
+            <div class="sub" id="now-mode"></div>
+          </section>
+          <section class="now-status-field" data-status-field="handle">
+            <div class="now-status-label">Pilot</div>
+            <div class="value" id="now-handle">—</div>
+            <div class="sub" id="now-version"></div>
+          </section>
+          <section class="now-status-field now-status-health" data-status-field="health">
+            <div class="now-status-label">This session</div>
+            <div class="card-source source-slot" id="now-stats-source" data-sources="logs" data-source-qualifier="INFERRED"></div>
+            <div class="statline"><span>Deaths</span><b id="now-deaths">0</b></div>
+            <div class="statline"><span>Incapacitations</span><b id="now-incaps">0</b></div>
+            <div class="note" id="combat-note"></div>
+          </section>
+          <section class="now-status-field now-status-respawn" data-status-field="respawn" data-status-available="false" hidden>
+            <div class="now-status-label">Wake up at</div>
+            <div class="value" id="now-respawn">—</div>
+            <div class="sub" id="now-respawn-sub"></div>
+            <div class="sub" id="now-respawn-bed"></div>
+          </section>
         </div>
-      </article>
-
-      <article class="card" data-card="ship">
-        <div class="card-label">Ship</div>
-        <div class="card-source source-slot" id="now-ship-source" data-sources="logs"></div>
-        <div class="now-ship-summary">
-          <div class="now-ship-logo" id="now-ship-logo" hidden></div>
-          <div class="value" id="now-ship">—</div>
+        <div class="now-status-options" id="now-status-options" hidden>
+          <span>Show</span>
+          <label><input type="checkbox" data-status-field-toggle="location" checked> Location</label>
+          <label><input type="checkbox" data-status-field-toggle="ship" checked> Ship</label>
+          <label><input type="checkbox" data-status-field-toggle="session" checked> Session</label>
+          <label><input type="checkbox" data-status-field-toggle="handle" checked> Pilot</label>
+          <label><input type="checkbox" data-status-field-toggle="health" checked> Session health</label>
+          <label><input type="checkbox" data-status-field-toggle="respawn" checked> Wake up at</label>
         </div>
-      </article>
-
-      <article class="card" data-card="session">
-        <div class="card-label">Session</div>
-        <div class="card-source source-slot" id="now-session-source" data-sources="logs"></div>
-        <div class="value" id="now-clock">—</div>
-        <div class="sub" id="now-mode"></div>
+        <div class="note" id="now-status-empty" hidden>Choose at least one reading to show in this card.</div>
       </article>
 
       <article class="card span2 now-briefing" id="now-briefing-card" data-card="briefing" hidden>
@@ -271,26 +320,12 @@
         </div>
       </article>
 
-      <article class="card" data-card="handle">
-        <div class="card-label">Handle</div>
-        <div class="value" id="now-handle">—</div>
-        <div class="sub" id="now-version"></div>
-      </article>
-
       <article class="card span2" data-card="feed">
         <div class="card-label">Live feed</div>
         <div class="card-source source-slot" id="now-feed-source" data-sources="logs"></div>
         <ul class="feed" id="now-feed">
           <li class="empty">Waiting for the game…</li>
         </ul>
-      </article>
-
-      <article class="card" data-card="stats">
-        <div class="card-label">This session</div>
-        <div class="card-source source-slot" id="now-stats-source" data-sources="logs" data-source-qualifier="INFERRED"></div>
-        <div class="statline"><span>Deaths</span><b id="now-deaths">0</b></div>
-        <div class="statline"><span>Incapacitations</span><b id="now-incaps">0</b></div>
-        <div class="note" id="combat-note"></div>
       </article>
 
       <article class="card" id="now-server-card" data-card="server" hidden>
@@ -349,13 +384,6 @@
         <div class="note" id="now-earning-note"></div>
       </article>
 
-      <article class="card" id="now-respawn-card" data-card="respawn" hidden>
-        <div class="card-label">Wake up at</div>
-        <div class="value" id="now-respawn">—</div>
-        <div class="sub" id="now-respawn-sub"></div>
-        <div class="sub" id="now-respawn-bed"></div>
-      </article>
-
       <article class="card span2" id="now-job-card" data-card="job" hidden>
         <div class="card-label">Job in hand</div>
         <div class="now-job-title" id="now-job-title"></div>
@@ -403,75 +431,89 @@
     </div>
 
     <div class="map-tools">
-      <label class="toggle">
-        <input type="checkbox" id="map-visited-only">
-        <span>Visited only</span>
-      </label>
-      <select id="map-mode" class="select" title="Choose an accurate system view or a schematic jump network">
-        <option value="system">System positions</option>
-        <option value="network">Jump network</option>
-      </select>
-      <select id="map-system" class="select" title="System to draw with relative body positions"></select>
-      <label class="toggle" title="List the commodities sold at a place on its hover tip and detail card">
-        <input type="checkbox" id="map-goods">
-        <span>Goods on hover</span>
-      </label>
-      <div class="map-service-filter" id="map-service-filter" role="group" aria-label="Filter places by service">
-        <button type="button" class="active" data-service="" title="Show every place">All</button>
-        <button type="button" data-service="shop" title="UEX-listed counters and shops">▦ Shops</button>
-        <button type="button" data-service="refuel" title="Places with a UEX fuel price">⛽ Refuel</button>
-        <button type="button" data-service="clinic" title="Places listed with a clinic">✚ Clinic</button>
+      <div class="map-toolbar-row map-primary-tools">
+        <select id="map-mode" class="select" title="Choose an accurate system view or a schematic jump network">
+          <option value="system">System positions</option>
+          <option value="network">Jump network</option>
+        </select>
+        <select id="map-system" class="select" title="System to draw with relative body positions"></select>
+        <span class="map-search-box">
+          <input type="search" id="map-search" aria-label="Find a place or commodity" placeholder="Find a place or commodity…" autocomplete="off">
+          <div class="map-results" id="map-results" hidden></div>
+        </span>
+        <button class="ghost map-player" id="map-here" title="Show your current location on the map">
+          <svg class="map-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/><circle cx="12" cy="12" r="1"/></svg> <span id="map-here-label">Your location</span>
+        </button>
       </div>
-      <select id="map-amenity" class="select" aria-label="Facility" title="Choose a facility, then select the closest to your last known location">
-        <option value="">Any facility</option>
-      </select>
-      <button type="button" class="ghost" id="map-closest" title="Find the closest matching facility or service from your last known location">Select closest</button>
-      <div class="map-focus-filter" id="map-focus-filter" role="group" aria-label="Focus the map on your work">
-        <button type="button" class="active" data-focus="" title="Show every place">All</button>
-        <button type="button" data-focus="plan" title="Stops on the active flight plan">Plan</button>
-        <button type="button" data-focus="shopping" title="Shopping-list destinations and known sellers">Shopping</button>
-        <button type="button" data-focus="stash" title="Places where your stash was last recorded">Stash</button>
-        <button type="button" data-focus="notes" title="Places with one of your personal map notes">Notes</button>
+      <div class="map-toolbar-row map-filter-tools">
+        <span class="map-tool-label">Services</span>
+        <div class="map-service-filter" id="map-service-filter" role="group" aria-label="Filter places by service">
+          <button type="button" class="active" data-service="" title="Show every place">All</button>
+          <button type="button" data-service="shop" title="UEX-listed counters and shops">Shops</button>
+          <button type="button" data-service="refuel" title="Places with a UEX fuel price">Refuel</button>
+          <button type="button" data-service="clinic" title="Places listed with a clinic">Clinic</button>
+        </div>
+        <select id="map-amenity" class="select" aria-label="Facility" title="Choose a facility, then select the closest to your last known location">
+          <option value="">Any facility</option>
+        </select>
+        <button type="button" class="ghost" id="map-closest" title="Find the closest matching facility or service from your last known location">Select closest</button>
+        <span class="map-tool-label map-focus-label">Focus</span>
+        <div class="map-focus-filter" id="map-focus-filter" role="group" aria-label="Focus the map on your work">
+          <button type="button" class="active" data-focus="" title="Show every place">All</button>
+          <button type="button" data-focus="plan" title="Stops on the active flight plan">Plan</button>
+          <button type="button" data-focus="shopping" title="Shopping-list destinations and known sellers">Shopping</button>
+          <button type="button" data-focus="stash" title="Places where your stash was last recorded">Stash</button>
+          <button type="button" data-focus="notes" title="Places with one of your personal map notes">Notes</button>
+        </div>
       </div>
-      <span class="map-search-box">
-        <input type="search" id="map-search" placeholder="Find a place or commodity…" autocomplete="off">
-        <div class="map-results" id="map-results" hidden></div>
-      </span>
-      <select id="map-shade" class="select" hidden title="What the highlight colour encodes">
-        <option value="price">Shade by price</option>
-        <option value="scu">Shade by capacity</option>
-        <option value="mine">Shade by my own prices</option>
-      </select>
-      <div class="seg" id="map-side" hidden title="Which side of the counter the map is showing">
-        <button type="button" data-side="sell" class="active">Selling</button>
-        <button type="button" data-side="buy">Buying</button>
+      <div class="map-toolbar-row map-action-tools">
+        <details class="map-view-options">
+          <summary>View options</summary>
+          <div class="map-options-panel">
+            <label class="toggle">
+              <input type="checkbox" id="map-visited-only">
+              <span>Visited only</span>
+            </label>
+            <label class="toggle" title="List the commodities sold at a place on its hover tip and detail card">
+              <input type="checkbox" id="map-goods">
+              <span>Goods on hover</span>
+            </label>
+            <select id="map-label-density" class="select" title="How many place labels to show as you zoom">
+              <option value="auto">Labels: auto</option>
+              <option value="quiet">Labels: quiet</option>
+              <option value="all">Labels: all</option>
+            </select>
+            <select id="map-preset" class="select" title="Apply or restore a saved map view">
+              <option value="">Map preset</option>
+              <option value="plan">Current plan</option>
+              <option value="shopping">Shopping run</option>
+              <option value="services">Service scan</option>
+              <option value="visited">My places</option>
+              <option value="saved">Saved view</option>
+            </select>
+            <button class="ghost" id="map-save-preset" title="Save the current map controls as Saved view">Save view</button>
+          </div>
+        </details>
+        <select id="map-shade" class="select" hidden title="What the highlight colour encodes">
+          <option value="price">Shade by price</option>
+          <option value="scu">Shade by capacity</option>
+          <option value="mine">Shade by my own prices</option>
+        </select>
+        <div class="seg" id="map-side" hidden title="Which side of the counter the map is showing">
+          <button type="button" data-side="sell" class="active">Selling</button>
+          <button type="button" data-side="buy">Buying</button>
+        </div>
+        <select id="map-window" class="select period" data-all="All time" hidden
+            title="How far back your own receipts count"></select>
+          <span class="muted" id="map-count"></span>
+          <span class="spacer"></span>
+          <button class="ghost" id="map-plan" title="The flight plan: where to go, in order">Plan</button>
+          <button class="ghost" id="map-follow" title="Keep the map centred on you as you move">Follow</button>
+          <button class="ghost" id="map-reset">Reset view</button>
+        </div>
       </div>
-      <select id="map-window" class="select period" data-all="All time" hidden
-              title="How far back your own receipts count"></select>
-      <select id="map-label-density" class="select" title="How many place labels to show as you zoom">
-        <option value="auto">Labels: auto</option>
-        <option value="quiet">Labels: quiet</option>
-        <option value="all">Labels: all</option>
-      </select>
-      <select id="map-preset" class="select" title="Apply or restore a saved map view">
-        <option value="">Map preset</option>
-        <option value="plan">Current plan</option>
-        <option value="shopping">Shopping run</option>
-        <option value="services">Service scan</option>
-        <option value="visited">My places</option>
-        <option value="saved">Saved view</option>
-      </select>
-      <button class="ghost" id="map-save-preset" title="Save the current map controls as Saved view">Save view</button>
-      <span class="spacer"></span>
-      <span class="muted" id="map-count"></span>
-      <button class="ghost" id="map-plan" title="The flight plan: where to go, in order">Plan</button>
-      <button class="ghost" id="map-follow" title="Keep the map centred on you as you move">Follow</button>
-      <button class="ghost map-player" id="map-here" title="Show your current location on the map">
-        <span aria-hidden="true">⌖</span> <span id="map-here-label">Your location</span>
-      </button>
-      <button class="ghost" id="map-reset">Reset view</button>
-    </div>
     <p class="muted map-mode-note" id="map-mode-note"></p>
+    <p class="workspace-state" id="map-state" aria-live="polite">Loading known places…</p>
     <div class="map-closest-result" id="map-closest-result" aria-live="polite" hidden></div>
 
     <div class="map-wrap">
@@ -492,64 +534,104 @@
 
   <!-- ROUTES -->
   <section id="view-routes" class="view">
-    <div class="section-bar">
-      <div class="route-heading">
-        <h2>Trade routes</h2>
-        <div class="route-header-status" aria-live="polite">
-          <span id="route-ship-context">No ship selected · SCU unknown · no source</span>
-          <span class="route-readiness needs-cargo" id="route-readiness">Needs cargo SCU</span>
+    <div class="section-bar flight-toolbar">
+      <div>
+        <span class="operations-kicker">Flight</span>
+        <div class="route-heading">
+          <h2>Flight plan</h2>
+          <div class="route-header-status" aria-live="polite">
+            <span id="route-ship-context">No ship selected · SCU unknown · no source</span>
+            <span class="route-readiness needs-cargo" id="route-readiness">Needs cargo SCU</span>
+          </div>
         </div>
       </div>
-      <div class="controls">
-        <input type="number" id="routes-capital" class="search" placeholder="Capital, aUEC" min="0" step="10000">
-        <select id="routes-ranking" class="select" title="How to rank trade routes">
-          <option value="reliable">Reliable first</option>
-          <option value="profit">Highest estimated profit</option>
-        </select>
-        <select id="routes-evidence" class="select" title="How much reported availability a route needs">
-          <option value="reported">Reported capacity</option>
-          <option value="full">Reported full load</option>
-          <option value="any">Include unknown capacity</option>
-        </select>
-        <select id="routes-safety" class="select" title="How route endpoints are filtered or ranked by system security">
-          <option value="any">Any security</option>
-          <option value="prefer-monitored">Prefer monitored</option>
-          <option value="avoid-lawless">Avoid lawless</option>
-          <option value="monitored">Monitored only</option>
-          <option value="lawless">Lawless routes</option>
-        </select>
-        <select id="routes-pad" class="select" title="How much landing-pad evidence each endpoint needs">
-          <option value="any">Any landing record</option>
-          <option value="known">Known landing pads</option>
-          <option value="xl">XL pad both ends</option>
-        </select>
-        <select id="routes-profile" class="select" title="Saved route-planning presets"></select>
-        <button class="ghost tiny" id="routes-profile-save" title="Save the current ship and route filters as a local preset">Save preset</button>
-        <button class="ghost tiny" id="routes-best-safe" title="Find and highlight the most reliable route for this ship, wallet, and current pad/security choices">Best safe route</button>
-        <label class="toggle" title="Only routes starting where you are now">
-          <input type="checkbox" id="routes-here">
-          <span>From here</span>
-        </label>
-        <label class="toggle" title="Only routes whose buy and sell reports are under a day old">
-          <input type="checkbox" id="routes-fresh-only">
-          <span>Fresh only</span>
-        </label>
+      <div class="flight-toolbar-actions">
+        <a class="ghost" href="#map" id="routes-open-plan" title="Open the active flight plan on the star map">Open active plan</a>
+        <a class="ghost" href="#map">Star map</a>
       </div>
     </div>
-    <section class="ship-plan" id="ship-plan" aria-live="polite">
+
+    <section class="flight-deck" aria-label="Flight preparation">
+      <section class="ship-plan flight-ship-card" id="ship-plan" aria-live="polite">
       <div class="ship-plan-head">
         <div>
-          <div class="card-label">Plan with this ship</div>
+          <div class="card-label">Ship for this run</div>
           <div class="ship-plan-title" id="ship-plan-title">Choose a ship from your flown roster</div>
         </div>
         <label class="ship-plan-picker" for="routes-ship">
-          <span class="muted">Current ship</span>
+          <span class="muted">Planning ship</span>
           <select id="routes-ship" class="select" title="Use this ship to constrain planning"></select>
         </label>
       </div>
       <div class="ship-plan-options" id="ship-plan-options"></div>
       <p class="muted ship-plan-limit" id="ship-plan-limit"></p>
+      </section>
+
+      <article class="flight-deck-card flight-active-plan" id="route-active-plan" aria-live="polite">
+        <span class="operations-kicker">Active route</span>
+        <h3 id="route-active-plan-status">Checking flight plans…</h3>
+        <p class="muted" id="route-active-plan-detail">Your next stop and progress will appear here.</p>
+        <a class="ghost tiny" href="#map" id="routes-open-plan-card">Open on map</a>
+      </article>
+
+      <article class="flight-deck-card flight-support-card">
+        <span class="operations-kicker">Turnaround support</span>
+        <h3>Find the nearest refuel</h3>
+        <p class="muted">Use your last known location to find a nearby refuel point, then check clinics and refinery facilities on the map.</p>
+        <button class="ghost tiny" id="routes-open-support">Find support on map</button>
+      </article>
     </section>
+
+    <section class="route-run-controls" aria-labelledby="route-run-title">
+      <div class="route-run-controls-head">
+        <div>
+          <span class="operations-kicker">Cargo run</span>
+          <h3 id="route-run-title">Find a run worth taking</h3>
+        </div>
+        <p class="muted">Rank the current price reports against your ship and available capital.</p>
+      </div>
+      <div class="route-run-primary">
+        <input type="number" id="routes-capital" class="search" placeholder="Capital, aUEC" min="0" step="10000">
+        <select id="routes-ranking" class="select" title="How to rank trade routes">
+          <option value="reliable">Reliable first</option>
+          <option value="profit">Highest estimated profit</option>
+        </select>
+        <button class="ghost" id="routes-best-safe" title="Find and highlight the most reliable route for this ship, wallet, and current pad/security choices">Find best safe run</button>
+      </div>
+      <details class="route-advanced-controls">
+        <summary>Route filters <span>availability, security, landing pads, and saved presets</span></summary>
+        <div class="controls">
+          <select id="routes-evidence" class="select" title="How much reported availability a route needs">
+            <option value="reported">Reported capacity</option>
+            <option value="full">Reported full load</option>
+            <option value="any">Include unknown capacity</option>
+          </select>
+          <select id="routes-safety" class="select" title="How route endpoints are filtered or ranked by system security">
+            <option value="any">Any security</option>
+            <option value="prefer-monitored">Prefer monitored</option>
+            <option value="avoid-lawless">Avoid lawless</option>
+            <option value="monitored">Monitored only</option>
+            <option value="lawless">Lawless routes</option>
+          </select>
+          <select id="routes-pad" class="select" title="How much landing-pad evidence each endpoint needs">
+            <option value="any">Any landing record</option>
+            <option value="known">Known landing pads</option>
+            <option value="xl">XL pad both ends</option>
+          </select>
+          <select id="routes-profile" class="select" title="Saved route-planning presets"></select>
+          <button class="ghost tiny" id="routes-profile-save" title="Save the current ship and route filters as a local preset">Save preset</button>
+          <label class="toggle" title="Only routes starting where you are now">
+            <input type="checkbox" id="routes-here">
+            <span>From here</span>
+          </label>
+          <label class="toggle" title="Only routes whose buy and sell reports are under a day old">
+            <input type="checkbox" id="routes-fresh-only">
+            <span>Fresh only</span>
+          </label>
+        </div>
+      </details>
+    </section>
+
     <section class="route-dashboard" id="route-dashboard" hidden>
       <div class="route-dashboard-head">
         <div>
@@ -561,29 +643,30 @@
       <div class="route-watch-list" id="route-watch-list"></div>
       <div class="route-history-list" id="route-history-list"></div>
     </section>
-    <p class="muted caption">
-      Estimated UEX hauls, sized to the selected ship's documented hold and wallet. Security is by
-      system: Stanton is monitored; Pyro and Nyx are lawless; an unmatched terminal stays unknown.
-      Pad labels are the game map's recorded amenities, not a clearance guarantee for this hull. “Reported capacity”
-      requires a stock and demand report on both ends; “full load” also requires
-      those reports to cover your target SCU. A price report is not live
-      inventory, terminal access, or travel time — each row shows the evidence
-      behind its estimate and the age of its two quotes.
-      <span id="routes-origin-note"></span>
-    </p>
-    <div class="table-wrap">
-      <table id="routes-table">
-        <thead>
-          <tr>
-            <th>Commodity</th><th>Buy at</th><th class="num">Buy</th>
-            <th>Sell at</th><th class="num">Sell</th>
-            <th class="num">Margin</th><th class="num">SCU</th>
-            <th class="num">Outlay</th><th class="num">Est. profit</th><th>Evidence</th><th>Capped by</th><th></th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
+    <section class="route-results-workspace" aria-labelledby="route-results-title">
+      <div class="route-results-head">
+        <div>
+          <span class="operations-kicker">Route intelligence</span>
+          <h3 id="route-results-title">Cargo opportunities</h3>
+        </div>
+        <p class="muted">Prices are leads, not live inventory. Each result shows the evidence and age behind it.</p>
+      </div>
+      <p class="muted caption">Estimated UEX hauls are sized to the selected ship's documented hold and wallet. Security is by system: Stanton is monitored; Pyro and Nyx are lawless; an unmatched terminal stays unknown. Pad labels are recorded amenities, not a clearance guarantee. <span id="routes-origin-note"></span></p>
+      <p class="workspace-state" id="routes-state" aria-live="polite">Loading current price reports…</p>
+      <div class="table-wrap">
+        <table id="routes-table">
+          <thead>
+            <tr>
+              <th>Commodity</th><th>Buy at</th><th class="num">Buy</th>
+              <th>Sell at</th><th class="num">Sell</th>
+              <th class="num">Margin</th><th class="num">SCU</th>
+              <th class="num">Outlay</th><th class="num">Est. profit</th><th>Evidence</th><th>Capped by</th><th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
     <section class="route-circuits" id="route-circuits" hidden>
       <div class="section-bar"><h3>Return-load circuits</h3></div>
       <p class="muted caption">Two commodity legs that return to the first terminal. Both price reports can change before you arrive; this is a loop candidate, not a guaranteed settlement.</p>
@@ -787,18 +870,62 @@
 
   <!-- JOBS -->
   <section id="view-jobs" class="view">
-    <div class="section-bar">
-      <h2>Shopping</h2>
+    <div class="section-bar operations-toolbar">
+      <div>
+        <span class="operations-kicker">Operations</span>
+        <h2>Command deck</h2>
+      </div>
       <div class="controls">
-        <button class="ghost" id="jobs-new">New list</button>
+        <button class="ghost" id="jobs-new">New shopping list</button>
       </div>
     </div>
-    <p class="muted caption">
-      Lists of things to gather, checked against what your stashes hold — so a
-      list knows what is still missing, where the rest of it is, and what the
-      missing part costs. The <em>+ list</em> button on Market, Parts and
-      Mining adds to whichever list you are filling.
-    </p>
+    <section class="operations-deck" aria-labelledby="operations-deck-title">
+      <div class="operations-deck-head">
+        <div>
+          <span class="operations-kicker">Choose a workspace</span>
+          <h3 id="operations-deck-title">What are you preparing to do?</h3>
+        </div>
+        <p>Start with the task in front of you; each workspace keeps its related planning tools together.</p>
+      </div>
+      <div class="operations-grid">
+        <button type="button" class="operation-card operation-card-primary" id="operations-new-list">
+          <span class="operation-icon" aria-hidden="true">▦</span>
+          <span class="operation-card-main"><b>Gather supplies</b><span>Make a list and check what is already in your stashes.</span></span>
+          <span class="operation-status" id="operations-shopping-status" aria-live="polite">Loading lists…</span>
+        </button>
+        <a class="operation-card" href="#routes">
+          <span class="operation-icon" aria-hidden="true">↗</span>
+          <span class="operation-card-main"><b>Plan a run</b><span>Compare cargo, ship capacity, and current trade routes.</span></span>
+          <span class="operation-status">Open route planner</span>
+        </a>
+        <a class="operation-card" href="#contracts">
+          <span class="operation-icon" aria-hidden="true">◈</span>
+          <span class="operation-card-main"><b>Review contracts</b><span>See your completed work and the live contracts from this session.</span></span>
+          <span class="operation-status" id="operations-contract-status" aria-live="polite">Checking session…</span>
+        </a>
+        <a class="operation-card" href="#checklists">
+          <span class="operation-icon" aria-hidden="true">✓</span>
+          <span class="operation-card-main"><b>Prepare departure</b><span>Keep authored checks, notes, and important tasks in one place.</span></span>
+          <span class="operation-status">Open checklists</span>
+        </a>
+        <a class="operation-card" href="#blueprints">
+          <span class="operation-icon" aria-hidden="true">✦</span>
+          <span class="operation-card-main"><b>Build a project</b><span>Turn an owned blueprint into a material goal.</span></span>
+          <span class="operation-status">Open blueprints</span>
+        </a>
+        <a class="operation-card" href="#wikelo">
+          <span class="operation-icon" aria-hidden="true">◇</span>
+          <span class="operation-card-main"><b>Browse Wikelo trades</b><span>Check collection requirements against what you already hold.</span></span>
+          <span class="operation-status">Open emporium</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="operations-workspace" aria-labelledby="shopping-workspace-title">
+      <div class="operations-workspace-head">
+        <div><span class="operations-kicker">Supplies</span><h3 id="shopping-workspace-title">Shopping lists</h3></div>
+        <span class="muted">Lists can also be filled from Market, Parts, and Mining.</span>
+      </div>
 
     <form class="job-form" id="job-form" hidden>
       <input type="text" id="job-title" placeholder="What is this for? e.g. Restock after Pyro" autocomplete="off">
@@ -814,14 +941,17 @@
       </div>
     </form>
 
+    <p class="workspace-state" id="jobs-state" aria-live="polite">Loading shopping lists…</p>
     <div id="jobs-list"></div>
+    </section>
 
-    <h2 class="spaced">Contracts in progress</h2>
-    <p class="muted caption">
-      Taken from the running session only — contracts are dropped when you
-      leave the game, so a closed game has none.
-    </p>
-    <div id="jobs-contracts"></div>
+    <section class="operations-workspace operations-live-workspace" aria-labelledby="contracts-workspace-title">
+      <div class="operations-workspace-head">
+        <div><span class="operations-kicker">Live session</span><h3 id="contracts-workspace-title">Contracts in progress</h3></div>
+        <span class="muted">The game drops these when you leave, so only a running session can have any.</span>
+      </div>
+      <div id="jobs-contracts"></div>
+    </section>
   </section>
 
   <!-- BLUEPRINTS -->
@@ -865,11 +995,12 @@
 
     <div class="log-pane active" id="log-pane-readings">
     <div class="log-overview">
-      <div class="log-card">
-        <div class="option-head">
-          <h3>Read from the game</h3>
+      <details class="log-card log-capture">
+        <summary>
+          <span>Read from the game</span>
           <span class="muted" id="screen-mode-status"></span>
-        </div>
+        </summary>
+        <div class="log-card-body">
         <p class="muted">Copy a <code>/showlocation</code> result or take a screenshot. Both land below;
           copied coordinates can be kept as a point of interest.</p>
         <div class="option-head">
@@ -901,17 +1032,20 @@
           <p class="muted" id="screen-status" aria-live="polite"></p>
           <div id="screen-result"></div>
         </div>
-      </div>
-
-      <aside class="log-card pinned-points" aria-labelledby="pinned-points-title">
-        <div class="option-head">
-          <h3 id="pinned-points-title">Pinned points</h3>
-          <span class="muted" id="screen-pin-count"></span>
         </div>
+      </details>
+
+      <details class="log-card pinned-points" aria-labelledby="pinned-points-title">
+        <summary>
+          <span id="pinned-points-title">Pinned points</span>
+          <span class="muted" id="screen-pin-count"></span>
+        </summary>
+        <div class="log-card-body">
         <p class="muted">A pin preserves the exact copied coordinates when you clear routine readings.
           Notes and the full list live on the <a href="#points">Points page</a>.</p>
         <div id="screen-pins"></div>
-      </aside>
+        </div>
+      </details>
     </div>
 
     <div class="log-history">
@@ -988,35 +1122,94 @@
 
   <!-- LOGBOOK -->
   <section id="view-logbook" class="view">
-    <div class="section-bar">
-      <h2>Logbook</h2>
+    <div class="section-bar logbook-toolbar">
+      <div>
+        <span class="operations-kicker">Flight</span>
+        <h2>After-action log</h2>
+      </div>
       <div class="controls">
-        <select id="logbook-period" class="select period" title="Filter by date"></select>
+        <label class="logbook-period-picker">
+          <span>Record range</span>
+          <select id="logbook-period" class="select period" title="Filter the logbook by date"></select>
+        </label>
       </div>
     </div>
-    <p class="muted caption">
-      The record itself: the latest things you did in the verse — sessions
-      flown, cargo and gear traded, items first seen — one timeline, newest
-      first. Places fly to the map.
-    </p>
-    <ul class="feed logbook" id="logbook-feed">
-      <li class="empty">Nothing yet.</li>
-    </ul>
+    <div class="logbook-deck" aria-live="polite">
+      <article class="logbook-brief-card logbook-latest-card">
+        <span class="operations-kicker">Latest recorded</span>
+        <h3 id="logbook-latest-title">Loading recent activity…</h3>
+        <p class="muted" id="logbook-latest-detail"></p>
+      </article>
+      <article class="logbook-brief-card">
+        <span class="operations-kicker">Activity</span>
+        <h3 id="logbook-activity-title">Loading activity…</h3>
+        <p class="muted" id="logbook-activity-detail"></p>
+      </article>
+      <article class="logbook-brief-card logbook-net-card">
+        <span class="operations-kicker">Recorded trade net</span>
+        <h3 id="logbook-net-title">Loading receipts…</h3>
+        <p class="muted" id="logbook-net-detail"></p>
+      </article>
+    </div>
+    <section class="logbook-workspace" aria-labelledby="logbook-timeline-title">
+      <div class="logbook-workspace-head">
+        <div>
+          <span class="operations-kicker">Timeline</span>
+          <h3 id="logbook-timeline-title">Recorded activity</h3>
+        </div>
+        <p class="muted">Sessions, trades and first-seen items, newest first. Places open on the map.</p>
+      </div>
+      <p class="workspace-state" id="logbook-state" aria-live="polite">Loading recorded activity…</p>
+      <ul class="feed logbook" id="logbook-feed">
+        <li class="empty">Nothing yet.</li>
+      </ul>
+    </section>
   </section>
 
   <!-- SESSIONS -->
   <section id="view-sessions" class="view">
-    <div class="section-bar">
-      <h2>Play history</h2>
+    <div class="section-bar sessions-toolbar">
+      <div>
+        <span class="operations-kicker">Flight</span>
+        <h2>Session debriefs</h2>
+      </div>
       <div class="controls">
         <input type="search" id="sessions-search" class="search" placeholder="Search ship or place…"
                autocomplete="off" spellcheck="false">
-        <select id="sessions-period" class="select period" title="Filter by date"></select>
+        <label class="sessions-period-picker">
+          <span>Record range</span>
+          <select id="sessions-period" class="select period" title="Filter sessions by date"></select>
+        </label>
       </div>
     </div>
-    <p class="muted caption">Select a session to open its route, activity and recorded economy debrief.</p>
-    <div class="summary-strip" id="lib-summary"></div>
-    <div class="table-wrap">
+    <div class="sessions-deck" aria-live="polite">
+      <article class="sessions-brief-card sessions-latest-card">
+        <span class="operations-kicker">Latest flight</span>
+        <h3 id="sessions-latest-title">Loading latest session…</h3>
+        <p class="muted" id="sessions-latest-detail"></p>
+        <button id="sessions-open-latest" class="ghost tiny" type="button">Open session debrief</button>
+      </article>
+      <article class="sessions-brief-card">
+        <span class="operations-kicker">Flight time</span>
+        <h3 id="sessions-duration-title">Loading duration…</h3>
+        <p class="muted" id="sessions-duration-detail"></p>
+      </article>
+      <article class="sessions-brief-card sessions-health-card">
+        <span class="operations-kicker">Session health</span>
+        <h3 id="sessions-health-title">Loading health…</h3>
+        <p class="muted" id="sessions-health-detail"></p>
+      </article>
+    </div>
+    <section class="sessions-workspace" aria-labelledby="sessions-history-title">
+      <div class="sessions-workspace-head">
+        <div>
+          <span class="operations-kicker">History</span>
+          <h3 id="sessions-history-title">Recorded sessions</h3>
+        </div>
+        <div class="sessions-period-summary" id="lib-summary"></div>
+      </div>
+      <p class="muted caption">Open a session to inspect its route, activity and recorded economy debrief.</p>
+      <div class="table-wrap">
       <table id="sessions-table">
         <thead>
           <tr>
@@ -1028,8 +1221,9 @@
         </thead>
         <tbody></tbody>
       </table>
-    </div>
-    <div class="pager" id="sessions-pager"></div>
+      </div>
+      <div class="pager" id="sessions-pager"></div>
+    </section>
   </section>
 
   <!-- SHIPS -->
@@ -1037,18 +1231,27 @@
   <section id="view-fleet" class="view">
     <div class="summary-strip" id="fleet-summary"></div>
 
-    <h2>Fleet size over time</h2>
-    <p class="muted caption">
-      Owned-vehicle count reported by the game's entitlement query each
-      session — ships <em>and</em> ground vehicles together, which is why it can
-      sit above the ticked roster below. Names are not logged, only the total.
-    </p>
-    <div class="map-wrap fleet-chart-wrap">
-      <svg id="fleet-chart" viewBox="0 0 1000 220" preserveAspectRatio="none"></svg>
-    </div>
+    <details class="fleet-history">
+      <summary>
+        <span>Fleet history</span>
+        <span class="fleet-history-hint">Entitlement count over time</span>
+      </summary>
+      <p class="muted caption">
+        Owned-vehicle count reported by the game's entitlement query each
+        session — ships <em>and</em> ground vehicles together, which is why it can
+        sit above the ticked roster below. Names are not logged, only the total.
+      </p>
+      <div class="map-wrap fleet-chart-wrap">
+        <svg id="fleet-chart" viewBox="0 0 1000 220" preserveAspectRatio="none"></svg>
+      </div>
+    </details>
 
-    <div class="section-bar">
-      <h2 class="spaced">Ships</h2>
+    <div class="section-bar fleet-roster-bar">
+      <div>
+        <p class="fleet-kicker">Operational roster</p>
+        <h2>Ships</h2>
+        <p class="fleet-roster-status" id="fleet-roster-status"></p>
+      </div>
       <div class="controls">
         <input type="search" id="fleet-search" class="search" placeholder="Search ships…"
                autocomplete="off" spellcheck="false">
@@ -1110,26 +1313,62 @@
 
   <!-- SPENDING -->
   <section id="view-spending" class="view">
-    <div class="section-bar">
-      <h2>Economy</h2>
+    <div class="section-bar economy-toolbar">
+      <div>
+        <p class="economy-kicker">Flight ledger</p>
+        <h2>Economy</h2>
+        <p class="economy-status">Income, purchases and cargo movement from your recorded sessions.</p>
+      </div>
       <div class="controls">
         <select id="spending-period" class="select period" title="Filter by date"></select>
       </div>
     </div>
     <div class="summary-strip" id="spend-summary"></div>
 
-    <h2 class="spaced">Cargo sales</h2>
-    <p class="muted caption">
-      The only income the logs record. Commodity trades carry no server
-      confirmation, unlike item purchases, so these are amounts requested at the
-      kiosk rather than settled transactions.
-    </p>
-    <div id="trade-chart" class="bars"></div>
+    <section class="economy-primary">
+      <div class="economy-section-head">
+        <div>
+          <p class="economy-kicker">Income trail</p>
+          <h2>Cargo sales</h2>
+        </div>
+        <span class="economy-section-note">Requested at kiosk</span>
+      </div>
+      <p class="muted caption">
+        The only income the logs record. Commodity trades carry no server
+        confirmation, unlike item purchases, so these are amounts requested at the
+        kiosk rather than settled transactions.
+      </p>
+      <div id="trade-chart" class="bars"></div>
+    </section>
 
-    <h2 class="spaced">Where it went</h2>
-    <div id="shops-chart" class="bars"></div>
-    <h2 class="spaced">Most bought</h2>
-    <div id="items-chart" class="bars"></div>
+    <div class="economy-breakdown">
+      <section class="economy-panel">
+        <div class="economy-section-head">
+          <div>
+            <p class="economy-kicker">Purchase frequency</p>
+            <h2>Where it went</h2>
+          </div>
+        </div>
+        <div id="shops-chart" class="bars"></div>
+        <details class="economy-more" id="shops-more" hidden>
+          <summary>More locations <span id="shops-more-count"></span></summary>
+          <div id="shops-more-chart" class="bars"></div>
+        </details>
+      </section>
+      <section class="economy-panel">
+        <div class="economy-section-head">
+          <div>
+            <p class="economy-kicker">Purchase value</p>
+            <h2>Most bought</h2>
+          </div>
+        </div>
+        <div id="items-chart" class="bars"></div>
+        <details class="economy-more" id="items-more" hidden>
+          <summary>More purchases <span id="items-more-count"></span></summary>
+          <div id="items-more-chart" class="bars"></div>
+        </details>
+      </section>
+    </div>
   </section>
 
   <!-- LEDGER -->
@@ -1420,7 +1659,7 @@
       What Wikelo will build, and what he wants for it — read from your installed game
       files, so the numbers are this patch's. Ranks are in the file; your own standing is
       not, so a gated trade is marked rather than hidden. <b>Track</b> turns a trade's
-      requirements into a shopping list on Jobs, where what you hold is ticked off from
+      requirements into a shopping list on the Operations command deck, where what you hold is ticked off from
       stash sightings — presence, never a count, because removals are not logged.
     </p>
     <div class="export-row" id="wikelo-groups"></div>
@@ -1504,6 +1743,7 @@
       and how many finished — the game never names them, so the count is the
       story: abandoned four steps in reads differently from dropped at the first.
     </p>
+    <p class="workspace-state" id="contracts-state" aria-live="polite">Loading contract history…</p>
     <div class="table-wrap">
       <table id="contracts-table">
         <thead>
@@ -1549,6 +1789,7 @@
       </div>
     </div>
 
+    <p class="workspace-state" id="market-state" aria-live="polite">Loading commodity catalogue…</p>
     <div class="table-wrap">
       <table id="market-table">
         <thead>
@@ -1680,22 +1921,31 @@
   </section>
 
   <section id="view-ships" class="view">
-    <div class="section-bar">
-      <h2>Ship catalogue</h2>
-      <div class="controls">
+    <div class="section-bar reference-toolbar-bar">
+      <div class="reference-title">
+        <span class="reference-kicker">Reference library</span>
+        <h2>Ship catalogue</h2>
+      </div>
+      <div class="controls reference-toolbar">
         <select id="ships-career" class="select" title="Filter by career"></select>
         <input type="search" id="ships-search" class="search" placeholder="Search ships…"
                autocomplete="off" spellcheck="false">
       </div>
     </div>
-    <p class="muted caption">
-      Every flyable the community dataset describes — career, crew and what an
-      insurance claim costs — priced at UEX in-game purchase prices where a
-      shop sells one; hover a price for every shop and rental desk, cheapest
-      first. Pure reference: your own hangar lives on the Fleet page.
-      Needs the community dataset (and UEX for prices) in Settings.
-    </p>
-    <div class="table-wrap">
+    <details class="reference-note">
+      <summary>About this catalogue</summary>
+      <p>Every flyable the community dataset describes — career, crew and what an
+        insurance claim costs — priced at UEX in-game purchase prices where a
+        shop sells one. Hover a price for every shop and rental desk, cheapest
+        first. Your own hangar lives on the Fleet page. Needs the community dataset
+        and UEX for prices in Settings.</p>
+    </details>
+    <div class="reference-results">
+      <div class="reference-results-head">
+        <span>Matching hulls</span>
+        <span class="muted" id="ships-count" aria-live="polite"></span>
+      </div>
+    <div class="table-wrap reference-table-wrap">
       <table id="ships-table">
         <thead>
           <tr>
@@ -1713,23 +1963,33 @@
         <tbody></tbody>
       </table>
     </div>
+    </div>
   </section>
 
   <!-- REFERENCE: parts and gear -->
   <section id="view-parts" class="view">
-    <div class="section-bar">
-      <h2>Parts &amp; gear catalogue</h2>
-      <div class="controls">
+    <div class="section-bar reference-toolbar-bar">
+      <div class="reference-title">
+        <span class="reference-kicker">Reference library</span>
+        <h2>Parts &amp; gear catalogue</h2>
+      </div>
+      <div class="controls reference-toolbar">
         <select id="parts-type" class="select" title="Filter by type"></select>
         <input type="search" id="parts-search" class="search" placeholder="Search parts and gear…"
                autocomplete="off" spellcheck="false">
       </div>
     </div>
-    <p class="muted caption" id="parts-caption">
-      Every ship component and piece of personal gear — type, size, grade, maker
-      — with UEX in-game prices joined by entity uuid where a shop stocks one.
-    </p>
-    <div class="table-wrap">
+    <details class="reference-note">
+      <summary>About this catalogue</summary>
+      <p class="muted caption" id="parts-caption">Every ship component and piece of personal gear — type,
+        size, grade and maker — with UEX in-game prices joined where a shop stocks one.</p>
+    </details>
+    <div class="reference-results">
+      <div class="reference-results-head">
+        <span>Matching items</span>
+        <span class="muted" id="parts-count" aria-live="polite"></span>
+      </div>
+    <div class="table-wrap reference-table-wrap">
       <table id="parts-table">
         <thead>
           <tr>
@@ -1743,7 +2003,7 @@
         <tbody></tbody>
       </table>
     </div>
-    <p class="muted caption" id="parts-count"></p>
+    </div>
   </section>
 
   <!-- REFERENCE: mining and salvage spawns -->
@@ -2205,14 +2465,22 @@
   </section>
 
   <section id="view-garage" class="view">
-    <div class="section-bar">
+    <div class="section-bar garage-toolbar">
       <h2>Garage</h2>
-      <div class="controls">
-        <select id="garage-mine" class="select" title="Ships the logs have seen you fly"></select>
-        <select id="garage-all" class="select" title="Every ship in the reference"></select>
+      <div class="controls garage-pickers">
+        <label class="garage-picker">
+          <span>Flight log</span>
+          <select id="garage-mine" class="select" title="Ships the logs have seen you fly"></select>
+        </label>
+        <label class="garage-picker">
+          <span>Ship library</span>
+          <select id="garage-all" class="select" title="Every ship in the reference"></select>
+        </label>
       </div>
     </div>
-    <p class="muted caption">
+    <details class="garage-guide">
+      <summary>How these fitted figures work</summary>
+      <p class="muted caption">
       A ship's numbers, and what a part would do to them. Every figure here is
       recomputed from the fitted parts using the community dataset's own model
       &mdash; the same files and the same arithmetic that produced its published
@@ -2221,14 +2489,8 @@
       dataset and erkul publish; a pilot who has pulled power off the guns is
       quieter than this says. The logs name the ship you fly but not its parts,
       so the sheet starts from the stock fit.
-    </p>
-
-    <div class="garage-duty-legend" aria-label="Ship discipline legend">
-      <span class="legend-label">Ship discipline</span>
-      <span class="garage-duty civilian" title="Derived from the ship's community career and role">Civilian</span>
-      <span class="garage-duty industrial" title="Derived from the ship's community career and role">Industrial</span>
-      <span class="garage-duty military" title="Derived from the ship's community career and role">Military</span>
-    </div>
+      </p>
+    </details>
 
     <p class="muted" id="garage-unavailable" hidden></p>
 
@@ -2236,6 +2498,12 @@
       <div class="garage-title" id="garage-title"></div>
       <div class="muted" id="garage-sub"></div>
       <div class="muted small" id="garage-source"></div>
+      <div class="garage-duty-legend" aria-label="Ship discipline legend">
+        <span class="legend-label">Ship discipline</span>
+        <span class="garage-duty civilian" title="Derived from the ship's community career and role">Civilian</span>
+        <span class="garage-duty industrial" title="Derived from the ship's community career and role">Industrial</span>
+        <span class="garage-duty military" title="Derived from the ship's community career and role">Military</span>
+      </div>
     </div>
 
     <section id="garage-rig" class="garage-rig" hidden aria-label="Ship component layout">
@@ -2380,30 +2648,50 @@
 
   <section id="view-armoury" class="view">
     <div class="section-bar">
-      <h2>Armoury</h2>
+      <div>
+        <div class="armoury-eyebrow">Hangar / personal equipment</div>
+        <h2>Armoury</h2>
+      </div>
       <div class="controls">
         <input type="search" id="armoury-search" class="search" placeholder="Search guns, armour, attachments…"
                autocomplete="off" spellcheck="false">
       </div>
     </div>
-    <p class="muted caption">
-      Which rifle, what armour, where to buy it. Every figure is read from your
-      own game files &mdash; a gun's damage sits on the ammunition its magazine
-      loads, a fire mode's rate on the gun, a piece of armour's resistance on a
-      table its class shares &mdash; and the price is UEX's cheapest terminal
-      for the item, as the Garage prices a part. <b>Nothing here is from your
-      logs</b>: they name what you had attached, never what it does.
-      Rates and damage a second are derived by holding the trigger down, and
-      say so; the game publishes neither. (<code>docs/armoury.md</code>)
-    </p>
+    <div class="armoury-deck" id="armoury-deck">
+      <button class="armoury-deck-card armoury-deck-primary active" id="armoury-open-guns" type="button">
+        <span class="armoury-deck-label">Firearms</span>
+        <strong id="armoury-guns-brief-title">Reading weapons…</strong>
+        <span class="muted" id="armoury-guns-brief-detail">Damage, fire modes and terminal prices</span>
+      </button>
+      <button class="armoury-deck-card" id="armoury-open-armour" type="button">
+        <span class="armoury-deck-label">Protection</span>
+        <strong id="armoury-armour-brief-title">Reading armour…</strong>
+        <span class="muted" id="armoury-armour-brief-detail">Resistance, environment and carry space</span>
+      </button>
+      <button class="armoury-deck-card" id="armoury-open-kit" type="button">
+        <span class="armoury-deck-label">Field kit</span>
+        <strong id="armoury-kit-brief-title">Reading field kit…</strong>
+        <span class="muted" id="armoury-kit-brief-detail">Attachments, grenades and knives</span>
+      </button>
+    </div>
+    <details class="armoury-evidence">
+      <summary>How these figures are read</summary>
+      <p class="muted small">
+        Every figure comes from your game files: a gun's damage sits on the ammunition its magazine loads,
+        a fire mode's rate on the gun, and armour resistance on the table its class shares. UEX provides the
+        cheapest recorded terminal. Your logs name equipped items, but do not say what they do. Rates and
+        damage per second are derived by holding the trigger down, and are labelled as such.
+        (<code>docs/armoury.md</code>)
+      </p>
+    </details>
     <p class="muted" id="armoury-unready" hidden></p>
 
     <nav class="subtabs" id="armoury-tabs" aria-label="Armoury pages">
-      <button type="button" data-pane="guns" class="active">Guns</button>
-      <button type="button" data-pane="armour">Armour</button>
-      <button type="button" data-pane="attachments">Attachments</button>
-      <button type="button" data-pane="grenades">Grenades</button>
-      <button type="button" data-pane="knives">Knives</button>
+      <button type="button" data-pane="guns" class="active"><span>01</span> Firearms</button>
+      <button type="button" data-pane="armour"><span>02</span> Armour</button>
+      <button type="button" data-pane="attachments"><span>03</span> Attachments</button>
+      <button type="button" data-pane="grenades"><span>04</span> Grenades</button>
+      <button type="button" data-pane="knives"><span>05</span> Knives</button>
     </nav>
 
     <div class="armoury-pane active" id="armoury-pane-guns">
@@ -2832,7 +3120,7 @@
         changes page and <code>Ctrl+Alt+F</code> goes fullscreen. The choice is
         remembered.
       </p>
-      <p class="muted" id="overlay-unavailable" hidden>
+      <p class="muted overlay-unavailable" id="overlay-unavailable" hidden>
         Not available here: this dashboard is served by the bare server, which
         has no overlay window. Run <code>QuantumWake.exe</code> to get one.
       </p>
@@ -2850,7 +3138,7 @@
       <p class="muted">Optional cockpit displays for Thrustmaster MFD Cougar frames.
         <b>They are set up from the tray, not from here</b> — this page cannot see your
         monitors or read a USB frame. Off until you turn them on.</p>
-      <ol class="mfd-steps muted">
+      <details class="mfd-guide"><summary>How MFD setup works</summary><ol class="mfd-steps muted">
         <li>Right-click the <b>Quantum Wake</b> tray icon (under the <code>^</code> arrow if
           it is hidden) and choose <b>MFD setup…</b></li>
         <li>Drag the left and right rectangles onto the monitor behind your frames, and
@@ -2874,7 +3162,7 @@
       <div class="option-head">
         <a class="ghost" href="mfd-setup.html" target="_blank" rel="noopener">Preview the placement editor</a>
         <a class="ghost" href="mfd.html" target="_blank" rel="noopener">Preview an MFD page</a>
-      </div>
+      </div></details>
     </div>
 
     <div class="option-block">
@@ -2890,7 +3178,14 @@
         the lot.
       </p>
 
-      <div class="layout-group">
+      <div class="overlay-presets" id="overlay-presets" aria-label="Overlay presets">
+        <button type="button" class="ghost" data-preset="flight">Flight</button>
+        <button type="button" class="ghost" data-preset="trading">Trading</button>
+        <button type="button" class="ghost" data-preset="minimal">Minimal</button>
+        <button type="button" class="ghost" data-preset="full">Full</button>
+      </div>
+
+      <details class="overlay-customize"><summary>Customize pages, cards and density</summary><div class="layout-group">
         <div class="layout-label">Pages</div>
         <div class="layout-boxes" id="overlay-tabs"></div>
       </div>
@@ -2899,6 +3194,7 @@
         <div class="layout-label">Cards on the Now page</div>
         <div class="layout-boxes" id="overlay-cards"></div>
       </div>
+      </details>
 
       <div class="layout-group">
         <div class="layout-label">Density</div>
@@ -3057,9 +3353,16 @@
   </section>
 
   <section id="view-settings" class="view">
-    <h2>Settings</h2>
+    <div class="settings-workspace-head">
+      <div>
+        <span class="settings-eyebrow">CONTROL ROOM</span>
+        <h2>Settings</h2>
+      </div>
+      <p class="muted">Choose what stays current, protect the history your totals use, and make a recap when you want to share one.</p>
+    </div>
 
-    <div class="option-block">
+    <div class="settings-start-grid">
+    <div class="option-block settings-quick-card settings-share-card">
       <div class="option-head">
         <h3>Share a recap</h3>
         <button class="ghost" id="share-open">Preview recap</button>
@@ -3084,7 +3387,7 @@
       <span class="muted" id="share-status"></span>
     </div>
 
-    <div class="option-block">
+    <div class="option-block settings-quick-card settings-update-card">
       <div class="option-head">
         <h3>New versions</h3>
         <button class="ghost" id="update-check">Check now</button>
@@ -3103,7 +3406,9 @@
       <span class="muted" id="update-status"></span>
     </div>
 
-    <div class="option-block">
+    </div>
+
+    <div class="option-block settings-wipe-card">
       <div class="option-head">
         <h3>Last wipe</h3>
         <button class="ghost" id="wipe-save">Save</button>
@@ -3147,6 +3452,12 @@
       </div>
     </div>
 
+    <details class="settings-group">
+      <summary>
+        <span class="settings-group-index">01</span>
+        <span class="settings-group-copy"><strong>Data sources</strong><span>Game files, optional references, and live price feeds.</span></span>
+      </summary>
+      <div class="settings-group-content">
     <div class="option-block">
       <div class="option-head">
         <h3>Your game files</h3>
@@ -3252,7 +3563,15 @@
         </div>
       </div>
     </div>
+      </div>
+    </details>
 
+    <details class="settings-group">
+      <summary>
+        <span class="settings-group-index">02</span>
+        <span class="settings-group-copy"><strong>Account care</strong><span>Diagnostics, private backups, and files you choose to share.</span></span>
+      </summary>
+      <div class="settings-group-content">
     <div class="option-block">
       <div class="option-head">
         <h3>Report a problem</h3>
@@ -3414,7 +3733,15 @@
       <span class="muted" id="export-preview"></span>
       <span class="muted" id="export-status"></span>
     </div>
+      </div>
+    </details>
 
+    <details class="settings-group">
+      <summary>
+        <span class="settings-group-index">03</span>
+        <span class="settings-group-copy"><strong>Log maintenance</strong><span>Re-read history and see which game signals remain available.</span></span>
+      </summary>
+      <div class="settings-group-content">
     <div class="option-block">
       <div class="option-head">
         <h3>Game logs</h3>
@@ -3451,6 +3778,8 @@
         </table>
       </div>
     </div>
+      </div>
+    </details>
   </section>
 
   <section id="view-about" class="view">
@@ -3705,7 +4034,7 @@
         </details>
         <details class="faq-item">
           <summary>What happens to a file someone sends me?</summary>
-          <p>Open it from <a href="#imports">Shared files</a>. It is kept apart from your own work — nothing is merged — so removing it takes it away completely. Its rows are hidden until you choose to show them on that page; then a friend's trades appear on the Cargo page, their blueprints on Jobs → Blueprints, and their points under <b>Shared by others</b> on Points, where <b>Keep as mine</b> copies one across as your own. Anything in the file that does not read — a date in the future, a coordinate that is not a number — is dropped and counted, and the file says how many.</p>
+          <p>Open it from <a href="#imports">Shared files</a>. It is kept apart from your own work — nothing is merged — so removing it takes it away completely. Its rows are hidden until you choose to show them on that page; then a friend's trades appear on the Cargo page, their blueprints on Operations → Blueprints, and their points under <b>Shared by others</b> on Points, where <b>Keep as mine</b> copies one across as your own. Anything in the file that does not read — a date in the future, a coordinate that is not a number — is dropped and counted, and the file says how many.</p>
         </details>
         <details class="faq-item">
           <summary>What is in a backup, and what is not?</summary>
@@ -3864,12 +4193,28 @@
     <div class="part-tags" id="entity-tags" hidden></div>
     <div class="entity-where" id="entity-where" hidden></div>
     <div class="entity-place-extra" id="entity-place-extra" hidden>
-      <div class="map-info-services" id="map-info-services" hidden></div>
-      <div id="map-info-trade" hidden></div>
-      <div class="map-info-notes" id="map-info-notes"></div>
-      <div class="map-info-amenities" id="map-info-amenities" hidden></div>
-      <div class="map-info-lore muted" id="map-info-lore" hidden></div>
-      <div class="map-info-sold" id="map-info-sold" hidden></div>
+      <div class="map-place-ops" id="map-place-ops">
+        <div class="map-place-ops-head">
+          <span>Operations at this place</span>
+          <span class="map-place-plan-state" id="map-place-plan-state" hidden></span>
+        </div>
+        <div class="map-place-service-copy">UEX-listed counters and services. Select one to scan the map.</div>
+        <div class="map-info-services" id="map-info-services" hidden></div>
+        <div class="map-info-support" id="map-info-support" hidden></div>
+        <div class="map-info-plan" id="map-info-plan"></div>
+        <details class="map-place-detail" id="map-place-detail">
+          <summary>Market and place details</summary>
+          <div class="map-info-data" id="map-info-data"></div>
+          <div id="map-info-trade" hidden></div>
+          <div class="map-info-amenities" id="map-info-amenities" hidden></div>
+          <div class="map-info-sold" id="map-info-sold" hidden></div>
+          <div class="map-info-lore muted" id="map-info-lore" hidden></div>
+        </details>
+        <details class="map-place-detail map-place-notes-detail">
+          <summary>Personal notes</summary>
+          <div class="map-info-notes" id="map-info-notes"></div>
+        </details>
+      </div>
     </div>
     <div class="entity-actions" id="entity-actions"></div>
   </aside>

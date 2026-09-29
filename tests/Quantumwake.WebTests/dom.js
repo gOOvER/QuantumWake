@@ -277,12 +277,11 @@ const GROUPS = {
   'select.period': ['#map-window'],
   '#map-side button': ['#side-sell', '#side-buy'],
   '[data-stats-toggle]': ['#contracts-stats-toggle'],
-  '#tabs button': ['#test-tab-now', '#test-tab-about', '#test-tab-fleet', '#test-tab-garage', '#test-tab-mining'],
-  '.view': ['#view-now', '#view-about', '#view-help', '#view-fleet', '#view-garage', '#view-mining'],
+  '#tabs button': ['#test-tab-now', '#test-tab-about', '#test-tab-fleet', '#test-tab-garage', '#test-tab-mining', '#test-tab-jobs'],
+  '.view': ['#view-now', '#view-about', '#view-help', '#view-fleet', '#view-garage', '#view-mining', '#view-jobs'],
   '#tabs .tab-group': [],
   '#view-now .card[data-card]': [
-    '#now-location-card', '#now-briefing-card', '#now-ship-card', '#now-session-card',
-    '#now-handle-card', '#now-feed-card', '#now-stats-card', '#now-respawn-card',
+    '#now-status-card', '#now-briefing-card', '#now-feed-card',
     '#now-job-card', '#now-checklist-card', '#now-trip-card', '#trade-advice-card',
   ],
 };
@@ -355,15 +354,14 @@ node('#test-tab-fleet').dataset.view = 'fleet';
    land there rather than only to set the class it will show. */
 node('#test-tab-garage').dataset.view = 'garage';
 node('#test-tab-mining').dataset.view = 'mining';
+node('#test-tab-jobs').dataset.view = 'jobs';
 
 node('#side-sell').dataset.side = 'sell';
 node('#side-buy').dataset.side = 'buy';
 
 for (const [selector, card] of [
-  ['#now-location-card', 'location'], ['#now-briefing-card', 'briefing'],
-  ['#now-ship-card', 'ship'], ['#now-session-card', 'session'],
-  ['#now-handle-card', 'handle'], ['#now-feed-card', 'feed'],
-  ['#now-stats-card', 'stats'], ['#now-respawn-card', 'respawn'],
+  ['#now-status-card', 'status'], ['#now-briefing-card', 'briefing'],
+  ['#now-feed-card', 'feed'],
   ['#now-job-card', 'job'], ['#now-checklist-card', 'checklist'], ['#now-trip-card', 'trip'], ['#trade-advice-card', 'trade'],
 ]) node(selector).dataset.card = card;
 
