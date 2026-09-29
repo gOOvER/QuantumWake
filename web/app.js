@@ -224,6 +224,16 @@ function buildPeriodSelects() {
 
 buildPeriodSelects();
 
+/** Names the difference between a view still loading, having no records, and losing its source. */
+function setWorkspaceState(selector, state, text = '') {
+  const node = $(selector);
+  if (!node) return;
+
+  node.hidden = state === 'ready';
+  node.dataset.state = state;
+  if (text) node.textContent = text;
+}
+
 /* ---------- current focus ---------- */
 
 /*
@@ -417,7 +427,7 @@ function showView(name) {
   // and the browser would anchor-scroll to it after load, leaving the header
   // stranded mid-screen. Fragments name views here, so no element may share a
   // view's name.
-  window.scrollTo(0, 0);
+  window.scrollTo?.(0, 0);
 
   // Keep the active tab in view when the strip scrolls, as it does in overlay mode.
   target.scrollIntoView({ block: 'nearest', inline: 'center' });
@@ -2543,11 +2553,25 @@ async function loadStanding() {
 
 async function loadContractList() {
   const days = Number($('#contracts-period').value) || 0;
-  const rows = await getJson(`/api/contracts?days=${days}`);
   const body = $('#contracts-table tbody');
+  setWorkspaceState('#contracts-state', 'loading', 'Loading contract history…');
   body.textContent = '';
 
+  let rows;
+  try {
+    rows = await getJson(`/api/contracts?days=${days}`);
+  } catch {
+    setWorkspaceState('#contracts-state', 'offline', 'Contract history is unavailable. Refresh after the local server reconnects.');
+    const tr = el('tr');
+    const td = el('td', 'muted', 'Contract history is unavailable.');
+    td.colSpan = 9;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
   if (!rows.length) {
+    setWorkspaceState('#contracts-state', 'empty', 'No contracts match this range.');
     const tr = el('tr');
     const td = el('td', 'muted', 'No contracts in that range.');
     td.colSpan = 9;
@@ -2555,6 +2579,8 @@ async function loadContractList() {
     body.append(tr);
     return;
   }
+
+  setWorkspaceState('#contracts-state', 'ready');
 
   const OUTCOMES = {
     Completed: ['done', 'completed'],
@@ -3659,10 +3685,13 @@ function ago(iso) {
 }
 
 async function loadMarket() {
+  setWorkspaceState('#market-state', 'loading', 'Loading commodity catalogue…');
+  let marketUnavailable = false;
   try {
     marketEntries = await getJson('/api/market');
   } catch {
     marketEntries = [];
+    marketUnavailable = true;
   }
 
   // Fuel, when that feed is on: cheapest refill per terminal.
@@ -3722,6 +3751,10 @@ async function loadMarket() {
   if (groups.includes(previous)) groupSelect.value = previous;
 
   renderMarket();
+  setWorkspaceState('#market-state', marketUnavailable ? 'offline' : marketEntries.length ? 'ready' : 'empty',
+    marketUnavailable
+      ? 'Commodity data is unavailable. Refresh after the local server reconnects.'
+      : 'No commodities are available in the current catalogue.');
 
   // The map's commodity search reads this catalogue, and the map usually draws
   // first. A search already standing (a ?q= link opened cold) would have found
@@ -12216,6 +12249,8 @@ async function loadRoutes() {
   const select = $('#routes-ship');
   if (!select) return;
 
+  setWorkspaceState('#routes-state', 'loading', 'Checking current price reports…');
+
   if (libraryStats) renderShipPlan();
   renderRouteFlightBrief();
   let active = activePlanningShip();
@@ -12262,6 +12297,7 @@ async function loadRoutes() {
   // per-SCU table would look like a viable haul despite the selected ship.
   // Only a known zero does this; an unknown hold is sized per SCU above.
   if (planningBlocksCargo(active)) {
+    setWorkspaceState('#routes-state', 'empty', 'This selected vehicle cannot carry cargo.');
     const tr = el('tr');
     const td = el('td', 'muted', planningIsGroundVehicle(active)
       ? `${active.ship.name} is a ground vehicle, so cargo routes are hidden for this plan.`
@@ -12279,9 +12315,15 @@ async function loadRoutes() {
   }
 
   let rows = [];
+  let routesUnavailable = false;
   try {
     rows = await getJson(`/api/routes?${routeQuery(query)}`);
-  } catch { /* UEX off */ }
+  } catch (error) {
+    // A missing optional UEX route endpoint is the long-standing "no prices"
+    // answer; an answering server failure or dropped connection is the state
+    // that needs a reconnect instruction.
+    routesUnavailable = !String(error?.message || '').endsWith('-> 404');
+  }
 
   // The initial per-SCU request often leaves before the fleet has loaded. It
   // must not win the race back and overwrite the later request for the ship
@@ -12293,7 +12335,9 @@ async function loadRoutes() {
     // Name the filter that emptied the table. "No route from here" is the
     // wrong explanation for a table that a tickbox hid every row from, and
     // there are now two tickboxes that can do it.
-    const td = el('td', 'muted', safety === 'monitored'
+    const reason = routesUnavailable
+      ? 'Current route prices are unavailable. Refresh after the local server reconnects.'
+      : safety === 'monitored'
       ? 'No route keeps both ends in monitored space. Try Avoid lawless or Any security.'
       : safety === 'avoid-lawless'
         ? 'No route keeps both ends out of lawless space. Try Any security.'
@@ -12311,7 +12355,9 @@ async function loadRoutes() {
           ? 'No route has both sides reporting enough capacity for this load. Try Reported capacity or Include unknown capacity.'
           : evidence === 'reported'
             ? 'No route has stock and demand reported on both sides. Try Include unknown capacity to see price-only estimates.'
-            : 'Nothing to show. Enable UEX prices on the Settings page.');
+            : 'Nothing to show. Enable UEX prices on the Settings page.';
+    setWorkspaceState('#routes-state', routesUnavailable ? 'offline' : 'empty', reason);
+    const td = el('td', 'muted', reason);
     td.colSpan = 12;
     tr.append(td);
     body.append(tr);
@@ -12435,6 +12481,7 @@ async function loadRoutes() {
   }
 
   setRouteReadiness('ready', 'Ready', 'At least one route meets the selected ship, wallet, safety, pad, and evidence filters.');
+  setWorkspaceState('#routes-state', 'ready');
   highlightBestRoute = false;
   renderRouteDashboard(rows);
   loadRouteCircuits(query).catch(() => {});
@@ -15718,15 +15765,21 @@ async function renderPinnedJob(jobs) {
  * the next load so a later tab click lands at the top as usual.
  */
 let jobsLandOn = null;
+let jobContractsRequest = 0;
 
 /** Scroll to the panel a button promised, once it has something to show. */
 function landOnJobs() {
   if (!jobsLandOn) return;
-  $(jobsLandOn)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Entering Shopping starts its own refresh while the focus action may also
+  // be loading the contract panel. Spend the landing instruction before the
+  // scroll, so both completions cannot use the same one.
+  const anchor = jobsLandOn;
   jobsLandOn = null;
+  $(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function loadJobContracts() {
+  const request = ++jobContractsRequest;
   const host = $('#jobs-contracts');
   host.textContent = '';
 
@@ -15737,6 +15790,7 @@ async function loadJobContracts() {
   try {
     live = await getJson('/api/now');
   } catch { /* server not answering; treat as not playing */ }
+  if (request !== jobContractsRequest) return;
 
   if (!live?.inGame) {
     setOperationsStatus('#operations-contract-status', 'Waiting for a game session');
@@ -15755,6 +15809,7 @@ async function loadJobContracts() {
       getJson('/api/haul/plan').catch(() => null),
     ]);
   } catch { /* nothing to show */ }
+  if (request !== jobContractsRequest) return;
 
   // This session only: anything taken before it started belongs to the past.
   const since = live.sessionStarted ? new Date(live.sessionStarted).getTime() : 0;
@@ -16161,11 +16216,13 @@ async function loadJobList() {
   const craftHost = $('#blueprint-jobs');
   host.textContent = '';
   if (craftHost) craftHost.textContent = '';
+  setWorkspaceState('#jobs-state', 'loading', 'Loading shopping lists…');
 
   let jobs = [];
+  let jobsUnavailable = false;
   try {
     jobs = await getJson(`/api/jobs${importedQuery()}`);
-  } catch { /* server down; the page still shows contracts */ }
+  } catch { jobsUnavailable = true; }
 
   renderPinnedJob(jobs);
   refreshMapFocusContext(mapFocusFilter === 'shopping' || mapFocusFilter === 'stash').catch(() => {});
@@ -16177,13 +16234,21 @@ async function loadJobList() {
   const builds = jobs.filter((j) => j.kind === 'craft');
   const openLists = lists.filter((j) => !j.done);
   const missing = openLists.reduce((sum, j) => sum + Math.max(0, (j.totalCount || 0) - (j.haveCount || 0)), 0);
-  setOperationsStatus('#operations-shopping-status', openLists.length
+  setOperationsStatus('#operations-shopping-status', jobsUnavailable
+    ? 'Shopping lists unavailable'
+    : openLists.length
     ? `${openLists.length} active ${openLists.length === 1 ? 'list' : 'lists'}${missing ? ` · ${missing} item${missing === 1 ? '' : 's'} to find` : ' · all items in hand'}`
-    : 'Start a shopping list', openLists.length ? 'active' : '');
+    : 'Start a shopping list', jobsUnavailable ? 'outward' : openLists.length ? 'active' : '');
+  setWorkspaceState('#jobs-state', jobsUnavailable ? 'offline' : openLists.length ? 'ready' : 'empty',
+    jobsUnavailable
+      ? 'Shopping lists are unavailable. Refresh after the local server reconnects.'
+      : 'No active shopping lists. Start one here or add items from Market, Parts, or Mining.');
 
   if (!lists.length) {
     host.append(el('p', 'muted',
-      'No lists yet. Start one here, or add anything from Market, Parts or Mining with "+ list".'));
+      jobsUnavailable
+        ? 'Shopping lists are temporarily unavailable.'
+        : 'No lists yet. Start one here, or add anything from Market, Parts or Mining with "+ list".'));
   }
 
   if (craftHost && !builds.length) {
@@ -17160,16 +17225,28 @@ function renderLogbookBrief(rows) {
 
 async function loadLogbook() {
   const days = Number($('#logbook-period').value) || 0;
-  const rows = await getJson(`/api/logbook?days=${days}`);
-  renderLogbookBrief(rows);
-
   const feed = $('#logbook-feed');
+  setWorkspaceState('#logbook-state', 'loading', 'Loading recorded activity…');
   feed.textContent = '';
 
+  let rows;
+  try {
+    rows = await getJson(`/api/logbook?days=${days}`);
+  } catch {
+    renderLogbookBrief([]);
+    setWorkspaceState('#logbook-state', 'offline', 'Recorded activity is unavailable. Refresh after the local server reconnects.');
+    feed.append(el('li', 'empty', 'Recorded activity is unavailable.'));
+    return;
+  }
+  renderLogbookBrief(rows);
+
   if (!rows.length) {
+    setWorkspaceState('#logbook-state', 'empty', 'No recorded activity matches this range.');
     feed.append(el('li', 'empty', 'Nothing in that range.'));
     return;
   }
+
+  setWorkspaceState('#logbook-state', 'ready');
 
   for (const row of rows) {
     const li = el('li');
@@ -20871,8 +20948,13 @@ let view = { ...HOME_VIEW };
 const labelSize = (scale = 1) => (view.w / HOME_VIEW.w) * 9.5 * scale;
 
 async function loadAtlas() {
+  setWorkspaceState('#map-state', 'loading', 'Loading known places…');
+  let mapUnavailable = false;
   const [data, servicePlaces] = await Promise.all([
-    getJson('/api/map'),
+    getJson('/api/map').catch(() => {
+      mapUnavailable = true;
+      return { nodes: [], positions: {} };
+    }),
     getJson('/api/map/services').catch(() => []),
   ]);
   atlas = data.nodes || [];
@@ -20887,6 +20969,10 @@ async function loadAtlas() {
   // A detail card can stay open while the history refreshes. Its facts should
   // catch up when the supporting service map does.
   if (mapInfoLocation) renderMapInfoServices(mapInfoLocation);
+  setWorkspaceState('#map-state', mapUnavailable ? 'offline' : atlas.length ? 'ready' : 'empty',
+    mapUnavailable
+      ? 'Map data is unavailable. Refresh after the local server reconnects.'
+      : 'No known places are available yet.');
 }
 
 /** Real body coordinates per system, when the community dataset supplies them. */

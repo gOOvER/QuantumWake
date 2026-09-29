@@ -970,6 +970,15 @@ body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
 @media (max-width: 900px) { .logbook-deck { grid-template-columns: repeat(2, minmax(0, 1fr)); } .logbook-latest-card { grid-column: 1 / -1; } }
 @media (max-width: 620px) { .logbook-toolbar, .logbook-workspace-head { align-items: stretch; flex-direction: column; } .logbook-period-picker { justify-items: start; } .logbook-workspace-head > .muted { text-align: left; } .logbook-deck { grid-template-columns: 1fr; } .logbook-latest-card { grid-column: auto; } }
 
+@media (max-width: 760px) {
+  .feed.logbook li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 8px; align-items: start; padding: 10px 2px 10px 9px; }
+  .feed.logbook .t { grid-column: 1 / -1; flex: none; font-size: 10px; }
+  .feed.logbook .k { grid-column: 1; grid-row: 2; }
+  .feed.logbook .what { grid-column: 2; grid-row: 2; font-size: 12px; }
+  .feed.logbook .detail, .feed.logbook .d:not(.what) { grid-column: 2; }
+  .feed.logbook .amt { grid-column: 3; grid-row: 2; margin-left: 0; align-self: start; }
+}
+
 /* ---------- bars ---------- */
 
 .bars { display: flex; flex-direction: column; gap: 5px; }
@@ -1356,6 +1365,26 @@ button.primary:disabled { opacity: .55; cursor: default; }
 .table-wrap { overflow-x: auto; border: 1px solid var(--rule); background: var(--deep); }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 
+/* Each data workspace speaks with the same small status line while its own
+   table or cards are loading, empty, or unavailable. */
+.workspace-state {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  box-sizing: border-box;
+  margin: 10px 0;
+  padding: 7px 10px;
+  border-left: 2px solid var(--cyan-deep);
+  background: rgba(13, 35, 50, .34);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.workspace-state[data-state="loading"] { color: var(--cyan); }
+.workspace-state[data-state="empty"] { border-left-color: var(--dim); color: var(--dim); }
+.workspace-state[data-state="offline"] { border-left-color: var(--amber); color: var(--amber); background: rgba(94, 57, 18, .16); }
+.workspace-state[hidden] { display: none; }
+
 thead th {
   text-align: left;
   padding: 10px 15px;
@@ -1375,6 +1404,13 @@ tbody td:first-child { color: var(--cyan); font-family: var(--mono); font-size: 
 .num, td.num { text-align: right; font-family: var(--mono); font-size: 12px; }
 td.inward { color: var(--green); }
 td.outward { color: var(--amber); }
+
+/* Contract issuer and market commodity are the row's anchors. Giving them a
+   little more contrast leaves the supporting classifications easy to scan. */
+#contracts-table td:nth-child(2), #market-table td:first-child { color: var(--text); font-family: inherit; font-weight: 600; }
+#contracts-table td:nth-child(3), #contracts-table td:nth-child(4), #contracts-table td:nth-child(5),
+#market-table td:nth-child(2) { color: var(--dim); font-size: 11px; }
+#contracts-table tbody tr:hover, #market-table tbody tr:hover { background: rgba(53, 200, 240, .09); }
 
 .session-row { cursor: pointer; }
 .sessions-toolbar { align-items: center; }
@@ -1665,6 +1701,19 @@ body:has(#view-map.active)::before { opacity: .2; }
   .map-focus-label { margin-left: 0; }
   #view-map #map-count { flex-basis: 100%; order: 2; }
   #view-map .map-wrap { height: 65vh; }
+  #view-map .map-toolbar-row { gap: 6px; padding: 8px; }
+  #view-map .map-primary-tools > .select { flex: 1 1 calc(50% - 4px); min-width: 0; }
+  #view-map .map-primary-tools .map-player { flex: 1 1 100%; margin-left: 0; }
+  #view-map :is(.map-service-filter, .map-focus-filter) { max-width: 100%; overflow-x: auto; }
+  #view-map :is(.map-service-filter, .map-focus-filter) button { flex: 0 0 auto; padding-inline: 8px; }
+  #view-map #map-closest { flex: 1 1 auto; }
+  #view-map .map-action-tools .spacer { display: none; }
+  #view-map .map-action-tools > .ghost { flex: 1 1 auto; }
+  body.entity-open .view { padding-right: 0; }
+  .entity-drawer, body:has(#view-map.active) .entity-drawer.map-place-open { top: auto; right: 10px; bottom: 10px; left: 10px; width: auto; max-height: min(48vh, 430px); }
+  .cargo-panel { top: auto; right: 8px; bottom: 8px; left: 8px; width: auto; max-height: min(52vh, 460px); }
+  .map-info-plan { grid-template-columns: 1fr; }
+  .map-plan-primary { justify-self: start; }
 }
 
 /* ---------- fleet ---------- */
@@ -3377,6 +3426,21 @@ body.overlay .checklist-attachments, body.overlay .checklist-due { display: none
 .job-form input:focus, .job-form textarea:focus { border-color: var(--cyan); }
 .job-form-actions { display: flex; gap: 8px; }
 
+@media (max-width: 620px) {
+  .job-card { padding: 11px; }
+  .job-head { flex-wrap: wrap; align-items: center; gap: 7px; }
+  .job-head > b { flex: 1 1 15ch; }
+  .job-head .spacer { display: none; }
+  .job-place-edit { order: 3; flex: 1 1 100%; max-width: none; }
+  .job-items { table-layout: fixed; }
+  .job-items td { padding: 4px; overflow-wrap: anywhere; }
+  .job-items .job-mark { width: 16px; }
+  .job-items td:nth-child(2) { width: 33%; }
+  .job-items td:nth-child(3) { width: 14%; white-space: normal; }
+  .job-items td:nth-child(4) { width: 31%; }
+  .job-items td:nth-child(5) { width: 18%; white-space: normal; }
+}
+
 /* ---------- optional UEX feeds ---------- */
 
 .uex-feeds { margin-top: 14px; border-top: 1px solid var(--rule); padding-top: 12px; }
@@ -4392,6 +4456,13 @@ th.sortable.sort-asc::after { content: " ▴"; color: var(--cyan); }
   .route-run-controls-head > .muted, .route-results-head > .muted { text-align: left; }
   .route-run-primary .search { width: min(100%, 240px); }
   .route-advanced-controls summary { align-items: flex-start; flex-direction: column; gap: 2px; }
+  #routes-table { min-width: 1080px; }
+  #contracts-table { min-width: 780px; }
+  #market-table { min-width: 860px; }
+  #routes-table th:first-child, #routes-table td:first-child,
+  #contracts-table th:first-child, #contracts-table td:first-child,
+  #market-table th:first-child, #market-table td:first-child { position: sticky; left: 0; z-index: 1; background: var(--deep); box-shadow: 1px 0 0 var(--rule); }
+  #routes-table thead th:first-child, #contracts-table thead th:first-child, #market-table thead th:first-child { background: var(--panel-2); }
 }
 
 .advice { list-style: none; margin: 6px 0 0; padding: 0; }

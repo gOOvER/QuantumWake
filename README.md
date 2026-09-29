@@ -365,7 +365,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.12
+### 0.16.13
+
+**Keep dense workspaces clear at any width.** Map controls and place panels now fold into a phone-width layout; Routes, Contracts, and Market retain their row identity while scrolling. Map, Routes, Shopping, Contracts, Market, and Logbook also distinguish loading, an empty result, and an unavailable local source.
 
 - **Keep the current operation with you.** Selecting a map place, planning ship, pinned shopping list, live contract, or new flight plan now opens a compact “In focus” rail. It remains available as you move through the app, returns directly to the relevant workspace, and clears when the work is no longer useful.
 
