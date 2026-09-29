@@ -14,7 +14,7 @@ under its set.
 "Which rifle, what armour, where to buy it" is a question the community
 answers on SPViewer and the wiki's weapon tables. The item catalogue the app
 reads already names all 9,553 attachables, the Garage already prices a part
-by the game's own id, and the Kits page already keeps loadouts by name. What
+by the game's own id, and the Loadout page already keeps kits by name. What
 was missing was any number about what a gun does.
 
 ## Where the numbers are

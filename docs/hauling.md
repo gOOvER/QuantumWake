@@ -4,7 +4,7 @@ A hauler with five contracts open sees five cards in the mobiGlas, each naming
 its own destination and nothing else. Where the cargo is collected is in each
 card's detail panel, one card at a time, and the logs never print it. This is
 what the app can and cannot know about a hauling run, with the count behind
-each claim, and how the plan on the Shopping page is put together from it.
+each claim, and how the plan on the Operations command deck is put together from it.
 
 Everything below was measured on this install's 209 backups on 21 September
 2026 (`dotnet run --project src\Quantumwake.Cli -- --hauling`), except where a
@@ -103,7 +103,7 @@ still to take.
 
 ## The plan
 
-`GET /api/haul/plan`, drawn on the Shopping page under the session's
+`GET /api/haul/plan`, drawn on the Operations command deck under the session's
 contracts, and `POST /api/haul/plan/trip` to write it into a tracked flight
 plan with a load or unload action at every stop.
 

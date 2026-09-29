@@ -130,7 +130,7 @@ this has to hide them, not list them.
 ## What the reader does
 
 `Quantumwake.Core/GameData/GameWikelo.cs` reads all of the above into the
-game-data cache beside the recipes, and the Wikelo page under Jobs shows it.
+game-data cache beside the recipes, and the Wikelo page under Operations shows it.
 Since the survey it also reads the **SCU requirements**: a resource order is a
 `HaulingOrderContent_Resource` with a `ResourceType` and a `minSCU` that is a
 float in the file, which is why the first pass missed it. The Polaris Bit is
@@ -185,9 +185,9 @@ session, which is a better answer than the file's - it is the offer list
 
 ## The page
 
-Jobs → Wikelo. Every live trade as a card - the retired seventeen are counted
+Operations → Wikelo. Every live trade as a card - the retired seventeen are counted
 and hidden - with what it wants ticked against stash sightings by the same rule
-the Jobs page uses: presence, never a count, and the place it was seen. A rank
+shopping lists use: presence, never a count, and the place it was seen. A rank
 gate is stated as a fact about the trade, since the pilot's standing is not in
 the logs. **Track as a goal** turns the requirements into a shopping list
 (`source: wikelo:<debugName>`, one per trade), which then behaves like any
