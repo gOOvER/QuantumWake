@@ -23,6 +23,73 @@ public class MapModeTests
         Assert.Contains("relative orbit distances", page.NodeText("#map-mode-note"));
     }
 
+    /// <summary>
+    /// A real select with no options refuses any value, so the remembered
+    /// system used to be dropped on the floor at start-up and the map always
+    /// opened where the player was. The stub keeps whatever it is given, so the
+    /// empty value is set here by hand, as the browser would have left it.
+    /// </summary>
+    [Fact]
+    public void System_picker_reopens_on_the_system_chosen_last_time()
+    {
+        var page = new Page();
+        page.Do("""
+            atlas = [
+              { rawId: 'stan', name: 'Area18', system: 'Stanton', body: 'ArcCorp', kind: 'City', visits: 1 },
+              { rawId: 'pyro', name: 'Ruin', system: 'Pyro', body: 'Pyro I', kind: 'Outpost', visits: 0 }
+            ];
+            hereId = 'stan';
+            localStorage.setItem('qw-map-system', 'Pyro');
+            __dom.node('#map-mode').value = 'system';
+            __dom.node('#map-system').value = '';
+            syncMapModeControls();
+            """);
+
+        Assert.Equal("Pyro", page.Text("__dom.node('#map-system').value"));
+    }
+
+    [Fact]
+    public void A_remembered_system_the_atlas_no_longer_has_falls_back_to_the_current_one()
+    {
+        var page = new Page();
+        page.Do("""
+            atlas = [
+              { rawId: 'stan', name: 'Area18', system: 'Stanton', body: 'ArcCorp', kind: 'City', visits: 1 },
+              { rawId: 'nyx', name: 'Levski', system: 'Nyx', body: 'Delamar', kind: 'City', visits: 1 }
+            ];
+            hereId = 'nyx';
+            localStorage.setItem('qw-map-system', 'Castra');
+            __dom.node('#map-mode').value = 'system';
+            __dom.node('#map-system').value = '';
+            syncMapModeControls();
+            """);
+
+        Assert.Equal("Nyx", page.Text("__dom.node('#map-system').value"));
+    }
+
+    [Fact]
+    public void Picking_another_system_renames_the_note_under_the_toolbar()
+    {
+        var page = new Page();
+        page.Do("""
+            atlas = [
+              { rawId: 'stan', name: 'Area18', system: 'Stanton', body: 'ArcCorp', kind: 'City', visits: 1 },
+              { rawId: 'nyx', name: 'Levski', system: 'Nyx', body: 'Delamar', kind: 'City', visits: 1 }
+            ];
+            hereId = 'nyx';
+            initMap();
+            __dom.node('#map-mode').value = 'system';
+            syncMapModeControls();
+            __before = __dom.node('#map-mode-note').textContent;
+            __dom.node('#map-system').value = 'Stanton';
+            __dom.node('#map-system').fire('change');
+            """);
+
+        Assert.StartsWith("Nyx:", page.Text("__before"));
+        Assert.StartsWith("Stanton:", page.NodeText("#map-mode-note"));
+        Assert.Equal("Stanton", page.Text("localStorage.getItem('qw-map-system')"));
+    }
+
     [Fact]
     public void System_mode_keeps_relative_orbit_distance_and_marks_missing_coordinates()
     {

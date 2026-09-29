@@ -20355,6 +20355,14 @@ function preferredMapSystem() {
   return here && SYSTEM_COLOURS[here] ? here : 'Stanton';
 }
 
+/* The system picked last time. Read when the list is filled rather than at
+   start-up: a select with no options yet refuses any value, so assigning it
+   early was silently dropped and the map always opened on the player's own
+   system, whatever had been chosen. */
+function rememberedMapSystem() {
+  try { return localStorage.getItem(MAP_SYSTEM_KEY) || ''; } catch { return ''; }
+}
+
 function currentMapLocation() {
   return hereId ? atlas.find((location) => location.rawId === hereId) || null : null;
 }
@@ -20407,10 +20415,10 @@ function syncMapModeControls() {
     .filter((name) => SYSTEM_COLOURS[name]))].sort();
 
   if (!system.dataset.filled || [...system.options].map((option) => option.value).join('|') !== systems.join('|')) {
-    const selected = system.value || preferredMapSystem();
+    const wanted = [system.value, rememberedMapSystem(), preferredMapSystem()];
     system.textContent = '';
     for (const name of systems) system.append(new Option(name, name));
-    system.value = systems.includes(selected) ? selected : (systems[0] || '');
+    system.value = wanted.find((name) => systems.includes(name)) || systems[0] || '';
     system.dataset.filled = '1';
   }
 
@@ -21564,7 +21572,6 @@ function initMap() {
   const system = $('#map-system');
   try {
     mode.value = localStorage.getItem(MAP_MODE_KEY) || 'system';
-    system.value = localStorage.getItem(MAP_SYSTEM_KEY) || '';
   } catch { /* private mode */ }
   mode.addEventListener('change', () => {
     syncMapModeControls();
@@ -21573,6 +21580,8 @@ function initMap() {
   });
   system.addEventListener('change', () => {
     try { localStorage.setItem(MAP_SYSTEM_KEY, system.value); } catch { /* fine */ }
+    // The note under the toolbar names the system, so it moves with the pick.
+    syncMapModeControls();
     drawMap();
   });
   for (const button of $$('#map-service-filter button'))

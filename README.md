@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![2510 tests](https://img.shields.io/badge/tests-2510%20passing-4fd48a)
+![2517 tests](https://img.shields.io/badge/tests-2517%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a private local logbook for Star Citizen. It
@@ -343,7 +343,7 @@ Only the overlay is Windows-specific. The other projects target `net10.0`.
 dotnet test Quantumwake.slnx -c Release
 ```
 
-The repository currently has 2,510 tests in three suites. `Quantumwake.Tests`
+The repository currently has 2,517 tests in three suites. `Quantumwake.Tests`
 covers parsing, session state, stores and game-data readers.
 `Quantumwake.WebTests` executes the dashboard and MFD JavaScript against a stub
 DOM. `Quantumwake.OcrTests` exercises the screenshot reader against fixtures it
@@ -385,9 +385,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.14
+### 0.16.15
 
 **Keep dense workspaces clear at any width.** Map controls and place panels now fold into a phone-width layout; Routes, Contracts, and Market retain their row identity while scrolling. Map, Routes, Shopping, Contracts, Market, and Logbook also distinguish loading, an empty result, and an unavailable local source.
+
+- **The star map opens in a moment.** It used to sit on *Loading known places…* for 25 to 35 seconds on a well-travelled install, because every shop, fuel and clinic listing re-read your whole session history to find its place. That history is now read once and kept until a new session lands or the wipe line moves, and the map draws in well under a second.
+
+- **The map remembers the system you were looking at.** A system you picked is where it reopens, instead of always jumping back to the one you are in. The line under the toolbar now names the system on screen; it used to keep the previous one's name after switching.
 
 - **Keep the current operation with you.** Selecting a map place, planning ship, pinned shopping list, live contract, or new flight plan now opens a compact “In focus” rail. It remains available as you move through the app, returns directly to the relevant workspace, and clears when the work is no longer useful.
 
