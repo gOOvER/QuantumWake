@@ -385,6 +385,10 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.16.16
+
+- **A truer Fleet picture on the project page.** The README's Fleet screenshot showed the 315p as a flat silhouette — the game files hold no picture of any 300-series ship — so it now shows ten hulls the game does picture. The app itself is unchanged.
+
 ### 0.16.15
 
 **Keep dense workspaces clear at any width.** Map controls and place panels now fold into a phone-width layout; Routes, Contracts, and Market retain their row identity while scrolling. Map, Routes, Shopping, Contracts, Market, and Logbook also distinguish loading, an empty result, and an unavailable local source.
