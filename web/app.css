@@ -1454,6 +1454,8 @@ td.outward { color: var(--amber); }
 .session-route-time { color: var(--dim); font-family: var(--mono); font-size: 10px; }
 .session-debrief-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 7px; padding: 5px 0; border-top: 1px solid rgba(23, 41, 60, .45); font-size: 11px; }
 .session-debrief-list li:first-child { border-top: 0; }
+.session-debrief-highlights li { grid-template-columns: auto minmax(0, 1fr); gap: 2px 7px; }
+.session-debrief-highlights li > :nth-child(3) { grid-column: 2; overflow-wrap: anywhere; }
 .session-debrief-note { margin: 13px 0 0; font-size: 10px; }
 .session-debrief-loading { padding: 18px; }
 @media (max-width: 1300px) { .session-debrief-grid { grid-template-columns: repeat(2, minmax(220px, 1fr)); } }
@@ -1991,6 +1993,10 @@ body.overlay .scan-file { display: none; }
 }
 .section-bar h2 { margin: 0; }
 .section-bar h2.spaced { margin-top: 32px; }
+/* A caption's -6px pulls it up into the 13px a bare h2 leaves below itself.
+   Inside a bar the heading has no margin to take, so the caption landed on
+   the title (Log, Controls). */
+.section-bar h2 + .caption { margin: 4px 0 0; }
 .section-bar:not(.mining-title) {
   padding: 10px 12px;
   border: 1px solid var(--rule);
@@ -2039,6 +2045,13 @@ body.overlay .scan-file { display: none; }
 #parts-table tbody tr:hover td:first-child { background: #102738; }
 #ships-table th:nth-child(n+9), #ships-table td:nth-child(n+9) { background-image: linear-gradient(90deg, rgba(53, 200, 240, .025), transparent); }
 #ships-table td:nth-child(11), #parts-table td:nth-child(7) { color: var(--cyan-hot); }
+/* The name, role and shop columns wrap; the numbers never do. Held to one
+   line, "Crusader Ares Star Fighter Inferno Wikelo War Special" made the name
+   column 411 px on its own, and at 1536 px Claim wait onwards (and Parts'
+   Cheapest at) sat past the right edge. */
+#ships-table td:nth-child(1), #ships-table td:nth-child(3), #ships-table td:nth-child(12),
+#parts-table td:nth-child(1), #parts-table td:nth-child(6), #parts-table td:nth-child(9) { white-space: normal; min-width: 12ch; }
+#ships-table th, #ships-table td { padding-left: 10px; padding-right: 10px; }
 @media (max-width: 720px) {
   .reference-toolbar { justify-content: stretch; border-top: 1px solid var(--rule); border-left: 0; }
   .reference-toolbar .search, .reference-toolbar .select { flex: 1 1 170px; min-width: 0; }
@@ -3159,7 +3172,13 @@ td.with-track .track:focus-visible { opacity: 1; }
 
 /* The profit remains an estimate even when both capacity figures were reported:
    UEX cannot observe the counter between the report and the player's arrival. */
-.route-report { min-width: 190px; }
+/* These wrap, unlike the figures: the evidence lines are sentences, and held
+   to one line each with the names beside them they made the table wider than
+   the page - at 1536 px the evidence was cut mid-word and Capped by and Save
+   were off the edge. */
+.route-report { min-width: 190px; white-space: normal; }
+#routes-table td:nth-child(1), #routes-table td:nth-child(2), #routes-table td:nth-child(4),
+#routes-table td:nth-child(12) { white-space: normal; min-width: 10ch; }
 .route-feasibility { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
 .route-feasibility.reported-full { color: var(--green); }
 .route-feasibility.reported-partial { color: var(--amber); }
@@ -4537,9 +4556,11 @@ body.overlay .advice li { font-size: 10.5px; padding: 3px 0; }
 .label-level em { flex: 1 1 22ch; }
 
 /* The note under a toggle is a sentence, not a suffix. Left inline it ran off
-   the right edge of the block and lost its last four words. */
+   the right edge of the block and lost its last four words - and as a block it
+   still did, because .toggle is nowrap and the note inherited it. */
 .label-options .toggle em {
   display: block;
+  white-space: normal;
   margin-top: 2px;
   max-width: 72ch;
 }
@@ -4983,7 +5004,9 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 
 /* The name takes the room and the reason gives it up: a name broken across
    three lines is unreadable, and "seen in storage" wrapping is merely untidy. */
-.search-hit .name { flex: 1 1 auto; min-width: 0; }
+/* overflow-wrap only breaks a word that cannot fit at all - a long class-like
+   name ran under the reason beside it rather than wrapping. */
+.search-hit .name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .search-hit .why { flex: 0 1 auto; text-align: right; font-size: 11px; }
 
 .search-empty { padding: 10px 14px; font-size: 12px; color: var(--muted); }
@@ -5178,7 +5201,7 @@ body.overlay .ship-picture { display: none; }
 .fleet-compare button { font-size: 10px; padding: 4px 7px; }
 /* Wikelo cards: the requirement list is the card, ticked from the stash. */
 .wikelo-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; flex-wrap: wrap; }
-.wikelo-desc { font-size: 11.5px; line-height: 1.5; font-style: italic; }
+.wikelo-desc { font-size: 11.5px; line-height: 1.5; font-style: italic; white-space: pre-line; }
 .wikelo-gives { font-size: 12px; }
 .wikelo-gate { font-size: 11.5px; }
 .wikelo-wants { list-style: none; margin: 2px 0 0; padding: 0; font-size: 12px; line-height: 1.6; }
@@ -5244,14 +5267,31 @@ body.overlay .ship-picture { display: none; }
 
 /* The star is a button that has to read as one state or the other at a
    glance; colour does that, the glyph change is for people who cannot see it. */
+/* A bare glyph, like the favourite on a Fleet card. As a ghost button it wore
+   the clipped frame too, and "on" gave that frame the green of an active
+   control around an amber star - two colours saying one thing, off-centre. */
 #servers-table .star,
-#now-server-star {
-  font-size: 15px;
+#now-server-star,
+#servers-table .star.on:hover:not(:disabled),
+#now-server-star.on:hover:not(:disabled) {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  clip-path: none;
+  font-size: 16px;
   line-height: 1;
-  padding: 2px 6px;
+  color: var(--dim);
 }
+#servers-table .star:hover:not(:disabled),
+#now-server-star:hover:not(:disabled) { color: var(--cyan-hot); background: none; }
 #servers-table .star.on,
-#now-server-star.on { color: var(--amber); }
+#now-server-star.on,
+#servers-table .star.on:hover:not(:disabled),
+#now-server-star.on:hover:not(:disabled) { color: var(--amber); }
 
 /* A shard from a retired deployment is history: the row stays, the eye is
    told not to plan around it. */
@@ -5265,7 +5305,10 @@ body.overlay .ship-picture { display: none; }
 #servers-table .server-disposition .select { min-width: 62px; padding: 2px 4px; font-size: 10px; }
 #servers-table .server-disposition .select.good { color: var(--cyan); }
 #servers-table .server-disposition .select.avoid { color: var(--amber); }
-#servers-table td.places { max-width: 260px; }
+/* Wraps, so "+6 more" drops under a long place name. Every body cell is
+   nowrap, and the max-width alone let the badge run out of the cell and onto
+   the note box beside it. */
+#servers-table td.places { max-width: 260px; white-space: normal; }
 #servers-table td.ending { white-space: nowrap; }
 #servers-table td.ending .bad { color: var(--red); }
 
@@ -5294,6 +5337,10 @@ body.overlay .ship-picture { display: none; }
 /* One stay per line: a session that bounced between three shards should read
    as three lines, not one ellipsised string. */
 .session-metric.session-metric-shards .session-metric-value { white-space: pre-line; font-size: 12px; }
+/* The ships tile is the same kind of list. A name too long for the tile hangs
+   under its own first line, so its sortie count cannot pass for another ship. */
+.session-metric.session-metric-ships .session-metric-value { font-size: 12px; }
+.session-metric-line { padding-left: 1.2em; text-indent: -1.2em; }
 #servers-table td.places .more { margin-left: 6px; }
 #servers-table .place-list { margin: 6px 0 0; padding: 0 0 0 14px; list-style: disc; }
 #servers-table .place-list li { line-height: 1.5; }

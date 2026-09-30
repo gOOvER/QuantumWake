@@ -76,7 +76,7 @@ vehicle.control      497
 Counts were cross-checked against independent PowerShell greps and agree
 exactly (see the reference doc). Ground truth from the plan also holds:
 
-- handle resolves to `nekron`, GEID `204721322607`
+- handle resolves to `nekron`, GEID `100000000042`
 - 145 session headers = 144 backup files + 1 live log
 - ships include `DRAK Clipper` and `RSI Aurora_Mk2`
 - **zero kill events**, as expected on 4.9 and 4.10

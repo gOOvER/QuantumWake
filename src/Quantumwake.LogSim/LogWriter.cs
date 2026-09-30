@@ -53,11 +53,14 @@ public sealed class LogWriter : IDisposable
 
     // ---------------- session header ----------------
 
-    public void Header(DateTimeOffset at, string build, string version)
+    public void Header(DateTimeOffset at, GameBuild build) =>
+        Header(at, build.Number, build.Version, build.BuiltOn);
+
+    public void Header(DateTimeOffset at, string build, string version, string builtOn = "Jul 29 2026 15:21:13")
     {
         Line(at, $"BackupNameAttachment=\" Build({build}) {at:dd MMM yy} ({at:HH mm ss})\"  -- used by backup system");
         Line(at, $"Log started on {at.UtcDateTime:ddd MMM dd HH:mm:ss yyyy}");
-        Line(at, "Built on Jul 29 2026 15:21:13");
+        Line(at, $"Built on {builtOn}");
         Line(at, "Running 64 bit version");
         Line(at, @"Executable: C:\Program Files\Roberts Space Industries\StarCitizen\LIVE\Bin64\StarCitizen.exe");
         Line(at, $"FileVersion: {version}");
@@ -75,7 +78,7 @@ public sealed class LogWriter : IDisposable
     public void Character(DateTimeOffset at, string handle, string geid) =>
         Line(at, $"[Notice] <AccountLoginCharacterStatus_Character> Character: " +
                  $"createdAt 1784476187540 - updatedAt 1786844282957 - geid {geid} - " +
-                 $"accountId 51915 - name {handle} - state STATE_CURRENT [Team_GameServices][Login]");
+                 $"accountId 50001 - name {handle} - state STATE_CURRENT [Team_GameServices][Login]");
 
     public void Context(DateTimeOffset at, string gameRules, string sessionId) =>
         Line(at, $"[Notice] <Context Establisher Done> establisher=\"Game\" runningTime=1.980013 " +
@@ -131,6 +134,21 @@ public sealed class LogWriter : IDisposable
                  $"[Team_CGP4][QuantumTravel]");
 
     /// <summary>
+    /// The navigation computer complaining that no route is plotted - written
+    /// over and over while a pilot sits in a ship without one.
+    /// </summary>
+    /// <remarks>
+    /// Chatter, but useful chatter: it is not an event in itself, so the
+    /// parser reads the <c>RSI_Hermes_700000000001[700000000001]</c> in it as
+    /// the ship's name, which is how a retrieved ship gets identified before
+    /// it has flown anywhere.
+    /// </remarks>
+    public void NoRouteLoaded(DateTimeOffset at, string vehicleId, string entityId) =>
+        Line(at, $"[Notice] <Failed to get starmap route data!> [ItemNavigation][CL][9028] | NOT AUTH | " +
+                 $"{vehicleId}[{entityId}]|CSCItemNavigation::GetStarmapRouteSegmentData|No Route loaded! " +
+                 "[Team_CGP4][QuantumTravel]");
+
+    /// <summary>
     /// A cargo kiosk trade, in the shape the real client writes.
     /// </summary>
     /// <remarks>
@@ -178,32 +196,50 @@ public sealed class LogWriter : IDisposable
     }
 
     /// <summary>An item attached to a player slot, as emitted on spawn and refresh.</summary>
+    /// <remarks>
+    /// A spawn writes the whole kit in one burst, every line carrying the same
+    /// <c>Elapsed</c> give or take a few microseconds, which is why the caller
+    /// passes it rather than this inventing one per line.
+    /// </remarks>
     public void Attachment(
         DateTimeOffset at,
         string handle,
         string itemClass,
         string entityId,
         string port,
-        string status = "persistent") =>
+        string status = "persistent",
+        double elapsed = 22.216066) =>
         Line(at, $"[Notice] <AttachmentReceived> Player[{handle}] " +
                  $"Attachment[{itemClass}_{entityId}, {itemClass}, {entityId}] " +
-                 $"Status[{status}] Port[{port}] Elapsed[22.216066] [Team_ActorFeatures][Inventory]");
+                 $"Status[{status}] Port[{port}] " +
+                 $"Elapsed[{elapsed.ToString("F6", CultureInfo.InvariantCulture)}] " +
+                 "[Team_CoreGameplayFeatures][Inventory]");
 
     /// <summary>Binds an opaque inventory scope to the location most recently named.</summary>
-    public void InventoryQuery(DateTimeOffset at, string geid, string scope, string key) =>
-        Line(at, $"[Notice] <Query Inventory> Query Inventory[{geid}:{scope}:{key}] " +
-                 "[Team_ActorFeatures][Inventory]");
+    /// <remarks>
+    /// The request number is the client's own counter for the session; the
+    /// game writes it on every query, so a line without one is not a shape it
+    /// produces.
+    /// </remarks>
+    public void InventoryQuery(DateTimeOffset at, string geid, string scope, string key, int request = 0) =>
+        Line(at, $"[Notice] <Query Inventory> Request[{request}] Inventory[{geid}:{scope}:{key}] " +
+                 "[Team_CoreGameplayFeatures][Inventory]");
 
     /// <summary>An item observed while one inventory page is being browsed.</summary>
+    /// <remarks>
+    /// Rank is the game's sort key for the slot - a run of lowercase letters,
+    /// "amrqrwdiuwbon" and the like - and means nothing to the parser.
+    /// </remarks>
     public void InventoryItem(
         DateTimeOffset at,
         string geid,
         string scope,
         string key,
-        string itemClass) =>
+        string itemClass,
+        string rank = "amrqrwdiuwbon") =>
         Line(at, $"[Notice] <Update Container Items Add New Item> End Page " +
-                 $"Entity Class[{itemClass}] Rank[simulated] " +
-                 $"SourceInventory[{geid}:{scope}:{key}] [Team_ActorFeatures][Inventory]");
+                 $"Entity Class[{itemClass}] Rank[{rank}] " +
+                 $"SourceInventory[{geid}:{scope}:{key}] [Team_CoreGameplayFeatures][Inventory]");
 
     /// <summary>The owned-vehicle totals returned by an ASOP entitlement query.</summary>
     public void FleetQuery(DateTimeOffset at, int entitlements, int vehicles) =>
@@ -217,17 +253,56 @@ public sealed class LogWriter : IDisposable
                  $"VehicleEntityId: [{entityId}] LandingArea: {landingArea} " +
                  "[Team_GameServices][ASOP]");
 
+    /// <summary>
+    /// A ship retrieval as current builds write it: the request, then the ship
+    /// on the pad a moment later.
+    /// </summary>
+    /// <remarks>
+    /// The landing area is the player's hangar, and the game spells it
+    /// "&lt;handle&gt;'s" on one line and "Large Hangar [Team_...]" on the next -
+    /// the possessive's newline is in the string. Neither line names the ship;
+    /// that arrives later, on whatever navigation line next carries the id.
+    /// </remarks>
+    public void VehicleRetrieval(
+        DateTimeOffset at,
+        string entityId,
+        string landingAtcId,
+        string handle,
+        string hangar)
+    {
+        Line(at, "[Notice] <CEntityComponentShipListProvider::SetVehicleSpawningInformations> " +
+                 $"SetVehicleSpawningInformations - VehicleEntityId: [{entityId}], LandingArea: {handle}'s");
+        Line(at, $"{hangar} [Team_GameServices][ASOP]");
+
+        var spawned = at.AddMilliseconds(830);
+        Line(spawned, "[Notice] <CEntityComponentShipListProvider::SetVehicleSpawnedInformations> " +
+                      $"SetVehicleSpawnedInformations - VehicleEntityId: [{entityId}], " +
+                      $"LandingATCId: [{landingAtcId}], LandingArea: {handle}'s");
+        Line(spawned, $"{hangar} [Team_GameServices][ASOP]");
+    }
+
     /// <summary>An incidental line that ties a retrieved entity id to a ship model.</summary>
     public void VehicleIdentity(DateTimeOffset at, string vehicleId, string entityId) =>
         Line(at, $"[Notice] <Vehicle Initialization> Registered {vehicleId}[{entityId}] " +
                  "with ItemNavigation and local navigation [Team_VehicleFeatures][Vehicle]");
 
     /// <summary>One item in the tight burst produced when a corpse is created.</summary>
-    public void CorpseItem(DateTimeOffset at, string itemClass, string port) =>
+    /// <remarks>
+    /// The whole kit is written in the same millisecond, one line per port,
+    /// which is what lets a reader group a burst into one death. The class
+    /// GUID is the item's record id in the game data; nothing reads it.
+    /// </remarks>
+    public void CorpseItem(
+        DateTimeOffset at,
+        string itemClass,
+        string port,
+        string entityId = "200000000218",
+        string classGuid = "dbaa8a7d-755f-4104-8b24-7b58fd1e76f6") =>
         Line(at, "[Notice] <Adding non kept item " +
                  "[CSCActorCorpseUtils::PopulateItemPortForItemRecoveryEntitlement]> " +
-                 $"Item '{itemClass}_200000000218 - Class({itemClass}) - simulated', " +
-                 $"Recorded data is: Port Name '{port}', Class {itemClass} [Team_ActorFeatures][Actor]");
+                 $"Item '{itemClass}_{entityId} - Class({itemClass}) - Context(Streamable Runtime-spawned) - Socpak()', " +
+                 $"Recorded data is: Port Name '{port}', Class GUID: '{classGuid}' " +
+                 "[Team_CoreGameplayFeatures][Unknown]");
 
     public void ContractMarker(
         DateTimeOffset at,
@@ -242,6 +317,7 @@ public sealed class LogWriter : IDisposable
                  $"[Team_Missions]");
 
     /// <summary>A non-commodity kiosk purchase request, pending a server answer.</summary>
+    /// <remarks>The two spaces before the team tag are the game's, not a typo.</remarks>
     public void ShopRequest(
         DateTimeOffset at,
         string geid,
@@ -250,36 +326,52 @@ public sealed class LogWriter : IDisposable
         string kioskId,
         decimal price,
         string itemName,
-        int quantity) =>
+        int quantity,
+        string itemClassGuid = "00000000-0000-0000-0000-000000000001") =>
         Line(at, $"[Notice] <CEntityComponentShopUIProvider::SendShopBuyRequest> " +
                  $"Sending SShopBuyRequest - playerId[{geid}] shopId[{shopId}] " +
                  $"shopName[{shopName}] kioskId[{kioskId}] " +
                  $"client_price[{price.ToString("F6", CultureInfo.InvariantCulture)}] " +
-                 $"itemClassGUID[00000000-0000-0000-0000-000000000001] " +
-                 $"itemName[{itemName}] quantity[{quantity}] [Team_ActorFeatures][Shops]");
+                 $"itemClassGUID[{itemClassGuid}] " +
+                 $"itemName[{itemName}] quantity[{quantity}]  [Team_CoreGameplayFeatures][Shops][UI]");
 
     /// <summary>The server outcome paired with the latest request at this kiosk.</summary>
+    /// <remarks>
+    /// Every answer in the real logs is <c>kioskState[BuyRequestProcessing]</c>
+    /// with <c>result[Success]</c>; the other states are for the scenarios that
+    /// test the pairing rules.
+    /// </remarks>
     public void ShopResponse(
         DateTimeOffset at,
         string shopName,
         string kioskId,
         string result,
         string type = "Buying",
-        string kioskState = "Idle") =>
+        string kioskState = "Idle",
+        string geid = "100000000042",
+        string shopId = "0") =>
         Line(at, $"[Notice] <CEntityComponentShopUIProvider::RmShopFlowResponse> " +
+                 $"Received ShopFlowResponse - playerId[{geid}] shopId[{shopId}] " +
                  $"shopName[{shopName}] kioskId[{kioskId}] kioskState[{kioskState}] " +
-                 $"result[{result}] type[{type}] [Team_ActorFeatures][Shops]");
+                 $"result[{result}] type[{type}] [Team_CoreGameplayFeatures][Shops][UI]");
 
     /// <summary>A mission journal objective changing state.</summary>
+    /// <remarks>
+    /// Hauling steps carry the bare <c>ShowInLog|</c>; other contracts'
+    /// visible steps carry more, <c>ShowInLog|RespectInheritedVisibility|</c>
+    /// among them. Pass the flags to write one of those.
+    /// </remarks>
     public void MissionObjective(
         DateTimeOffset at,
         string missionId,
         string objectiveId,
         string state,
-        bool shownInLog = true) =>
+        bool shownInLog = true,
+        string? flags = null) =>
         Line(at, $"[Notice] <ObjectiveUpserted> Received ObjectiveUpserted push message for: " +
                  $"mission_id {missionId} - objective_id {objectiveId} - state {state} " +
-                 $"- created 0 - flags={(shownInLog ? "ShowInLog|" : "Internal|")} [Team_Missions]");
+                 $"- created 0 - flags={flags ?? (shownInLog ? "ShowInLog|" : "Internal|")} " +
+                 "[Team_GameServices][Missions]");
 
     /// <summary>
     /// A contract ending, said the two ways the game says it.
@@ -294,17 +386,36 @@ public sealed class LogWriter : IDisposable
         string missionId,
         string state,
         string completionType,
-        string reason = "Objectives complete")
+        string reason = "Objectives complete",
+        string handle = "testpilot",
+        string geid = "100000000042")
     {
         Line(at, $"[Notice] <MissionEnded> Received MissionEnded push message for: " +
                  $"mission_id {missionId} - mission_state {state} " +
                  $"[Team_GameServices][Missions]");
 
+        EndMission(at, missionId, completionType, reason, handle, geid);
+    }
+
+    /// <summary>
+    /// The client's half of a contract ending, on its own.
+    /// </summary>
+    /// <remarks>
+    /// An abandonment usually says only this: across the real backups there
+    /// are 73 <c>CompletionType[Abandon]</c> lines and one withdrawn
+    /// <c>MissionEnded</c>.
+    /// </remarks>
+    public void EndMission(
+        DateTimeOffset at,
+        string missionId,
+        string completionType,
+        string reason,
+        string handle = "testpilot",
+        string geid = "100000000042") =>
         Line(at, $"[Notice] <EndMission> Ending mission for player. MissionId[{missionId}] " +
-                 $"Player[nekron] PlayerId[9730519752057] " +
+                 $"Player[{handle}] PlayerId[{geid}] " +
                  $"CompletionType[{completionType}] Reason[{reason}] " +
                  $"[Team_MissionFeatures][Missions]");
-    }
 
     /// <summary>
     /// A notification and its follow-up Action lines. The repeats are the point:
@@ -416,4 +527,30 @@ public sealed class LogWriter : IDisposable
     }
 
     public void Dispose() => _writer.Dispose();
+}
+
+/// <summary>
+/// A game build and what its header says about itself.
+/// </summary>
+/// <remarks>
+/// The header's version and compile date change with the build, so a build
+/// number written beside another build's version is a header no client ever
+/// wrote. The known ones are copied from real backups; any other number keeps
+/// the default's version, which is the best that can be said without a log
+/// from that build.
+/// </remarks>
+public sealed record GameBuild(string Number, string Version, string BuiltOn)
+{
+    public static GameBuild Default { get; } = new("12344265", "4.9.188.23497", "Jul 29 2026 15:21:13");
+
+    private static readonly GameBuild[] Known =
+    [
+        Default,
+        new("12568521", "1.0.191.51145", "Sep  2 2026 19:13:33"),
+        new("12572603", "1.0.191.55227", "Sep  3 2026 13:46:55"),
+        new("12660092", "4.10.193.11644", "Sep 15 2026 13:12:47")
+    ];
+
+    public static GameBuild For(string number) =>
+        Known.FirstOrDefault(b => b.Number == number) ?? Default with { Number = number };
 }

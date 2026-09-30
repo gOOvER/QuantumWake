@@ -14,7 +14,7 @@ outcome.
 
 ```
 <Notice> <CEntityComponentShopUIProvider::SendShopBuyRequest> Sending SShopBuyRequest -
-  playerId[204721322607] shopId[752023944375] shopName[SCShop_OmegaPro_NewBabbage]
+  playerId[100000000042] shopId[752023944375] shopName[SCShop_OmegaPro_NewBabbage]
   kioskId[752023944372] client_price[475200.000000]
   itemClassGUID[2a02027b-5c19-456b-901b-663189505be0]
   itemName[POWR_JUST_S02_Genoa_SCItem] quantity[1] [Team_CoreGameplayFeatures][Shops][UI]
@@ -100,7 +100,7 @@ as HUD notifications.
 ## 4. Fleet size — one line, genuinely interesting
 
 ```
-<Notice> <VehicleListQuery> Fetching vehicle list for player 204721322607 completed.
+<Notice> <VehicleListQuery> Fetching vehicle list for player 100000000042 completed.
   Retrieved 12 entitlements out of 14 vehicules. [Team_GameServices][ASOP][Entitlement][Insurance]
 ```
 
@@ -156,7 +156,7 @@ notifications are the **only** lines in a 4.9 or 4.10 log that name another play
 
 ```
 <SHUDEvent_OnNotification> Added notification "Party
-D-Rud disconnected.: " [94] to queue. ...
+B-Kon disconnected.: " [94] to queue. ...
 ```
 
 **Six titles, not five.** 0.7.0 read `Party`, `New Party Leader` and
@@ -176,8 +176,8 @@ not coming back. Reading only the first makes a friend with a poor connection
 look like one who walked off.
 
 Current figures on this install: 365 notifications, 324 read, **32 people
-named** — seven of whom (`Craven`, `IanH1194`, `Krios`, `Ronus`,
-`SuperAtomic`, `Sybreed`, `drudz`) appear *only* in join or leave lines and
+named** — seven of whom (`Brenner`, `JoeK2281`, `Tallo`, `Odrin`,
+`HyperNimbus`, `Morvane`, `bkonz`) appear *only* in join or leave lines and
 were unnameable before. 187 connects, 64 drops, 33 departures, 22 joins, 13
 leader handovers, 5 disbands. The remaining 41 are queue chatter and one line
 the game garbled.
@@ -186,7 +186,7 @@ the game garbled.
 of its lines are a ship channel emptying rather than a party changing:
 
 ```
-Member Left  X has left the channel 'RSI Ursa Medivac : DeathStrokeo1'.
+Member Left  X has left the channel 'RSI Ursa Medivac : NightWardeno1'.
 ```
 
 So the body has to be read rather than the title trusted, or a passenger
@@ -195,7 +195,7 @@ stepping out of a hired ship is recorded as leaving a party they were never in.
 ### Taken in 0.8: who was aboard whose ship
 
 Those channel lines are read now. They name the ship **and its owner** —
-`'RSI Ursa Medivac : DeathStrokeo1'` — which is the only thing in a 4.9 or 4.10 log
+`'RSI Ursa Medivac : NightWardeno1'` — which is the only thing in a 4.9 or 4.10 log
 that puts a person inside a particular vehicle.
 
 **Count the queue entries, not the log lines.** Each notification is written

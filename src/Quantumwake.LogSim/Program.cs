@@ -40,11 +40,19 @@ if (options.Scenario is not null && selectedScenario is null)
     return 2;
 }
 
+if (options.StayInGame && selectedScenario is null)
+{
+    Console.Error.WriteLine("--stay-in-game shapes how a --scenario ends; use it with one.");
+    return 2;
+}
+
 if (selectedScenario is not null && options.Live)
 {
     Console.Error.WriteLine("A named scenario is a completed deterministic log and cannot be combined with --live.");
     return 2;
 }
+
+var build = GameBuild.For(options.Build);
 
 var liveDirectory = Path.Combine(options.InstallRoot, "LIVE");
 var backupsDirectory = Path.Combine(liveDirectory, "logbackups");
@@ -59,13 +67,15 @@ if (selectedScenario is null)
     Console.WriteLine($"Combat       : {(options.Combat ? "enabled (exercises the dormant parser)" : "off, matching real 4.9 and 4.10 logs")}");
 else
     Console.WriteLine($"Scenario     : {selectedScenario.Name} - {selectedScenario.Description}");
+Console.WriteLine($"Build        : {build.Number} ({build.Version})");
 Console.WriteLine();
 
 var simOptions = new SimOptions
 {
     Handle = options.Handle,
     Legs = options.Legs,
-    Combat = options.Combat
+    Combat = options.Combat,
+    Build = build
 };
 
 // ---- historical backups ----
@@ -74,16 +84,18 @@ if (selectedScenario is null && options.Backups > 0)
 {
     Console.WriteLine($"Generating {options.Backups} backup sessions…");
 
-    // Walk backwards from yesterday, one session most evenings.
+    // Walk backwards from yesterday, one session most evenings. Seeded, so the
+    // same --seed lays the same evenings out behind whatever today is.
+    var calendar = new Random(options.Seed);
     var day = DateTimeOffset.Now.Date.AddDays(-1);
 
     for (var i = 0; i < options.Backups; i++)
     {
         var start = new DateTimeOffset(day, TimeSpan.Zero)
             .AddHours(20)
-            .AddMinutes(Random.Shared.Next(0, 90));
+            .AddMinutes(calendar.Next(0, 90));
 
-        var name = $"Game Build(12344265) {start:dd MMM yy} ({start:HH mm ss}).log";
+        var name = $"Game Build({build.Number}) {start:dd MMM yy} ({start:HH mm ss}).log";
         var path = Path.Combine(backupsDirectory, name);
 
         using (var writer = new LogWriter(path))
@@ -96,7 +108,7 @@ if (selectedScenario is null && options.Backups > 0)
         File.SetLastWriteTime(path, start.LocalDateTime.AddHours(2));
 
         Console.Write($"\r  {i + 1}/{options.Backups}");
-        day = day.AddDays(-Random.Shared.Next(1, 4));
+        day = day.AddDays(-calendar.Next(1, 4));
     }
 
     Console.WriteLine("\r  done." + new string(' ', 20));
@@ -117,7 +129,9 @@ if (selectedScenario is not null)
             selectedScenario,
             options.Start ?? DateTimeOffset.Now.Date.AddHours(20),
             options.Handle,
-            simOptions.Geid);
+            simOptions.Geid,
+            build,
+            options.StayInGame);
     }
 
     var info = new FileInfo(gameLog);
@@ -126,6 +140,8 @@ if (selectedScenario is not null)
     Console.WriteLine("Expected parser facts:");
     foreach (var fact in selectedScenario.ExpectedFacts)
         Console.WriteLine($"  - {fact}");
+    if (options.StayInGame)
+        Console.WriteLine("  - ends in game: back on a shard at Port Tressler, in a retrieved Drake Clipper, contracts still open");
     Console.WriteLine();
     Console.WriteLine("Open it in Quantum Wake:");
     Console.WriteLine($"  .\\start.ps1 -Path \"{liveDirectory}\"");
@@ -202,6 +218,8 @@ internal sealed record Args
     public string? Scenario { get; init; }
     public bool ListScenarios { get; init; }
     public DateTimeOffset? Start { get; init; }
+    public string Build { get; init; } = GameBuild.Default.Number;
+    public bool StayInGame { get; init; }
     public bool ShowHelp { get; init; }
 
     public static Args Parse(string[] args)
@@ -246,6 +264,15 @@ internal sealed record Args
 
                 case "--live":
                     result = result with { Live = true };
+                    break;
+
+                case "--build" when next is not null:
+                    result = result with { Build = next };
+                    i++;
+                    break;
+
+                case "--stay-in-game":
+                    result = result with { StayInGame = true };
                     break;
 
                 case "--combat":
@@ -297,6 +324,10 @@ internal sealed record Args
               --list-scenarios  List focused, deterministic test stories
               --scenario <name> Write one focused scenario instead of random sessions
               --start <date>    Scenario timestamp (ISO 8601; default: today at 20:00)
+              --stay-in-game    With --scenario: end in the world, not logged out - on a shard, at a
+                                location, in a retrieved ship, open contracts kept. For the Now page.
+              --build <n>       Game build written in headers, shard names and backup file names
+                                (default: 12344265). Known builds also get their real version line.
               --handle <name>   Player handle (default: testpilot)
               --seed <n>        Deterministic output (default: 1337)
 
@@ -306,6 +337,7 @@ internal sealed record Args
               dotnet run --project src\Quantumwake.LogSim -- --live --speed 120
               dotnet run --project src\Quantumwake.LogSim -- --scenario cargo-run
               dotnet run --project src\Quantumwake.LogSim -- --scenario all --start 2026-08-24T20:00:00Z
+              dotnet run --project src\Quantumwake.LogSim -- --scenario all --stay-in-game --build 12660092
 
             Then point the app at the generated install:
               .\start.ps1 -Path "%TEMP%\QuantumwakeFakeInstall\LIVE"

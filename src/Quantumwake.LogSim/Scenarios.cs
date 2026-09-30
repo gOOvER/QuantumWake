@@ -42,7 +42,7 @@ public static class ScenarioCatalogue
             ["1 incapacitation", "0 inferred respawns"]),
         new("crew-flight",
             "Receive party changes, fly together, and see one member disconnect.",
-            ["4 party notes", "D-Rud becomes leader", "1 ship sortie", "1 quantum jump"]),
+            ["4 party notes", "B-Kon becomes leader", "1 ship sortie", "1 quantum jump"]),
         new("party-lifecycle",
             "Connect, change leader, disconnect, reconnect, and disband a party.",
             ["5 party notes", "1 disband", "matchmaking chatter excluded"]),
@@ -126,9 +126,11 @@ public static class ScenarioRunner
         ScenarioDefinition scenario,
         DateTimeOffset start,
         string handle = "testpilot",
-        string geid = "204721322607")
+        string geid = "100000000042",
+        GameBuild? build = null,
+        bool stayInGame = false)
     {
-        var context = new ScenarioContext(log, start, handle, geid);
+        var context = new ScenarioContext(log, start, handle, geid, build ?? GameBuild.Default);
         context.Begin();
 
         if (scenario.Name.Equals("all", StringComparison.OrdinalIgnoreCase))
@@ -141,8 +143,75 @@ public static class ScenarioRunner
             RunBody(scenario.Name, context);
         }
 
-        if (!scenario.StaysInGame)
+        if (stayInGame)
+            Settle(context);
+        else if (!scenario.StaysInGame)
             context.End();
+    }
+
+    /// <summary>
+    /// Leaves the pilot in the world rather than logging out: back on a shard
+    /// if a disconnect took them off one, standing at Port Tressler, in a
+    /// retrieved ship, with company and any open contracts still in the
+    /// journal.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For recording the Now page, which with a finished log shows a game
+    /// that has closed. Everything a live session carries has to be in the
+    /// file: the shard from the last join, the location from the last
+    /// inventory request, the ship from a retrieval whose id a navigation line
+    /// later names, the clock from the first line.
+    /// </para>
+    /// <para>
+    /// No route is plotted. A ship on the pad gets its name from the navigation
+    /// computer's "No Route loaded!" grumble - quantum lines are events of
+    /// their own and do not name it - and plotting a route would put the page
+    /// in transit rather than at the station.
+    /// </para>
+    /// </remarks>
+    private static void Settle(ScenarioContext c)
+    {
+        if (c.OffShard)
+        {
+            // A timeout drops the client to the menu; matchmaking puts it
+            // back on a different server.
+            c.Log.Context(c.Now, "SC_Frontend", ScenarioContext.SessionId);
+            c.Log.LoadingScreen(c.Now.AddSeconds(1), "Frontend_Main", "SC_Frontend", 2.84);
+            c.Advance(40);
+            c.Log.JoinShard(c.Now, $"pub_use1b_{c.Build.Number}_117");
+            c.Log.Context(c.Now, "SC_Default", ScenarioContext.SessionId);
+            c.Log.LoadingScreen(c.Now.AddSeconds(1), "PU_Megamap", "SC_Default", 19.62);
+            c.Advance(25);
+            c.Log.Spawned(c.Now);
+            c.OffShard = false;
+        }
+
+        c.Location("RR_MIC_LEO");
+        c.Advance(30);
+
+        const string entity = "700000009101";
+        const string vehicle = "DRAK_Clipper_700000009101";
+
+        c.Log.VehicleRetrieval(c.Now, entity, "700000009102", c.Handle, "Large Hangar");
+        c.Advance(70);
+        c.Notify("Hangar Request Completed: ");
+        c.Log.SplitNotification(c.Now, $"You have joined channel 'Drake Clipper : {c.Handle}'.", ": ",
+            c.NextNotificationId());
+        c.Advance(10);
+
+        c.Log.SplitNotification(c.Now, "Party", "Pilot-Two connected.: ", c.NextNotificationId());
+        c.Advance(10);
+        c.Log.SplitNotification(c.Now, "New Member Joined",
+            $"Pilot-Two has joined the channel 'Drake Clipper : {c.Handle}'.: ", c.NextNotificationId());
+        c.Advance(20);
+
+        // Sat in the seat with nothing plotted; the navigation computer says
+        // so, naming the ship as it does.
+        c.Log.NoRouteLoaded(c.Now, vehicle, entity);
+        c.Advance(20);
+        c.Log.NoRouteLoaded(c.Now, vehicle, entity);
+        c.Advance(5);
     }
 
     private static void RunBody(string name, ScenarioContext context)
@@ -329,11 +398,11 @@ public static class ScenarioRunner
 
     private static void CrewFlight(ScenarioContext c)
     {
-        c.Notify("Party D-Rud connected.:");
-        c.Notify("Party astro_ice connected.:");
-        c.Notify("New Party Leader D-Rud is now party leader.:");
+        c.Notify("Party B-Kon connected.:");
+        c.Notify("Party nova_rime connected.:");
+        c.Notify("New Party Leader B-Kon is now party leader.:");
         c.Flight("LOC_RR_S4_L1", "RR_MIC_L1", "New Babbage");
-        c.Notify("Party astro_ice disconnected.:");
+        c.Notify("Party nova_rime disconnected.:");
     }
 
     private static void PartyLifecycle(ScenarioContext c)
@@ -366,7 +435,7 @@ public static class ScenarioRunner
         // The step above is not what finishes a contract - the real game says
         // so separately, and this install has to say it too or the scenario
         // describes a hauling run that ends the moment it is loaded.
-        c.Log.MissionEnded(c.Now, mission, "MISSION_STATE_COMPLETED", "Complete");
+        c.Log.MissionEnded(c.Now, mission, "MISSION_STATE_COMPLETED", "Complete", handle: c.Handle, geid: c.Geid);
         c.Advance(5);
         c.Notify("Received Blueprint: Omnisky IX");
     }
@@ -424,7 +493,7 @@ public static class ScenarioRunner
         c.Advance(20);
         c.Log.MissionObjective(c.Now, mission, "recover_crate_0", "MISSION_OBJECTIVE_STATE_WITHDRAWN");
         c.Advance(2);
-        c.Log.MissionEnded(c.Now, mission, "MISSION_STATE_WITHDRAWN", "Abandon", "Player left");
+        c.Log.MissionEnded(c.Now, mission, "MISSION_STATE_WITHDRAWN", "Abandon", "Player left", c.Handle, c.Geid);
         c.Advance(10);
     }
 
@@ -462,7 +531,7 @@ public static class ScenarioRunner
         c.Log.InventoryQuery(c.Now, c.Geid, "Location", "3531251586");
         c.Log.InventoryItem(c.Now.AddSeconds(1), c.Geid, "Location", "3531251586", "gmni_sniper_ballistic_01");
         c.Log.InventoryItem(c.Now.AddSeconds(2), c.Geid, "Location", "3531251586", "gmni_sniper_ballistic_01");
-        c.Log.InventoryItem(c.Now.AddSeconds(3), c.Geid, "Player", "204721322607", "medpen_hemozal");
+        c.Log.InventoryItem(c.Now.AddSeconds(3), c.Geid, "Player", "100000000042", "medpen_hemozal");
         c.Advance(10);
         c.Location("Stanton4_NewBabbage");
         c.Log.InventoryQuery(c.Now, c.Geid, "Location", "3531251587");
@@ -506,6 +575,7 @@ public static class ScenarioRunner
     private static void UnexpectedDisconnect(ScenarioContext c)
     {
         c.Log.Disconnect(c.Now, "Connection timeout", "SC_Default", remote: true);
+        c.OffShard = true;
         c.Advance(10);
     }
 
@@ -524,22 +594,27 @@ public static class ScenarioRunner
 
     private sealed class ScenarioContext
     {
-        private const string SessionId = "01234567-89ab-cdef-0123-456789abcdef";
+        public const string SessionId = "01234567-89ab-cdef-0123-456789abcdef";
         private int _notificationId = 400;
         private int _flightId;
 
-        public ScenarioContext(LogWriter log, DateTimeOffset start, string handle, string geid)
+        public ScenarioContext(LogWriter log, DateTimeOffset start, string handle, string geid, GameBuild build)
         {
             Log = log;
             Now = start;
             Handle = handle;
             Geid = geid;
+            Build = build;
         }
 
         public LogWriter Log { get; }
         public DateTimeOffset Now { get; private set; }
         public string Handle { get; }
         public string Geid { get; }
+        public GameBuild Build { get; }
+
+        /// <summary>True after a world-channel disconnect, until a join puts the client back.</summary>
+        public bool OffShard { get; set; }
 
         public void Advance(int seconds) => Now = Now.AddSeconds(seconds);
 
@@ -547,7 +622,7 @@ public static class ScenarioRunner
 
         public void Begin()
         {
-            Log.Header(Now, "12344265", "4.9.188.23497");
+            Log.Header(Now, Build);
             Advance(1);
             Log.Character(Now, Handle, Geid);
             Log.Login(Now.AddMilliseconds(120), Handle);
@@ -555,7 +630,7 @@ public static class ScenarioRunner
             Log.Context(Now, "SC_Frontend", SessionId);
             Log.LoadingScreen(Now.AddSeconds(1), "Frontend_Main", "SC_Frontend", 3.44);
             Advance(10);
-            Log.JoinShard(Now, "pub_use1b_12344265_042");
+            Log.JoinShard(Now, $"pub_use1b_{Build.Number}_042");
             Log.Context(Now, "SC_Default", SessionId);
             Log.LoadingScreen(Now.AddSeconds(1), "PU_Megamap", "SC_Default", 21.30);
             Advance(25);

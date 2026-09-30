@@ -7,7 +7,7 @@ namespace Quantumwake.Core.Events;
 /// Logged in full, including the price the client believes it is paying:
 /// <code>
 /// &lt;CEntityComponentShopUIProvider::SendShopBuyRequest&gt; Sending SShopBuyRequest -
-///   playerId[204721322607] shopId[752023944375] shopName[SCShop_OmegaPro_NewBabbage]
+///   playerId[100000000042] shopId[752023944375] shopName[SCShop_OmegaPro_NewBabbage]
 ///   kioskId[752023944372] client_price[475200.000000]
 ///   itemClassGUID[...] itemName[POWR_JUST_S02_Genoa_SCItem] quantity[1]
 /// </code>
@@ -182,7 +182,7 @@ public enum MissionEnding
 ///   mission_state MISSION_STATE_COMPLETED [Team_GameServices][Missions]
 ///
 /// &lt;EndMission&gt; Ending mission for player. MissionId[cbb50710-...]
-///   Player[nekron] PlayerId[9730519752057]
+///   Player[nekron] PlayerId[1000000000073]
 ///   CompletionType[Abandon] Reason[Player left] [Team_MissionFeatures][Missions]
 /// </code>
 /// <para>
@@ -237,7 +237,7 @@ public sealed record AttachmentEvent(
 }
 
 /// <summary>
-/// An inventory scope being queried, e.g. <c>204721322607:Location:3531251586</c>.
+/// An inventory scope being queried, e.g. <c>100000000042:Location:3531251586</c>.
 /// </summary>
 /// <remarks>
 /// This is what makes stash tracking possible. The query fires immediately after
@@ -261,7 +261,7 @@ public sealed record InventoryQueryEvent(
 /// <remarks>
 /// <code>
 /// &lt;Update Container Items Add New Item&gt; End Page Entity Class[gmni_sniper_ballistic_01]
-///   Rank[amracixuxglwx] SourceInventory[204721322607:Location:3531251586]
+///   Rank[amracixuxglwx] SourceInventory[100000000042:Location:3531251586]
 /// </code>
 /// These are listings produced while browsing an inventory, not transfers, so
 /// they show what was <i>seen</i> at a place rather than a live stock level.

@@ -19,17 +19,17 @@ public class PartyTests
     /// title glued to the front and the notification's colon on the end.
     /// </summary>
     [Theory]
-    [InlineData("Party D-Rud connected.:", "D-Rud", PartyMoment.Connected)]
-    [InlineData("Party D-Rud disconnected.:", "D-Rud", PartyMoment.Disconnected)]
-    [InlineData("Party Drafts-of-Singularity connected.:", "Drafts-of-Singularity", PartyMoment.Connected)]
-    [InlineData("Party astro_ice connected.:", "astro_ice", PartyMoment.Connected)]
-    [InlineData("Party KR105 disconnected.:", "KR105", PartyMoment.Disconnected)]
-    [InlineData("New Party Leader Craven is now party leader.:", "Craven", PartyMoment.BecameLeader)]
-    [InlineData("New Member Joined Vhailor-5 has joined the party.:", "Vhailor-5", PartyMoment.Joined)]
-    [InlineData("New Member Joined LeonardCharette-SQsfKwqo has joined the party.:",
-        "LeonardCharette-SQsfKwqo", PartyMoment.Joined)]
-    [InlineData("Member Left Sylosis has left the party.:", "Sylosis", PartyMoment.Left)]
-    [InlineData("Member Left drudz has left the party.:", "drudz", PartyMoment.Left)]
+    [InlineData("Party B-Kon connected.:", "B-Kon", PartyMoment.Connected)]
+    [InlineData("Party B-Kon disconnected.:", "B-Kon", PartyMoment.Disconnected)]
+    [InlineData("Party Echoes-of-Cartography connected.:", "Echoes-of-Cartography", PartyMoment.Connected)]
+    [InlineData("Party nova_rime connected.:", "nova_rime", PartyMoment.Connected)]
+    [InlineData("Party TX207 disconnected.:", "TX207", PartyMoment.Disconnected)]
+    [InlineData("New Party Leader Brenner is now party leader.:", "Brenner", PartyMoment.BecameLeader)]
+    [InlineData("New Member Joined Quorren-7 has joined the party.:", "Quorren-7", PartyMoment.Joined)]
+    [InlineData("New Member Joined MarcusHollowell-TzqfPwbe has joined the party.:",
+        "MarcusHollowell-TzqfPwbe", PartyMoment.Joined)]
+    [InlineData("Member Left Velaris has left the party.:", "Velaris", PartyMoment.Left)]
+    [InlineData("Member Left bkonz has left the party.:", "bkonz", PartyMoment.Left)]
     public void Reads_who_and_what_happened(string text, string handle, PartyMoment moment)
     {
         var note = Party.Read(At, text);
@@ -63,9 +63,9 @@ public class PartyTests
     /// line where the game wrote a half-decoded string.
     /// </summary>
     [Theory]
-    [InlineData("Party Launch Initiated by party leader KR105.:")]
-    [InlineData("Party Launch Join queue canceled by party leader KR105.:")]
-    [InlineData("Party Launch Accepted Initiated by party leader KR105.:")]
+    [InlineData("Party Launch Initiated by party leader TX207.:")]
+    [InlineData("Party Launch Join queue canceled by party leader TX207.:")]
+    [InlineData("Party Launch Accepted Initiated by party leader TX207.:")]
     [InlineData("Party Notifications sent to party members.:")]
 
     [InlineData("New Member Joined")]
@@ -124,9 +124,9 @@ public class PartyTests
     /// the notes read stays a measure of what the reader declined to guess at.
     /// </remarks>
     [Theory]
-    [InlineData("Member Left Sylosis has left the channel 'RSI Ursa Medivac : DeathStrokeo1'.:")]
-    [InlineData("Member Left D-Rud has left the channel 'MISC Starlancer MAX : nekron'.:")]
-    [InlineData("Member Left  has left the channel 'RSI Ursa Medivac : DeathStrokeo1'.:")]
+    [InlineData("Member Left Velaris has left the channel 'RSI Ursa Medivac : NightWardeno1'.:")]
+    [InlineData("Member Left B-Kon has left the channel 'MISC Starlancer MAX : nekron'.:")]
+    [InlineData("Member Left  has left the channel 'RSI Ursa Medivac : NightWardeno1'.:")]
     public void A_ship_channel_emptying_is_not_a_party_event(string text)
     {
         Assert.False(Party.IsParty(text));
@@ -140,12 +140,12 @@ public class PartyTests
     [Fact]
     public void Leaving_is_not_the_same_as_dropping()
     {
-        var left = Party.Read(At, "Member Left Sylosis has left the party.:");
-        var dropped = Party.Read(At, "Party Sylosis disconnected.:");
+        var left = Party.Read(At, "Member Left Velaris has left the party.:");
+        var dropped = Party.Read(At, "Party Velaris disconnected.:");
 
         Assert.Equal(PartyMoment.Left, left!.Moment);
         Assert.Equal(PartyMoment.Disconnected, dropped!.Moment);
-        Assert.Equal("Sylosis", left.Handle);
+        Assert.Equal("Velaris", left.Handle);
         Assert.Equal(left.Handle, dropped.Handle);
     }
 
@@ -158,19 +158,19 @@ public class PartyTests
     public void Latest_keeps_the_last_word_about_each_player()
     {
         var latest = Party.Latest([
-            new PartyNote(At, "D-Rud", PartyMoment.Connected),
-            new PartyNote(At.AddMinutes(5), "D-Rud", PartyMoment.Disconnected),
-            new PartyNote(At.AddMinutes(9), "D-Rud", PartyMoment.Connected),
-            new PartyNote(At.AddMinutes(2), "Sylosis", PartyMoment.Joined),
+            new PartyNote(At, "B-Kon", PartyMoment.Connected),
+            new PartyNote(At.AddMinutes(5), "B-Kon", PartyMoment.Disconnected),
+            new PartyNote(At.AddMinutes(9), "B-Kon", PartyMoment.Connected),
+            new PartyNote(At.AddMinutes(2), "Velaris", PartyMoment.Joined),
         ]);
 
         Assert.Equal(2, latest.Count);
 
         // Most recent first, so the card leads with what just happened.
-        Assert.Equal("D-Rud", latest[0].Handle);
+        Assert.Equal("B-Kon", latest[0].Handle);
         Assert.Equal(PartyMoment.Connected, latest[0].Moment);
         Assert.Equal(At.AddMinutes(9), latest[0].At);
-        Assert.Equal("Sylosis", latest[1].Handle);
+        Assert.Equal("Velaris", latest[1].Handle);
     }
 
     /// <summary>
@@ -180,11 +180,11 @@ public class PartyTests
     public void Latest_drops_the_note_that_names_nobody()
     {
         var latest = Party.Latest([
-            new PartyNote(At, "D-Rud", PartyMoment.Connected),
+            new PartyNote(At, "B-Kon", PartyMoment.Connected),
             new PartyNote(At.AddMinutes(1), null, PartyMoment.Disbanded),
         ]);
 
-        Assert.Equal("D-Rud", Assert.Single(latest).Handle);
+        Assert.Equal("B-Kon", Assert.Single(latest).Handle);
     }
 
 }

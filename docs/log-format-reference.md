@@ -5,7 +5,7 @@ repos, absent from this install). **Part 2** is what was actually observed in
 this install's logs and is safe to build against.
 
 Install: `C:\Program Files\Roberts Space Industries\StarCitizen\LIVE`
-Version: 4.9.188.23497 · Handle: `nekron` · GEID: `204721322607`
+Version: 4.9.188.23497 · Handle: `nekron` · GEID: `100000000042`
 
 ---
 
@@ -112,7 +112,7 @@ IDs replaced with `#ID#` where they were normalised during template extraction.
 ```
 <2026-08-20T01:28:55.402Z> [Notice] <Legacy login response> [CIG-net] User Login Success - Handle[nekron] - Time[177332566] [Team_GameServices][Login]
 
-<2026-08-20T01:28:53.446Z> [Notice] <AccountLoginCharacterStatus_Character> Character: createdAt 1784476187540 - updatedAt 1786844282957 - geid 204721322607 - accountId 51915 - name nekron - state STATE_CURRENT [Team_GameServices][Login]
+<2026-08-20T01:28:53.446Z> [Notice] <AccountLoginCharacterStatus_Character> Character: createdAt 1784476187540 - updatedAt 1786844282957 - geid 100000000042 - accountId 50001 - name nekron - state STATE_CURRENT [Team_GameServices][Login]
 ```
 
 ```python
@@ -174,7 +174,7 @@ is not the server. The server is named by `<Join PU>`, below.
 ### Ships flown  ← best vehicle signal
 
 ```
-<2026-08-20T01:57:58.601Z> [Notice] <Vehicle Control Flow> CVehicleMovementBase::ClearDriver: Local client node [204721322607] releasing control token for 'DRAK_Clipper_771690342710' [771690342710] [Team_CGP4][Vehicle]
+<2026-08-20T01:57:58.601Z> [Notice] <Vehicle Control Flow> CVehicleMovementBase::ClearDriver: Local client node [100000000042] releasing control token for 'DRAK_Clipper_771690342710' [771690342710] [Team_CGP4][Vehicle]
 ```
 
 ```python
@@ -256,7 +256,7 @@ player-facing HUD text, including:
 - `"Incapacitated: While incapacitated, ask others in your party…"`
 - `"Entering Armistice Zone - Combat Prohibited: "` (366)
 - `"Leaving Armistice Zone - Caution Advised: "` (150)
-- `"Party Launch …"`, `"… Initiated by party leader KR105."` (2,554 party lines)
+- `"Party Launch …"`, `"… Initiated by party leader TX207."` (2,554 party lines)
 
 Each notification appears multiple times with different `Action:` values
 (`Next`, `StartFade`, `Remove`) — **deduplicate on the `[nnn]` notification id**
@@ -267,7 +267,7 @@ or you will count each event three to five times.
 ```
 <Channel Disconnected> cause=30010 reason="Nub destroyed" frame=10136 isRemote=0 viewState=eCVS_InGame map="megamap" gamerules="SC_Frontend" hostType="Replicant" …
 
-<Channel Destroyed> map="megamap" gamerules="SC_Frontend" … nickname="nekron" playerGEID=204721322607
+<Channel Destroyed> map="megamap" gamerules="SC_Frontend" … nickname="nekron" playerGEID=100000000042
 ```
 
 ```python

@@ -12,14 +12,14 @@ namespace Quantumwake.WebTests;
 public class CrewShipTests
 {
     private const string Crew = """
-        [{"handle":"Sylosis","sessions":4,"connected":6,"dropped":2,"ledParty":1,
+        [{"handle":"Velaris","sessions":4,"connected":6,"dropped":2,"ledParty":1,
           "joined":2,"left":1,"first":"2026-05-01T00:00:00+00:00","last":"2026-08-01T00:00:00+00:00"}]
         """;
 
     private const string Ships = """
-        [{"handle":"DeathStrokeo1","ship":"RSI Ursa Medivac","owner":"DeathStrokeo1","times":10,
+        [{"handle":"NightWardeno1","ship":"RSI Ursa Medivac","owner":"NightWardeno1","times":10,
           "first":"2026-05-01T00:00:00+00:00","last":"2026-08-01T00:00:00+00:00"},
-         {"handle":"Sylosis","ship":"Tumbril Cyclone MT","owner":"nekron","times":2,
+         {"handle":"Velaris","ship":"Tumbril Cyclone MT","owner":"nekron","times":2,
           "first":"2026-05-10T00:00:00+00:00","last":"2026-05-10T00:00:00+00:00"}]
         """;
 
@@ -38,7 +38,7 @@ public class CrewShipTests
         var text = Loaded().NodeText("#crew-ships");
 
         Assert.Contains("Ships you have shared", text);
-        Assert.Contains("DeathStrokeo1", text);
+        Assert.Contains("NightWardeno1", text);
         Assert.Contains("RSI Ursa Medivac", text);
         Assert.Contains("Tumbril Cyclone MT", text);
     }
@@ -55,8 +55,8 @@ public class CrewShipTests
         var rows = page.Text("__dom.node('#crew-ships').descendants()"
             + ".filter(n => n.tagName === 'tr').map(r => r.children.map(c => c.textContent).join('|')).join(';')");
 
-        Assert.Contains("DeathStrokeo1|RSI Ursa Medivac|theirs|10", rows);
-        Assert.Contains("Sylosis|Tumbril Cyclone MT|yours|2", rows);
+        Assert.Contains("NightWardeno1|RSI Ursa Medivac|theirs|10", rows);
+        Assert.Contains("Velaris|Tumbril Cyclone MT|yours|2", rows);
     }
 
     /// <summary>
@@ -90,7 +90,7 @@ public class CrewShipTests
         page.Serve("/api/crew?days=0", Crew);
         page.Do("__dom.node('#crew-period').value = '0'; await loadCrew();");
 
-        Assert.Contains("Sylosis", page.NodeText("#crew-table"));
+        Assert.Contains("Velaris", page.NodeText("#crew-table"));
         Assert.Equal("", page.NodeText("#crew-ships"));
     }
 }

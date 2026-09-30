@@ -21,18 +21,18 @@ public class ShipChannelTests
     /// LogFileReader, and the notification's own colon still on the end.
     /// </summary>
     [Theory]
-    [InlineData("You have joined channel 'RSI Ursa Medivac : DeathStrokeo1'.:",
-        "RSI Ursa Medivac", "DeathStrokeo1", null, ChannelMoment.YouBoarded)]
+    [InlineData("You have joined channel 'RSI Ursa Medivac : NightWardeno1'.:",
+        "RSI Ursa Medivac", "NightWardeno1", null, ChannelMoment.YouBoarded)]
     [InlineData("You have joined channel 'Tumbril Cyclone MT : nekron'.:",
         "Tumbril Cyclone MT", "nekron", null, ChannelMoment.YouBoarded)]
-    [InlineData("New Member Joined Sylosis has joined the channel 'Tumbril Cyclone MT : nekron'.:",
-        "Tumbril Cyclone MT", "nekron", "Sylosis", ChannelMoment.TheyBoarded)]
-    [InlineData("New Member Joined Vhailor-5 has joined the channel 'Drake Cutlass Black : Sylosis'.:",
-        "Drake Cutlass Black", "Sylosis", "Vhailor-5", ChannelMoment.TheyBoarded)]
-    [InlineData("Member Left Sylosis has left the channel 'Drake Cutlass Black : Sylosis'.:",
-        "Drake Cutlass Black", "Sylosis", "Sylosis", ChannelMoment.TheyLeft)]
-    [InlineData("Member Left Drafts-of-Singularity has left the channel 'RSI Perseus : Drafts-of-Singularity'.:",
-        "RSI Perseus", "Drafts-of-Singularity", "Drafts-of-Singularity", ChannelMoment.TheyLeft)]
+    [InlineData("New Member Joined Velaris has joined the channel 'Tumbril Cyclone MT : nekron'.:",
+        "Tumbril Cyclone MT", "nekron", "Velaris", ChannelMoment.TheyBoarded)]
+    [InlineData("New Member Joined Quorren-7 has joined the channel 'Drake Cutlass Black : Velaris'.:",
+        "Drake Cutlass Black", "Velaris", "Quorren-7", ChannelMoment.TheyBoarded)]
+    [InlineData("Member Left Velaris has left the channel 'Drake Cutlass Black : Velaris'.:",
+        "Drake Cutlass Black", "Velaris", "Velaris", ChannelMoment.TheyLeft)]
+    [InlineData("Member Left Echoes-of-Cartography has left the channel 'RSI Perseus : Echoes-of-Cartography'.:",
+        "RSI Perseus", "Echoes-of-Cartography", "Echoes-of-Cartography", ChannelMoment.TheyLeft)]
     public void Reads_the_ship_its_owner_and_who_the_line_is_about(
         string text, string ship, string owner, string? handle, ChannelMoment moment)
     {
@@ -55,10 +55,10 @@ public class ShipChannelTests
     /// declined to read stops meaning anything.
     /// </summary>
     [Theory]
-    [InlineData("New Member Joined Vhailor-5 has joined the party.:")]
-    [InlineData("Member Left Sylosis has left the party.:")]
-    [InlineData("Party D-Rud connected.:")]
-    [InlineData("New Party Leader Craven is now party leader.:")]
+    [InlineData("New Member Joined Quorren-7 has joined the party.:")]
+    [InlineData("Member Left Velaris has left the party.:")]
+    [InlineData("Party B-Kon connected.:")]
+    [InlineData("New Party Leader Brenner is now party leader.:")]
     [InlineData("Party Disbanded The party has been disbanded.:")]
     public void A_party_line_is_not_a_ship_channel(string text)
     {
@@ -68,9 +68,9 @@ public class ShipChannelTests
 
     /// <summary>The other direction: the party reader must leave these alone.</summary>
     [Theory]
-    [InlineData("You have joined channel 'RSI Ursa Medivac : DeathStrokeo1'.:")]
-    [InlineData("New Member Joined Sylosis has joined the channel 'Tumbril Cyclone MT : nekron'.:")]
-    [InlineData("Member Left Sylosis has left the channel 'Drake Cutlass Black : Sylosis'.:")]
+    [InlineData("You have joined channel 'RSI Ursa Medivac : NightWardeno1'.:")]
+    [InlineData("New Member Joined Velaris has joined the channel 'Tumbril Cyclone MT : nekron'.:")]
+    [InlineData("Member Left Velaris has left the channel 'Drake Cutlass Black : Velaris'.:")]
     public void A_ship_channel_is_not_a_party_line(string text)
     {
         Assert.False(Party.IsParty(text));

@@ -33,6 +33,26 @@ public class OperationsDeckTests
             page.NodeText("#operations-shopping-status"));
     }
 
+    /// <summary>
+    /// With no lists, the state line and the list each printed their own empty
+    /// message, one under the other, saying the same thing twice.
+    /// </summary>
+    [Theory]
+    [InlineData(false, "No active shopping lists")]
+    [InlineData(true, "Shopping lists are unavailable")]
+    public void No_lists_is_said_once(bool unavailable, string said)
+    {
+        var page = new Page();
+        if (unavailable) page.Fail("/api/jobs", 500, "{}");
+        else page.Serve("/api/jobs", "[]");
+
+        page.Do("await loadJobList();");
+
+        Assert.StartsWith(said, page.NodeText("#jobs-state"));
+        Assert.False(page.Truth("__dom.node('#jobs-state').hidden"));
+        Assert.Equal("", page.NodeText("#jobs-list"));
+    }
+
     [Fact]
     public void Contract_card_says_when_no_live_session_can_supply_work()
     {

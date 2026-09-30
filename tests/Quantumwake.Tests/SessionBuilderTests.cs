@@ -77,11 +77,11 @@ public class SessionBuilderTests
         var summary = Build(
             new SessionStartEvent(T0, "Build(12344265)", "4.9.188.23497"),
             new LoginEvent(T0.AddSeconds(10), "nekron"),
-            new CharacterEvent(T0.AddSeconds(11), "nekron", "204721322607", "51915", "STATE_CURRENT")
+            new CharacterEvent(T0.AddSeconds(11), "nekron", "100000000042", "50001", "STATE_CURRENT")
         ).Build();
 
         Assert.Equal("nekron", summary.Handle);
-        Assert.Equal("204721322607", summary.Geid);
+        Assert.Equal("100000000042", summary.Geid);
         Assert.Equal("4.9.188.23497", summary.GameVersion);
     }
 

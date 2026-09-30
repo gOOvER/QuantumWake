@@ -144,4 +144,43 @@ public class GlobalSearchTests
 
         Assert.Contains("GET /api/entity?kind=part&id=behr_rifle_ballistic_01", page.Fetched());
     }
+
+    /// <summary>
+    /// A catalogue part with no display name comes back under its engine class.
+    /// "Freelancer" answered four Controller_Flight_MISC_Freelancer_* rows that
+    /// way; a worn item whose id is its display name must still show.
+    /// </summary>
+    [Fact]
+    public void Engine_classes_with_no_name_are_not_offered()
+    {
+        var page = Searched("""
+            {"query":"freelancer","nothing":false,"groups":[
+              {"source":"your logs","hits":[
+                {"kind":"part","id":"Freelancer Jacket","name":"Freelancer Jacket","why":"on your character"}]},
+              {"source":"the catalogue","hits":[
+                {"kind":"ship","id":"MISC Freelancer","name":"MISC Freelancer","why":"a ship the catalogue knows"},
+                {"kind":"part","id":"ARMR_MISC_Freelancer","name":"Freelancer Ship Armor","why":"Armor the catalogue knows"},
+                {"kind":"part","id":"Controller_Flight_MISC_Freelancer","name":"Controller_Flight_MISC_Freelancer",
+                 "why":"FlightController the catalogue knows"}]}]}
+            """, "freelancer");
+
+        var text = page.NodeText("#global-results");
+        Assert.DoesNotContain("Controller_Flight", text);
+        Assert.Contains("Freelancer Jacket", text);
+        Assert.Contains("Freelancer Ship Armor", text);
+        Assert.Equal(3, page.Count("__dom.node('#global-results').byClass('search-hit').length"));
+    }
+
+    [Fact]
+    public void A_search_that_only_found_engine_classes_says_nothing_matched()
+    {
+        var text = Searched("""
+            {"query":"shield_r","nothing":false,"groups":[
+              {"source":"the catalogue","hits":[
+                {"kind":"part","id":"ARGO_ATLS_IKTI_Shield_R","name":"ARGO_ATLS_IKTI_Shield_R","why":"Misc the catalogue knows"}]}]}
+            """, "shield_r").NodeText("#global-results");
+
+        Assert.Contains("Nothing matches", text);
+        Assert.DoesNotContain("the catalogue", text);
+    }
 }

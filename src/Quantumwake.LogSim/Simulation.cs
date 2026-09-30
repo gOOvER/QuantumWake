@@ -53,18 +53,159 @@ internal static class Fixtures
         "Port Tressler", "New Babbage", "Seraphim Station", "Area18", "Gaslight", "Everus Harbor"
     ];
 
-    public static readonly (string Prefix, string Model)[] Ships =
+    /// <remarks>
+    /// The channel name is what the ship's comms channel is called when the
+    /// pilot boards - "Anvil F7C-M Super Hornet Mk II", not the entity class -
+    /// each copied from a real "You have joined channel" line.
+    /// </remarks>
+    public static readonly (string Prefix, string Model, string Channel)[] Ships =
     [
-        ("MISC", "Starlancer_Max"),
-        ("ANVL", "Hornet_F7CM_Mk2"),
-        ("DRAK", "Corsair"),
-        ("RSI", "Hermes"),
-        ("MISC", "Freelancer_MAX"),
-        ("RSI", "Aurora_Mk2"),
-        ("DRAK", "Cutter"),
-        ("ORIG", "325a"),
-        ("DRAK", "Clipper")
+        ("MISC", "Starlancer_Max", "MISC Starlancer MAX"),
+        ("ANVL", "Hornet_F7CM_Mk2", "Anvil F7C-M Super Hornet Mk II"),
+        ("DRAK", "Corsair", "Drake Corsair"),
+        ("RSI", "Hermes", "RSI Hermes"),
+        ("MISC", "Freelancer_MAX", "MISC Freelancer MAX"),
+        ("RSI", "Aurora_Mk2", "RSI Aurora Mk II"),
+        ("DRAK", "Cutter", "Drake Cutter"),
+        ("ORIG", "325a", "Origin 325a"),
+        ("DRAK", "Clipper", "Drake Clipper")
     ];
+
+    /// <summary>
+    /// Placeholder crew. Never a real handle: these are what the party toasts
+    /// and ship channels name, and a demo install is shown to other people.
+    /// </summary>
+    public static readonly string[] Crew = ["Pilot-One", "Pilot-Two", "Pilot-Three", "Pilot-Four"];
+
+    /// <summary>
+    /// Armour sets as a spawn equips them, port by port. Every class is one a
+    /// real <c>AttachmentReceived</c> line has put on that port.
+    /// </summary>
+    public static readonly (string Port, string Class)[][] Armour =
+    [
+        [
+            ("Armor_Helmet", "cds_armor_medium_helmet_02_01_01"),
+            ("Armor_Torso", "cds_armor_medium_core_02_01_01"),
+            ("Armor_Arms", "cds_armor_medium_arms_02_01_01"),
+            ("Armor_Legs", "cds_armor_medium_legs_02_01_01"),
+            ("Armor_Undersuit", "rsi_odyssey_undersuit_01_01_01"),
+            ("backpack", "hdtc_utility_light_backpack_01_01_01")
+        ],
+        [
+            ("Armor_Helmet", "rrs_specialist_light_helmet_01_02_01"),
+            ("Armor_Torso", "rrs_specialist_light_core_01_02_01"),
+            ("Armor_Arms", "rrs_specialist_light_arms_01_02_01"),
+            ("Armor_Legs", "rrs_specialist_light_legs_01_02_01"),
+            ("Armor_Undersuit", "hdtc_undersuit_01_01_01"),
+            ("backpack", "rrs_combat_light_backpack_01_02_01")
+        ],
+        [
+            ("Armor_Helmet", "rrs_specialist_heavy_helmet_01_02_01"),
+            ("Armor_Torso", "rrs_specialist_heavy_core_01_02_01"),
+            ("Armor_Arms", "rrs_specialist_heavy_arms_01_02_01"),
+            ("Armor_Legs", "rrs_specialist_heavy_legs_01_02_01"),
+            ("Armor_Undersuit", "rsi_odyssey_undersuit_01_01_01"),
+            ("backpack", "rrs_combat_heavy_backpack_01_02_01")
+        ]
+    ];
+
+    /// <summary>Long guns with the magazine and sight the real logs show on them.</summary>
+    public static readonly (string Gun, string Magazine, string Optic)[] Rifles =
+    [
+        ("hdgw_rifle_ballistic_01", "hdgw_rifle_ballistic_01_mag", "nvtc_optics_holo_x2_s1"),
+        ("behr_rifle_ballistic_03", "behr_rifle_ballistic_03_mag", "behr_optics_tsco_x4_s2"),
+        ("gmni_sniper_ballistic_01", "gmni_sniper_ballistic_01_mag", "gmni_optics_tsco_x8_s3")
+    ];
+
+    /// <summary>Everything a spawn carries besides armour and the long gun.</summary>
+    public static readonly (string Port, string Class)[] Kit =
+    [
+        ("Body_ItemPort", "body_01_noMagicPocket"),
+        ("mobiglas_attach", "MobiGlas"),
+        ("radar", "FPS_DefaultRadar_Lens"),
+        ("universal_necksock", "universal_necksock_01"),
+        ("medPen_attach_1", "crlf_consumable_healing_01"),
+        ("oxyPen_attach_1", "crlf_consumable_healing_01"),
+        ("utility_attach_1", "grin_multitool_01"),
+        ("wep_sidearm", "klwe_pistol_energy_01"),
+        ("magazine_attach", "klwe_pistol_energy_01_mag")
+    ];
+
+    /// <summary>
+    /// What turns up when a location's storage is browsed, all classes a real
+    /// inventory listing has shown.
+    /// </summary>
+    public static readonly string[] StashItems =
+    [
+        "crlf_consumable_healing_01", "hdgw_rifle_ballistic_01_mag", "behr_gren_frag_01",
+        "behr_lmg_ballistic_01_mag", "behr_rifle_ballistic_03_mag", "gmni_sniper_ballistic_01",
+        "grin_multitool_01", "klwe_pistol_energy_01", "Drink_bottle_vestal_01_a",
+        "cds_armor_medium_arms_02_01_01", "grin_tractor_01", "Food_burrito_01_musaka_a",
+        "rrs_specialist_heavy_core_01_02_01", "behr_lmg_ballistic_01", "kegr_fire_extinguisher_01",
+        "crlf_medgun_01", "crlf_consumable_painkiller_01", "lbco_sniper_energy_01",
+        "nvtc_optics_holo_x2_s1", "mrai_flightsuit_01_07_12"
+    ];
+
+    /// <summary>
+    /// Things Wikelo asks for, as the entity classes his trades name
+    /// (docs/wikelo.md). Scrip, Carinite and the pearls also appear under
+    /// these exact classes in real inventory lines; the Favor is the class the
+    /// emporium's own contracts require.
+    /// </summary>
+    public static readonly string[] WikeloItems =
+    [
+        "Carryable_1H_CY_Physical_Currency_Scrip_Merc_1",
+        "Harvestable_Mineral_1H_CarinitePure",
+        "Carryable_2H_FL_Vlk_Pearl_Irradiated_Super_01",
+        "Carryable_2H_FL_Vlk_Pearl_Irradiated_High_02",
+        "Carryable_1H_CY_banu_favour_Wikelo"
+    ];
+
+    /// <summary>
+    /// Kiosk purchases by where they happen, with the total and quantity a
+    /// real request carried for exactly that shop and item.
+    /// </summary>
+    public static readonly Dictionary<string, (string Shop, string Item, decimal Total, int Quantity)[]> Shops = new()
+    {
+        ["RR_MIC_LEO"] =
+        [
+            ("SCShop_RestStop_Pharmacy-001", "crlf_consumable_healing_01", 2_915m, 11),
+            ("SCShop_RestStop_Pharmacy-001", "crlf_consumable_healing_01", 5_565m, 21),
+            ("SCShop_RestStop_Pharmacy-001", "crlf_consumable_overdoseRevival_01", 5_040m, 21)
+        ],
+        ["RR_MIC_L1"] =
+        [
+            ("SCShop_RestStop_Pharmacy-001", "crlf_consumable_healing_01", 5_565m, 21)
+        ],
+        ["RR_CRU_LEO"] =
+        [
+            ("SCShop_RestStop_Pharmacy-001", "crlf_consumable_healing_01", 10_865m, 41)
+        ],
+        ["RR_P5_L2"] =
+        [
+            ("SCShop_Pyro_RestStop_BlackMarket_FPSItems", "lbco_sniper_energy_01", 9_029m, 1),
+            ("SCShop_Pyro_RestStop_BlackMarket_FPSItems", "slaver_armor_light_helmet_01_01_01", 1_547m, 1)
+        ],
+        ["Stanton4_NewBabbage"] =
+        [
+            ("SCShop_ShubinInterstellar_NewBabbage", "grin_multitool_01_salvage_repair", 375m, 1),
+            ("SCShop_ShubinInterstellar_NewBabbage", "grin_tractor_01", 19_175m, 1),
+            ("SCShop_ShubinInterstellar_NewBabbage", "rrs_specialist_heavy_helmet_01_02_01", 7_952m, 1),
+            ("SCShop_Centermass_NewBabbage", "MISL_S02_EM_TALN_Dominator", 3_850m, 11),
+            ("SCShop_Centermass_NewBabbage", "KLWE_LaserRepeater_S2", 32_276m, 2)
+        ],
+        ["Stanton3_Area18"] =
+        [
+            ("SCShop_Centermass_Area18", "KLWE_LaserRepeater_S2", 16_138m, 1),
+            ("SCShop_Centermass_Area18", "KLWE_LaserRepeater_S3", 36_308m, 1)
+        ]
+    };
+
+    /// <summary>The payouts real "Awarded" toasts have stated, all after hauls.</summary>
+    public static readonly int[] Awards = [9_000, 39_750, 50_250, 53_000, 55_250, 55_750, 61_500, 76_750, 80_500];
+
+    /// <summary>Hangar sizes as the retrieval line's second half names them.</summary>
+    public static readonly string[] Hangars = ["Large Hangar", "Small Hangar", "Medium Hangar"];
 
     /// <summary>
     /// Archetype and the title the toast shows for it, paired: the title is
@@ -107,27 +248,47 @@ internal static class Fixtures
 /// Generates one plausible play session as a sequence of log events.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The session follows a believable arc - menu, spawn, travel between locations
 /// by quantum, ship swaps, contracts, the occasional incapacitation and
 /// disconnect - so the dashboard has a coherent story to render rather than
 /// random noise.
+/// </para>
+/// <para>
+/// Two random streams, not one. The trip itself - ships, destinations, trades -
+/// draws from the original stream exactly as it always has; everything layered
+/// on since (contract endings, kit, crew, stash, purchases, deaths) draws from
+/// the second. Adding a draw to the first would reshuffle every ship and flight
+/// in every install generated before, and a seed that stops meaning the same
+/// trips is not much of a seed.
+/// </para>
 /// </remarks>
 internal sealed class Simulation
 {
     private readonly LogWriter _log;
     private readonly Random _random;
+    private readonly Random _extra;
     private readonly SimOptions _options;
 
     private DateTimeOffset _now;
     private int _notificationId = 30;
     private int _noiseCounter;
+    private int _inventoryRequest;
     private string _currentLocation = "RR_MIC_LEO";
+
+    private (string Port, string Class)[] _armour = [];
+    private (string Gun, string Magazine, string Optic) _rifle;
+    private readonly List<string> _party = [];
+    private string? _droppedMember;
+    private bool _respawning;
+    private OpenContract? _contract;
 
     public Simulation(LogWriter log, SimOptions options, DateTimeOffset start, int seed)
     {
         _log = log;
         _options = options;
         _random = new Random(seed);
+        _extra = new Random(unchecked(seed * 7919 + 17));
         _now = start;
     }
 
@@ -137,9 +298,15 @@ internal sealed class Simulation
     /// <summary>Called after each beat so live mode can sleep proportionally.</summary>
     public event Action<TimeSpan>? Beat;
 
-    private void Advance(int minSeconds, int maxSeconds)
+    private void Advance(int minSeconds, int maxSeconds) =>
+        Pass(TimeSpan.FromSeconds(_random.Next(minSeconds, maxSeconds + 1)));
+
+    /// <summary>Time passing for something drawn from the second stream.</summary>
+    private void Wait(int minSeconds, int maxSeconds) =>
+        Pass(TimeSpan.FromSeconds(_extra.Next(minSeconds, maxSeconds + 1)));
+
+    private void Pass(TimeSpan span)
     {
-        var span = TimeSpan.FromSeconds(_random.Next(minSeconds, maxSeconds + 1));
         _now += span;
         Elapsed += span;
         Beat?.Invoke(span);
@@ -155,12 +322,29 @@ internal sealed class Simulation
 
     private T Pick<T>(T[] items) => items[_random.Next(items.Length)];
 
+    private T Draw<T>(T[] items) => items[_extra.Next(items.Length)];
+
+    private bool Chance(double p) => _extra.NextDouble() < p;
+
+    /// <summary>A GUID from the seeded stream, so reruns write the same ids.</summary>
+    private string NewGuid()
+    {
+        var bytes = new byte[16];
+        _extra.NextBytes(bytes);
+        bytes[7] = (byte)(bytes[7] & 0x0F | 0x40);
+        bytes[8] = (byte)(bytes[8] & 0x3F | 0x80);
+        return new Guid(bytes).ToString();
+    }
+
+    /// <summary>A twelve-digit entity id in the range live item ids fall in.</summary>
+    private string NewEntityId() => _extra.NextInt64(780000000000, 849999999999).ToString();
+
     /// <summary>Writes a complete session.</summary>
     public void Run()
     {
-        var sessionId = Guid.NewGuid().ToString();
+        var sessionId = NewGuid();
 
-        _log.Header(_now, "12344265", "4.9.188.23497");
+        _log.Header(_now, _options.Build);
         Advance(1, 3);
 
         _log.Character(_now, _options.Handle, _options.Geid);
@@ -173,26 +357,35 @@ internal sealed class Simulation
         Noise(6);
         Advance(_options.MenuSeconds / 2, _options.MenuSeconds);
 
-        // Into the persistent universe. The deployment number is made up, as the
-        // real ones are from the client's point of view - it never matches the header.
-        _log.JoinShard(_now, $"pub_use1b_12344265_{_random.Next(1, 200):D3}");
+        // Into the persistent universe.
+        _log.JoinShard(_now, $"pub_use1b_{_options.Build.Number}_{_random.Next(1, 200):D3}");
         _log.Context(_now, "SC_Default", sessionId);
         _log.LoadingScreen(_now.AddSeconds(2), "PU_Megamap", "SC_Default", 21.3);
         Advance(20, 30);
         _log.Spawned(_now);
 
+        // Most evenings in the same armour; now and then something else.
+        _armour = Chance(0.6) ? Fixtures.Armour[0] : Draw(Fixtures.Armour);
+        _rifle = Draw(Fixtures.Rifles);
+        Equip();
+
         VisitLocation(_currentLocation);
 
-        // A chat notification that splits across lines - the multi-line quirk.
+        // A quarter of evenings are flown with company.
+        if (Chance(_options.PartyChance))
+            FormParty();
+
         Advance(5, 15);
-        _log.SplitNotification(
-            _now,
-            $"You have joined channel 'Origin 325a : {_options.Handle}'.",
-            ": ",
-            _notificationId++);
 
         for (var leg = 0; leg < _options.Legs; leg++)
             RunLeg(leg);
+
+        if (_party.Count > 0 && Chance(0.3))
+        {
+            Wait(20, 90);
+            PartyNote("Party Disbanded", "The party has been disbanded.: ");
+            _party.Clear();
+        }
 
         // Wind down.
         Advance(10, 30);
@@ -208,26 +401,24 @@ internal sealed class Simulation
     /// <summary>One trip: pick a ship, take a contract, fly somewhere, land.</summary>
     private void RunLeg(int leg)
     {
-        var (prefix, model) = Pick(Fixtures.Ships);
+        var (prefix, model, channel) = Pick(Fixtures.Ships);
         var entityId = _random.NextInt64(700000000000, 799999999999).ToString();
         var vehicleId = $"{prefix}_{model}_{entityId}";
+
+        Board(vehicleId, entityId, channel);
 
         // Contract, sometimes.
         if (_random.NextDouble() < 0.6)
         {
             Advance(20, 90);
             var (generator, contract, title) = Pick(Fixtures.Contracts);
-            var missionId = Guid.NewGuid().ToString();
-
-            _log.ContractMarker(_now, missionId, generator, contract, Guid.NewGuid().ToString());
-            _log.Notification(
-                _now.AddSeconds(1),
-                $"Contract Accepted:  {title}: ",
-                _notificationId++,
-                missionId);
+            AcceptContract(generator, contract, title);
         }
 
         Noise(_random.Next(4, 12));
+
+        // Cargo loaded, or the card given up on before leaving.
+        ProgressContract();
 
         // Quantum travel to somewhere new.
         Advance(30, 180);
@@ -248,10 +439,17 @@ internal sealed class Simulation
         if (_options.Combat && _random.NextDouble() < 0.5)
             RunCombat();
 
-        // Occasionally go down.
+        // Occasionally go down, and once in a while nobody comes.
         if (_random.NextDouble() < _options.IncapacitationChance)
         {
             _log.Incapacitated(_now, _notificationId++);
+
+            if (Chance(_options.DeathChance))
+            {
+                Wait(60, 150);
+                Die();
+            }
+
             Advance(20, 60);
         }
 
@@ -261,6 +459,18 @@ internal sealed class Simulation
 
         VisitLocation(Pick(Fixtures.Locations).Id);
 
+        if (_respawning)
+        {
+            // A new body comes with the kit put back on, port by port.
+            _respawning = false;
+            Wait(20, 60);
+            Equip();
+        }
+
+        FinishContract();
+        Shop();
+        PartyChatter();
+
         // Cargo, at about half the stops. Buying and selling both happen, so
         // the map has two sides of the counter to shade.
         if (_random.NextDouble() < 0.55)
@@ -269,6 +479,303 @@ internal sealed class Simulation
             RunTrade();
         }
     }
+
+    /// <summary>
+    /// Getting into this leg's ship: sometimes fetched from a hangar first,
+    /// always the comms channel joined, sometimes crew following.
+    /// </summary>
+    /// <remarks>
+    /// The retrieval does not name the ship, as the real one does not. The
+    /// navigation computer grumbling that no route is loaded, once the pilot
+    /// is in the seat, is what ties the id to a model.
+    /// </remarks>
+    private void Board(string vehicleId, string entityId, string channel)
+    {
+        if (Chance(0.45))
+        {
+            _log.VehicleRetrieval(_now, entityId, NewEntityId(), _options.Handle, Draw(Fixtures.Hangars));
+            Wait(40, 120);
+            _log.Notification(_now, "Hangar Request Completed: ", _notificationId++);
+            Wait(15, 60);
+        }
+
+        // The quote closes on the next line: "...'.\n: " is how it is written.
+        _log.SplitNotification(
+            _now,
+            $"You have joined channel '{channel} : {_options.Handle}'.",
+            ": ",
+            _notificationId++);
+
+        _log.NoRouteLoaded(_now.AddSeconds(4), vehicleId, entityId);
+
+        if (_party.Count > 0 && Chance(0.5))
+        {
+            Wait(5, 40);
+            _log.SplitNotification(
+                _now,
+                "New Member Joined",
+                $"{Draw(_party.ToArray())} has joined the channel '{channel} : {_options.Handle}'.: ",
+                _notificationId++);
+        }
+
+        Wait(5, 20);
+    }
+
+    /// <summary>
+    /// Everything worn and carried, as the burst a spawn writes.
+    /// </summary>
+    private void Equip()
+    {
+        var elapsed = 20 + _extra.NextDouble() * 10;
+
+        foreach (var (port, itemClass) in Carried())
+        {
+            _log.Attachment(_now, _options.Handle, itemClass, NewEntityId(), port, elapsed: elapsed);
+            elapsed += 0.000015;
+        }
+    }
+
+    private IEnumerable<(string Port, string Class)> Carried()
+    {
+        foreach (var item in Fixtures.Kit)
+            yield return item;
+
+        foreach (var item in _armour)
+            yield return item;
+
+        yield return ("wep_stocked_2", _rifle.Gun);
+        yield return ("magazine_attach", _rifle.Magazine);
+        yield return ("optics_attach", _rifle.Optic);
+        yield return ("magazine_attach_1", _rifle.Magazine);
+        yield return ("magazine_attach_2", _rifle.Magazine);
+    }
+
+    /// <summary>
+    /// A death: the corpse's items written in one millisecond, which is the
+    /// only way current builds say it happened.
+    /// </summary>
+    /// <remarks>
+    /// Never <c>&lt;Actor Death&gt;</c>, which the game stopped writing. The
+    /// next arrival is where the body wakes, and the kit goes back on there.
+    /// </remarks>
+    private void Die()
+    {
+        foreach (var (port, itemClass) in Carried())
+            _log.CorpseItem(_now, itemClass, port, NewEntityId(), NewGuid());
+
+        _respawning = true;
+    }
+
+    /// <summary>The contract card taken on this leg, carried until it ends.</summary>
+    private sealed record OpenContract(
+        string MissionId,
+        string Title,
+        bool Hauling,
+        string Step,
+        ContractFate Fate);
+
+    private enum ContractFate { Complete, Fail, Abandon, Open }
+
+    /// <summary>
+    /// Accepts a contract and decides now how it will end, so the ending can be
+    /// written wherever in the leg it falls.
+    /// </summary>
+    /// <remarks>
+    /// Most taken contracts complete, which is what the real logs show: 285
+    /// completions against 73 abandonments and 6 failures. A few are left
+    /// open, as a card still in the journal at logout is.
+    /// </remarks>
+    private void AcceptContract(string generator, string contract, string title)
+    {
+        var missionId = NewGuid();
+
+        _log.ContractMarker(_now, missionId, generator, contract, NewGuid(), NewGuid());
+        _log.Notification(
+            _now.AddSeconds(1),
+            $"Contract Accepted:  {title}: ",
+            _notificationId++,
+            missionId);
+
+        var roll = _extra.NextDouble();
+        var fate = roll switch
+        {
+            < 0.78 => ContractFate.Complete,
+            < 0.84 => ContractFate.Fail,
+            < 0.96 => ContractFate.Abandon,
+            _ => ContractFate.Open
+        };
+
+        var hauling = contract.Contains("Haul", StringComparison.Ordinal);
+
+        // Hauling steps are named pickup_/dropoff_ around a GUID the contract
+        // archetype shares across every mission of that kind; other contracts'
+        // steps are bare GUIDs.
+        var step = hauling ? StableGuid(contract) : NewGuid();
+
+        _contract = new OpenContract(missionId, title, hauling, step, fate);
+
+        if (hauling)
+            Objective($"pickup_{step}_0", "MISSION_OBJECTIVE_STATE_INPROGRESS");
+        else
+            Objective(step, "MISSION_OBJECTIVE_STATE_INPROGRESS");
+    }
+
+    /// <summary>The leg's middle: cargo on board, or the card abandoned.</summary>
+    private void ProgressContract()
+    {
+        if (_contract is not { } open)
+            return;
+
+        if (open.Fate == ContractFate.Abandon && Chance(0.5))
+        {
+            Abandon(open);
+            return;
+        }
+
+        if (open.Hauling)
+        {
+            Wait(60, 240);
+            Objective($"pickup_{open.Step}_0", "MISSION_OBJECTIVE_STATE_COMPLETED");
+            Objective($"dropoff_{open.Step}_1", "MISSION_OBJECTIVE_STATE_INPROGRESS");
+        }
+    }
+
+    /// <summary>The leg's end: delivered, failed, or walked away from.</summary>
+    private void FinishContract()
+    {
+        if (_contract is not { } open)
+            return;
+
+        switch (open.Fate)
+        {
+            case ContractFate.Complete:
+                Wait(20, 120);
+                if (open.Hauling)
+                    Objective($"dropoff_{open.Step}_1", "MISSION_OBJECTIVE_STATE_COMPLETED");
+                else
+                    Objective(open.Step, "MISSION_OBJECTIVE_STATE_COMPLETED");
+
+                _log.MissionEnded(_now.AddMilliseconds(20), open.MissionId,
+                    "MISSION_STATE_COMPLETED", "Complete", "Mission Ended", _options.Handle, _options.Geid);
+                _log.Notification(_now.AddMilliseconds(24), $"Contract Complete: {open.Title}: ",
+                    _notificationId++, open.MissionId);
+
+                // Only hauls ever state a payout, and not all of them.
+                if (open.Hauling && Chance(0.35))
+                {
+                    _log.Notification(_now.AddMilliseconds(330),
+                        $"Awarded {Draw(Fixtures.Awards)} aUEC: ", _notificationId++);
+                }
+
+                Wait(10, 20);
+                _contract = null;
+                break;
+
+            case ContractFate.Fail:
+                Wait(20, 120);
+                _log.MissionEnded(_now, open.MissionId,
+                    "MISSION_STATE_FAILED", "Fail", "Mission Ended", _options.Handle, _options.Geid);
+                _log.Notification(_now.AddMilliseconds(4), $"Contract Failed: {open.Title}: ",
+                    _notificationId++, open.MissionId);
+                Wait(10, 20);
+                _contract = null;
+                break;
+
+            case ContractFate.Abandon:
+                Abandon(open);
+                break;
+
+            default:
+                // Left in the journal: the next contract taken replaces it as
+                // the one being followed, and this one never says it ended.
+                _contract = null;
+                break;
+        }
+    }
+
+    private void Abandon(OpenContract open)
+    {
+        Wait(10, 60);
+        _log.EndMission(_now, open.MissionId, "Abandon", "Player left", _options.Handle, _options.Geid);
+        Wait(5, 15);
+        _contract = null;
+    }
+
+    private void Objective(string objectiveId, string state)
+    {
+        if (_contract is not { } open)
+            return;
+
+        _log.MissionObjective(_now, open.MissionId, objectiveId, state,
+            flags: open.Hauling ? "ShowInLog|" : "ShowInLog|RespectInheritedVisibility|");
+    }
+
+    /// <summary>A kiosk purchase, where this stop has a shop the real logs bought from.</summary>
+    private void Shop()
+    {
+        if (!Fixtures.Shops.TryGetValue(_currentLocation, out var offers) || !Chance(0.35))
+            return;
+
+        var (shop, item, total, quantity) = Draw(offers);
+        var shopId = NewEntityId();
+        var kioskId = NewEntityId();
+
+        Wait(30, 120);
+        _log.ShopRequest(_now, _options.Geid, shop, shopId, kioskId, total, item, quantity, NewGuid());
+        _log.ShopResponse(_now.AddMilliseconds(_extra.Next(250, 700)), shop, kioskId, "Success",
+            kioskState: "BuyRequestProcessing", geid: _options.Geid, shopId: shopId);
+        Wait(5, 20);
+    }
+
+    /// <summary>
+    /// Opens a party: a few placeholder members coming online, and sometimes
+    /// the lead changing hands.
+    /// </summary>
+    private void FormParty()
+    {
+        var size = _extra.Next(1, 4);
+        var pool = Fixtures.Crew.OrderBy(_ => _extra.Next()).Take(size);
+
+        foreach (var member in pool)
+        {
+            Wait(10, 90);
+            _party.Add(member);
+            PartyNote("Party", $"{member} connected.: ");
+        }
+
+        if (Chance(0.4))
+        {
+            Wait(5, 30);
+            PartyNote("New Party Leader", $"{Draw(_party.ToArray())} is now party leader.: ");
+        }
+    }
+
+    /// <summary>A member dropping, or coming back from having dropped.</summary>
+    private void PartyChatter()
+    {
+        if (_party.Count == 0)
+            return;
+
+        if (_droppedMember is { } back)
+        {
+            Wait(10, 60);
+            PartyNote("Party", $"{back} connected.: ");
+            _droppedMember = null;
+        }
+        else if (Chance(0.2))
+        {
+            Wait(10, 60);
+            _droppedMember = Draw(_party.ToArray());
+            PartyNote("Party", $"{_droppedMember} disconnected.: ");
+        }
+    }
+
+    /// <summary>
+    /// A party toast: the title on one line, the body on the next, the way
+    /// every one of them is written.
+    /// </summary>
+    private void PartyNote(string title, string body) =>
+        _log.SplitNotification(_now, title, body, _notificationId++);
 
     /// <summary>One kiosk trade at wherever the pilot is standing.</summary>
     /// <remarks>
@@ -311,14 +818,25 @@ internal sealed class Simulation
     /// Rolled from the ids rather than stored, so it survives a reseed: a map
     /// whose best terminal moved on every run would be untestable.
     /// </remarks>
-    private static double PriceFactor(string place, string resource)
+    private static double PriceFactor(string place, string resource) =>
+        0.78 + Hash($"{place}|{resource}") % 45 / 100.0;
+
+    private static uint Hash(string text)
     {
         var hash = 17u;
 
-        foreach (var c in $"{place}|{resource}")
+        foreach (var c in text)
             hash = unchecked(hash * 31 + c);
 
-        return 0.78 + hash % 45 / 100.0;
+        return hash;
+    }
+
+    /// <summary>A GUID that is the same every time for the same text.</summary>
+    private static string StableGuid(string text)
+    {
+        var bytes = new byte[16];
+        new Random((int)Hash(text)).NextBytes(bytes);
+        return new Guid(bytes).ToString();
     }
 
     private void RunCombat()
@@ -364,6 +882,56 @@ internal sealed class Simulation
             _log.LocationNoInventory(_now.AddSeconds(5), _options.Handle);
 
         Noise(_random.Next(3, 8));
+
+        if (Chance(_options.StashChance))
+            BrowseStash(locationId);
+    }
+
+    /// <summary>
+    /// A look at the local storage: the query that names its scope, then the
+    /// items on the page, all within a few seconds of arriving.
+    /// </summary>
+    /// <remarks>
+    /// What a place holds is rolled from its id, not the session, so the same
+    /// station shows the same shelf every visit - a stash that reshuffled
+    /// nightly would never let the Stash page settle. Wikelo's wants sit on a
+    /// few of those shelves so his trades have something to count.
+    /// </remarks>
+    private void BrowseStash(string locationId)
+    {
+        var key = Hash($"stash|{locationId}").ToString();
+        var shelf = new Random((int)Hash($"shelf|{locationId}"));
+
+        var held = Fixtures.StashItems
+            .OrderBy(_ => shelf.Next())
+            .Take(shelf.Next(3, 8))
+            .ToList();
+
+        if (shelf.NextDouble() < 0.5)
+            held.AddRange(Fixtures.WikeloItems.OrderBy(_ => shelf.Next()).Take(shelf.Next(1, 4)));
+
+        var at = _now.AddSeconds(6);
+        _log.InventoryQuery(at, _options.Geid, "Location", key, _inventoryRequest++);
+
+        // One page's worth: most of the shelf, not always all of it.
+        foreach (var item in held.Where(_ => Chance(0.8)))
+        {
+            at = at.AddMilliseconds(_extra.Next(3, 40));
+            _log.InventoryItem(at, _options.Geid, "Location", key, item, Rank());
+        }
+
+        Wait(10, 45);
+    }
+
+    /// <summary>A sort key shaped like the game's: "amr" and a run of letters.</summary>
+    private string Rank()
+    {
+        var letters = new char[_extra.Next(10, 14)];
+
+        for (var i = 0; i < letters.Length; i++)
+            letters[i] = (char)('a' + _extra.Next(26));
+
+        return "amr" + new string(letters);
     }
 }
 
@@ -371,7 +939,10 @@ internal sealed class Simulation
 internal sealed record SimOptions
 {
     public string Handle { get; init; } = "testpilot";
-    public string Geid { get; init; } = "204721322607";
+    public string Geid { get; init; } = "100000000042";
+
+    /// <summary>The build every header and shard name carries.</summary>
+    public GameBuild Build { get; init; } = GameBuild.Default;
 
     /// <summary>Trips per session.</summary>
     public int Legs { get; init; } = 6;
@@ -379,6 +950,18 @@ internal sealed record SimOptions
     public int MenuSeconds { get; init; } = 300;
     public int FlightSeconds { get; init; } = 600;
     public double IncapacitationChance { get; init; } = 0.2;
+
+    /// <summary>
+    /// How often an incapacitation ends in death. Low: the real logs hold
+    /// far more toasts saying the pilot went down than corpses.
+    /// </summary>
+    public double DeathChance { get; init; } = 0.08;
+
+    /// <summary>Evenings flown in a party.</summary>
+    public double PartyChance { get; init; } = 0.25;
+
+    /// <summary>Arrivals at which the local storage is opened.</summary>
+    public double StashChance { get; init; } = 0.35;
 
     /// <summary>
     /// Emit combat events. Off by default because SC 4.9 and 4.10 do not produce them;

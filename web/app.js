@@ -2814,9 +2814,12 @@ async function repeatSessionRoute(detail) {
   })));
 }
 
+/** A debrief tile. A list value is drawn one block per entry. */
 function sessionMetric(label, value, cls = '') {
   const metric = el('div', `session-metric ${cls}`.trim());
-  metric.append(el('div', 'session-metric-value', value));
+  const shown = el('div', 'session-metric-value', Array.isArray(value) ? undefined : value);
+  if (Array.isArray(value)) for (const line of value) shown.append(el('div', 'session-metric-line', line));
+  metric.append(shown);
   metric.append(el('div', 'session-metric-label', label));
   return metric;
 }
@@ -2888,10 +2891,14 @@ function renderSessionDebrief(summary) {
   const movementCount = (detail.purchases || []).length + tradeCount;
   const net = Number(detail.income || 0) - Number(detail.spend || 0) - Number(detail.commoditySpend || 0);
 
+  // One ship per line, each its own block. Joined with middots, six hulls
+  // wrapped into a narrow tile as one run of text with nothing to show where
+  // one ship ended and the next began; as blocks, a long name that still wraps
+  // is indented under itself rather than reading as another ship.
   const metrics = el('div', 'session-debrief-metrics');
   metrics.append(
     sessionMetric('In game', duration(summary.inGame)),
-    sessionMetric('Ship', ships.join(' · ') || 'On foot'),
+    sessionMetric(ships.length > 1 ? 'Ships' : 'Ship', ships.length ? ships : 'On foot', 'session-metric-ships'),
     sessionMetric('Recorded route', `${route.length} point${route.length === 1 ? '' : 's'} · ${(detail.jumps || []).length} jump${(detail.jumps || []).length === 1 ? '' : 's'}`),
     sessionMetric('Contracts', contracts.length ? `${completed} / ${contracts.length} completed` : 'None recorded'),
     sessionMetric(tradeCount ? 'Recorded net*' : 'Recorded net', movementCount
@@ -2969,12 +2976,15 @@ function renderSessionDebrief(summary) {
   const highlights = (detail.timeline || [])
     .filter((entry) => !['party', 'location', 'quantum', 'login'].includes(entry.kind))
     .slice(-10);
-  const highlightList = el('ul', 'session-debrief-list');
+  // Its own layout: the detail is the free text - a whole contract title with
+  // StarStrings' tags in it - and as a third auto column it took the width and
+  // squeezed the title under it until the two overprinted.
+  const highlightList = el('ul', 'session-debrief-list session-debrief-highlights');
   highlights.forEach((entry) => {
     const item = el('li');
     item.append(el('span', 'muted', shortTimeOf(entry.at)));
-    item.append(el('span', null, entry.text));
-    if (entry.detail) item.append(el('span', 'muted', entry.detail));
+    item.append(el('span', null, withoutMarkup(entry.text)));
+    if (entry.detail) item.append(el('span', 'muted', withoutMarkup(entry.detail)));
     highlightList.append(item);
   });
   if (!highlights.length) highlightList.append(el('li', 'muted', 'No additional highlights recorded.'));
@@ -8571,7 +8581,11 @@ function wikeloCard(trade, into = null) {
     : ''));
   card.append(head);
 
-  if (trade.description) card.append(el('div', 'muted wikelo-desc', trade.description));
+  // The game's own string, so it carries the game's markup: <EM4> emphasis and
+  // "\n" written out as two characters. Both reached the card as text.
+  if (trade.description) {
+    card.append(el('div', 'muted wikelo-desc', withoutMarkup(trade.description.replace(/\\n/g, '\n'))));
+  }
 
   const gives = el('div', 'wikelo-gives');
   if (trade.rewards.length) {
@@ -16244,12 +16258,9 @@ async function loadJobList() {
       ? 'Shopping lists are unavailable. Refresh after the local server reconnects.'
       : 'No active shopping lists. Start one here or add items from Market, Parts, or Mining.');
 
-  if (!lists.length) {
-    host.append(el('p', 'muted',
-      jobsUnavailable
-        ? 'Shopping lists are temporarily unavailable.'
-        : 'No lists yet. Start one here, or add anything from Market, Parts or Mining with "+ list".'));
-  }
+  // No second empty message inside the list: the state line above already
+  // says both "nothing yet" and "unavailable", and with no lists the two
+  // printed one under the other saying the same thing.
 
   if (craftHost && !builds.length) {
     craftHost.append(el('p', 'muted',
@@ -25294,6 +25305,20 @@ const SEARCH_OPENS = {
   run: () => showView('map'),
 };
 
+/**
+ * A catalogue part the game never gave a name.
+ *
+ * The server falls back to the engine class when an item has no display name,
+ * so "Freelancer" also answered four Controller_Flight_MISC_Freelancer_* rows
+ * and "shield" a run of display_components_* shop props - things no pilot
+ * holds or buys, under names nobody would type. The name being the class is
+ * the tell - but only with the class's shape, one underscored word, because a
+ * worn item's hit carries its display name as its id too. There is no human
+ * name to give them, so they are not offered.
+ */
+const internalSearchHit = (hit) => hit.kind === 'part'
+  && hit.name === hit.id && /_/.test(hit.name || '') && !/\s/.test(hit.name);
+
 async function runGlobalSearch() {
   const box = $('#global-search');
   const panel = $('#global-results');
@@ -25309,16 +25334,18 @@ async function runGlobalSearch() {
   panel.hidden = false;
   panel.textContent = '';
 
+  const groups = (results.groups || [])
+    .map((group) => ({ ...group, hits: group.hits.filter((hit) => !internalSearchHit(hit)) }))
+    .filter((group) => group.hits.length);
+
   // Nothing matching is an answer, and saying it beats an empty frame the
   // reader has to work out for themselves.
-  if (results.nothing) {
+  if (results.nothing || !groups.length) {
     panel.append(el('div', 'search-empty', `Nothing matches “${q}”.`));
     return;
   }
 
-  for (const group of results.groups) {
-    if (!group.hits.length) continue;
-
+  for (const group of groups) {
     panel.append(el('div', 'search-source', group.source));
 
     for (const hit of group.hits) {

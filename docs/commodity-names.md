@@ -13,7 +13,7 @@ A cargo sale is fully described except for the one field that matters:
 
 ```
 <CEntityComponentCommodityUIProvider::SendCommoditySellRequest>
-  Sending SShopCommoditySellRequest - playerId[204721322607]
+  Sending SShopCommoditySellRequest - playerId[100000000042]
   shopId[730090005328] shopName[SCShop_Admin_lt_base_g] kioskId[730090005327]
   amount[146240.000000] resourceGUID[b999ef65-35be-45bf-908a-5eac6e06ba12]
   autoLoading[0] quantity[320] transactionMode[Location]

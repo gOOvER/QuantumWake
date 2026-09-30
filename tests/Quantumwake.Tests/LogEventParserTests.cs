@@ -31,12 +31,12 @@ public class LogEventParserTests
     {
         var ev = ParseOne<CharacterEvent>(
             "<2026-08-20T01:28:53.446Z> [Notice] <AccountLoginCharacterStatus_Character> Character: " +
-            "createdAt 1784476187540 - updatedAt 1786844282957 - geid 204721322607 - accountId 51915 - " +
+            "createdAt 1784476187540 - updatedAt 1786844282957 - geid 100000000042 - accountId 50001 - " +
             "name nekron - state STATE_CURRENT [Team_GameServices][Login]");
 
         Assert.Equal("nekron", ev.Name);
-        Assert.Equal("204721322607", ev.Geid);
-        Assert.Equal("51915", ev.AccountId);
+        Assert.Equal("100000000042", ev.Geid);
+        Assert.Equal("50001", ev.AccountId);
         Assert.Equal("STATE_CURRENT", ev.State);
     }
 
@@ -70,7 +70,7 @@ public class LogEventParserTests
     {
         var ev = ParseOne<VehicleControlEvent>(
             "<2026-08-20T01:57:58.601Z> [Notice] <Vehicle Control Flow> " +
-            "CVehicleMovementBase::ClearDriver: Local client node [204721322607] releasing " +
+            "CVehicleMovementBase::ClearDriver: Local client node [100000000042] releasing " +
             "control token for 'DRAK_Clipper_771690342710' [771690342710] [Team_CGP4][Vehicle]");
 
         Assert.Equal("DRAK_Clipper_771690342710", ev.VehicleId);
@@ -419,7 +419,7 @@ public class LogEventParserTests
     {
         var trade = ParseOne<CommodityTradeEvent>(
             "<2026-08-15T03:12:41.100Z> [Notice] <CEntityComponentCommodityUIProvider::SendCommoditySellRequest> " +
-            "Sending SShopCommoditySellRequest - playerId[204721322607] shopId[730090005328] " +
+            "Sending SShopCommoditySellRequest - playerId[100000000042] shopId[730090005328] " +
             "shopName[SCShop_Admin_lt_base_g] kioskId[730090005327] amount[146240.000000] " +
             "resourceGUID[B999EF65-35BE-45BF-908A-5EAC6E06BA12] autoLoading[0] quantity[320] " +
             "transactionMode[Location] Cargo Box Data:  [boxSize[16] | unitAmount[20]]");
@@ -442,7 +442,7 @@ public class LogEventParserTests
     {
         var trade = ParseOne<CommodityTradeEvent>(
             "<2026-08-15T03:12:41.100Z> [Notice] <CEntityComponentCommodityUIProvider::SendCommoditySellRequest> " +
-            "Sending SShopCommoditySellRequest - playerId[204721322607] shopId[730090005328] " +
+            "Sending SShopCommoditySellRequest - playerId[100000000042] shopId[730090005328] " +
             "shopName[SCShop_Admin_lt_base_g] kioskId[730090005327] amount[1058400.000000] " +
             "quantity[288] transactionMode[ResourceContainer]");
 
@@ -460,7 +460,7 @@ public class LogEventParserTests
     {
         var trade = ParseOne<CommodityTradeEvent>(
             "<2026-08-03T02:29:40.941Z> [Notice] <CEntityComponentCommodityUIProvider::SendCommodityBuyRequest> " +
-            "Sending SShopCommodityBuyRequest - playerId[204721322607] shopId[730090138592] " +
+            "Sending SShopCommodityBuyRequest - playerId[100000000042] shopId[730090138592] " +
             "shopName[SCShop_Admin_lt_base_g] kioskId[730090138591] price[63980.000000] " +
             "shopPricePerCentiSCU[1.999375] resourceGUID[b999ef65-35be-45bf-908a-5eac6e06ba12] " +
             "autoLoading[0] quantity[32000.000000 cSCU] Cargo Box Data: boxSize[16.000000] | unitAmount[20]");

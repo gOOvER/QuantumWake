@@ -385,6 +385,28 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.16.16
+
+**Pages that fit, and say things once.** A round of fixes to text that overlapped, was cut off or showed the game's own markup, found by filming every page at 125% Windows scaling.
+
+- **Session highlights read cleanly.** A contract in *Latest highlights* no longer shows StarStrings' `<EM3>`/`<EM4>` tags, and its title no longer prints over the contract name beside it.
+
+- **Wikelo's trades read as prose.** Their descriptions come straight from the game files, and printed the game's `<EM4>` emphasis tags and `\n` line breaks as text; they now read as the game shows them.
+
+- **The favourite star on Servers and Now is a plain star**, dim until you pick it and amber after, instead of a boxed button that turned green around an amber star.
+
+- **A session flown in several ships lists them one per line**, under "Ships", instead of one long run of text in a narrow tile.
+
+- **Routes, Ships, Parts and Labels fit their panels.** On a scaled or narrower window their columns now wrap instead of running off the edge, so the evidence on a cargo run, a ship's claim time and where a part is cheapest stay in view.
+
+- **Servers keeps your note visible.** The "+N more" places badge no longer covers the note box.
+
+- **Search no longer offers engine class names** such as `Controller_Flight_MISC_Freelancer`, and a long result wraps rather than running into the next column.
+
+- **Log and Controls headings sit above their subtitles** rather than on top of them.
+
+- **An empty shopping list says so once**, not in two stacked messages.
+
 ### 0.16.15
 
 **Keep dense workspaces clear at any width.** Map controls and place panels now fold into a phone-width layout; Routes, Contracts, and Market retain their row identity while scrolling. Map, Routes, Shopping, Contracts, Market, and Logbook also distinguish loading, an empty result, and an unavailable local source.

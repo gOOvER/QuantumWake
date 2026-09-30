@@ -153,7 +153,7 @@ public class LogTailReadingTests : IDisposable
     [Fact]
     public void An_offset_is_bytes_so_wide_characters_do_not_shift_it()
     {
-        Write("<2026-08-01T00:00:00.000Z> Drafts-of-Singularity flew a 🚀 today");
+        Write("<2026-08-01T00:00:00.000Z> Echoes-of-Cartography flew a 🚀 today");
 
         long offset = 0;
         LogFileReader.ReadFrom(_path, ref offset, out _);

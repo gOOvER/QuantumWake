@@ -44,6 +44,21 @@ public class WikeloTests
     }
 
     [Fact]
+    public void A_description_is_read_not_printed_with_the_game_markup()
+    {
+        // The game's string as the files hold it: <EM4> emphasis, and a line
+        // break written out as backslash-n. Both used to reach the card as text.
+        var page = Loaded(Emporium.Replace(
+            "\"Wikelo make Fortune better.\"",
+            "\"Wikelo make Fortune better.\\\\n\\\\n<EM4>Note</EM4>: bring the favors.\""));
+
+        var list = page.NodeText("#wikelo-list");
+        Assert.Contains("Wikelo make Fortune better.\n\nNote: bring the favors.", list);
+        Assert.DoesNotContain("<EM", list);
+        Assert.DoesNotContain("\\n", list);
+    }
+
+    [Fact]
     public void A_trade_shows_what_it_wants_what_it_gives_and_what_the_stash_has_seen()
     {
         var page = Loaded();
