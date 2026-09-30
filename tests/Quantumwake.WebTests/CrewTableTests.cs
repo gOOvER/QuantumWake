@@ -13,9 +13,9 @@ namespace Quantumwake.WebTests;
 public class CrewTableTests
 {
     private const string Crew = """
-        [{"handle":"Sylosis","sessions":6,"connected":12,"dropped":4,"ledParty":2,
+        [{"handle":"Velaris","sessions":6,"connected":12,"dropped":4,"ledParty":2,
           "joined":3,"left":4,"first":"2026-05-01T00:00:00+00:00","last":"2026-08-01T00:00:00+00:00"},
-         {"handle":"drudz","sessions":2,"connected":0,"dropped":0,"ledParty":0,
+         {"handle":"bkonz","sessions":2,"connected":0,"dropped":0,"ledParty":0,
           "joined":1,"left":2,"first":"2026-06-01T00:00:00+00:00","last":"2026-06-02T00:00:00+00:00"}]
         """;
 
@@ -33,14 +33,14 @@ public class CrewTableTests
         var page = Loaded();
         var text = page.NodeText("#crew-table");
 
-        Assert.Contains("Sylosis", text);
-        Assert.Contains("drudz", text);
+        Assert.Contains("Velaris", text);
+        Assert.Contains("bkonz", text);
 
-        // Sylosis: 6 sessions, 3 joins, 4 departures, 12 online, 4 drops, 2 led.
+        // Velaris: 6 sessions, 3 joins, 4 departures, 12 online, 4 drops, 2 led.
         var cells = page.Text("__dom.node('#crew-table').descendants()"
             + ".filter(n => n.tagName === 'tr')[0].children.map(c => c.textContent).join('|')");
 
-        Assert.Equal("Sylosis|6|3|4|12|4|2", cells[..cells.LastIndexOf('|', cells.LastIndexOf('|') - 1)]);
+        Assert.Equal("Velaris|6|3|4|12|4|2", cells[..cells.LastIndexOf('|', cells.LastIndexOf('|') - 1)]);
     }
 
     /// <summary>
@@ -55,7 +55,7 @@ public class CrewTableTests
         var cells = page.Text("__dom.node('#crew-table').descendants()"
             + ".filter(n => n.tagName === 'tr')[1].children.map(c => c.textContent).join('|')");
 
-        Assert.StartsWith("drudz|2|1|2|0|0|", cells);
+        Assert.StartsWith("bkonz|2|1|2|0|0|", cells);
     }
 
     /// <summary>
@@ -70,7 +70,7 @@ public class CrewTableTests
         var cells = page.Text("__dom.node('#crew-table').descendants()"
             + ".filter(n => n.tagName === 'tr')[1].children.map(c => c.textContent).join('|')");
 
-        // drudz never took lead: the cell reads as a dash.
+        // bkonz never took lead: the cell reads as a dash.
         Assert.Contains("—", cells);
     }
 

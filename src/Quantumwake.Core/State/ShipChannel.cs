@@ -53,9 +53,9 @@ public sealed record ChannelNote(
 /// rather than its title:
 /// </para>
 /// <code>
-/// You have joined channel 'RSI Ursa Medivac : DeathStrokeo1'.
-/// New Member Joined Sylosis has joined the channel 'Tumbril Cyclone MT : nekron'.
-/// Member Left Sylosis has left the channel 'Drake Cutlass Black : Sylosis'.
+/// You have joined channel 'RSI Ursa Medivac : NightWardeno1'.
+/// New Member Joined Velaris has joined the channel 'Tumbril Cyclone MT : nekron'.
+/// Member Left Velaris has left the channel 'Drake Cutlass Black : Velaris'.
 /// </code>
 /// <para>
 /// What this cannot say is worth stating wherever it is used. There is no
@@ -128,7 +128,7 @@ public static class ShipChannel
     ];
 
     /// <summary>
-    /// The ship and its owner out of <c>'RSI Ursa Medivac : DeathStrokeo1'</c>.
+    /// The ship and its owner out of <c>'RSI Ursa Medivac : NightWardeno1'</c>.
     /// </summary>
     /// <remarks>
     /// Split on the last " : " rather than the first, because a ship name may

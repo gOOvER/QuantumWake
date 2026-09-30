@@ -70,7 +70,7 @@ public class MissionEndingParserTests
         var ended = Parse(
             "<2026-05-02T02:39:45.501Z> [Notice] <EndMission> Ending mission for player. " +
             "MissionId[cbb50710-4a8b-43a9-89b1-8a570393d7bb] Player[nekron] " +
-            "PlayerId[9730519752057] CompletionType[Abandon] Reason[Player left] " +
+            "PlayerId[1000000000073] CompletionType[Abandon] Reason[Player left] " +
             "[Team_MissionFeatures][Missions]");
 
         Assert.Equal("cbb50710-4a8b-43a9-89b1-8a570393d7bb", ended.MissionId);
@@ -88,7 +88,7 @@ public class MissionEndingParserTests
         var ended = Parse(
             "<2026-05-02T02:39:45.501Z> [Notice] <EndMission> Ending mission for player. " +
             "MissionId[cbb50710-4a8b-43a9-89b1-8a570393d7bb] Player[nekron] " +
-            $"PlayerId[9730519752057] CompletionType[{type}] Reason[Player left] " +
+            $"PlayerId[1000000000073] CompletionType[{type}] Reason[Player left] " +
             "[Team_MissionFeatures][Missions]");
 
         Assert.Equal(expected, ended.Ending);
@@ -105,7 +105,7 @@ public class MissionEndingParserTests
         var ended = Parse(
             "<2026-05-02T02:39:45.501Z> [Notice] <EndMission> Ending mission for player. " +
             "MissionId[cbb50710-4a8b-43a9-89b1-8a570393d7bb] Player[nekron] " +
-            "PlayerId[9730519752057] CompletionType[Deactivate] Reason[Player left] " +
+            "PlayerId[1000000000073] CompletionType[Deactivate] Reason[Player left] " +
             "[Team_MissionFeatures][Missions]");
 
         Assert.Equal(MissionEnding.Unknown, ended.Ending);

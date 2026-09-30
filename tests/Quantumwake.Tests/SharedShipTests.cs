@@ -37,11 +37,11 @@ public class SharedShipTests : IDisposable
     [Fact]
     public void Somebody_boarding_your_ship_is_a_pairing()
     {
-        Save("s1", new ChannelNote(At, "Tumbril Cyclone MT", "nekron", "Sylosis", ChannelMoment.TheyBoarded));
+        Save("s1", new ChannelNote(At, "Tumbril Cyclone MT", "nekron", "Velaris", ChannelMoment.TheyBoarded));
 
         var shared = Assert.Single(_library.SharedShips());
 
-        Assert.Equal("Sylosis", shared.Handle);
+        Assert.Equal("Velaris", shared.Handle);
         Assert.Equal("Tumbril Cyclone MT", shared.Ship);
         Assert.Equal("nekron", shared.Owner);
         Assert.Equal(1, shared.Times);
@@ -54,12 +54,12 @@ public class SharedShipTests : IDisposable
     [Fact]
     public void Boarding_somebody_elses_ship_is_a_pairing_with_its_owner()
     {
-        Save("s1", new ChannelNote(At, "RSI Ursa Medivac", "DeathStrokeo1", null, ChannelMoment.YouBoarded));
+        Save("s1", new ChannelNote(At, "RSI Ursa Medivac", "NightWardeno1", null, ChannelMoment.YouBoarded));
 
         var shared = Assert.Single(_library.SharedShips());
 
-        Assert.Equal("DeathStrokeo1", shared.Handle);
-        Assert.Equal("DeathStrokeo1", shared.Owner);
+        Assert.Equal("NightWardeno1", shared.Handle);
+        Assert.Equal("NightWardeno1", shared.Owner);
         Assert.Equal("RSI Ursa Medivac", shared.Ship);
     }
 
@@ -99,9 +99,9 @@ public class SharedShipTests : IDisposable
     public void The_same_pilot_in_the_same_ship_is_one_row_with_a_count_and_a_span()
     {
         Save("s1",
-            new ChannelNote(At, "Drake Cutlass Black", "Sylosis", null, ChannelMoment.YouBoarded),
-            new ChannelNote(At.AddHours(2), "Drake Cutlass Black", "Sylosis", null, ChannelMoment.YouBoarded));
-        Save("s2", new ChannelNote(At.AddDays(9), "Drake Cutlass Black", "Sylosis", null, ChannelMoment.YouBoarded));
+            new ChannelNote(At, "Drake Cutlass Black", "Velaris", null, ChannelMoment.YouBoarded),
+            new ChannelNote(At.AddHours(2), "Drake Cutlass Black", "Velaris", null, ChannelMoment.YouBoarded));
+        Save("s2", new ChannelNote(At.AddDays(9), "Drake Cutlass Black", "Velaris", null, ChannelMoment.YouBoarded));
 
         var shared = Assert.Single(_library.SharedShips());
 
@@ -114,13 +114,13 @@ public class SharedShipTests : IDisposable
     public void The_same_pilot_in_two_ships_is_two_rows()
     {
         Save("s1",
-            new ChannelNote(At, "Drake Cutlass Black", "Sylosis", null, ChannelMoment.YouBoarded),
-            new ChannelNote(At, "RSI Perseus", "Sylosis", null, ChannelMoment.YouBoarded));
+            new ChannelNote(At, "Drake Cutlass Black", "Velaris", null, ChannelMoment.YouBoarded),
+            new ChannelNote(At, "RSI Perseus", "Velaris", null, ChannelMoment.YouBoarded));
 
         var shared = _library.SharedShips();
 
         Assert.Equal(2, shared.Count);
-        Assert.All(shared, s => Assert.Equal("Sylosis", s.Handle));
+        Assert.All(shared, s => Assert.Equal("Velaris", s.Handle));
     }
 
     /// <summary>
@@ -130,7 +130,7 @@ public class SharedShipTests : IDisposable
     [Fact]
     public void A_departure_alone_is_not_a_pairing()
     {
-        Save("s1", new ChannelNote(At, "Drake Cutlass Black", "Sylosis", "Vhailor-5", ChannelMoment.TheyLeft));
+        Save("s1", new ChannelNote(At, "Drake Cutlass Black", "Velaris", "Quorren-7", ChannelMoment.TheyLeft));
 
         Assert.Empty(_library.SharedShips());
     }
@@ -138,11 +138,11 @@ public class SharedShipTests : IDisposable
     [Fact]
     public void A_window_counts_only_what_falls_inside_it()
     {
-        Save("old", new ChannelNote(At.AddDays(-90), "RSI Perseus", "Drafts-of-Singularity", null, ChannelMoment.YouBoarded));
-        Save("new", new ChannelNote(DateTimeOffset.UtcNow.AddDays(-2), "Drake Corsair", "Sylosis", null, ChannelMoment.YouBoarded));
+        Save("old", new ChannelNote(At.AddDays(-90), "RSI Perseus", "Echoes-of-Cartography", null, ChannelMoment.YouBoarded));
+        Save("new", new ChannelNote(DateTimeOffset.UtcNow.AddDays(-2), "Drake Corsair", "Velaris", null, ChannelMoment.YouBoarded));
 
         var shared = Assert.Single(_library.SharedShips(7));
-        Assert.Equal("Sylosis", shared.Handle);
+        Assert.Equal("Velaris", shared.Handle);
 
         Assert.Equal(2, _library.SharedShips(0).Count);
     }

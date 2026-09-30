@@ -169,10 +169,10 @@ public sealed class LogScenarioTests
         WithScenario("crew-flight", (_, session) =>
         {
             Assert.Collection(session.PartyNotes,
-                note => Assert.Equal(("D-Rud", PartyMoment.Connected), (note.Handle, note.Moment)),
-                note => Assert.Equal(("astro_ice", PartyMoment.Connected), (note.Handle, note.Moment)),
-                note => Assert.Equal(("D-Rud", PartyMoment.BecameLeader), (note.Handle, note.Moment)),
-                note => Assert.Equal(("astro_ice", PartyMoment.Disconnected), (note.Handle, note.Moment)));
+                note => Assert.Equal(("B-Kon", PartyMoment.Connected), (note.Handle, note.Moment)),
+                note => Assert.Equal(("nova_rime", PartyMoment.Connected), (note.Handle, note.Moment)),
+                note => Assert.Equal(("B-Kon", PartyMoment.BecameLeader), (note.Handle, note.Moment)),
+                note => Assert.Equal(("nova_rime", PartyMoment.Disconnected), (note.Handle, note.Moment)));
             Assert.Single(session.Jumps);
             Assert.Single(session.Ships);
         });

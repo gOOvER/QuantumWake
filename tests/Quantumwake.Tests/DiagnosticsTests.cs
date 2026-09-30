@@ -44,11 +44,11 @@ public class DiagnosticsTests
     public void Account_and_character_ids_go_even_when_they_are_not_ours()
     {
         var line = Diagnostics.Scrub(
-            "<Character> createdAt 1784476187540 - geid 999888777666 - accountId 51915 - state STATE_CURRENT",
+            "<Character> createdAt 1784476187540 - geid 999888777666 - accountId 50001 - state STATE_CURRENT",
             Known);
 
         Assert.DoesNotContain("999888777666", line);
-        Assert.DoesNotContain("51915", line);
+        Assert.DoesNotContain("50001", line);
         Assert.Contains("geid <id>", line);
         Assert.Contains("accountId <id>", line);
         Assert.Contains("STATE_CURRENT", line);
@@ -136,12 +136,12 @@ public class DiagnosticsTests
     public void The_character_line_gives_up_nothing_either()
     {
         var line = Diagnostics.Scrub(
-            "<Character> geid 203059584653 - accountId 51915 - name SomeoneWeNeverParsed - state STATE_CURRENT",
+            "<Character> geid 203059584653 - accountId 50001 - name SomeoneWeNeverParsed - state STATE_CURRENT",
             known: []);
 
         Assert.DoesNotContain("SomeoneWeNeverParsed", line);
         Assert.DoesNotContain("203059584653", line);
-        Assert.DoesNotContain("51915", line);
+        Assert.DoesNotContain("50001", line);
         Assert.Contains("STATE_CURRENT", line);
     }
 

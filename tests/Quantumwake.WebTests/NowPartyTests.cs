@@ -8,8 +8,8 @@ namespace Quantumwake.WebTests;
 public class NowPartyTests
 {
     private const string Two =
-        "party:[{handle:'D-Rud',moment:'connected',at:'2026-08-27T20:03:59Z'},"
-        + "{handle:'Sylosis',moment:'left',at:'2026-08-27T19:41:02Z'}]";
+        "party:[{handle:'B-Kon',moment:'connected',at:'2026-08-27T20:03:59Z'},"
+        + "{handle:'Velaris',moment:'left',at:'2026-08-27T19:41:02Z'}]";
 
     private static Page Now(string extra)
     {
@@ -26,8 +26,8 @@ public class NowPartyTests
         var page = Now(Two);
 
         Assert.False(page.Truth("__dom.node('#now-party-card').hidden"));
-        Assert.Contains("D-Rud", page.NodeText("#now-party-list"));
-        Assert.Contains("Sylosis", page.NodeText("#now-party-list"));
+        Assert.Contains("B-Kon", page.NodeText("#now-party-list"));
+        Assert.Contains("Velaris", page.NodeText("#now-party-list"));
     }
 
     /// <summary>

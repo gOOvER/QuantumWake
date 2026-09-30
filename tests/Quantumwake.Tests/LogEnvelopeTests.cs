@@ -50,7 +50,7 @@ public class LogEnvelopeTests
     {
         const string raw =
             "<2026-04-27T01:53:07.044Z> [SPAM 299][Notice] <CObjectiveMarkerComponent::AddToPlayerDataBank> " +
-            "MissionObjectiveMarker_7169[7169] - Added to DataBank of Player: nekron[9730519752057]";
+            "MissionObjectiveMarker_7169[7169] - Added to DataBank of Player: nekron[1000000000073]";
 
         Assert.True(LogEnvelope.TryParse(raw, out var line));
         Assert.True(line.IsSpam);

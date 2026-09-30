@@ -49,7 +49,7 @@ public sealed record PartyNote(DateTimeOffset At, string? Handle, PartyMoment Mo
 /// <para>
 /// The toasts arrive over two log lines - the title, then the body - and reach
 /// here already joined by <c>LogFileReader.ReadEntries</c>, which is why the
-/// text reads "Party D-Rud disconnected.:" with the title glued to the front and
+/// text reads "Party B-Kon disconnected.:" with the title glued to the front and
 /// the notification's own trailing colon still attached.
 /// </para>
 /// <para>
@@ -72,14 +72,14 @@ public sealed record PartyNote(DateTimeOffset At, string? Handle, PartyMoment Mo
 /// <para>
 /// <c>Member Left</c> is the one title that does not belong to one channel.
 /// Most of its lines are ship comms - "X has left the channel 'RSI Ursa
-/// Medivac : DeathStrokeo1'" - so the body has to be read rather than the
+/// Medivac : NightWardeno1'" - so the body has to be read rather than the
 /// title trusted, or a passenger stepping out of a hired ship is recorded as
 /// leaving a party they were never in.
 /// </para>
 /// <para>
 /// Handles are matched as a single run of non-space characters because that is
-/// what the game permits and what these logs contain - "D-Rud",
-/// "Drafts-of-Singularity", "astro_ice", "LeonardCharette-SQsfKwqo". Anything
+/// what the game permits and what these logs contain - "B-Kon",
+/// "Echoes-of-Cartography", "nova_rime", "MarcusHollowell-TzqfPwbe". Anything
 /// that does not fit a known sentence is left unread rather than guessed at:
 /// the party channel also carries queue and matchmaking chatter naming nobody,
 /// and one file here contains a line of mojibake where the game wrote a
