@@ -61,13 +61,30 @@ public sealed record GameScenario(
 /// <param name="Issuer">Who offers it, from the generator's contractor line.</param>
 /// <param name="Points">Points on completion.</param>
 /// <param name="Tags">The completion tags it awards, which decide the bars it counts on besides the overall one.</param>
+/// <param name="Variants">
+/// How many sub-contracts it has. A sub-contract has no name and no results of
+/// its own - it is the parent with some parameters overridden - and the log
+/// names it after the parent and its index: the third of
+/// <c>Iasi_DefendShip_Easy</c>'s is <c>Iasi_DefendShip_Easy_2</c>. The first
+/// Discovery Month log had four such names, and each one's
+/// <c>contractDefinitionId</c> was that sub-contract's own id.
+/// </param>
 public sealed record GameScenarioContract(
     string Id,
     string Scenario,
     string Title,
     string Issuer,
     int Points,
-    IReadOnlyList<string> Tags);
+    IReadOnlyList<string> Tags,
+    int Variants = 0)
+{
+    /// <summary>Every name the log can write for it: its own, then each sub-contract's.</summary>
+    public IEnumerable<string> LoggedNames()
+    {
+        yield return Id;
+        for (var i = 0; i < Variants; i++) yield return $"{Id}_{i}";
+    }
+}
 
 /// <summary>Every campaign the install describes, and every contract that pays into one.</summary>
 public sealed record GameScenarioCatalogue(
@@ -335,7 +352,8 @@ public static partial class GameScenarios
         return new GameScenarioContract(
             id, scenario,
             title.Length > 0 ? Placeholders(title) : Readable(id),
-            issuer, points, tags.Distinct().ToList());
+            issuer, points, tags.Distinct().ToList(),
+            ContractsIn(core, at, contract.StructIndex, "subContracts").Count);
     }
 
     /// <summary>

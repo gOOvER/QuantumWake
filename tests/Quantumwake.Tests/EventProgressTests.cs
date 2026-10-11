@@ -48,8 +48,8 @@ public class EventProgressTests
             ]),
         ],
         [
-            new GameScenarioContract("Iasi_Patrol_Hard", "Iasi_ScenarioProgress", "Neutralize Threats", "Foxwell Enforcement", 417, [Defense]),
-            new GameScenarioContract("Iasi_DefendShip_Easy", "Iasi_ScenarioProgress", "Support Ship", "Foxwell Enforcement", 146, [Defense]),
+            new GameScenarioContract("Iasi_Patrol_Hard", "Iasi_ScenarioProgress", "Neutralize Threats", "Foxwell Enforcement", 417, [Defense], Variants: 3),
+            new GameScenarioContract("Iasi_DefendShip_Easy", "Iasi_ScenarioProgress", "Support Ship", "Foxwell Enforcement", 146, [Defense], Variants: 3),
             new GameScenarioContract("Iasi_HaulCargo_AtoB_Supply_SecuritySupplies", "Iasi_ScenarioProgress", "Important Supply Haul", "Covalex", 625, [Transport]),
             new GameScenarioContract("Iasi_ResourceGathering_Mining_Quantanium", "Iasi_ScenarioProgress", "Procure Refined Quantainium", "Shubin Interstellar", 1142, []),
             new GameScenarioContract("ORS_CA_Medium", "ORS_ScenarioProgress", "Medium Materials Order", "", 2208, []),
@@ -191,6 +191,42 @@ public class EventProgressTests
     }
 
     /// <summary>
+    /// The first Discovery Month log: every Support Ship it held was logged as
+    /// <c>Iasi_DefendShip_Easy_2</c>, the parent's third sub-contract, and the
+    /// page counted none of them. A sub-contract pays as its parent.
+    /// </summary>
+    [Fact]
+    public void A_sub_contract_is_counted_as_the_contract_it_varies()
+    {
+        var status = Discovery(
+            Run("Iasi_DefendShip_Easy_2", ContractOutcome.Completed),
+            Run("Iasi_DefendShip_Easy_0", ContractOutcome.Completed, 30),
+            Run("Iasi_Patrol_Hard_1", ContractOutcome.InProgress, 60));
+
+        Assert.Equal(0, status.Unrecognised);
+        Assert.Equal(2 * 146, Track(status, "Your total").Points);
+        Assert.Equal(2 * 146, Track(status, "Defense").Points);
+        Assert.Equal(2, status.Contracts.Single(c => c.Id == "Iasi_DefendShip_Easy").Completed);
+        Assert.Equal(1, status.Contracts.Single(c => c.Id == "Iasi_Patrol_Hard").Open);
+        Assert.NotNull(status.FirstSeen);
+    }
+
+    /// <summary>
+    /// Only the sub-contracts the game lists: an index past them is a name the
+    /// table does not know, and is reported rather than guessed at.
+    /// </summary>
+    [Fact]
+    public void A_sub_contract_index_the_game_does_not_list_stays_unrecognised()
+    {
+        var status = Discovery(
+            Run("Iasi_DefendShip_Easy_3", ContractOutcome.Completed),
+            Run("Iasi_HaulCargo_AtoB_Supply_SecuritySupplies_0", ContractOutcome.Completed, 30));
+
+        Assert.Equal(2, status.Unrecognised);
+        Assert.Equal(0, Track(status, "Your total").Points);
+    }
+
+    /// <summary>
     /// The check that the arithmetic is the game's: this install's 15 Medium
     /// and 12 Large Materials Orders for Orison Relief come to 72,648 points,
     /// past its 72,000 top tier. Here the Medium ones alone, against the first.
@@ -233,6 +269,16 @@ public class EventProgressTests
     }
 
     [Fact]
+    public void A_sub_contract_row_shows_what_its_parent_pays()
+    {
+        var pay = EventPay.For(Catalogue).Pay("Iasi_DefendShip_Easy_2");
+
+        Assert.NotNull(pay);
+        Assert.Equal(146, pay.Points);
+        Assert.Equal(["Your total", "Defense"], pay.Tracks);
+    }
+
+    [Fact]
     public void No_game_data_means_no_events_rather_than_an_error()
     {
         Assert.Empty(EventProgress.Build(GameScenarioCatalogue.Empty, [Run("Iasi_Patrol_Hard", ContractOutcome.Completed)]));
@@ -254,5 +300,6 @@ public class EventProgressTests
         Assert.Equal(Defense, back.Scenarios[0].Tracks[1].Tag);
         Assert.Equal([Defense], back.Contracts[0].Tags);
         Assert.Equal(417, back.Contracts[0].Points);
+        Assert.Equal(3, back.Contracts[0].Variants);
     }
 }

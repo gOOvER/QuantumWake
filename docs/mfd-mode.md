@@ -447,7 +447,7 @@ The category layout is stable as data arrives:
 | Category | Screens |
 | --- | --- |
 | Flight | Navigation, System map, Ship, Local intel |
-| Operations | Flight plan, Checklist, Contract, Shopping |
+| Operations | Flight plan, Checklist, Contract, Event progress, Shopping |
 | Resources | Cargo & trade, Ledger, Mining, Earnings |
 | Pilot | Session, Server, Activity, Crew, Log |
 
@@ -457,6 +457,13 @@ been on it, how many times before, and the note you wrote on the dashboard's
 Servers page. It is the page to read right after the loading screen: a note
 that says "two 30ks last time" is a reason to relog now and a complaint an
 hour later. Pilot is the one category that fills all five buttons.
+
+**Event progress** follows the campaign selected with **Track on Now** on the
+dashboard; without one it follows an event contract in the journal, then the
+most recently played campaign. It shows the overall bar as a logbook floor,
+the next tier, the fewest recorded runs to it, and the current contract's point
+award. Category bars are available under **More**. Campaign selection, reward
+browsing and route planning stay on the dashboard, where they have room.
 
 DONE and MORE disappear where they have no action; Up/Down dim when there is
 nothing to move. Home and Back retain their positions across menus. Direct page

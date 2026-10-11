@@ -665,7 +665,7 @@ async function refreshExtras() {
   };
   await Promise.all([grab('/api/earnings?days=30', 'earnings'), grab('/api/jobs', 'jobs'),
     grab('/api/respawn', 'respawn'), grab('/api/ledger?days=30', 'ledger'), grab('/api/ledger/wallet', 'wallet'),
-    grab('/api/screen/readings?take=8', 'screenLog')]);
+    grab('/api/screen/readings?take=8', 'screenLog'), grab('/api/events', 'events')]);
   lastRows = ''; render();
 }
 async function loadMakers() {

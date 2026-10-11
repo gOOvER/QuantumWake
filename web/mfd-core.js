@@ -84,9 +84,9 @@ window.QwMfd = (() => {
   const OSBS = 20, BUTTONS = 28;
   // Keep these indices stable for displays saved before menu navigation.
   const pageIds = ['nav', 'task', 'act', 'cargo', 'contract', 'status', 'feed', 'crew', 'money', 'list',
-    'ship', 'here', 'ledger', 'mine', 'map', 'services', 'log', 'server'];
+    'ship', 'here', 'ledger', 'mine', 'map', 'services', 'log', 'server', 'event'];
   const pages = ['NAV', 'TASK', 'ACT', 'CARGO', 'CONTRACT', 'STATUS', 'FEED', 'CREW', 'MONEY', 'LIST',
-    'SHIP', 'HERE', 'LEDGER', 'MINE', 'MAP', 'SERVICES', 'LOG', 'SERVER'];
+    'SHIP', 'HERE', 'LEDGER', 'MINE', 'MAP', 'SERVICES', 'LOG', 'SERVER', 'EVENT'];
 
   /* One vocabulary for the display, the setup editor and the stored profile.
      Ids rather than page numbers in the file: a profile saved today still
@@ -114,6 +114,8 @@ window.QwMfd = (() => {
       icon: 'M3 8l9-4 9 4v8l-9 4-9-4zM3 8l9 4 9-4M12 12v8' },
     { id: 'contract', label: 'Page · Contract', caption: 'CNTRCT', short: 'CNTR',
       icon: 'M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6' },
+    { id: 'event', label: 'Page · Event progress', caption: 'EVENT', short: 'EVNT',
+      icon: 'M12 3v18M5 7h14M5 12h14M5 17h14M8 5v4M16 10v4M10 15v4' },
     { id: 'status', label: 'Page · Status', caption: 'STATUS', short: 'STAT',
       icon: 'M12 3a9 9 0 1 0 .1 0M12 7.5v.5M12 11v6' },
     { id: 'feed', label: 'Page · Feed', caption: 'FEED', short: 'FEED',
@@ -134,7 +136,7 @@ window.QwMfd = (() => {
       icon: 'M4 20.5 12 12.5M6.2 8.2c3-3 8.2-4.1 12.2-3-1 4-2.1 9.2-5.1 12.2M14.2 6.2l4 4' },
     { id: 'map', label: 'Page · Map', caption: 'MAP', short: 'MAP',
       icon: 'M2.5 5.8 9 3.4v14.8L2.5 20.6zM9 3.4l6 2.4v14.8l-6-2.4M15 5.8l6.5-2.4v14.8L15 20.6' },
-    { id: 'services', label: 'Page · Nearest services', caption: 'SERVICES', short: 'SVC',
+    { id: 'services', label: 'Page · Nearest services', caption: 'SVC', short: 'SVC',
       icon: 'M14.6 6.2a4.2 4.2 0 0 0-5.7 5.2L3.6 16.7l2.9 2.9 5.3-5.3a4.2 4.2 0 0 0 5.2-5.7l-2.6 2.6-2.1-2.1z' },
     { id: 'map-prev', label: 'Radar · previous body', caption: 'PREV', short: 'PRV',
       icon: 'M15 4L7 12l8 8' },
@@ -185,7 +187,7 @@ window.QwMfd = (() => {
     { id: 'flight', title: 'Flight', short: 'FLT', icon: 'nav', hint: 'Where you are, and what you fly',
       children: ['nav', 'map', 'services', 'ship', 'here'] },
     { id: 'operations', title: 'Operations', short: 'OPS', icon: 'task', hint: 'Plan, checklist, jobs',
-      children: ['task', 'act', 'contract', 'list'] },
+      children: ['task', 'act', 'contract', 'event', 'list'] },
     { id: 'resources', title: 'Resources', short: 'RSRC', icon: 'cargo', hint: 'Cargo, money, mining',
       children: ['cargo', 'ledger', 'mine', 'money'] },
     { id: 'pilot', title: 'Pilot', short: 'PLT', icon: 'status', hint: 'Session, server, activity, crew and log',
@@ -193,7 +195,7 @@ window.QwMfd = (() => {
   ];
   const titles = { home: 'Cockpit', nav: 'Navigation', task: 'Mission', act: 'Checklist',
     cargo: 'Cargo & trade', contract: 'Contract', status: 'Session', feed: 'Activity', crew: 'Crew',
-    money: 'Earnings', list: 'Shopping', ship: 'Ship', here: 'Local intel', ledger: 'Ledger', mine: 'Mining', map: 'System map', services: 'Nearest services', log: 'Log',
+    money: 'Earnings', list: 'Shopping', ship: 'Ship', here: 'Local intel', ledger: 'Ledger', mine: 'Mining', map: 'System map', services: 'Nearest services', log: 'Log', event: 'Event progress',
     server: 'Server' };
   const menuNodes = {}, leafParents = {};
   function indexMenu(nodes, parentId = 'home') {
@@ -613,6 +615,31 @@ window.QwMfd = (() => {
     return `${parts.join(' + ')} across ${load.stops} stop${load.stops > 1 ? 's' : ''} · planned, not detected`;
   }
 
+  /* The dashboard may pin an event before a pilot has flown a contract for it.
+     That deliberate choice wins; otherwise an open journal contract is the
+     clearest signal, followed by the most recently seen event. The MFD has no
+     picker because five bezel buttons are for flying, not browsing campaigns. */
+  function currentEvent(events) {
+    const all = events?.events || [];
+    const tracked = all.find(event => event.id === events?.tracked);
+    if (tracked) return tracked;
+    const open = (events?.open || [])[0];
+    const inJournal = all.find(event => event.title === open?.event);
+    if (inJournal) return inJournal;
+    return [...all].filter(event => event.lastSeen)
+      .sort((a, b) => new Date(b.lastSeen) - new Date(a.lastSeen))[0] || all[0] || null;
+  }
+
+  function eventTrack(event) {
+    return event?.tracks?.find(track => track.overall) || event?.tracks?.[0] || null;
+  }
+
+  function eventNext(track) {
+    if (!track?.nextTier) return 'Every listed tier reached';
+    const index = (track.tiers || []).findIndex(tier => tier.minPoints === track.nextTier) + 1;
+    return `${Number(track.toNext || 0).toLocaleString()} pts to Tier ${index} (${Number(track.nextTier).toLocaleString()} pts)`;
+  }
+
   /* A row is [label, value, timestamp, mark]. The mark is how the display is
      told which line the cursor is on, so the selection rule lives here with
      the rest of the page logic rather than in the renderer. */
@@ -720,6 +747,37 @@ window.QwMfd = (() => {
           ...(about.length ? [['ISSUER', about.join(' · ')]] : []),
           ['TAKEN', 'This session', c.since],
           ...(open.length > 1 ? [['ALSO OPEN', `${open.length - 1} more`]] : [])
+        ];
+      }
+      case 'event': {
+        const events = view.extra?.events;
+        if (!events) return [['EVENT PROGRESS', 'Reading your event journal…']];
+        if (!events.available) return [['EVENT DATA UNAVAILABLE',
+          'Read the installed game data in Settings to identify event tiers and contract points.']];
+        const event = currentEvent(events);
+        if (!event) return [['NO EVENTS IN THIS PATCH',
+          'The installed game data lists no event campaigns.']];
+        const track = eventTrack(event);
+        if (!track) return [['NO EVENT BARS',
+          'This campaign has no progress bars in the installed game data.']];
+        const label = events.tracked === event.id ? 'TRACKED EVENT'
+          : (events.open || []).some(open => open.event === event.title) ? 'ACTIVE EVENT' : 'RECENT EVENT';
+        const points = Number(track.points || 0).toLocaleString();
+        const otherTracks = (event.tracks || []).filter(candidate => candidate !== track && candidate.nextTier != null)
+          .slice(0, 2).map(candidate => [
+            `${String(candidate.name || 'EVENT BAR').toUpperCase()} · NEXT`,
+            `${Number(candidate.points || 0).toLocaleString()} pts · ${eventNext(candidate)}`]);
+        const fastest = track.fastest?.[0];
+        const open = (events.open || []).find(candidate => candidate.event === event.title);
+        return [
+          [label, event.title],
+          [`${String(track.name || 'PROGRESS').toUpperCase()} · FLOOR`,
+            `${points} pts from completed contracts in this logbook`],
+          ['NEXT TIER', eventNext(track)],
+          ...otherTracks,
+          ...(fastest ? [['FEWEST RUNS', `${fastest.needed} × ${fastest.title} · ${Number(fastest.points || 0).toLocaleString()} pts each`]] : []),
+          ...(open ? [['IN YOUR JOURNAL', `+${Number(open.points || 0).toLocaleString()} pts · ${open.title}`]] : []),
+          ...(event.unrecognised ? [['NOT COUNTED', `${event.unrecognised} matching contract${event.unrecognised === 1 ? '' : 's'} lack a points entry.`]] : [])
         ];
       }
       /* Session, Handle, "This session" and "Wake up at" all fold in here: two
