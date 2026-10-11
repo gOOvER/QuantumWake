@@ -414,7 +414,11 @@ there, category bars and the contract currently in your journal. Event choice,
 rewards and route planning remain on the dashboard, where there is room to use
 them.
 
-**0.17 is the events release, and it needs testers.** RSI Discovery Month started the day this shipped, so the Events page's contract names and point values come straight from the game files. The first played session found the variant mismatch above; mining and salvage contracts haven't been checked against a played session yet. If the Events page and your in-game journal disagree, a problem report from Settings is the most useful thing you can send.
+**Discovery Month still needs testers.** Mining and salvage orders and the scavenger box haven't turned up in a played log yet, so they're the part of the Events page nobody has checked. If the Events page and your in-game journal disagree, a problem report from Settings is the most useful thing you can send.
+
+### 0.17.5
+
+**0.17 is the events release, and it needs testers.** RSI Discovery Month started the day this shipped, so the Events page's contract names and point values come straight from the game files and haven't yet been checked against a played session. If the Events page and your in-game journal disagree, a problem report from Settings is the most useful thing you can send.
 
 **A toast when you reach a tier.** Cross a tier on any event bar and the app says so, in the overlay too, with what the tier gives: "Defense tier 1 reached - Scorpius Echo Livery and Sovereign IP-20 Power Plant". The journal moves the bar and says nothing.
 
