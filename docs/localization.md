@@ -106,26 +106,58 @@ language, and the parser stops seeing them:
 | Party joins, leaves, leader, disband (`Party.cs`) | `New Member Joined`, `Member Left`, `New Party Leader`, `Party …` | `notification_member_joined_Title` and siblings | 100 / 124 / 18 / 30 |
 | Ship channel (`ShipChannel.cs`) | `… the channel '…'` | | 372 |
 
-CIG ships English only. Community French translations install a loose
-`global.ini` under their own folder in `data\Localization\` and set
-`g_language` in `user.cfg`. **Unverified here**: this install has only
-`english` and has never written a French log, so what a translated game puts in
-`Game.log` is not yet known - it may well be that some lines stay English.
+**The game ships French itself, partly.** `Data.p4k` carries a `global.ini`
+for ten languages beside English - French, German, Italian, Spanish (Spain and
+Latin America), Brazilian Portuguese, Japanese, Korean, Chinese simplified and
+traditional - and `g_language` in `user.cfg` picks one (this install:
+`english`). The French table is far from whole: 25,395 keys against English's
+90,946, with 66,752 English keys it has no line for. What it holds for the
+lines above:
+
+| Key | English | French |
+|---|---|---|
+| `mobiGlas_ui_MissionEvent_Activated` | `Contract Accepted:  %s` | absent |
+| `mobiGlas_ui_MissionEvent_Complete` | `Contract Complete: %s` | absent |
+| `notification_member_joined_Title` | `New Member Joined` | `Nouveau membre` |
+| `notification_member_left_Title` | `Member Left` | `Un membre a quitté le groupe` |
+| `notification_leader_changed_Title` | `New Party Leader` | `Nouveau leader du groupe` |
+| `notification_group_disbanded_Title` | `Party Disbanded` | `Dissolution du groupe` |
+| `notification_local_player_joined_Title` | `You have joined` | `Vous avez rejoint` |
+| `mobiGlas_ui_notification_Party_Member_Joined` | `%S has joined the party.` | absent |
+| `mobiGlas_ui_notification_Party_Member_Left` | `%S has left the party.` | absent |
+
+So a French party notification is likely a French title over a body the table
+does not have, and the ship-channel wording (`You have joined channel '…'`) is
+not in any table at all - it is written by code, and probably stays English
+whatever the language. Ship and commodity names were the same in both tables
+in every one checked (`Aegis Avenger Titan`, `Laranite`).
+
+**Unverified here**: this install is set to English and has never written a
+French log. What the game puts in a line whose key the French table lacks - the
+English, the key, or nothing - is the open question, and the contract titles
+hang on it. Community translations exist as well; they install a loose
+`global.ini` in their own language folder, which the game reads in place of
+the one in `Data.p4k`.
 
 The fix, once a French log exists to prove it against: read `g_language`, load
-the table the game actually uses, and match on the text behind the key rather
-than on English. Three neighbours follow the same thread:
+the table the game actually uses - the loose file when there is one, else that
+language's table in `Data.p4k`, which the app already reads - fall back to
+English key by key as the game does, and match on the text behind the key
+rather than on English. Three neighbours follow the same thread:
 
-- `GameNames` reads names from `english\global.ini` in `Data.p4k`; a French
-  player sees French names in game and English ones here.
+- `GameNames` reads names from `english\global.ini` in `Data.p4k`. For the
+  names checked the French table agrees, but wherever it translates a name a
+  French player would see one thing in game and another here.
 - The text overlay installs into `data\localization\english\global.ini`. With
   `g_language` set to anything else the game never reads it, and the page says
   it is installed.
 - The screenshot readers match English words. A French mobiGlas reads as
   nothing.
 
-**Needed before any of it: a `Game.log` from a game set to French.** That is a
-tester's afternoon, and it is the first thing to ask for.
+**Needed before any of it: a `Game.log` from a game set to French** - by
+`g_language = french_(france)` or by a community translation, ideally with a
+contract accepted and a party joined. That is a tester's afternoon, and it is
+the first thing to ask for.
 
 ## Phases
 
