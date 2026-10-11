@@ -119,6 +119,7 @@ public static class ServerHost
         builder.Services.AddSingleton<BackupBuilder>();
         builder.Services.AddSingleton<RestoreService>();
         builder.Services.AddSingleton<RunSettingsStore>();
+        builder.Services.AddSingleton<LanguageStore>();
         builder.Services.AddSingleton<EventTrackStore>();
         builder.Services.AddSingleton<ScreenSettingsStore>();
         builder.Services.AddSingleton<ScreenReadingStore>();
@@ -3628,6 +3629,42 @@ public static class ServerHost
             });
         });
 
+        // The dashboard's language. Kept on the server so the overlay, whose
+        // WebView2 has storage of its own, reads in the same one as the browser.
+        app.MapGet("/api/language", (LanguageStore language) => new
+        {
+            current = language.Current,
+            available = LanguageStore.Available,
+        });
+
+        app.MapPost("/api/language", (LanguageStore language, string? code) =>
+            Results.Ok(new { current = language.Save(code) }));
+
+        // A blocking script in the page's <head>: the language and its whole
+        // catalogue inline, so the first paint is already translated and an
+        // English page loads nothing. A catalogue that is missing or will not
+        // parse serves English rather than a script that throws, because a
+        // syntax error here would cost the page every string, not just some.
+        app.MapGet("/api/i18n.js", (LanguageStore language, HttpContext context) =>
+        {
+            context.Response.Headers.CacheControl = "no-store";
+
+            var code = language.Current;
+            var catalogue = code == LanguageStore.English ? null : ReadWebText($"locales/{code}.json");
+
+            if (catalogue is not null)
+            {
+                try { using var _ = JsonDocument.Parse(catalogue); }
+                catch (JsonException) { catalogue = null; }
+            }
+
+            var script = catalogue is null
+                ? "window.QW_LANG = \"en\";\n"
+                : $"window.QW_LANG = {JsonSerializer.Serialize(code)};\nwindow.QW_STRINGS = {catalogue};\n";
+
+            return Results.Text(script, "text/javascript", Encoding.UTF8);
+        });
+
         app.MapGet("/api/runs/settings", (RunSettingsStore settings) => settings.Current);
 
         app.MapPost("/api/runs/settings", (RunSettingsStore settings, int? days) =>
@@ -5545,6 +5582,17 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
             return saved;
 
         return GameInstallLocator.Preferred();
+    }
+
+    /// <summary>A file of the web UI as text, from whichever copy the page itself is served from.</summary>
+    static string? ReadWebText(string relative)
+    {
+        var root = ResolveWebRoot();
+        if (root is null)
+            return EmbeddedWeb.ReadText(relative);
+
+        var path = Path.Combine(root, relative);
+        return File.Exists(path) ? File.ReadAllText(path) : null;
     }
 
     /// <summary>Finds the shared web/ directory whether running from source or published.</summary>

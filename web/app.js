@@ -5,6 +5,10 @@
  * free. Live updates arrive over Server-Sent Events, which every browser
  * supports natively. */
 
+// First, before anything below holds a reference into the markup: i18n.js
+// replaces whole elements, and one replaced later would be unreachable.
+txDocument(document.body);
+
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
@@ -266,9 +270,9 @@ function renderContextRail() {
   rail.hidden = !focus;
   if (!focus) return;
 
-  title.textContent = focus.title || 'Current focus';
+  title.textContent = focus.title || tx('Current focus');
   detail.textContent = focus.detail || '';
-  action.textContent = focus.action || 'Open';
+  action.textContent = focus.action || tx('Open');
   action.onclick = () => {
     if (focus.anchor) jobsLandOn = focus.anchor;
     showView(focus.view || 'now');
@@ -530,13 +534,13 @@ function expandHelp(open) {
   const root = $('#view-help');
   for (const item of Array.from(root?.querySelectorAll('.faq-item') || [])) if (!item.hidden) item.open = open;
   const button = $('#help-expand');
-  if (button) button.textContent = open ? 'Collapse all' : 'Expand all';
+  if (button) button.textContent = open ? tx('Collapse all') : tx('Expand all');
 }
 
 $('#help-search')?.addEventListener('input', (event) => filterHelp(event.target.value));
 $('#help-expand')?.addEventListener('click', () => {
   const button = $('#help-expand');
-  expandHelp(button.textContent !== 'Collapse all');
+  expandHelp(button.textContent !== tx('Collapse all'));
 });
 
 /* Driven by the overlay shell's global hotkeys, so views can be changed without
@@ -998,14 +1002,20 @@ document.addEventListener('keydown', (event) => {
 let commandIndex = 0;
 function commandEntries() {
   const pages = $$('#tabs button[data-view]').map(button => ({
-    label: `Open ${button.textContent.trim()}`, hint: 'page', run: () => showView(button.dataset.view),
+    label: tx('Open {page}', { page: button.textContent.trim() }), hint: tx('page'), run: () => showView(button.dataset.view),
   }));
-  const presets = ['flight', 'mining', 'combat', 'trading', 'minimal', 'full'].map(name => ({
-    label: `${name[0].toUpperCase() + name.slice(1)} overlay layout`, hint: 'overlay', run: () => window.scOverlayPreset?.(name),
+  // Spelled out rather than built from the preset's name, so each is a whole
+  // phrase a translation can reorder.
+  const presets = [
+    ['flight', tx('Flight overlay layout')], ['mining', tx('Mining overlay layout')],
+    ['combat', tx('Combat overlay layout')], ['trading', tx('Trading overlay layout')],
+    ['minimal', tx('Minimal overlay layout')], ['full', tx('Full overlay layout')],
+  ].map(([name, label]) => ({
+    label, hint: tx('overlay'), run: () => window.scOverlayPreset?.(name),
   }));
   return [...pages, ...presets,
-    { label: 'Show overlay', hint: 'overlay', run: () => fetch('/api/overlay?visible=true', { method: 'POST' }) },
-    { label: 'Open MFD setup', hint: 'mfd', run: () => openMfdSetup() }];
+    { label: tx('Show overlay'), hint: tx('overlay'), run: () => fetch('/api/overlay?visible=true', { method: 'POST' }) },
+    { label: tx('Open MFD setup'), hint: tx('mfd'), run: () => openMfdSetup() }];
 }
 function renderCommandPalette() {
   const query = $('#command-query').value.trim().toLowerCase();
@@ -1115,7 +1125,7 @@ function renderNowFocus(state, briefing = pilotBriefing) {
 function renderNow(state) {
   nowState = state;
   $('#link').classList.toggle('live', !!state.connected);
-  $('#link').title = state.connected ? 'live' : 'disconnected';
+  $('#link').title = state.connected ? tx('live') : tx('disconnected');
 
   $('#now-location').textContent = state.location || (state.inGame ? 'Unknown' : 'In menus');
   $('#now-location-sub').textContent = [state.locationBody, state.locationSystem].filter(Boolean).join(' · ');
@@ -2121,17 +2131,17 @@ function renderEntity(card) {
     setContextFocus({
       kind: 'ship',
       title: card.name,
-      detail: card.subtitle || 'Ship reference',
+      detail: card.subtitle || tx('Ship reference'),
       view: 'routes',
-      action: 'Plan with ship',
+      action: tx('Plan with ship'),
     });
   } else if (card.kind === 'place') {
     setContextFocus({
       kind: 'place',
       title: card.name,
-      detail: card.subtitle || 'Map place',
+      detail: card.subtitle || tx('Map place'),
       view: 'map',
-      action: 'Open map',
+      action: tx('Open map'),
     });
   }
 
@@ -13162,9 +13172,9 @@ function choosePlanningShip(name) {
     setContextFocus({
       kind: 'ship',
       title: ship.ship.name,
-      detail: cargo > 0 ? `${cargo.toLocaleString()} SCU selected for route planning` : 'Selected for route planning',
+      detail: cargo > 0 ? tx('{cargo} SCU selected for route planning', { cargo: cargo.toLocaleString() }) : tx('Selected for route planning'),
       view: 'routes',
-      action: 'Open routes',
+      action: tx('Open routes'),
     });
   } else if (contextFocus?.kind === 'ship') {
     clearContextFocus();
@@ -17008,10 +17018,10 @@ async function loadJobContracts() {
     focus.addEventListener('click', () => setContextFocus({
       kind: 'contract',
       title: contract.name || `${contract.issuer} · ${contract.type}`,
-      detail: [contract.issuer, contract.type, contract.system].filter(Boolean).join(' · ') || 'Live contract',
+      detail: [contract.issuer, contract.type, contract.system].filter(Boolean).join(' · ') || tx('Live contract'),
       view: 'jobs',
       anchor: '#jobs-contracts',
-      action: 'Open contracts',
+      action: tx('Open contracts'),
     }));
     head.append(focus);
     card.append(head);
@@ -17475,10 +17485,10 @@ async function loadJobList() {
         setContextFocus({
           kind: 'shopping',
           title: job.title,
-          detail: `${job.haveCount} of ${job.totalCount} items in hand`,
+          detail: tx('{have} of {total} items in hand', { have: job.haveCount, total: job.totalCount }),
           view: 'jobs',
           anchor: '#jobs-list',
-          action: 'Open list',
+          action: tx('Open list'),
         });
       } else if (contextFocus?.kind === 'shopping' && contextFocus.title === job.title) {
         clearContextFocus();
@@ -23706,10 +23716,10 @@ async function planTrip(title, stops) {
   setContextFocus({
     kind: 'flight-plan',
     title,
-    detail: `${stops.length} stop${stops.length === 1 ? '' : 's'} ready to route`,
+    detail: txn(stops.length, '{count} stop ready to route', '{count} stops ready to route'),
     view: 'map',
     plan: true,
-    action: 'Open plan',
+    action: tx('Open plan'),
   });
   await fetch('/api/trips', {
     method: 'POST',
@@ -25256,10 +25266,10 @@ async function showMapInfo(location) {
   setContextFocus({
     kind: 'place',
     title: location.name,
-    detail: [location.body, location.system].filter(Boolean).join(' · ') || 'Map place',
+    detail: [location.body, location.system].filter(Boolean).join(' · ') || tx('Map place'),
     view: 'map',
     placeId: location.rawId,
-    action: 'Open map',
+    action: tx('Open map'),
   });
   $('#entity-drawer').classList.add('map-place-open');
 
@@ -27072,6 +27082,54 @@ function updateNowButton(result) {
   return install;
 }
 
+/* ---------- language ---------- */
+
+/**
+ * The Settings block that picks the page's language.
+ *
+ * Each option is named in its own language, since the reader who needs one is
+ * the reader who cannot yet read the others. A partial language says what it
+ * covers, in that language, so it never passes for a finished one.
+ */
+async function renderLanguageSettings() {
+  const pick = $('#language-pick');
+  const covers = $('#language-covers');
+  if (!pick) return;
+
+  const answer = await getJson('/api/language');
+  const languages = answer.available || [];
+
+  pick.textContent = '';
+  for (const language of languages) {
+    const option = el('option', null, language.name);
+    option.value = language.code;
+    pick.append(option);
+  }
+  pick.value = answer.current;
+
+  // Shown whichever language is chosen: the note is written for the people
+  // who would pick that language, and they are reading an English page.
+  if (covers) {
+    const partial = languages.filter(language => language.covers);
+    covers.textContent = partial.map(language => `${language.name} — ${language.covers}.`).join(' ');
+    covers.hidden = partial.length === 0;
+  }
+
+  pick.onchange = async () => {
+    pick.disabled = true;
+    try {
+      await fetch(`/api/language?code=${encodeURIComponent(pick.value)}`, { method: 'POST' });
+      // Reloaded rather than re-rendered: dozens of renders have already
+      // written text into the page, and re-running all of them in place is a
+      // bug farm for a thing done once.
+      location.reload();
+    } catch {
+      pick.disabled = false;
+      pick.value = answer.current;
+    }
+  };
+}
+
 /** The Settings block: the toggle, and what the last look found. */
 async function renderUpdateSettings() {
   const toggle = $('#update-auto');
@@ -27536,7 +27594,7 @@ async function boot() {
 
   // The current location on Now flies to the map like every other place name.
   $('#now-location').classList.add('now-jump');
-  $('#now-location').title = 'Show on the map';
+  $('#now-location').title = tx('Show on the map');
   $('#now-location').addEventListener('click', () => {
     const name = $('#now-location').textContent.trim();
     if (name && name !== '—') jumpToPlace(name);
@@ -27544,13 +27602,13 @@ async function boot() {
 
   try {
     const install = await getJson('/api/install');
-    $('#install').textContent = `${install.channel} · ${install.backups} logs`;
+    $('#install').textContent = `${install.channel} · ${txn(install.backups, '{count} log', '{count} logs')}`;
     // Said in full on hover: on a window too narrow for the top bar the label
     // still gives way to an ellipsis, and a count cut to "60 LO…" says nothing.
-    $('#install').title = `${install.channel} install · ${install.backups} logs read`;
+    $('#install').title = txn(install.backups, '{channel} install · {count} log read', '{channel} install · {count} logs read', { channel: install.channel });
     $('#about-install').textContent = `${install.channel} · ${install.backups} logs`;
   } catch {
-    $('#install').textContent = 'no install found';
+    $('#install').textContent = tx('no install found');
     $('#about-install').textContent = 'none found';
 
     // Nothing to read: ask where the game lives rather than showing an
@@ -27595,6 +27653,7 @@ async function boot() {
   }
 
   renderUpdateSettings().catch(() => { /* Settings fills in on its next visit */ });
+  renderLanguageSettings().catch(() => { /* the page stays in the language it was served in */ });
 
   loadWipe().catch(() => { /* Settings shows it on its next visit */ });
 

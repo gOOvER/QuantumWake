@@ -2497,6 +2497,8 @@ body.overlay .foot { display: none; }
 .settings-share-card { background: linear-gradient(135deg, rgba(13, 45, 61, .84), var(--deep) 60%); }
 .settings-update-card { background: linear-gradient(135deg, rgba(32, 39, 49, .78), var(--deep) 65%); }
 .settings-update-card::before { background: var(--amber); }
+.settings-language-card { max-width: none; margin: 0 0 16px; }
+.settings-language-card select { min-width: 160px; }
 .settings-wipe-card { max-width: none; border-left: 3px solid var(--amber); background: linear-gradient(115deg, rgba(104, 68, 20, .11), var(--deep) 58%); }
 .settings-wipe-card .wipe-scope { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 20px; }
 .settings-group {

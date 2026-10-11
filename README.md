@@ -403,6 +403,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.18.0
+
+**Quantum Wake in French — the start of it.** Settings → General has a new **Language · Langue** card. Choose Français and the navigation, the search box, the command palette and the fixed text of Settings → General come up in French, in the browser and in the overlay alike. The rest of the app is still English for now, and the card says exactly what is covered so far; more pages follow through the 0.18 updates. Names from the game — ships, places, commodities — stay as the game writes them, so they still match your mobiGlas and the price sites.
+
+**Nothing changes unless you choose it.** English stays the default, even on a French Windows, until the translation is complete.
+
+**Playing Star Citizen itself in French?** If you run a community French translation of the game, a `Game.log` from one of your sessions would help a lot. Some of what Quantum Wake reads — contract titles, party joins and leaves — is text the game translates, so with a French game those may not be picked up, and there is no French log here to check against. Open an issue on GitHub and attach one.
+
 ### 0.17.9
 
 **Event points no longer go missing when the game is relaunched with the app open.** The session you are playing is kept under one shared name until the game moves its log into the backups, and nothing read that backup until the app was next started. Launch the game twice in one sitting with the app running and the earlier session was overwritten. On one install that was a whole evening of Discovery Month: 2,123 points the in-game journal had and the Events page did not, and a tier already paid out still shown as not reached. The app now reads the backup as soon as the game starts a new log. A session already lost this way comes back the next time you start the app.

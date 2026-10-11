@@ -25,7 +25,11 @@ public sealed class Page
 {
     private readonly Engine _engine;
 
-    public Page()
+    /// <param name="language">
+    /// A catalogue under <c>web/locales/</c> to serve the page in, as
+    /// <c>/api/i18n.js</c> would; null is English, which needs none.
+    /// </param>
+    public Page(string? language = null)
     {
         // A page that never finishes is a failing test, not a hanging build:
         // the app has poll loops that only stop because a browser's timers do,
@@ -39,6 +43,14 @@ public sealed class Page
 
         Run(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "dom.js")), "dom.js");
         SeedFromMarkup();
+
+        if (language is not null)
+        {
+            var catalogue = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", "locales", $"{language}.json"));
+            Run($"window.QW_LANG = {Quote(language)}; window.QW_STRINGS = {catalogue};", "/api/i18n.js");
+        }
+
+        Run(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", "i18n.js")), "i18n.js");
         Run(WithoutAutoStart(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", "app.js"))), "app.js");
     }
 

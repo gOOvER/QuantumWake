@@ -6,6 +6,11 @@
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
 <link rel="stylesheet" href="app.css?v=0.10.29">
+<!-- Blocking on purpose: the language and its catalogue arrive before the
+     body is drawn, so a French page never flashes English first. Served
+     without a server, the first 404s and the page is simply English. -->
+<script src="api/i18n.js"></script>
+<script src="i18n.js"></script>
 </head>
 <body>
 
@@ -3537,6 +3542,21 @@
       <span class="muted" id="update-status"></span>
     </div>
 
+    </div>
+
+    <!-- Named in both languages on purpose: someone who needs French has to
+         find this card while the page is still in English. -->
+    <div class="option-block settings-language-card">
+      <div class="option-head">
+        <h3>Language · Langue</h3>
+        <select id="language-pick" class="search" aria-label="Language"></select>
+      </div>
+      <p class="muted">
+        The language this dashboard and the overlay are read in. Names from the
+        game — ships, places, commodities — stay as the game writes them, so
+        they still match what the mobiGlas shows.
+      </p>
+      <p class="muted" id="language-covers"></p>
     </div>
 
     <div class="option-block settings-wipe-card">

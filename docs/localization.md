@@ -1,0 +1,179 @@
+# Languages
+
+The 0.18 line. Quantum Wake has been English-only since the first build; this is
+the plan for making it readable in other languages, starting with French, and
+the record of what each step actually covers.
+
+Measured on `dev0180` at ee9e769 (0.17.7), against this install: SC LIVE,
+`g_language = english`, 248 files in `logbackups`.
+
+## How much text there is
+
+| Where | Size | What it holds |
+|---|---|---|
+| `web/index.html` | 4,353 lines; 875 headings, buttons, labels and paragraphs; 201 `title` tooltips | Every page's fixed copy. The Help page alone is 356 lines of prose. |
+| `web/app.js` | 27,587 lines; 1,815 template literals | Everything rendered from data: table headers, status lines, empty states, toasts. |
+| MFD pages | `mfd-core.js` 1,073, `mfd.js` 717, `mfd-setup.js` 377 lines | Short labels, cramped for space - French runs about a fifth longer than English. |
+| Server | ~142 English sentences in `Quantumwake.Server`, `Quantumwake.Data` and `Core` (a grep for four-word capitalised strings, so an estimate) | Explanations, "why is this empty" notes, problem lines. |
+| Tray and overlay shell | ~60 strings in `Quantumwake.Overlay` | Menu items, the MFD window, first-run prompts. |
+
+That is far more than one release, so it goes out in phases, and the language
+picker says how far a language has got rather than implying it is done.
+
+## What is deliberately not translated
+
+- **Game names.** Ships, places, commodities and items are shown as the game's
+  own text table writes them. That is what the pilot sees in the mobiGlas and
+  what UEX and the community dataset are keyed on; a translated "Laranite"
+  matches nothing. A pilot who plays the game itself in French is a different
+  case - see [The game in French](#the-game-in-french).
+- **Evidence.** Log excerpts, raw tags, class names and diagnostic output are
+  quoted verbatim. They are there so a reader can find the line in `Game.log`,
+  which is in English whatever the page is in.
+- **Other people's text.** UEX notes, community dataset descriptions and
+  release notes from GitHub arrive in English and stay so.
+- **Numbers and dates.** All 153 `toLocale*String` calls in `app.js` already pass
+  the browser's locale (`[]` or nothing), so a French Windows already shows
+  `1 234 567` and `11 oct. 2026`. That follows regional settings, not the page
+  language, which is right: a Québécois reader on an English page still wants
+  their own date order.
+
+## The design
+
+**English strings are their own keys.** `tx('Last wipe')` looks the English up
+in the active catalogue and falls back to it. Three reasons, in order:
+
+1. The 2,683 tests 0.17.7 shipped with assert English text. With English as the key the page is
+   byte-identical in English and not one of them changes.
+2. An untranslated string falls back to the English, so a partial language
+   is a readable page rather than a page of key names.
+3. Nobody has to invent and maintain a few thousand key names.
+
+The cost is that editing the English orphans its translation, and the French
+would silently revert to English. `LocaleCatalogueTests` closes that: every
+catalogue entry must still exist as English somewhere - as a `tx()` literal in
+the scripts or as text in the markup - or the build goes red naming it.
+
+**Interpolation and plurals.** `tx('{have} of {total} items in hand', { have,
+total })` substitutes named values after lookup, so a translation can move
+them. `txn(count, '{count} log', '{count} logs')` picks the form by the page
+language's own rule: French treats 0 as singular ("0 journal"), English does
+not ("0 logs"), so the rule cannot be `count === 1`. The rules are written out
+in `i18n.js` rather than asked of `Intl.PluralRules`, because the test engine
+has no `Intl`. A plural entry in the catalogue is keyed on the English plural
+and holds `{ "one": …, "other": … }`; an untranslated one keeps English's rule.
+
+The names are `tx` and `txn`, not `t`: `app.js` declares a local `t` 52 times,
+and each would quietly shadow the global inside its function.
+
+**Markup is translated once, before `app.js` runs.** A walk over the document
+replaces any element whose whole content - inline tags included - is a
+catalogue key, so a paragraph with a `<code>` in it is one sentence for the
+translator rather than three fragments; otherwise it translates text nodes and
+the `title`, `placeholder`, `aria-label` and `alt` attributes one at a time. It
+has to run first: `app.js` holds element references from its top level, and an
+element replaced after that is one the script can no longer reach. The tests
+check each entry carries the same tags and `{placeholders}` as its English, so
+a translation cannot drop the `<code>` or the `{count}`.
+
+**The server owns the choice.** It is kept in `language.json` in the data
+folder, not in the page's `localStorage`, because the overlay's WebView2 keeps
+its own storage: a choice made in the browser would leave the overlay in
+English. The page asks for it with `<script src="/api/i18n.js">` in `<head>`,
+which the server answers with the language and its catalogue inline. It blocks
+on purpose - the first paint is already French, and an English page loads
+nothing extra.
+
+**Changing language reloads the page.** Dozens of renders have already written
+text into the page; re-running all of them in place is a bug farm for a thing
+done once.
+
+**English stays the default until a language is complete.** A French Windows
+user who updates to 0.18.0 gets the app they had, not a half-French one they
+did not ask for. "Follow Windows" becomes the default for a language once it
+has no English left, which the catalogue test can count.
+
+## The game in French
+
+This is the part that can break things rather than merely leave them English.
+The parser matches some notification text, and notifications come out of the
+game's text table - so a game running a translated table writes them in that
+language, and the parser stops seeing them:
+
+| What it reads | Matched on | Key in `global.ini` | Seen in this install's logs |
+|---|---|---|---|
+| Contract titles (`SessionBuilder.cs`) | `Contract Accepted:` / `Contract Complete:` | `mobiGlas_ui_MissionEvent_Activated` / `_Complete` | 536 / 296 |
+| Party joins, leaves, leader, disband (`Party.cs`) | `New Member Joined`, `Member Left`, `New Party Leader`, `Party …` | `notification_member_joined_Title` and siblings | 100 / 124 / 18 / 30 |
+| Ship channel (`ShipChannel.cs`) | `… the channel '…'` | | 372 |
+
+CIG ships English only. Community French translations install a loose
+`global.ini` under their own folder in `data\Localization\` and set
+`g_language` in `user.cfg`. **Unverified here**: this install has only
+`english` and has never written a French log, so what a translated game puts in
+`Game.log` is not yet known - it may well be that some lines stay English.
+
+The fix, once a French log exists to prove it against: read `g_language`, load
+the table the game actually uses, and match on the text behind the key rather
+than on English. Three neighbours follow the same thread:
+
+- `GameNames` reads names from `english\global.ini` in `Data.p4k`; a French
+  player sees French names in game and English ones here.
+- The text overlay installs into `data\localization\english\global.ini`. With
+  `g_language` set to anything else the game never reads it, and the page says
+  it is installed.
+- The screenshot readers match English words. A French mobiGlas reads as
+  nothing.
+
+**Needed before any of it: a `Game.log` from a game set to French.** That is a
+tester's afternoon, and it is the first thing to ask for.
+
+## Phases
+
+1. **0.18.0 - the machinery and a first slice of French.** `tx()`/`txn()`, the
+   markup walk, the server's choice and `/api/i18n.js`, the picker under
+   Settings → General, the catalogue tests. French covers the navigation,
+   search, command palette, the focus rail and the fixed text of Settings →
+   General; that page's live status lines are still English.
+2. **The pages, one area at a time** - Now, then Operations, Flight, Economy,
+   Reference, Hangar, the rest of Settings, Help last because it is the
+   longest. Each area's WebTests gain a run in French so a regression shows as
+   English in a French test rather than a screenshot nobody took.
+3. **Server sentences.** The same catalogue, read in C#, so there is one file
+   per language and one test guarding it.
+4. **MFD pages and the tray app.** The tray reads `language.json` directly; the
+   MFD labels need a width check, since a Cougar's screen does not stretch.
+5. **Playing the game in French.** Everything under
+   [The game in French](#the-game-in-french), starting from a tester's log.
+6. **Follow Windows by default** for French once the catalogue test reports no
+   English left.
+
+## Adding a language
+
+1. Copy `web/locales/fr.json` to `web/locales/<code>.json` and translate the
+   values. Keys are the English and are never edited.
+2. Add the code and its own name for itself to `LanguageStore.Available`.
+3. `dotnet test` - the catalogue tests check the new file like the French one.
+
+## Built
+
+### 0.18.0
+
+Phase 1 as described above: 188 French entries in `web/locales/fr.json`.
+What French covers is listed beside it in the picker, so the page never
+claims more than it does.
+
+- **Keys come from the browser, not by hand.** A markup entry has to equal
+  what the browser serialises - `&mdash;` comes back as the character,
+  `&nbsp;` stays an entity - so the 160 markup keys were collected by running
+  the same walk in headless Chrome over the real page, not retyped.
+- **Checked rendered**, against a LogSim install with a second server on a
+  copied data folder set to French: navigation, search, the Settings prose and
+  the command palette all French; the update and wipe banners and Settings'
+  status lines English, as the picker says.
+- **One label had to change for width.** "En direct" for *Now* wrapped onto two
+  lines in the tab strip; it is "Direct". The MFD pages will have this
+  problem worse.
+- **The Help page's Expand/Collapse button compared its own label to
+  English** to decide what it did - the only place in `app.js` that reads its
+  text back. It compares against `tx()` now, so translating Help cannot
+  break it.

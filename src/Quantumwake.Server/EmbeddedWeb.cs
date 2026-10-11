@@ -51,6 +51,20 @@ internal static class EmbeddedWeb
         return map;
     }
 
+    /// <summary>A text file out of the compiled-in copy, or null when there is none.</summary>
+    public static string? ReadText(string path)
+    {
+        if (!Files.TryGetValue("/" + path.TrimStart('/'), out var resource))
+            return null;
+
+        using var stream = typeof(EmbeddedWeb).Assembly.GetManifestResourceStream(resource);
+        if (stream is null)
+            return null;
+
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
+
     public static void Map(WebApplication app)
     {
         app.Use(async (context, next) =>
