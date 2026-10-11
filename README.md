@@ -403,7 +403,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.17.5
+### 0.17.6
+
+**Event progress on the Cougar MFD.** Operations → Event progress follows the
+campaign you track on the dashboard (or the event contract in your journal),
+then shows your logbook-total floor, the next tier, the quickest recorded path
+there, category bars and the contract currently in your journal. Event choice,
+rewards and route planning remain on the dashboard, where there is room to use
+them.
 
 **0.17 is the events release, and it needs testers.** RSI Discovery Month started the day this shipped, so the Events page's contract names and point values come straight from the game files and haven't yet been checked against a played session. If the Events page and your in-game journal disagree, a problem report from Settings is the most useful thing you can send.
 

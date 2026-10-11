@@ -184,6 +184,34 @@ public class MfdTests
     }
 
     [Fact]
+    public void EventPageFollowsTheTrackedCampaignAndStatesProgressAsALogbookFloor()
+    {
+        var e = Engine();
+        const string events = """
+            {"available":true,"tracked":"discovery","events":[{"id":"discovery","title":"RSI Discovery Event","unrecognised":1,"tracks":[{"name":"Your total","overall":true,"points":2085,"nextTier":4500,"toNext":2415,"tiers":[{"minPoints":4500}],"fastest":[{"needed":3,"title":"Procure Quantainium","points":1142}]},{"name":"Defense","overall":false,"points":2085,"nextTier":4000,"toNext":1915,"tiers":[{"minPoints":4000}]}]}],"open":[{"event":"RSI Discovery Event","title":"Neutralize Threats","points":417}]}
+            """;
+        e.Execute($"var mfdEventFixture = JSON.parse('{events}');");
+
+        var json = e.Evaluate("JSON.stringify(QwMfd.rows(QwMfd.pageIds.indexOf('event'),{},null,false,{extra:{events:mfdEventFixture}}))").AsString();
+
+        Assert.Contains("TRACKED EVENT", json);
+        Assert.Contains("2,085 pts from completed contracts in this logbook", json);
+        Assert.Contains("2,415 pts to Tier 1 (4,500 pts)", json);
+        Assert.Contains("3 × Procure Quantainium · 1,142 pts each", json);
+        Assert.Contains("+417 pts · Neutralize Threats", json);
+        Assert.Contains("NOT COUNTED", json);
+    }
+
+    [Fact]
+    public void EventPageExplainsWhenTheInstalledGameDataHasNotBeenRead()
+    {
+        var json = Engine().Evaluate("JSON.stringify(QwMfd.rows(QwMfd.pageIds.indexOf('event'),{},null,false,{extra:{events:{available:false}}}))").AsString();
+
+        Assert.Contains("EVENT DATA UNAVAILABLE", json);
+        Assert.Contains("Read the installed game data", json);
+    }
+
+    [Fact]
     public void QuantumDestinationWinsOverPlanAndFailedPlanIsExplicit()
     {
         var e = Engine();
@@ -549,7 +577,7 @@ public class MfdTests
     public void EveryPageIsReachableThroughADeepMenuAndHasAWayBack()
     {
         var e = Engine();
-        Assert.Equal(18, e.Evaluate("QwMfd.pageIds.length").AsNumber());
+        Assert.Equal(19, e.Evaluate("QwMfd.pageIds.length").AsNumber());
         Assert.True(e.Evaluate(
             "QwMfd.pageIds.every(id => QwMfd.trail(id)[0] === 'home'"
             + " && QwMfd.trail(id)[QwMfd.trail(id).length - 1] === id"

@@ -14,12 +14,17 @@ const briefing = { tripId: 'fixture-trip', tripTitle: 'Medical supply run', stop
     { id: 'action-b', kind: 'unload', quantity: 32, unit: 'SCU', text: 'Deliver supplies', done: false }] }] };
 const atlas = { nodes: [{ rawId: 'everus', body: 'Hurston' }], positions: { stanton: {
   ArcCorp: { x: 2e10, y: 1e10 }, Hurston: { x: -1e10, y: 1e10 }, Crusader: { x: 0, y: -1e10 }, microTech: { x: 3e10, y: -3e10 } } } };
+const events = { available: true, tracked: 'discovery', events: [{ id: 'discovery', title: 'RSI Discovery Event',
+  tracks: [{ name: 'Your total', overall: true, points: 2085, nextTier: 4500, toNext: 2415,
+    tiers: [{ minPoints: 4500 }], fastest: [{ needed: 3, title: 'Procure Quantainium', points: 1142 }] },
+  { name: 'Defense', overall: false, points: 2085, nextTier: 4000, toNext: 1915, tiers: [{ minPoints: 4000 }] }],
+  contracts: [] }], open: [{ event: 'RSI Discovery Event', title: 'Neutralize Threats', points: 417 }] };
 const server = http.createServer((req, res) => {
   const p = new URL(req.url, 'http://localhost').pathname;
   if (req.method !== 'GET') { res.writeHead(405); res.end(); return; }
   if (p.startsWith('/api/')) {
     res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify(p === '/api/now' ? state : p === '/api/briefing' ? briefing : p === '/api/map' ? atlas
+    res.end(JSON.stringify(p === '/api/now' ? state : p === '/api/briefing' ? briefing : p === '/api/map' ? atlas : p === '/api/events' ? events
       : ['/api/jobs', '/api/ledger'].includes(p) ? [] : p === '/api/manufacturers' ? {} : { known: false })); return;
   }
   if (!/^\/[a-zA-Z0-9/._-]+$/.test(p) || p.includes('..')) { res.writeHead(404); res.end(); return; }
@@ -118,6 +123,9 @@ let chrome, ws;
   assert.match(await run("byId('readings').textContent"), /Plan \+ counters · not a hold/);
   await run('press(15)'); assert.equal(await run('details'), false); assert.equal(await run('screen'), 'cargo');
   await run('press(15)'); assert.equal(await run('screen'), 'resources');
+  await run("navigate('event')");
+  assert.match(await run("byId('readings').textContent"), /2,085 pts from completed contracts in this logbook/);
+  await shot('event-progress-480');
   // A custom profile remains the whole answer, including cleared keys and rocker shortcuts.
   await run("__native({data:{type:'display',buttons:{1:'crew',21:'home',22:'menu-2'}}});press(1)");
   assert.equal(await run('screen'), 'crew');
