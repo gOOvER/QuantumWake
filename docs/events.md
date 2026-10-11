@@ -102,6 +102,20 @@ contract's `id`. The parser already keeps that name on each contract record,
 along with how its mission ended. So the totals need nothing new from the
 logs, and `PayloadVersion` did not move.
 
+**Sub-contracts are logged under their own name.** That held for Orison
+Relief, and broke on the first Discovery Month log (2026-10-10): all four
+names it held for a sub-contract-carrying contract ended in `_2` -
+`Iasi_DefendShip_Easy_2`, `Iasi_EliminateSpecific_Easy_2`,
+`Iasi_EliminateAll_Medium_2`, `Iasi_2H_Box_Courier_2` - and none is a
+generator contract. A contract's `subContracts` are variants: each has an `id`
+and parameter overrides, but no `debugName` and no `contractResults`, so it
+pays exactly what its parent does. Each `_2` marker's `contractDefinitionId`
+was the `id` of its parent's `subContracts[2]`, 4 of 4, so the suffix is the
+zero-based index. 22 of Discovery Month's 31 contracts have three
+sub-contracts. Until 0.17.7 the page called every one of those entries
+"unrecognised", and 3 completions (417 points) were missing.
+`Iasi_Courier_GoldItem_OnceOnly` has no sub-contracts and was counted all along.
+
 **Checked against something the totals did not use.** This install's Orison
 Relief history is 15 Medium and 12 Large Materials Orders, all on 2026-09-17:
 15 × 2,208 + 12 × 3,294 = **72,648 points**, just past the 72,000 top tier

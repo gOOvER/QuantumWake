@@ -95,12 +95,18 @@ public static class EventProgress
         // The same mission can reach here twice - the stored copy of a log and
         // the live session both hold it - and the later word on it wins: a
         // contract seen open in the store and finished live is finished.
+        var byId = catalogue.Contracts.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
+        var byLoggedName = ByLoggedName(catalogue);
+
+        // A sub-contract is logged under its own name and pays as its parent,
+        // so it is counted as the parent from here on.
         var missions = contracts
             .GroupBy(c => c.MissionId ?? $"{c.Raw}@{c.FirstSeen:O}")
             .Select(g => g.OrderByDescending(Rank).First())
+            .Select(c => byLoggedName.TryGetValue(c.Raw, out var parent) && !string.Equals(parent.Id, c.Raw, StringComparison.OrdinalIgnoreCase)
+                ? c with { Raw = parent.Id }
+                : c)
             .ToList();
-
-        var byId = catalogue.Contracts.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
 
         return catalogue.Scenarios
             .Select(s => Status(s, catalogue.Contracts.Where(c => c.Scenario == s.Id).ToList(), missions, byId))
@@ -191,6 +197,20 @@ public static class EventProgress
             done.Count, unrecognised, tracks, contracts);
     }
 
+    /// <summary>Every name the log can give a paying contract, to the contract it pays as.</summary>
+    internal static Dictionary<string, GameScenarioContract> ByLoggedName(GameScenarioCatalogue catalogue)
+    {
+        var byName = new Dictionary<string, GameScenarioContract>(StringComparer.OrdinalIgnoreCase);
+
+        // Own names first, so a contract whose real name happens to look like
+        // another's sub-contract keeps it.
+        foreach (var c in catalogue.Contracts) byName.TryAdd(c.Id, c);
+        foreach (var c in catalogue.Contracts)
+            foreach (var name in c.LoggedNames().Skip(1)) byName.TryAdd(name, c);
+
+        return byName;
+    }
+
     /// <summary>The <c>Name_</c> every id starts with, or null when they share none.</summary>
     private static string? SharedPrefix(IEnumerable<string> ids)
     {
@@ -217,11 +237,11 @@ public sealed class EventPay
         var scenarios = catalogue.Scenarios.ToDictionary(s => s.Id);
         var byId = new Dictionary<string, EventPayment>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var contract in catalogue.Contracts)
+        foreach (var (name, contract) in EventProgress.ByLoggedName(catalogue))
         {
             if (!scenarios.TryGetValue(contract.Scenario, out var scenario)) continue;
 
-            byId.TryAdd(contract.Id, new EventPayment(
+            byId.TryAdd(name, new EventPayment(
                 contract.Points,
                 scenario.Title,
                 scenario.Tracks

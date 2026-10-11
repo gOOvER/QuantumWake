@@ -403,7 +403,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.17.6
+### 0.17.7
+
+**Discovery Month contracts you finish now count.** Most of the event's contracts come in variants, and the game logs a variant under its own name: `Iasi_DefendShip_Easy_2` rather than `Iasi_DefendShip_Easy`. The Events page only knew the parent names, so every Support Ship, Eliminate Known Outlaw and the like finished so far was listed as unrecognised and added nothing. A variant now counts as the contract it varies, on the Events page, the Now card, the overlay, the MFD, tier toasts and the points chip on contract rows. Your history is recounted when the app starts; nothing needs replaying.
 
 **Event progress on the Cougar MFD.** Operations → Event progress follows the
 campaign you track on the dashboard (or the event contract in your journal),
@@ -412,7 +414,7 @@ there, category bars and the contract currently in your journal. Event choice,
 rewards and route planning remain on the dashboard, where there is room to use
 them.
 
-**0.17 is the events release, and it needs testers.** RSI Discovery Month started the day this shipped, so the Events page's contract names and point values come straight from the game files and haven't yet been checked against a played session. If the Events page and your in-game journal disagree, a problem report from Settings is the most useful thing you can send.
+**0.17 is the events release, and it needs testers.** RSI Discovery Month started the day this shipped, so the Events page's contract names and point values come straight from the game files. The first played session found the variant mismatch above; mining and salvage contracts haven't been checked against a played session yet. If the Events page and your in-game journal disagree, a problem report from Settings is the most useful thing you can send.
 
 **A toast when you reach a tier.** Cross a tier on any event bar and the app says so, in the overlay too, with what the tier gives: "Defense tier 1 reached - Scorpius Echo Livery and Sovereign IP-20 Power Plant". The journal moves the bar and says nothing.
 
