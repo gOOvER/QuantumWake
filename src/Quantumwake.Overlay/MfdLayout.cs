@@ -25,6 +25,26 @@ internal sealed record MfdPanel
     /// past the opening, which put the display under the bezel.
     /// </remarks>
     public MfdInset? Inset { get; init; }
+
+    /// <summary>
+    /// The size of the monitor this panel was saved on, so it can be found
+    /// again when its name no longer points at it. Null in a file saved before
+    /// 0.17.8.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Monitor"/> is Windows' display name, <c>\\.\DISPLAY2</c>, and
+    /// Windows renumbers those - after a driver update, a sleep, a cable
+    /// replugged. On the machine this was found on, a layout saved on the
+    /// 1366×768 Cougar screen as <c>DISPLAY1</c> woke up to find <c>DISPLAY1</c>
+    /// was the 3440×1440 main monitor: the frames and their black backdrop went
+    /// there, over the taskbar and the tray icon that was the only way into
+    /// setup. A cockpit screen is rarely the same size as anything else on the
+    /// desk, which makes the size the better half of its identity.
+    /// </remarks>
+    public int? MonitorWidth { get; init; }
+
+    /// <inheritdoc cref="MonitorWidth"/>
+    public int? MonitorHeight { get; init; }
 }
 
 internal sealed record MfdInset(int? Left, int? Top, int? Right, int? Bottom)
@@ -163,16 +183,98 @@ internal sealed record MfdLayout
         {
             if (p.Cougar is < 1 or > 8 || string.IsNullOrWhiteSpace(p.Monitor))
                 throw new ArgumentException("Choose a monitor and a Cougar number for each MFD.");
-            var m = monitors.FirstOrDefault(m => m.Id == p.Monitor);
+            var m = Locate(p, monitors);
             // Retain a disconnected monitor's placement; never cover the game by moving it to primary.
             if (m is null) return p;
             var width = Math.Clamp(p.Width, Math.Min(220, m.Width), m.Width);
             var height = Math.Clamp(p.Height, Math.Min(220, m.Height), m.Height);
-            return p with { Width = width, Height = height,
+            return p with { Monitor = m.Id, Width = width, Height = height,
                 X = Math.Clamp(p.X, 0, m.Width - width), Y = Math.Clamp(p.Y, 0, m.Height - height),
                 Inset = p.Inset?.Clean(width, height) };
         }).ToArray() };
     }
+
+    /// <summary>
+    /// The monitor a panel belongs on, or null when it cannot be found.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The name is trusted while it still points at a monitor of the size the
+    /// panel was saved on. When it does not, the one monitor of that size is
+    /// the panel's screen under a new name. When no monitor has that size, or
+    /// several do, the answer is null and the panel stays off: guessing wrong
+    /// puts an always-on-top black backdrop over the game, which is the failure
+    /// this exists to stop.
+    /// </para>
+    /// <para>
+    /// A file saved before sizes were recorded has only the name to go on, and
+    /// gets it. Two monitors of the same size swapping names is invisible to
+    /// this, and is the case where the name is still all there is.
+    /// </para>
+    /// </remarks>
+    public static MfdMonitor? Locate(MfdPanel panel, IReadOnlyList<MfdMonitor> monitors)
+    {
+        var named = monitors.FirstOrDefault(m => m.Id == panel.Monitor);
+        if (panel.MonitorWidth is not { } width || panel.MonitorHeight is not { } height) return named;
+        if (named is not null && named.Width == width && named.Height == height) return named;
+
+        var sized = monitors.Where(m => m.Width == width && m.Height == height).ToArray();
+        return sized.Length == 1 ? sized[0] : null;
+    }
+
+    /// <summary>The layout with each panel remembering the size of the monitor it is on, as it is saved.</summary>
+    public MfdLayout Stamped(IReadOnlyList<MfdMonitor> monitors) => this with
+    {
+        Panels = Panels.Select(p => monitors.FirstOrDefault(m => m.Id == p.Monitor) is { } m
+            ? p with { MonitorWidth = m.Width, MonitorHeight = m.Height }
+            : p).ToArray()
+    };
+
+    /// <summary>
+    /// What to tell the pilot when the frames did not land where they were
+    /// saved, or null when they did.
+    /// </summary>
+    /// <remarks>
+    /// Said once, at start, through the tray. Every case names the shortcut,
+    /// because the case that needs it most - frames on the wrong screen - is
+    /// the one where the tray may be hard to reach.
+    /// </remarks>
+    public static string? Explain(MfdLayout saved, IReadOnlyList<MfdMonitor> monitors)
+    {
+        if (!saved.Enabled || saved.Panels is not { Length: > 0 } panels) return null;
+
+        var placed = panels.Select(p => (Panel: p, Monitor: Locate(p, monitors))).ToArray();
+
+        if (placed.FirstOrDefault(x => x.Monitor is null && x.Panel.MonitorWidth is not null) is { Panel: { } lost })
+            return $"The MFD screen ({lost.MonitorWidth}×{lost.MonitorHeight}) was not found, so the MFDs are off. "
+                + "Reconnect it, or open MFD setup (Ctrl+Alt+M) to place them again.";
+
+        if (placed.Any(x => x.Monitor is not null && x.Monitor.Id != x.Panel.Monitor))
+            return "Windows renumbered your displays since the MFD layout was saved. The MFDs found their "
+                + "screen again by its size. If they are not behind the frames, open MFD setup (Ctrl+Alt+M).";
+
+        // A file from before sizes were kept, pointing at the main monitor
+        // while others exist: exactly what a renumbering does to one, and
+        // nothing here can tell it apart from a deliberate choice. One save in
+        // setup records the size and ends the question.
+        if (monitors.Count > 1
+            && placed.Any(x => x.Panel.MonitorWidth is null && x.Monitor is { Primary: true }))
+            return "The MFDs are on your main screen. If your frames are on another one, Windows has renumbered "
+                + "your displays: open MFD setup (Ctrl+Alt+M), place them and save once, and the layout will "
+                + "find its screen by size from then on.";
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether a monitor may be blacked out behind the frames.
+    /// </summary>
+    /// <remarks>
+    /// Never the main one. It holds the game and the taskbar, so a backdrop
+    /// there is never what a cockpit wants - and it is the one place a backdrop
+    /// hides the tray icon, the way into setup.
+    /// </remarks>
+    public static bool MayBlackOut(MfdMonitor monitor) => !monitor.Primary;
 
     /// <summary>
     /// The binding map with anything unusable dropped. Null stays null, which

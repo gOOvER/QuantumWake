@@ -403,6 +403,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.17.8
+
+**The MFD displays no longer get lost when Windows renumbers your screens.** The MFDs remembered their monitor only by the number Windows gives it, and Windows changes those numbers after a driver update, a sleep or a replugged cable. When it did, the frames and their black backdrop could wake up on your main screen, covering the taskbar and the tray icon you needed to fix it. Now:
+
+- **The MFDs find their screen by its size** when its number changes, so a renumbering puts them back behind the frames and the app tells you it happened. If no screen of that size is connected, they stay off and say so instead of guessing.
+- **The black backdrop never covers your main monitor**, so the taskbar and tray stay reachable whatever happens.
+- **Three ways into MFD setup:** the tray as before, **Ctrl+Alt+M** from anywhere (even with the overlay hidden), and a new **Open MFD setup** button under Settings → Overlay or in the command palette.
+
+If your layout was saved before this version, open MFD setup and press **Save layout** once. That records the screen's size, and from then on it is found even when Windows renumbers. Until you do, the app warns you at start if your MFDs are sitting on your main screen.
+
 ### 0.17.7
 
 **Discovery Month contracts you finish now count.** Most of the event's contracts come in variants, and the game logs a variant under its own name: `Iasi_DefendShip_Easy_2` rather than `Iasi_DefendShip_Easy`. The Events page only knew the parent names, so every Support Ship, Eliminate Known Outlaw and the like finished so far was listed as unrecognised and added nothing. A variant now counts as the contract it varies, on the Events page, the Now card, the overlay, the MFD, tier toasts and the points chip on contract rows. Your history is recounted when the app starts; nothing needs replaying.

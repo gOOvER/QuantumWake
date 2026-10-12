@@ -3258,10 +3258,15 @@
       and says plainly that the two links are previews rather than the thing.
     -->
     <div class="option-block" id="option-mfd">
-      <div class="option-head"><h3>Cougar MFD displays</h3></div>
+      <div class="option-head"><h3>Cougar MFD displays</h3>
+        <button class="ghost" id="mfd-setup-open">Open MFD setup</button></div>
       <p class="muted">Optional cockpit displays for Thrustmaster MFD Cougar frames.
-        <b>They are set up from the tray, not from here</b> — this page cannot see your
-        monitors or read a USB frame. Off until you turn them on.</p>
+        <b>They are set up in the Quantum Wake app, not on this page</b> — this page cannot
+        see your monitors or read a USB frame. The button opens the app's setup window;
+        so does <b>MFD setup…</b> in the tray, and <code>Ctrl+Alt+M</code> from anywhere,
+        which is the way back when the frames have landed on the wrong screen. Off until
+        you turn them on.</p>
+      <span class="muted" id="mfd-setup-status"></span>
       <details class="mfd-guide"><summary>How MFD setup works</summary><ol class="mfd-steps muted">
         <li>Right-click the <b>Quantum Wake</b> tray icon (under the <code>^</code> arrow if
           it is hidden) and choose <b>MFD setup…</b></li>
@@ -4036,7 +4041,7 @@
         </details>
         <details class="faq-item">
           <summary>Which keys do anything?</summary>
-          <p>In the dashboard the <b>left and right arrows</b> cycle through the views. For the overlay, <code>Ctrl+Alt+O</code> shows or hides it and <code>Ctrl+Alt+F</code> switches between widget size and full screen; both work while the game has focus. The Cougar MFD frames answer their own physical buttons once MFD mode is set up.</p>
+          <p>In the dashboard the <b>left and right arrows</b> cycle through the views. For the overlay, <code>Ctrl+Alt+O</code> shows or hides it and <code>Ctrl+Alt+F</code> switches between widget size and full screen; both work while the game has focus. The Cougar MFD frames answer their own physical buttons once MFD mode is set up, and <code>Ctrl+Alt+M</code> opens MFD setup from anywhere.</p>
         </details>
         <details class="faq-item">
           <summary>Where does it keep my data?</summary>
@@ -4100,7 +4105,7 @@
         </details>
         <details class="faq-item">
           <summary>How do the Cougar MFD displays work?</summary>
-          <p>Choose <b>MFD setup…</b> from the tray, place the two display openings on the monitor or monitors behind the frames, then enable and save the layout. The panels use the same local data as the dashboard but keep the answer short: navigation, the next task, cargo, contracts, money and the live feed. They are optional and do not replace the regular overlay.</p>
+          <p>Choose <b>MFD setup…</b> from the tray (or press <code>Ctrl+Alt+M</code>, or <b>Open MFD setup</b> under Settings → Overlay), place the two display openings on the monitor or monitors behind the frames, then enable and save the layout. The panels use the same local data as the dashboard but keep the answer short: navigation, the next task, cargo, contracts, money and the live feed. They are optional and do not replace the regular overlay.</p>
         </details>
         <details class="faq-item">
           <summary>Does screenshot reading capture my screen?</summary>

@@ -148,6 +148,13 @@ internal static partial class NativeWindowStyles
     public static void UnregisterGlobalHotKey(Window window, int id) =>
         UnregisterHotKey(new WindowInteropHelper(window).Handle, id);
 
+    /// <summary>The same, for a window that is not a WPF one - a message-only window, say.</summary>
+    public static bool RegisterGlobalHotKey(IntPtr handle, int id, uint modifiers, uint virtualKey) =>
+        RegisterHotKey(handle, id, modifiers, virtualKey);
+
+    public static void UnregisterGlobalHotKey(IntPtr handle, int id) =>
+        UnregisterHotKey(handle, id);
+
     public static class Modifiers
     {
         public const uint Alt = 0x0001;

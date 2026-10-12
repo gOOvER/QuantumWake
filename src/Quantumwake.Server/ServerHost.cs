@@ -433,6 +433,17 @@ public static class ServerHost
                     message = "No overlay in this process - the dashboard is running under the bare server."
                 }));
 
+        // MFD setup lives in the tray app, which alone can see the monitors and
+        // the USB frames; the dashboard can only ask it to open. The bare
+        // server has no tray, and says so.
+        app.MapPost("/api/mfd/setup", (ShellBridge shell) =>
+            shell.TryOpenMfdSetup()
+                ? Results.Ok(new { opened = true })
+                : Results.Conflict(new
+                {
+                    message = "MFD setup opens from the Quantum Wake app, and the dashboard is running under the bare server."
+                }));
+
         // What the widget shows. Read by the overlay itself on every load, so
         // a change made in the dashboard reaches the other window.
         app.MapGet("/api/overlay/layout", (OverlayLayoutStore layout) => new
