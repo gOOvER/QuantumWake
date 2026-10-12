@@ -1003,7 +1003,9 @@ function commandEntries() {
   const presets = ['flight', 'mining', 'combat', 'trading', 'minimal', 'full'].map(name => ({
     label: `${name[0].toUpperCase() + name.slice(1)} overlay layout`, hint: 'overlay', run: () => window.scOverlayPreset?.(name),
   }));
-  return [...pages, ...presets, { label: 'Show overlay', hint: 'overlay', run: () => fetch('/api/overlay?visible=true', { method: 'POST' }) }];
+  return [...pages, ...presets,
+    { label: 'Show overlay', hint: 'overlay', run: () => fetch('/api/overlay?visible=true', { method: 'POST' }) },
+    { label: 'Open MFD setup', hint: 'mfd', run: () => openMfdSetup() }];
 }
 function renderCommandPalette() {
   const query = $('#command-query').value.trim().toLowerCase();
@@ -12745,6 +12747,31 @@ const OVERLAY_PRESETS = {
 };
 
 /** Applies a named layout from either the dashboard or the overlay's header. */
+/**
+ * Asks the Quantum Wake app to open MFD setup.
+ *
+ * Only the app can see the monitors and the frames, so this is a request, and
+ * the answer says whether anything was there to hear it. It matters most when
+ * the frames have woken up on the wrong screen and covered the tray.
+ */
+async function openMfdSetup() {
+  const status = $('#mfd-setup-status');
+  try {
+    const response = await fetch('/api/mfd/setup', { method: 'POST' });
+    if (response.ok) {
+      if (status) status.textContent = 'MFD setup is open on the PC. Drag it to any screen; the black backdrop clears from the screen it is on.';
+      return true;
+    }
+    const answer = await response.json().catch(() => ({}));
+    if (status) status.textContent = answer.message || 'MFD setup could not be opened from here.';
+  } catch {
+    if (status) status.textContent = 'The app did not answer. Use MFD setup… in the tray, or Ctrl+Alt+M.';
+  }
+  return false;
+}
+
+$('#mfd-setup-open')?.addEventListener('click', () => { openMfdSetup().catch(() => {}); });
+
 async function applyOverlayPreset(name) {
   const preset = OVERLAY_PRESETS[name];
   if (preset === undefined) return;

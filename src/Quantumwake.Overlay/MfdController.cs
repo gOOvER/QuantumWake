@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Windows.Interop;
 using System.Windows.Threading;
 
 namespace Quantumwake.Overlay;
@@ -31,14 +32,20 @@ internal sealed class MfdController : IDisposable
         _saved = MfdLayout.Default(_monitors);
         try
         {
-            if (File.Exists(_path))
-                _saved = (JsonSerializer.Deserialize<MfdLayout>(File.ReadAllText(_path), MfdLayout.JsonOptions)
-                    ?? _saved).Validate(_monitors);
+            if (File.Exists(_path)
+                && JsonSerializer.Deserialize<MfdLayout>(File.ReadAllText(_path), MfdLayout.JsonOptions) is { } stored)
+            {
+                // Explained before it is validated: validating is what moves a
+                // panel to its screen's new name, and the note is about that move.
+                if (MfdLayout.Explain(stored, _monitors) is { } note) _notify(note);
+                _saved = stored.Validate(_monitors);
+            }
         }
         catch (Exception e) when (e is IOException or JsonException or ArgumentException or UnauthorizedAccessException)
         { _notify("MFD settings could not be read. Open MFD setup to place the displays again."); }
         _active = _saved;
         Apply(_saved, false);
+        RegisterSetupHotkey();
         _displays.Tick += (_, _) =>
         {
             var monitors = MfdWindow.Monitors();
@@ -83,7 +90,36 @@ internal sealed class MfdController : IDisposable
         };
         EnsureInput();
         _setup.Show();
+        _setup.Activate();
         Backdrops(_active);
+    }
+
+    private const int SetupHotkeyId = 0xA21;
+    private const uint VkM = 0x4D;
+    private HwndSource? _hotkeys;
+
+    /// <summary>
+    /// Ctrl+Alt+M opens MFD setup from anywhere.
+    /// </summary>
+    /// <remarks>
+    /// On a message-only window of its own rather than the overlay's, whose
+    /// hotkeys exist only once the overlay has been shown - and a pilot who
+    /// never uses the overlay is exactly the pilot with frames on the wrong
+    /// screen and no other way in. Said out loud when another app holds the
+    /// keys, since a shortcut that silently does nothing is worse than none.
+    /// </remarks>
+    private void RegisterSetupHotkey()
+    {
+        _hotkeys = new HwndSource(new HwndSourceParameters("Quantum Wake MFD hotkeys") { ParentWindow = new IntPtr(-3) });
+        _hotkeys.AddHook((IntPtr _, int msg, IntPtr wParam, IntPtr _, ref bool handled) =>
+        {
+            if (msg == 0x0312 && wParam.ToInt32() == SetupHotkeyId) { OpenSetup(); handled = true; }
+            return IntPtr.Zero;
+        });
+        const uint keys = NativeWindowStyles.Modifiers.Control | NativeWindowStyles.Modifiers.Alt
+            | NativeWindowStyles.Modifiers.NoRepeat;
+        if (!NativeWindowStyles.RegisterGlobalHotKey(_hotkeys.Handle, SetupHotkeyId, keys, VkM))
+            _notify("Ctrl+Alt+M is already in use by another app; open MFD setup from the tray or the dashboard.");
     }
 
     private void SendState() => _setup?.Send(new {
@@ -106,6 +142,7 @@ internal sealed class MfdController : IDisposable
                 ?.Validate(_monitors) ?? throw new ArgumentException("The MFD layout is missing.");
             if (type == "save")
             {
+                layout = layout.Stamped(_monitors);
                 Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
                 File.WriteAllText(_path + ".tmp", JsonSerializer.Serialize(layout, MfdLayout.JsonOptions));
                 File.Move(_path + ".tmp", _path, overwrite: true);
@@ -169,7 +206,7 @@ internal sealed class MfdController : IDisposable
         _preview = preview;
         foreach (var panel in layout.Panels)
         {
-            var monitor = _monitors.FirstOrDefault(m => m.Id == panel.Monitor);
+            var monitor = MfdLayout.Locate(panel, _monitors);
             if ((!layout.Enabled && !preview) || monitor is null)
             {
                 if (_windows.Remove(panel.Id, out var old)) old.Close();
@@ -218,10 +255,11 @@ internal sealed class MfdController : IDisposable
         var busy = _busy = _setup?.MonitorId(_monitors);
         var wanted = layout.Blackout
             ? layout.Panels
-                .Where(p => _windows.ContainsKey(p.Id) && p.Monitor != busy)
-                .GroupBy(p => p.Monitor)
-                .Where(g => _monitors.Any(m => m.Id == g.Key))
-                .ToDictionary(g => g.Key, g => (IReadOnlyList<MfdPanel>)[.. g])
+                .Where(p => _windows.ContainsKey(p.Id))
+                .Select(p => (Panel: p, Monitor: MfdLayout.Locate(p, _monitors)))
+                .Where(x => x.Monitor is not null && x.Monitor.Id != busy && MfdLayout.MayBlackOut(x.Monitor))
+                .GroupBy(x => x.Monitor!.Id)
+                .ToDictionary(g => g.Key, g => (IReadOnlyList<MfdPanel>)[.. g.Select(x => x.Panel)])
             : [];
 
         foreach (var id in _blackouts.Keys.ToArray())
@@ -242,6 +280,11 @@ internal sealed class MfdController : IDisposable
     {
         _disposing = true;
         _displays.Stop();
+        if (_hotkeys is not null)
+        {
+            NativeWindowStyles.UnregisterGlobalHotKey(_hotkeys.Handle, SetupHotkeyId);
+            _hotkeys.Dispose();
+        }
         _setup?.Close();
         _input?.Dispose();
         foreach (var window in _windows.Values) window.Close();

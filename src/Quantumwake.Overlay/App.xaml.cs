@@ -98,6 +98,11 @@ public partial class App : System.Windows.Application
             : DashboardUrl;
         _mfd = new MfdController(mfdRoot, message => _tray?.Notify(message));
 
+        // The dashboard's button into MFD setup. On the dispatcher like the
+        // other bridges: the request arrives on a server thread.
+        _server?.Services.GetRequiredService<ShellBridge>().AttachMfdSetup(
+            () => Dispatcher.InvokeAsync(() => _mfd?.OpenSetup()));
+
         _overlay = CreateOverlay();
 
         if (_settings.ShowOverlay)
