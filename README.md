@@ -403,9 +403,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.18.4
+### 0.18.5
 
-**Quantum Wake in French — the start of it.** Settings → General has a new **Language · Langue** card. Choose Français and the navigation, the search box, the command palette, the notices along the top (old prices, a new patch, a new version), the Now page, the whole of Settings → General and the Routes page come up in French, in the browser and in the overlay alike — the live feed, status lines, price feeds, the table of what your logs still carry and every cargo run's evidence included, with dates written the French way. Flight plans saved from Routes get French titles and stop notes; plans you saved before keep theirs. The rest of the app is still English for now, and the card says exactly what is covered so far; more pages follow through the 0.18 updates. Names from the game — ships, places, commodities — stay as the game writes them, so they still match your mobiGlas and the price sites.
+**Quantum Wake in French — the start of it.** Settings → General has a new **Language · Langue** card. Choose Français and the navigation, the search box, the command palette, the notices along the top (old prices, a new patch, a new version), the Now page, the whole of Settings → General and every Operations page — the command deck, Routes, Contracts, Checklists, Blueprints, Wikelo and Events — come up in French, in the browser and in the overlay alike — the live feed, status lines, price feeds, the table of what your logs still carry, every cargo run's evidence and every event tier included, with dates written the French way. Flight plans saved from Routes, and builds and shopping runs started from Operations, get French titles; the ones you saved before keep theirs. The rest of the app is still English for now, and the card says exactly what is covered so far; more pages follow through the 0.18 updates. Names from the game — ships, places, commodities, contract titles, Wikelo's trades — stay as the game writes them, so they still match your mobiGlas and the price sites.
 
 **Nothing changes unless you choose it.** English stays the default, even on a French Windows, until the translation is complete.
 

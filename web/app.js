@@ -224,12 +224,12 @@ const PERIODS = [
 /** Fills every `select.period`. A view can reword its all-time option via data-all. */
 function buildPeriodSelects() {
   for (const select of $$('select.period')) {
-    const allLabel = select.dataset.all || PERIODS[0].label;
+    const allLabel = tx(select.dataset.all || PERIODS[0].label);
 
     for (const period of PERIODS) {
       const option = document.createElement('option');
       option.value = String(period.days);
-      option.textContent = period.days === 0 ? allLabel : period.label;
+      option.textContent = period.days === 0 ? allLabel : tx(period.label);
       select.append(option);
     }
   }
@@ -626,10 +626,10 @@ function initPageStatsCollapsers() {
 
       // Named rather than an arrow, because a button reading "Summary" gives no
       // clue which way it goes - and the summary is gone when it matters most.
-      button.textContent = collapsed ? 'Show summary' : 'Hide summary';
+      button.textContent = collapsed ? tx('Show summary') : tx('Hide summary');
       button.title = collapsed
-        ? 'Show the summary, standing and charts again'
-        : 'Hide the summary and go straight to the contracts';
+        ? tx('Show the summary, standing and charts again')
+        : tx('Hide the summary and go straight to the contracts');
       button.setAttribute('aria-label', button.title);
       button.setAttribute('aria-expanded', String(!collapsed));
     };
@@ -2468,7 +2468,7 @@ function bars(container, rows, format) {
   node.textContent = '';
 
   if (!rows || rows.length === 0) {
-    node.append(el('p', 'muted', 'No data yet.'));
+    node.append(el('p', 'muted', tx('No data yet.')));
     return;
   }
 
@@ -2594,14 +2594,14 @@ function renderContracts(stats) {
   // worth seeing; a permanent zero beside four real figures is furniture, and
   // it would read as "nothing ever went wrong" on an install too new to know.
   const contractTiles = [
-    ['Contracts seen', stats.contractsSeen],
-    ['Completed', stats.contractsCompleted],
-    ['Abandoned', stats.contractsAbandoned],
+    [tx('Contracts seen'), stats.contractsSeen],
+    [tx('Completed'), stats.contractsCompleted],
+    [tx('Abandoned'), stats.contractsAbandoned],
   ];
 
-  if (stats.contractsFailed > 0) contractTiles.push(['Failed', stats.contractsFailed]);
+  if (stats.contractsFailed > 0) contractTiles.push([tx('Failed'), stats.contractsFailed]);
 
-  contractTiles.push(['Completion rate', stats.contractsSeen
+  contractTiles.push([tx('Completion rate'), stats.contractsSeen
     ? `${Math.round((stats.contractsCompleted / stats.contractsSeen) * 100)}%`
     : '—']);
 
@@ -2645,7 +2645,7 @@ async function loadStanding() {
 
   if (!rows.length) {
     const tr = el('tr');
-    const td = el('td', 'muted', 'No contracts in that range.');
+    const td = el('td', 'muted', tx('No contracts in that range.'));
     td.colSpan = 6;
     tr.append(td);
     body.append(tr);
@@ -2670,7 +2670,7 @@ async function loadStanding() {
 
     // Failures ride the abandoned column rather than adding a fifth that is
     // empty for every issuer but one. The count is there when it is not zero.
-    if (row.failed > 0) dropped.append(el('span', 'muted', ` · ${row.failed} failed`));
+    if (row.failed > 0) dropped.append(el('span', 'muted', ` · ${tx('{count} failed', { count: row.failed })}`));
 
     tr.append(dropped);
 
@@ -2680,11 +2680,11 @@ async function loadStanding() {
 
     if (row.repFrom > 0) {
       rep.append(el('span', null, row.rep.toLocaleString()));
-      rep.append(el('span', 'muted', ` · from ${row.repFrom}`));
-      rep.title = `Read from ${row.repFrom} contract title${row.repFrom === 1 ? '' : 's'} the StarStrings mod has annotated`;
+      rep.append(el('span', 'muted', ` · ${tx('from {count}', { count: row.repFrom })}`));
+      rep.title = txn(row.repFrom, 'Read from {count} contract title the StarStrings mod has annotated', 'Read from {count} contract titles the StarStrings mod has annotated');
     } else {
       rep.append(el('span', 'muted', '—'));
-      rep.title = 'No annotated title among these, so nobody has written down what they pay';
+      rep.title = tx('No annotated title among these, so nobody has written down what they pay');
     }
 
     tr.append(rep);
@@ -2702,16 +2702,16 @@ async function loadStanding() {
 async function loadContractList() {
   const days = Number($('#contracts-period').value) || 0;
   const body = $('#contracts-table tbody');
-  setWorkspaceState('#contracts-state', 'loading', 'Loading contract history…');
+  setWorkspaceState('#contracts-state', 'loading', tx('Loading contract history…'));
   body.textContent = '';
 
   let rows;
   try {
     rows = await getJson(`/api/contracts?days=${days}`);
   } catch {
-    setWorkspaceState('#contracts-state', 'offline', 'Contract history is unavailable. Refresh after the local server reconnects.');
+    setWorkspaceState('#contracts-state', 'offline', tx('Contract history is unavailable. Refresh after the local server reconnects.'));
     const tr = el('tr');
-    const td = el('td', 'muted', 'Contract history is unavailable.');
+    const td = el('td', 'muted', tx('Contract history is unavailable.'));
     td.colSpan = 9;
     tr.append(td);
     body.append(tr);
@@ -2719,9 +2719,9 @@ async function loadContractList() {
   }
 
   if (!rows.length) {
-    setWorkspaceState('#contracts-state', 'empty', 'No contracts match this range.');
+    setWorkspaceState('#contracts-state', 'empty', tx('No contracts match this range.'));
     const tr = el('tr');
-    const td = el('td', 'muted', 'No contracts in that range.');
+    const td = el('td', 'muted', tx('No contracts in that range.'));
     td.colSpan = 9;
     tr.append(td);
     body.append(tr);
@@ -2731,14 +2731,14 @@ async function loadContractList() {
   setWorkspaceState('#contracts-state', 'ready');
 
   const OUTCOMES = {
-    Completed: ['done', 'completed'],
-    Abandoned: ['outward', 'abandoned'],
+    Completed: ['done', tx('completed')],
+    Abandoned: ['outward', tx('abandoned')],
 
     // Worded as something that happened to you rather than something you did,
     // because that is the distinction the game is drawing and the whole reason
     // this is not filed as an abandonment.
-    Failed: ['outward', 'failed'],
-    InProgress: ['muted', 'in progress'],
+    Failed: ['outward', tx('failed')],
+    InProgress: ['muted', tx('in progress')],
     Unknown: ['muted', '—'],
   };
 
@@ -2750,7 +2750,7 @@ async function loadContractList() {
     // carry those and the full name rides the row's tooltip.
     tr.append(el('td', null, row.issuer || '—'));
     tr.append(el('td', 'muted', row.type || '—'));
-    tr.append(el('td', 'muted', row.difficulty || '—'));
+    tr.append(el('td', 'muted', row.difficulty ? tx(row.difficulty) : '—'));
     tr.append(el('td', 'muted', row.system || '—'));
     tr.title = row.name;
 
@@ -2763,22 +2763,22 @@ async function loadContractList() {
     const pays = el('td');
 
     if (row.rep) {
-      const chip = el('span', 'tag-rep', `${row.rep.toLocaleString()} rep`);
-      chip.title = 'From the contract title, annotated by the StarStrings mod';
+      const chip = el('span', 'tag-rep', tx('{rep} rep', { rep: row.rep.toLocaleString() }));
+      chip.title = tx('From the contract title, annotated by the StarStrings mod');
       pays.append(chip);
     }
 
     if (row.blueprint) {
       const chip = el('span', 'tag-bp', 'BP');
-      chip.title = 'Tagged as awarding a blueprint';
+      chip.title = tx('Tagged as awarding a blueprint');
       pays.append(chip);
     }
 
     // What it pays into an event journal, from the installed game's own
     // points table - not annotated by anyone, so it is shown on every row.
     if (row.eventPoints) {
-      const chip = el('span', 'tag-event', `${row.eventPoints.toLocaleString()} pts`);
-      chip.title = `${row.event}: counts toward ${(row.eventTracks || []).join(', ')}`;
+      const chip = el('span', 'tag-event', tx('{points} pts', { points: row.eventPoints.toLocaleString() }));
+      chip.title = tx('{event}: counts toward {tracks}', { event: row.event, tracks: (row.eventTracks || []).join(', ') });
       pays.append(chip);
     }
 
@@ -7352,9 +7352,9 @@ function renderCraftingRef() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            title: `Craft ${bp.output}`,
+            title: tx('Craft {item}', { item: bp.output }),
             kind: 'craft',
-            source: `${bp.output} blueprint · ${craftTime(bp.craftSeconds)} to craft`,
+            source: tx('{item} blueprint · {time} to craft', { item: bp.output, time: craftTime(bp.craftSeconds) }),
             items: parseJobItems(bp.materials.join('\n')),
           }),
         }).catch(() => { button.textContent = 'failed'; });
@@ -9087,7 +9087,7 @@ async function loadWikelo() {
     wikeloAll = await getJson('/api/wikelo');
   } catch {
     list.textContent = '';
-    list.append(el('p', 'muted', 'Could not load the emporium — is the app still running?'));
+    list.append(el('p', 'muted', tx('Could not load the emporium — is the app still running?')));
     return;
   }
 
@@ -9108,7 +9108,7 @@ function renderWikeloGroups() {
   for (const [key, label] of Object.entries(WIKELO_GROUPS)) {
     const count = trades.filter((t) => t.group === key).length;
     if (!count) continue;
-    const button = el('button', wikeloGroup === key ? 'ghost' : 'ghost off', `${label} · ${count}`);
+    const button = el('button', wikeloGroup === key ? 'ghost' : 'ghost off', `${tx(label)} · ${count}`);
     button.type = 'button';
     button.dataset.group = key;
     button.addEventListener('click', () => { wikeloGroup = key; renderWikelo(); });
@@ -9130,9 +9130,9 @@ function renderWikeloGoal(trades) {
   }
 
   goal.hidden = false;
-  goal.append(el('span', 'strong', 'Current goal'));
+  goal.append(el('span', 'strong', tx('Current goal')));
   goal.append(el('span', null, trade.title));
-  const clear = el('button', 'ghost tiny wikelo-goal-clear', 'Clear');
+  const clear = el('button', 'ghost tiny wikelo-goal-clear', tx('Clear'));
   clear.type = 'button';
   clear.addEventListener('click', () => { rememberWikeloGoal(null); renderWikelo(); });
   goal.append(clear);
@@ -9151,8 +9151,7 @@ function renderWikelo() {
     renderWikeloGoal([]);
     if (count) count.textContent = '';
     list.append(el('p', 'muted',
-      'The emporium is read from the game files, and this install has not been read yet — '
-      + 'Settings says when the game data is ready. Nothing here comes from a website.'));
+      tx('The emporium is read from the game files, and this install has not been read yet — Settings says when the game data is ready. Nothing here comes from a website.')));
     return;
   }
 
@@ -9160,8 +9159,8 @@ function renderWikelo() {
   renderWikeloGoal(trades);
   const retired = (wikeloAll.trades || []).length - trades.length;
   if (count) {
-    count.textContent = `${trades.length} trades`
-      + (retired ? ` · ${retired} retired in the file, not shown` : '');
+    count.textContent = txn(trades.length, '{count} trade', '{count} trades')
+      + (retired ? ` · ${tx('{count} retired in the file, not shown', { count: retired })}` : '');
   }
 
   const query = ($('#wikelo-search')?.value || '').trim().toLowerCase();
@@ -9174,7 +9173,7 @@ function renderWikelo() {
   });
 
   if (!shown.length) {
-    list.append(el('p', 'muted', query ? 'No trade matches that.' : 'Nothing in this group.'));
+    list.append(el('p', 'muted', query ? tx('No trade matches that.') : tx('Nothing in this group.')));
     return;
   }
 
@@ -9185,7 +9184,9 @@ function renderWikelo() {
 function wikeloGate(trade) {
   if (!trade.minStanding) return null;
   const standing = (wikeloAll?.standings || []).find((s) => s.id === trade.minStanding);
-  return standing ? `${standing.name} (${standing.minReputation.toLocaleString()} rep) or better` : `rank ${trade.minStanding}`;
+  return standing
+    ? tx('{rank} ({rep} rep) or better', { rank: standing.name, rep: standing.minReputation.toLocaleString() })
+    : tx('rank {rank}', { rank: trade.minStanding });
 }
 
 /** One trade's card - new, or redrawn in place once it is tracked, so the message under it survives. */
@@ -9200,7 +9201,7 @@ function wikeloCard(trade, into = null) {
   head.append(el('div', 'point-name-read', trade.title));
   const held = trade.requirements.filter((r) => r.have).length;
   head.append(el('div', 'muted', trade.requirements.length
-    ? `${held} of ${trade.requirements.length} seen in your stash`
+    ? tx('{held} of {total} seen in your stash', { held, total: trade.requirements.length })
     : ''));
   card.append(head);
 
@@ -9214,20 +9215,20 @@ function wikeloCard(trade, into = null) {
   if (trade.rewards.length) {
     gives.append(el('span', 'strong', trade.rewards.map((r) => `${r.count > 1 ? `${r.count}× ` : ''}${r.name}`).join(', ')));
   } else {
-    gives.append(el('span', 'muted', 'a reward the file does not name — a blueprint or food pool'));
+    gives.append(el('span', 'muted', tx('a reward the file does not name — a blueprint or food pool')));
   }
-  if (trade.reputation) gives.append(el('span', 'muted', ` · +${trade.reputation} rep`));
+  if (trade.reputation) gives.append(el('span', 'muted', ` · +${tx('{rep} rep', { rep: trade.reputation })}`));
   card.append(gives);
 
   const gate = wikeloGate(trade);
-  if (gate) card.append(el('div', 'muted warn wikelo-gate', `Needs ${gate}. Your standing is not in the logs, so this is a fact about the trade, not about you.`));
+  if (gate) card.append(el('div', 'muted warn wikelo-gate', tx('Needs {gate}. Your standing is not in the logs, so this is a fact about the trade, not about you.', { gate })));
 
   const wants = el('ul', 'wikelo-wants');
   for (const r of trade.requirements) {
     const li = el('li', r.have ? 'have' : 'lack');
     li.append(el('span', 'mark', r.have ? '✓' : '○'));
     li.append(el('span', 'what', `${r.unit === 'SCU' ? `${r.count} SCU` : `${r.count}×`} ${r.name}`));
-    if (r.have) li.append(el('span', 'muted', ` · seen at ${r.where.join(', ')}`));
+    if (r.have) li.append(el('span', 'muted', ` · ${tx('seen at {places}', { places: r.where.join(', ') })}`));
     wants.append(li);
   }
   card.append(wants);
@@ -9235,9 +9236,9 @@ function wikeloCard(trade, into = null) {
   const actions = el('div', 'point-actions');
   const said = el('span', 'muted point-said');
 
-  const pin = el('button', 'ghost wikelo-pin', trade.id === wikeloGoalId ? 'Current goal' : 'Set current goal');
+  const pin = el('button', 'ghost wikelo-pin', trade.id === wikeloGoalId ? tx('Current goal') : tx('Set current goal'));
   pin.type = 'button';
-  pin.title = trade.id === wikeloGoalId ? 'Clear this as the current goal' : 'Keep this trade above the emporium while you work on it';
+  pin.title = trade.id === wikeloGoalId ? tx('Clear this as the current goal') : tx('Keep this trade above the emporium while you work on it');
   pin.addEventListener('click', () => {
     rememberWikeloGoal(trade.id === wikeloGoalId ? null : trade.id);
     renderWikelo();
@@ -9245,14 +9246,14 @@ function wikeloCard(trade, into = null) {
   actions.append(pin);
 
   if (trade.trackedJobId) {
-    const open = el('button', 'ghost wikelo-open', 'Tracking — open the list');
+    const open = el('button', 'ghost wikelo-open', tx('Tracking — open the list'));
     open.type = 'button';
     open.addEventListener('click', () => showView('jobs'));
     actions.append(open);
   } else {
-    const track = el('button', 'ghost wikelo-track', trade.trackedDone ? 'Track again' : 'Track as a goal');
+    const track = el('button', 'ghost wikelo-track', trade.trackedDone ? tx('Track again') : tx('Track as a goal'));
     track.type = 'button';
-    track.title = 'Make a shopping list of everything this trade wants';
+    track.title = tx('Make a shopping list of everything this trade wants');
     track.addEventListener('click', () => trackWikelo(trade, card, track, said));
     actions.append(track);
   }
@@ -9264,7 +9265,7 @@ function wikeloCard(trade, into = null) {
 
 async function trackWikelo(trade, card, button, said) {
   button.disabled = true;
-  said.textContent = 'Making the list…';
+  said.textContent = tx('Making the list…');
 
   try {
     const response = await fetch(`/api/wikelo/${encodeURIComponent(trade.id)}/track`, { method: 'POST' });
@@ -9276,11 +9277,11 @@ async function trackWikelo(trade, card, button, said) {
     trade.trackedJobId = answer.job?.id || 'tracked';
     wikeloCard(trade, card);
     card.querySelector('.point-said').textContent = answer.existed
-      ? 'Already tracking — the list is on Jobs.'
-      : 'Listed on Jobs. Pin it there to see it on Now and the MFD.';
+      ? tx('Already tracking — the list is on Jobs.')
+      : tx('Listed on Jobs. Pin it there to see it on Now and the MFD.');
     loadJobs().catch(() => {});
   } catch (e) {
-    said.textContent = e.message || 'Could not make the list.';
+    said.textContent = e.message || tx('Could not make the list.');
     button.disabled = false;
   }
 }
@@ -9352,7 +9353,7 @@ function announceEventTiers(before, after) {
     for (const track of event.tracks) {
       track.tiers.forEach((tier, index) => {
         if (!tier.reached || had.has(`${event.id}|${track.id}|${tier.minPoints}`)) return;
-        toast('event-tier', `${track.name} tier ${index + 1} reached`,
+        toast('event-tier', tx('{track} tier {tier} reached', { track: track.name, tier: index + 1 }),
           tier.reward ? `${event.title} - ${tier.reward}` : event.title);
       });
     }
@@ -9412,7 +9413,7 @@ function renderEvents() {
   picker.textContent = '';
 
   if (!eventsData) {
-    body.append(el('p', 'muted', 'Could not load the events — is the app still running?'));
+    body.append(el('p', 'muted', tx('Could not load the events — is the app still running?')));
     return;
   }
 
@@ -9420,21 +9421,21 @@ function renderEvents() {
   // patch with no events in it.
   if (!eventsData.available) {
     $('#events-count').textContent = '';
-    body.append(el('p', 'muted', 'The game files have not been read yet, so the event tiers and contract points are not known. Point Settings at your Star Citizen install and they will be.'));
+    body.append(el('p', 'muted', tx('The game files have not been read yet, so the event tiers and contract points are not known. Point Settings at your Star Citizen install and they will be.')));
     return;
   }
 
   const events = eventsData.events || [];
-  $('#events-count').textContent = `${events.length} in this patch`;
+  $('#events-count').textContent = tx('{count} in this patch', { count: events.length });
 
   const shown = chosenEvent();
   for (const event of events) {
     const state = eventsData.tracked === event.id ? 'tracked' : (eventsData.open || []).some(o => o.event === event.title) ? 'open' : eventRecent(event) ? 'recent' : '';
     const button = el('button', event.id === shown?.id ? 'ghost' : 'ghost off', event.title);
     button.type = 'button';
-    button.title = event.firstSeen ? `In your logs since ${dateOf(event.firstSeen)}` : 'Not in your logs yet';
+    button.title = event.firstSeen ? tx('In your logs since {date}', { date: dateOf(event.firstSeen) }) : tx('Not in your logs yet');
     if (event.firstSeen) button.append(el('span', 'event-seen', '●'));
-    if (state) button.append(el('span', 'muted', ` · ${state}`));
+    if (state) button.append(el('span', 'muted', ` · ${tx(state)}`));
     button.addEventListener('click', () => { rememberEvent(event.id); renderEvents(); });
     picker.append(button);
   }
@@ -9453,22 +9454,22 @@ function eventView(event) {
 
   const facts = el('p', 'event-facts');
   if (event.firstSeen) {
-    facts.append(el('span', null, `${event.completed.toLocaleString()} of its contracts finished since ${dateOf(event.firstSeen)}`));
+    facts.append(el('span', null, tx('{count} of its contracts finished since {date}', { count: event.completed.toLocaleString(), date: dateOf(event.firstSeen) })));
   } else {
-    facts.append(el('span', 'muted', 'None of its contracts are in your logs yet. Finish one and it is counted from then.'));
+    facts.append(el('span', 'muted', tx('None of its contracts are in your logs yet. Finish one and it is counted from then.')));
   }
-  if (event.lastSeen) facts.append(el('span', 'muted', ` · last event contract seen ${dateOf(event.lastSeen)}`));
-  if (eventsData?.countedFrom) facts.append(el('span', 'muted', ` · counting from your wipe on ${dayUtc(eventsData.countedFrom)}`));
-  if (event.percent) facts.append(el('span', 'muted', ' · the journal shows these bars in percent; here they are in points'));
+  if (event.lastSeen) facts.append(el('span', 'muted', ` · ${tx('last event contract seen {date}', { date: dateOf(event.lastSeen) })}`));
+  if (eventsData?.countedFrom) facts.append(el('span', 'muted', ` · ${tx('counting from your wipe on {date}', { date: dayUtc(eventsData.countedFrom) })}`));
+  if (event.percent) facts.append(el('span', 'muted', ` · ${tx('the journal shows these bars in percent; here they are in points')}`));
   box.append(facts);
 
   const actions = el('div', 'point-actions event-actions');
   const tracked = eventsData?.tracked === event.id;
-  const track = el('button', 'ghost event-track-now', tracked ? 'Tracked on Now — stop' : 'Track on Now');
+  const track = el('button', 'ghost event-track-now', tracked ? tx('Tracked on Now — stop') : tx('Track on Now'));
   track.type = 'button';
   track.title = tracked
-    ? 'Let the Now card follow what you play again'
-    : 'Keep this event on the Now page and the overlay, whatever you are playing';
+    ? tx('Let the Now card follow what you play again')
+    : tx('Keep this event on the Now page and the overlay, whatever you are playing');
   track.addEventListener('click', () => trackEvent(tracked ? null : event.id, track));
   actions.append(track);
   box.append(actions);
@@ -9477,7 +9478,9 @@ function eventView(event) {
   // contract that looks like this event's and is not in the table is named.
   if (event.unrecognised) {
     box.append(el('p', 'warn event-unrecognised',
-      `${event.unrecognised} contract${event.unrecognised === 1 ? '' : 's'} in your logs look like this event's but are not in the installed game's points table, so they are not counted.`));
+      txn(event.unrecognised,
+        '{count} contract in your logs looks like this event\'s but is not in the installed game\'s points table, so it is not counted.',
+        '{count} contracts in your logs look like this event\'s but are not in the installed game\'s points table, so they are not counted.')));
   }
 
   const open = (eventsData?.open || []).filter((o) => o.event === event.title);
@@ -9486,10 +9489,10 @@ function eventView(event) {
     for (const contract of open) {
       const li = el('li', 'want');
       li.append(el('span', 'what', `+${contract.points.toLocaleString()}`));
-      li.append(el('span', 'd', ` · ${contract.title} — counts toward ${contract.tracks.join(', ')}`));
+      li.append(el('span', 'd', ` · ${tx('{contract} — counts toward {tracks}', { contract: contract.title, tracks: contract.tracks.join(', ') })}`));
       now.append(li);
     }
-    box.append(el('div', 'card-label', 'In your journal now'));
+    box.append(el('div', 'card-label', tx('In your journal now')));
     box.append(now);
   }
 
@@ -9498,7 +9501,7 @@ function eventView(event) {
   box.append(tracks);
 
   const details = document.createElement('details'); details.className = 'event-details';
-  details.append(el('summary', null, `All ${event.contracts.length} paying contracts`));
+  details.append(el('summary', null, tx('All {count} paying contracts', { count: event.contracts.length })));
   details.append(eventContractsTable(event)); box.append(details);
   return box;
 }
@@ -9520,12 +9523,12 @@ const REWARD_GLYPHS = {
 /** "Power plant · S1 · grade C · Sovereign": what a reward is, from the install's catalogue. */
 function rewardKindLine(item, facts) {
   const type = facts?.type || item.kind;
-  const bits = [REWARD_KINDS[type] || prettyType(type)];
+  const bits = [REWARD_KINDS[type] ? tx(REWARD_KINDS[type]) : prettyType(type)];
   // Size and grade mean something on a ship component; on a livery, a blade or
   // a handheld tool the file still says S1 grade A, which would read as a fact.
   if (REWARD_GRADED.has(type)) {
     if (facts?.size) bits.push(`S${facts.size}`);
-    if (facts?.grade) bits.push(`grade ${gradeLetter(facts.grade)}`);
+    if (facts?.grade) bits.push(tx('grade {grade}', { grade: gradeLetter(facts.grade) }));
   }
   if (facts?.maker) bits.push(facts.maker);
   return bits.filter((b) => b && b !== '—').join(' · ');
@@ -9568,14 +9571,14 @@ function eventRewardItems(items) {
     }
 
     const text = el('div', 'event-reward-text');
-    text.append(el('div', 'event-reward-name', `${item.oneOf ? 'One of: ' : ''}${item.name}`));
+    text.append(el('div', 'event-reward-name', item.oneOf ? tx('One of: {name}', { name: item.name }) : item.name));
     text.append(el('div', 'muted event-reward-kind', item.class
       ? rewardKindLine(item, facts)
-      : 'not in the installed game’s catalogue under this name'));
+      : tx('not in the installed game’s catalogue under this name')));
 
     if (item.class && eventsData?.prices) {
-      if (facts?.price != null) text.append(el('div', 'event-reward-price', `≈ ${money(facts.price)} · UEX typical`));
-      else if (sayUnsoldPerCard) text.append(el('div', 'muted event-reward-price', 'not sold at any terminal UEX lists'));
+      if (facts?.price != null) text.append(el('div', 'event-reward-price', tx('≈ {price} · UEX typical', { price: money(facts.price) })));
+      else if (sayUnsoldPerCard) text.append(el('div', 'muted event-reward-price', tx('not sold at any terminal UEX lists')));
     }
 
     card.append(text);
@@ -9583,7 +9586,7 @@ function eventRewardItems(items) {
   }
 
   if (eventsData?.prices && !sayUnsoldPerCard && items.some((i) => i.class)) {
-    box.append(el('div', 'muted event-reward-unsold', 'None of these is sold at any terminal UEX lists - event rewards usually are not.'));
+    box.append(el('div', 'muted event-reward-unsold', tx('None of these is sold at any terminal UEX lists - event rewards usually are not.')));
   }
 
   return box;
@@ -9599,10 +9602,10 @@ function eventMatchesPreference(contract) {
 function eventPlan(event) {
   const track = event.tracks.find(t => t.overall && t.nextTier != null) || event.tracks.find(t => t.nextTier != null);
   const plan = el('section', 'event-plan');
-  if (!track) { plan.append(el('div', 'event-plan-target', 'Every recorded tier reached')); return plan; }
+  if (!track) { plan.append(el('div', 'event-plan-target', tx('Every recorded tier reached'))); return plan; }
   const head = el('div', 'event-plan-head');
-  head.append(el('span', 'card-label', 'Next event target'));
-  head.append(el('strong', 'event-plan-target', `${track.toNext.toLocaleString()} pts to ${track.name} tier ${track.tiers.findIndex(t => t.minPoints === track.nextTier) + 1}`));
+  head.append(el('span', 'card-label', tx('Next event target')));
+  head.append(el('strong', 'event-plan-target', tx('{points} pts to {track} tier {tier}', { points: track.toNext.toLocaleString(), track: track.name, tier: track.tiers.findIndex(t => t.minPoints === track.nextTier) + 1 })));
   plan.append(head);
   const top = track.tiers[track.tiers.length - 1]?.minPoints || track.nextTier;
   const bar = el('div', 'event-plan-bar'); const fill = el('span'); fill.style.width = `${Math.min(100, (track.points / top) * 100)}%`; bar.append(fill); plan.append(bar);
@@ -9611,12 +9614,15 @@ function eventPlan(event) {
   plan.append(milestones);
   const choices = event.contracts.filter(eventMatchesPreference).map(c => ({ ...c, needed: Math.ceil(track.toNext / c.points) }))
     .sort((a,b) => a.needed - b.needed || b.points - a.points).slice(0, 3);
-  plan.append(el('p', 'muted', choices.length ? `Best ${eventPreference === 'all' ? 'available' : eventPreference} path: ${choices.map(c => `${c.needed} × ${c.title} (${c.points.toLocaleString()} pts)`).join(' · ')}` : `No ${eventPreference} contracts are listed for this event; choose Any activity to see every path.`));
+  const kind = tx(eventPreference === 'all' ? 'available' : eventPreference);
+  plan.append(el('p', 'muted', choices.length
+    ? tx('Best {kind} path: {paths}', { kind, paths: choices.map(c => `${c.needed} × ${c.title} (${eventPoints(c.points)})`).join(' · ') })
+    : tx('No {kind} contracts are listed for this event; choose Any activity to see every path.', { kind })));
   const lanes = el('div', 'event-lanes');
-  for (const [name, icon] of [['combat','✦'],['mining','◇'],['hauling','↗']]) { const pick = event.contracts.filter(c => { const saved = eventPreference; eventPreference = name; const hit = eventMatchesPreference(c); eventPreference = saved; return hit; }).sort((a,b)=>b.points-a.points)[0]; const lane = el('div','event-lane'); lane.append(el('b',null,`${icon} ${name}`)); lane.append(el('span',null,pick ? `${pick.title} · ${pick.points.toLocaleString()} pts` : 'No listed path')); lanes.append(lane); }
+  for (const [name, icon] of [['combat','✦'],['mining','◇'],['hauling','↗']]) { const pick = event.contracts.filter(c => { const saved = eventPreference; eventPreference = name; const hit = eventMatchesPreference(c); eventPreference = saved; return hit; }).sort((a,b)=>b.points-a.points)[0]; const lane = el('div','event-lane'); lane.append(el('b',null,`${icon} ${tx(name)}`)); lane.append(el('span',null,pick ? `${pick.title} · ${eventPoints(pick.points)}` : tx('No listed path'))); lanes.append(lane); }
   plan.append(lanes);
   const actions = el('div', 'event-plan-actions');
-  for (const [label, view] of [['View contracts', 'contracts'], ['Plan route', 'routes'], ['Open map', 'map']]) { const button = el('button', 'ghost tiny', label); button.type = 'button'; button.onclick = () => showView(view); actions.append(button); }
+  for (const [label, view] of [['View contracts', 'contracts'], ['Plan route', 'routes'], ['Open map', 'map']]) { const button = el('button', 'ghost tiny', tx(label)); button.type = 'button'; button.onclick = () => showView(view); actions.append(button); }
   plan.append(actions); return plan;
 }
 
@@ -9639,7 +9645,7 @@ function eventTrackCard(track) {
   for (const tier of track.tiers) {
     const tick = el('span', `event-tick${tier.reached ? ' reached' : ''}`);
     tick.style.left = `${top ? (tier.minPoints / top) * 100 : 0}%`;
-    tick.title = `${tier.minPoints.toLocaleString()} pts`;
+    tick.title = eventPoints(tier.minPoints);
     bar.append(tick);
   }
   card.append(bar);
@@ -9655,14 +9661,14 @@ function eventTrackCard(track) {
     const head = el(items.length ? 'button' : 'div', 'event-tier-head');
     head.append(el('span', 'mark', tier.reached ? '✓' : '○'));
     const line = el('span', 'event-tier-line');
-    line.append(el('span', 'what', `Tier ${index + 1} · ${tier.minPoints.toLocaleString()}`));
+    line.append(el('span', 'what', `${tx('Tier {tier}', { tier: index + 1 })} · ${tier.minPoints.toLocaleString()}`));
     if (tier.reward) line.append(el('span', 'muted', ` — ${tier.reward}`));
     head.append(line);
     li.append(head);
 
     if (items.length) {
       head.type = 'button';
-      head.title = 'Show what this tier gives';
+      head.title = tx('Show what this tier gives');
       head.setAttribute('aria-expanded', 'false');
       head.append(el('span', 'event-tier-caret', '▸'));
 
@@ -9681,17 +9687,19 @@ function eventTrackCard(track) {
   });
   const tierDetails = document.createElement('details');
   tierDetails.className = 'event-details';
-  tierDetails.append(el('summary', null, `${track.tiers.length} tiers and rewards`));
+  tierDetails.append(el('summary', null, txn(track.tiers.length, '{count} tier and rewards', '{count} tiers and rewards')));
   tierDetails.append(tiers); card.append(tierDetails);
 
   if (track.fastest.length) {
     const fast = el('div', 'event-fastest');
-    fast.append(el('div', 'card-label', 'Fewest contracts to the next tier'));
+    fast.append(el('div', 'card-label', tx('Fewest contracts to the next tier')));
     const list = el('ul', 'feed');
     for (const s of track.fastest) {
       const li = el('li');
       li.append(el('span', 'what', `${s.needed} ×`));
-      li.append(el('span', 'd', ` ${s.title} (${s.points.toLocaleString()} each${s.done ? `, done ${s.done}× before` : ''})`));
+      li.append(el('span', 'd', ` ${s.title} (${s.done
+        ? tx('{points} each, done {done}× before', { points: s.points.toLocaleString(), done: s.done })
+        : tx('{points} each', { points: s.points.toLocaleString() })})`));
       list.append(li);
     }
     fast.append(list);
@@ -9706,7 +9714,7 @@ function eventContractsTable(event) {
   const table = el('table', 'data');
   const head = el('tr');
   for (const [label, cls] of [['Contract', null], ['Offered by', null], ['Counts toward', null], ['Points', 'num'], ['Done', 'num']])
-    head.append(el('th', cls, label));
+    head.append(el('th', cls, tx(label)));
   const thead = el('thead');
   thead.append(head);
   table.append(thead);
@@ -9739,7 +9747,7 @@ async function trackEvent(id, button) {
     if (response.ok && eventsData) eventsData.tracked = (await response.json()).tracked ?? null;
   } catch {
     const status = $('#events-plan-status');
-    if (status) status.textContent = 'Could not save the tracked event. It will keep following your current contracts.';
+    if (status) status.textContent = tx('Could not save the tracked event. It will keep following your current contracts.');
   }
 
   renderEvents();
@@ -16931,13 +16939,13 @@ async function fillBlueprintGoals() {
 
   if (owned.length) {
     const group = document.createElement('optgroup');
-    group.label = `Yours (${owned.length})`;
+    group.label = tx('Yours ({count})', { count: owned.length });
     for (const bp of owned) group.append(new Option(bp.output, bp.output));
     select.append(group);
   }
 
   const others = document.createElement('optgroup');
-  others.label = owned.length ? 'Everything else' : 'Blueprints';
+  others.label = owned.length ? tx('Everything else') : tx('Blueprints');
   for (const bp of rest.slice(0, 400)) others.append(new Option(bp.output, bp.output));
   select.append(others);
 
@@ -16956,10 +16964,10 @@ $('#jobs-plan')?.addEventListener('click', async (e) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title: `Craft ${bp.output}`,
+        title: tx('Craft {item}', { item: bp.output }),
         kind: 'craft',
-        source: `${bp.output} blueprint · ${craftTime(bp.craftSeconds)} to craft`
-          + (bp.owned ? ' · in your library' : ''),
+        source: tx('{item} blueprint · {time} to craft', { item: bp.output, time: craftTime(bp.craftSeconds) })
+          + (bp.owned ? ` · ${tx('in your library')}` : ''),
         items: parseJobItems(bp.materials.join('\n')),
       }),
     });
@@ -17050,10 +17058,9 @@ async function loadJobContracts() {
   if (request !== jobContractsRequest) return;
 
   if (!live?.inGame) {
-    setOperationsStatus('#operations-contract-status', 'Waiting for a game session');
+    setOperationsStatus('#operations-contract-status', tx('Waiting for a game session'));
     host.append(el('p', 'muted',
-      'Nothing active — the game is not running. Contracts are dropped when you leave, '
-      + 'so only a live session can have any.'));
+      tx('Nothing active — the game is not running. Contracts are dropped when you leave, so only a live session can have any.')));
     landOnJobs();
     return;
   }
@@ -17074,8 +17081,8 @@ async function loadJobContracts() {
     c.outcome === 'InProgress' && new Date(c.at).getTime() >= since);
 
   if (!open.length && !plan?.contracts?.length) {
-    setOperationsStatus('#operations-contract-status', 'No live contracts');
-    host.append(el('p', 'muted', 'No contract open in this session.'));
+    setOperationsStatus('#operations-contract-status', tx('No live contracts'));
+    host.append(el('p', 'muted', tx('No contract open in this session.')));
     landOnJobs();
     return;
   }
@@ -17084,7 +17091,7 @@ async function loadJobContracts() {
 
   const activeCount = Math.max(open.length, plan?.contracts?.length || 0);
   setOperationsStatus('#operations-contract-status',
-    `${activeCount} live contract${activeCount === 1 ? '' : 's'}`, 'active');
+    txn(activeCount, '{count} live contract', '{count} live contracts'), 'active');
 
   // Everything that is not a haul keeps its plain card; the hauls are on
   // the run above, with their legs.
@@ -17103,9 +17110,9 @@ async function loadJobContracts() {
 
     const head = el('div', 'job-head');
     head.append(el('b', null, contract.name || `${contract.issuer} · ${contract.type}`));
-    if (contract.difficulty) head.append(el('span', 'job-kind', contract.difficulty));
-    const focus = el('button', 'ghost tiny', 'Focus');
-    focus.title = 'Keep this contract available while you plan';
+    if (contract.difficulty) head.append(el('span', 'job-kind', tx(contract.difficulty)));
+    const focus = el('button', 'ghost tiny', tx('Focus'));
+    focus.title = tx('Keep this contract available while you plan');
     focus.addEventListener('click', () => setContextFocus({
       kind: 'contract',
       title: contract.name || `${contract.issuer} · ${contract.type}`,
@@ -17117,13 +17124,13 @@ async function loadJobContracts() {
     head.append(focus);
     card.append(head);
 
-    const sub = [contract.issuer, contract.type, contract.system, `taken ${relative(contract.at)}`]
+    const sub = [contract.issuer, contract.type, contract.system, tx('taken {when}', { when: relative(contract.at) })]
       .filter(Boolean).join(' · ');
     card.append(el('div', 'muted', sub));
 
     if (contract.steps > 0) {
       card.append(jobProgress(contract.stepsDone, contract.steps,
-        `${contract.stepsDone} of ${contract.steps} objectives done`));
+        tx('{done} of {total} objectives done', { done: contract.stepsDone, total: contract.steps })));
     }
 
     host.append(card);
@@ -17150,7 +17157,7 @@ let haulPlanNotice = null;
 
 function renderHaulPlan(host, plan) {
   const section = el('div', 'haul-plan');
-  section.append(el('h3', 'spaced', 'Hauling run'));
+  section.append(el('h3', 'spaced', tx('Hauling run')));
 
   if (haulPlanNotice) {
     section.append(el('p', 'outward caption', haulPlanNotice));
@@ -17159,24 +17166,34 @@ function renderHaulPlan(host, plan) {
 
   const read = plan.contracts.filter((c) => c.source === 'screenshot').length;
   const summary = [
-    `${plan.contracts.length} contract${plan.contracts.length === 1 ? '' : 's'}`,
-    `${read} with the card read`,
+    txn(plan.contracts.length, '{count} contract', '{count} contracts'),
+    tx('{count} with the card read', { count: read }),
     plan.knownScu > 0
-      ? `${plan.knownScu} SCU remaining${read < plan.contracts.length ? ' known (a floor)' : ''}`
+      ? (read < plan.contracts.length
+        ? tx('{scu} SCU remaining known (a floor)', { scu: plan.knownScu })
+        : tx('{scu} SCU remaining', { scu: plan.knownScu }))
       : null,
-    plan.ship && plan.shipScu ? `${plan.ship} holds ${plan.shipScu} SCU` : null,
+    plan.ship && plan.shipScu ? tx('{ship} holds {scu} SCU', { ship: plan.ship, scu: plan.shipScu }) : null,
   ].filter(Boolean).join(' · ');
   section.append(el('p', 'muted caption', summary));
 
+  const CONFIDENCE = { none: 'none confidence', low: 'low confidence', medium: 'medium confidence', high: 'high confidence' };
+  const confidence = (plan.locationConfidence || '').toLowerCase();
+  const known = [
+    tx('last known location'),
+    confidence ? tx(CONFIDENCE[confidence] || `${confidence} confidence`) : null,
+    plan.travelling ? tx('in transit') : null,
+  ].filter(Boolean).join(', ');
   section.append(el('p', 'muted haul-origin', plan.start
-    ? `Route from ${plan.start.name}${plan.start.body ? ` · ${plan.start.body}` : ''} (last known location${plan.locationConfidence ? `, ${plan.locationConfidence.toLowerCase()} confidence` : ''}${plan.travelling ? ', in transit' : ''}). Pickups first, grouped by body and system; distances are not known.`
-    : 'Current location unknown — this route cannot choose a nearby starting stop.'));
+    ? tx('Route from {place} ({known}). Pickups first, grouped by body and system; distances are not known.',
+      { place: `${plan.start.name}${plan.start.body ? ` · ${plan.start.body}` : ''}`, known })
+    : tx('Current location unknown — this route cannot choose a nearby starting stop.')));
   section.append(el('p', 'muted caption',
-    'Cargo below is projected after completing each stop, assuming the listed pickups still need collecting. It is not a live inventory of your hold.'));
+    tx('Cargo below is projected after completing each stop, assuming the listed pickups still need collecting. It is not a live inventory of your hold.')));
 
   if (plan.knownScu > 0 && plan.shipScu && plan.knownScu > plan.shipScu) {
     section.append(el('p', 'outward caption',
-      `${plan.knownScu} SCU is more than the ${plan.ship} holds — two trips, or another hull.`));
+      tx('{scu} SCU is more than the {ship} holds — two trips, or another hull.', { scu: plan.knownScu, ship: plan.ship })));
   }
 
   for (const c of plan.contracts) {
@@ -17184,7 +17201,7 @@ function renderHaulPlan(host, plan) {
 
     const head = el('div', 'job-head');
     head.append(el('b', null, c.title));
-    const source = c.source === 'screenshot' ? 'card read' : c.source === 'title' ? 'title only' : 'unread';
+    const source = c.source === 'screenshot' ? tx('card read') : c.source === 'title' ? tx('title only') : tx('unread');
     head.append(el('span', 'job-kind', source));
     if (c.commodity) head.append(el('span', 'muted', c.commodity));
     card.append(head);
@@ -17194,10 +17211,10 @@ function renderHaulPlan(host, plan) {
       for (const leg of c.legs) {
         const from = leg.pickup
           ? `${leg.pickup}${leg.pickupBody ? ` (${leg.pickupBody})` : ''}`
-          : 'pickup not known';
+          : tx('pickup not known');
         const to = leg.delivery
           ? `${leg.delivery}${leg.deliveryBody ? ` (${leg.deliveryBody})` : ''}`
-          : 'drop-off not known';
+          : tx('drop-off not known');
         const scu = leg.scu != null ? ` · ${leg.scuDone || 0}/${leg.scu} SCU` : '';
         legs.append(el('li', leg.pickup && leg.delivery ? null : 'muted', `${from} → ${to}${scu}`));
       }
@@ -17208,18 +17225,19 @@ function renderHaulPlan(host, plan) {
       const remaining = c.remainingScu != null ? c.remainingScu : c.scu;
       const delivered = c.scuDone || 0;
       card.append(el('div', 'muted haul-progress',
-        `${c.scu} SCU contracted · ${remaining} remaining${delivered ? ` · ${delivered} delivered` : ''}`));
+        tx('{scu} SCU contracted · {remaining} remaining', { scu: c.scu, remaining })
+          + (delivered ? ` · ${tx('{count} delivered', { count: delivered })}` : '')));
     }
 
     if (c.pickups > 0 || c.deliveries > 0) {
       const bits = [];
-      if (c.pickups > 0) bits.push(`${c.pickupsDone} of ${c.pickups} pickup${c.pickups === 1 ? '' : 's'} done`);
-      if (c.deliveries > 0) bits.push(`${c.deliveriesDone} of ${c.deliveries} drop-off${c.deliveries === 1 ? '' : 's'} done`);
+      if (c.pickups > 0) bits.push(txn(c.pickups, '{done} of {count} pickup done', '{done} of {count} pickups done', { done: c.pickupsDone }));
+      if (c.deliveries > 0) bits.push(txn(c.deliveries, '{done} of {count} drop-off done', '{done} of {count} drop-offs done', { done: c.deliveriesDone }));
       card.append(el('div', 'muted haul-progress', bits.join(' · ')));
     }
 
     if (c.note) card.append(el('div', 'muted haul-note', c.note));
-    if (c.shot) card.append(el('div', 'muted haul-note', `read from ${c.shot}`));
+    if (c.shot) card.append(el('div', 'muted haul-note', tx('read from {file}', { file: c.shot })));
 
     section.append(card);
   }
@@ -17235,27 +17253,28 @@ function renderHaulPlan(host, plan) {
       const where = el('td');
       where.append(el('b', null, stop.place));
       if (stop.body) where.append(el('span', 'muted', ` · ${stop.body}`));
-      if (!stop.placeId) where.append(el('span', 'muted', ' · not on the map'));
+      if (!stop.placeId) where.append(el('span', 'muted', ` · ${tx('not on the map')}`));
       tr.append(where);
 
       const what = el('td');
       for (const a of stop.actions) {
         const scu = a.scu != null ? `${a.scu} SCU ` : '';
-        const delivered = a.scuDone ? ` (${a.scuDone} delivered)` : '';
+        const delivered = a.scuDone ? ` (${tx('{count} delivered', { count: a.scuDone })})` : '';
+        const verb = a.kind === 'load' ? tx('load') : a.kind === 'unload' ? tx('unload') : a.kind;
         what.append(el('div', a.kind === 'load' ? 'haul-load' : 'haul-unload',
-          `${a.kind} ${scu}${a.commodity || 'cargo'}${delivered} — ${a.contractTitle}${a.note ? ` (${a.note})` : ''}`));
+          `${verb} ${scu}${a.commodity || tx('cargo')}${delivered} — ${a.contractTitle}${a.note ? ` (${a.note})` : ''}`));
       }
       if (stop.aboard?.length) {
         const cargo = stop.aboard.map((item) => {
           if (item.amountUnknown) return item.knownScu > 0
-            ? `${item.commodity} at least ${item.knownScu} SCU`
-            : `${item.commodity} quantity not yet known`;
+            ? tx('{commodity} at least {scu} SCU', { commodity: item.commodity, scu: item.knownScu })
+            : tx('{commodity} quantity not yet known', { commodity: item.commodity });
           return `${item.commodity} ${item.knownScu} SCU`;
         }).join(' · ');
-        what.append(el('div', 'muted haul-aboard', `projected aboard after this stop: ${cargo}`));
+        what.append(el('div', 'muted haul-aboard', tx('projected aboard after this stop: {cargo}', { cargo })));
         for (const item of stop.aboard.filter((item) => item.amountUnknown)) {
           what.append(el('div', 'muted haul-cargo-note', item.note
-            || `The amount of ${item.commodity} at each pickup was not read. Check this contract's cargo details before loading.`));
+            || tx('The amount of {commodity} at each pickup was not read. Check this contract\'s cargo details before loading.', { commodity: item.commodity })));
         }
       }
       if (stop.note) what.append(el('div', 'muted', stop.note));
@@ -17268,8 +17287,8 @@ function renderHaulPlan(host, plan) {
     section.append(table);
 
     const actions = el('div', 'haul-actions');
-    const make = el('button', 'ghost haul-make', 'Make it the flight plan');
-    make.title = 'Write these stops into a tracked flight plan, with the loads and unloads at each';
+    const make = el('button', 'ghost haul-make', tx('Make it the flight plan'));
+    make.title = tx('Write these stops into a tracked flight plan, with the loads and unloads at each');
     make.addEventListener('click', async () => {
       make.disabled = true;
       try {
@@ -17282,10 +17301,10 @@ function renderHaulPlan(host, plan) {
           body: JSON.stringify({ planId: plan.planId || null }),
         }).then((r) => r.json());
         if (result?.id) {
-          make.textContent = `✓ ${result.title} — ${result.stops} stops, tracked`;
+          make.textContent = `✓ ${result.title} — ${txn(result.stops, '{count} stop, tracked', '{count} stops, tracked')}`;
           if (typeof loadTrips === 'function') loadTrips().catch(() => {});
         } else {
-          make.textContent = result?.message || 'could not plan';
+          make.textContent = result?.message || tx('could not plan');
           make.disabled = false;
 
           // The run moved under it: show the new one rather than leave the
@@ -17298,14 +17317,14 @@ function renderHaulPlan(host, plan) {
           }
         }
       } catch {
-        make.textContent = 'failed';
+        make.textContent = tx('failed');
         make.disabled = false;
       }
     });
     actions.append(make);
     section.append(actions);
     section.append(el('p', 'muted caption',
-      'Arrival marks the stop reached. Load and unload actions stay manual: the log does not identify which named contract leg changed.'));
+      tx('Arrival marks the stop reached. Load and unload actions stay manual: the log does not identify which named contract leg changed.')));
   }
 
   for (const note of plan.notes || []) section.append(el('p', 'muted caption', note));
@@ -17319,8 +17338,8 @@ function renderHaulPlan(host, plan) {
  * else a new one - and says where it went.
  */
 function trackButton(name, needed = 1, unit = '') {
-  const button = el('button', 'ghost track', '+ list');
-  button.title = `Add ${name} to your shopping list`;
+  const button = el('button', 'ghost track', tx('+ list'));
+  button.title = tx('Add {item} to your shopping list', { item: name });
 
   button.addEventListener('click', async () => {
     button.disabled = true;
@@ -17332,10 +17351,10 @@ function trackButton(name, needed = 1, unit = '') {
         body: JSON.stringify({ name, needed, unit }),
       }).then((r) => r.json());
 
-      button.textContent = '✓ added';
-      button.title = `On "${result.title}"`;
+      button.textContent = tx('✓ added');
+      button.title = tx('On "{list}"', { list: result.title });
     } catch {
-      button.textContent = 'failed';
+      button.textContent = tx('failed');
       button.disabled = false;
     }
   });
@@ -17370,13 +17389,13 @@ function jobLines(job) {
     const whereCell = el('td', 'muted');
 
     if (item.inventoryUnconfirmed) {
-      whereCell.append(el('span', 'note-inline', 'seen in inventory — not counted'));
+      whereCell.append(el('span', 'note-inline', tx('seen in inventory — not counted')));
       if (item.where.length) {
         whereCell.append(document.createTextNode(' · '));
         whereCell.append(placeLink(item.where[0]));
       }
     } else if (item.wornNow) {
-      whereCell.textContent = 'worn now';
+      whereCell.textContent = tx('worn now');
     } else if (item.where.length) {
       whereCell.append(placeLink(item.where[0]));
       if (item.where.length > 1) {
@@ -17385,7 +17404,7 @@ function jobLines(job) {
         whereCell.append(more);
       }
     } else if (item.buyAt) {
-      whereCell.append(el('span', 'note-inline', 'buy at '));
+      whereCell.append(el('span', 'note-inline', `${tx('buy at')} `));
       whereCell.append(placeLink(item.buyAt));
     } else {
       whereCell.textContent = '—';
@@ -17410,8 +17429,8 @@ function jobLines(job) {
  * the app does not.
  */
 function importedChip(from) {
-  const chip = el('span', 'job-kind from-a-file', `from ${from.handle || 'a file'}`);
-  chip.title = `Imported ${dateOf(from.importedAt)} from a shared file. Not your data.`
+  const chip = el('span', 'job-kind from-a-file', from.handle ? tx('from {handle}', { handle: from.handle }) : tx('from a file'));
+  chip.title = tx('Imported {date} from a shared file. Not your data.', { date: dateOf(from.importedAt) })
     + (from.note ? `\n${from.note}` : '');
   return chip;
 }
@@ -17427,8 +17446,8 @@ function importedChip(from) {
  * SCU to a line you already had produces a number you never chose.
  */
 function copyToMine(job) {
-  const copy = el('button', 'ghost tiny', 'Copy to my lists');
-  copy.title = 'Makes your own copy. Theirs stays where it is.';
+  const copy = el('button', 'ghost tiny', tx('Copy to my lists'));
+  copy.title = tx('Makes your own copy. Theirs stays where it is.');
 
   copy.addEventListener('click', async () => {
     copy.disabled = true;
@@ -17440,7 +17459,7 @@ function copyToMine(job) {
         body: JSON.stringify({
           title: job.title,
           kind: job.kind,
-          source: `copied from ${job.imported.handle || 'a shared file'}`,
+          source: job.imported.handle ? tx('copied from {handle}', { handle: job.imported.handle }) : tx('copied from a shared file'),
           items: job.items.map((i) => ({ name: i.name, needed: i.needed, unit: i.unit })),
         }),
       });
@@ -17473,7 +17492,7 @@ async function loadJobList() {
   const craftHost = $('#blueprint-jobs');
   host.textContent = '';
   if (craftHost) craftHost.textContent = '';
-  setWorkspaceState('#jobs-state', 'loading', 'Loading shopping lists…');
+  setWorkspaceState('#jobs-state', 'loading', tx('Loading shopping lists…'));
 
   let jobs = [];
   let jobsUnavailable = false;
@@ -17492,14 +17511,14 @@ async function loadJobList() {
   const openLists = lists.filter((j) => !j.done);
   const missing = openLists.reduce((sum, j) => sum + Math.max(0, (j.totalCount || 0) - (j.haveCount || 0)), 0);
   setOperationsStatus('#operations-shopping-status', jobsUnavailable
-    ? 'Shopping lists unavailable'
+    ? tx('Shopping lists unavailable')
     : openLists.length
-    ? `${openLists.length} active ${openLists.length === 1 ? 'list' : 'lists'}${missing ? ` · ${missing} item${missing === 1 ? '' : 's'} to find` : ' · all items in hand'}`
-    : 'Start a shopping list', jobsUnavailable ? 'outward' : openLists.length ? 'active' : '');
+    ? `${txn(openLists.length, '{count} active list', '{count} active lists')} · ${missing ? txn(missing, '{count} item to find', '{count} items to find') : tx('all items in hand')}`
+    : tx('Start a shopping list'), jobsUnavailable ? 'outward' : openLists.length ? 'active' : '');
   setWorkspaceState('#jobs-state', jobsUnavailable ? 'offline' : openLists.length ? 'ready' : 'empty',
     jobsUnavailable
-      ? 'Shopping lists are unavailable. Refresh after the local server reconnects.'
-      : 'No active shopping lists. Start one here or add items from Market, Parts, or Mining.');
+      ? tx('Shopping lists are unavailable. Refresh after the local server reconnects.')
+      : tx('No active shopping lists. Start one here or add items from Market, Parts, or Mining.'));
 
   // No second empty message inside the list: the state line above already
   // says both "nothing yet" and "unavailable", and with no lists the two
@@ -17507,7 +17526,7 @@ async function loadJobList() {
 
   if (craftHost && !builds.length) {
     craftHost.append(el('p', 'muted',
-      'No builds planned. Pick a blueprint above, or hit Plan on Reference → Crafting.'));
+      tx('No builds planned. Pick a blueprint above, or hit Plan on Reference → Crafting.')));
   }
 
   for (const job of jobs) {
@@ -17516,7 +17535,7 @@ async function loadJobList() {
 
     const head = el('div', 'job-head');
     head.append(el('b', null, job.title));
-    head.append(el('span', 'job-kind', job.kind === 'craft' ? 'craft' : 'list'));
+    head.append(el('span', 'job-kind', job.kind === 'craft' ? tx('craft') : tx('list')));
     if (job.imported) head.append(importedChip(job.imported));
 
     // An imported card carries no control that changes anything.
@@ -17532,7 +17551,7 @@ async function loadJobList() {
       head.append(copyToMine(job));
       card.append(head);
       card.append(jobProgress(job.haveCount, job.totalCount,
-        `you have ${job.haveCount} of the ${job.totalCount} things this needs`));
+        tx('you have {have} of the {total} things this needs', { have: job.haveCount, total: job.totalCount })));
       card.append(jobLines(job));
 
       // The same split as any other card: a build belongs on Crafting whoever
@@ -17544,7 +17563,7 @@ async function loadJobList() {
     // Where this list is for, changeable here because it is a plan rather than
     // a fact: the run you meant on Tuesday is not the run you fly on Friday.
     const where = el('select', 'select job-place-edit');
-    where.title = 'Where you mean to shop';
+    where.title = tx('Where you mean to shop');
     fillPlaceOptions(where, job.destinationId || job.destination || '');
 
     where.addEventListener('change', async () => {
@@ -17565,10 +17584,10 @@ async function loadJobList() {
     head.append(spacer);
 
     // Pinning puts the job on Now, which is also what the overlay shows.
-    const pin = el('button', job.pinned ? 'ghost on' : 'ghost', job.pinned ? 'On Now' : 'Pin to Now');
+    const pin = el('button', job.pinned ? 'ghost on' : 'ghost', job.pinned ? tx('On Now') : tx('Pin to Now'));
     pin.title = job.pinned
-      ? 'Showing on the Now page and in the overlay'
-      : 'Show this job on the Now page and in the overlay';
+      ? tx('Showing on the Now page and in the overlay')
+      : tx('Show this job on the Now page and in the overlay');
 
     pin.addEventListener('click', async () => {
       await fetch(`/api/jobs/${job.id}/pin`, { method: 'POST' });
@@ -17588,7 +17607,7 @@ async function loadJobList() {
     });
     head.append(pin);
 
-    const toggle = el('button', 'ghost', job.done ? 'Reopen' : 'Mark done');
+    const toggle = el('button', 'ghost', job.done ? tx('Reopen') : tx('Mark done'));
     toggle.addEventListener('click', async () => {
       await fetch(`/api/jobs/${job.id}/toggle`, { method: 'POST' });
       loadJobList();
@@ -17597,12 +17616,12 @@ async function loadJobList() {
 
     // A list knows where its missing things are sold, which is a shopping trip
     // waiting to be flown - once the player has said which seller they meant.
-    const shop = el('button', 'ghost', 'Plan trip');
-    shop.title = 'Turn what is still missing into a flight plan';
+    const shop = el('button', 'ghost', tx('Plan trip'));
+    shop.title = tx('Turn what is still missing into a flight plan');
     shop.addEventListener('click', () => planShoppingTrip(job, card));
     head.append(shop);
 
-    const remove = el('button', 'ghost danger', 'Delete');
+    const remove = el('button', 'ghost danger', tx('Delete'));
     remove.addEventListener('click', async () => {
       await fetch(`/api/jobs/${job.id}`, { method: 'DELETE' });
       loadJobList();
@@ -17610,10 +17629,10 @@ async function loadJobList() {
     head.append(remove);
     card.append(head);
 
-    if (job.source) card.append(el('div', 'muted', `from ${job.source}`));
+    if (job.source) card.append(el('div', 'muted', tx('from {source}', { source: job.source })));
 
     card.append(jobProgress(job.haveCount, job.totalCount,
-      `${job.haveCount} of ${job.totalCount} in hand`));
+      tx('{done} of {total} in hand', { done: job.haveCount, total: job.totalCount })));
 
     card.append(jobLines(job));
     (job.kind === 'craft' && craftHost ? craftHost : host).append(card);
@@ -17662,7 +17681,7 @@ function fillPlaceOptions(select, selected) {
 
   const anywhere = document.createElement('option');
   anywhere.value = '';
-  anywhere.textContent = 'Anywhere — no particular stop';
+  anywhere.textContent = tx('Anywhere — no particular stop');
   select.append(anywhere);
 
   const been = atlas.filter((l) => l.visits > 0).sort((a, b) => b.visits - a.visits);
@@ -17672,7 +17691,7 @@ function fillPlaceOptions(select, selected) {
     if (!places.length) return;
 
     const group = document.createElement('optgroup');
-    group.label = label;
+    group.label = tx(label);
 
     for (const place of places) {
       const option = document.createElement('option');
@@ -17729,7 +17748,7 @@ async function fillItemOptions(select) {
 
   const placeholder = document.createElement('option');
   placeholder.value = '';
-  placeholder.textContent = 'Add something we know…';
+  placeholder.textContent = tx('Add something we know…');
   select.append(placeholder);
 
   catalogue ??= await getJson('/api/shopping/catalogue').catch(() => ({ commodities: [], items: [] }));
@@ -17738,7 +17757,7 @@ async function fillItemOptions(select) {
     if (!names?.length) return;
 
     const group = document.createElement('optgroup');
-    group.label = label;
+    group.label = tx(label);
 
     for (const name of names) {
       const option = document.createElement('option');
@@ -17845,21 +17864,21 @@ async function checklistCall(url, method = 'POST', body = null) {
 function showChecklistAttachment(attachment) {
   if (attachment.kind === 'location') {
     const button = el('button', 'checklist-attachment place-link', `⌖ ${attachment.label}`);
-    button.title = 'Show this place on the map';
+    button.title = tx('Show this place on the map');
     button.addEventListener('click', () => briefingMap(attachment.placeId, attachment.target || attachment.label));
     return button;
   }
 
   if (attachment.kind === 'commodity') {
     const button = el('button', 'checklist-attachment', `◇ ${attachment.label}`);
-    button.title = 'Open this commodity';
+    button.title = tx('Open this commodity');
     button.addEventListener('click', () => openCommodity(attachment.target || attachment.label));
     return button;
   }
 
   if (attachment.kind === 'item') {
     const button = el('button', 'checklist-attachment', `▦ ${attachment.label}`);
-    button.title = 'Find this item in Parts';
+    button.title = tx('Find this item in Parts');
     button.addEventListener('click', () => {
       showView('parts');
       $('#parts-search').value = attachment.target || attachment.label;
@@ -17890,7 +17909,7 @@ function checklistItemRow(list, item, compact = false) {
   const check = document.createElement('input');
   check.type = 'checkbox';
   check.checked = item.done;
-  check.title = item.done ? 'Reopen task' : 'Mark task done';
+  check.title = item.done ? tx('Reopen task') : tx('Mark task done');
   check.addEventListener('change', () => checklistCall(`/api/checklists/${list.id}/items/${item.id}/toggle`));
   row.append(check);
 
@@ -17900,9 +17919,8 @@ function checklistItemRow(list, item, compact = false) {
   if (item.dueAt) main.append(el('div', 'checklist-due', `◷ ${checklistDue(item.dueAt)}`));
 
   if (bought) {
-    const note = el('div', 'checklist-bought', `bought ${dayOf(item.bought)}`);
-    note.title = 'Your logs show this was bought after you wrote this line. '
-      + 'Tick it to take it off for good.';
+    const note = el('div', 'checklist-bought', tx('bought {date}', { date: dayOf(item.bought) }));
+    note.title = tx('Your logs show this was bought after you wrote this line. Tick it to take it off for good.');
     main.append(note);
   }
 
@@ -17916,7 +17934,7 @@ function checklistItemRow(list, item, compact = false) {
 
   if (!compact) {
     const remove = el('button', 'ghost tiny', '×');
-    remove.title = 'Remove task';
+    remove.title = tx('Remove task');
     remove.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}/items/${item.id}`, 'DELETE'));
     row.append(remove);
   }
@@ -17957,14 +17975,14 @@ function checklistComposer(list) {
   const form = el('form', 'checklist-composer');
   const task = document.createElement('input');
   task.type = 'text';
-  task.placeholder = 'Add a task, e.g. bring tractor beam';
+  task.placeholder = tx('Add a task, e.g. bring tractor beam');
   task.required = true;
   form.append(task);
 
   const fields = el('div', 'checklist-fields');
   const place = document.createElement('select');
   place.className = 'select';
-  place.title = 'Optional map location';
+  place.title = tx('Optional map location');
   fillPlaceOptions(place, '');
   fields.append(place);
 
@@ -17972,15 +17990,15 @@ function checklistComposer(list) {
   item.type = 'search';
   item.className = 'search';
   item.setAttribute('list', 'checklist-catalogue');
-  item.placeholder = 'Optional commodity, part or gear';
-  item.title = 'Optional commodity, part or gear reference';
+  item.placeholder = tx('Optional commodity, part or gear');
+  item.title = tx('Optional commodity, part or gear reference');
   fields.append(item);
   fillChecklistReferenceOptions();
 
   const due = document.createElement('input');
   due.type = 'datetime-local';
   due.className = 'search';
-  due.title = 'Optional date and time';
+  due.title = tx('Optional date and time');
   fields.append(due);
   form.append(fields);
 
@@ -17988,16 +18006,16 @@ function checklistComposer(list) {
   const note = document.createElement('input');
   note.type = 'text';
   note.className = 'search';
-  note.placeholder = 'Optional note';
+  note.placeholder = tx('Optional note');
   detail.append(note);
   const url = document.createElement('input');
   url.type = 'url';
   url.className = 'search';
-  url.placeholder = 'Optional https:// link';
+  url.placeholder = tx('Optional https:// link');
   detail.append(url);
   form.append(detail);
 
-  const add = el('button', 'ghost', 'Add task');
+  const add = el('button', 'ghost', tx('Add task'));
   form.append(add);
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -18069,7 +18087,7 @@ function renderChecklists(lists) {
   host.textContent = '';
 
   if (!lists.length) {
-    host.append(el('p', 'muted', 'No checklists yet. Make one for a departure, an operation, or anything you do not want to forget.'));
+    host.append(el('p', 'muted', tx('No checklists yet. Make one for a departure, an operation, or anything you do not want to forget.')));
     return;
   }
 
@@ -18077,23 +18095,23 @@ function renderChecklists(lists) {
     const card = el('article', 'checklist-card');
     const head = el('div', 'job-head');
     head.append(el('b', null, list.title));
-    if (list.pinned) head.append(el('span', 'job-kind owned', 'on Now'));
+    if (list.pinned) head.append(el('span', 'job-kind owned', tx('on Now')));
     head.append(el('span', 'spacer'));
 
-    const pin = el('button', list.pinned ? 'ghost on' : 'ghost', list.pinned ? 'On Now' : 'Pin to Now');
-    pin.title = 'Only one checklist is shown on Now and in the overlay';
+    const pin = el('button', list.pinned ? 'ghost on' : 'ghost', list.pinned ? tx('On Now') : tx('Pin to Now'));
+    pin.title = tx('Only one checklist is shown on Now and in the overlay');
     pin.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}/pin`));
     head.append(pin);
-    const remove = el('button', 'ghost danger', 'Delete');
+    const remove = el('button', 'ghost danger', tx('Delete'));
     remove.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}`, 'DELETE'));
     head.append(remove);
     card.append(head);
 
     const done = list.items.filter((item) => item.done).length;
-    card.append(jobProgress(done, list.items.length, `${done} of ${list.items.length} done`));
+    card.append(jobProgress(done, list.items.length, tx('{done} of {total} done', { done, total: list.items.length })));
     const items = el('ul', 'checklist-items');
     for (const entry of list.items) items.append(checklistItemRow(list, entry));
-    if (!list.items.length) items.append(el('li', 'muted', 'No tasks yet — add the first thing you want to remember.'));
+    if (!list.items.length) items.append(el('li', 'muted', tx('No tasks yet — add the first thing you want to remember.')));
     card.append(items, checklistComposer(list));
     host.append(card);
   }
@@ -19027,10 +19045,8 @@ async function renderSharedBlueprints() {
   if (!rows.length) return;
 
   const card = el('section', 'shared-block');
-  card.append(el('h3', null, 'Held by others'));
-  card.append(el('p', 'muted', 'Blueprints the files you have been sent say somebody holds. '
-    + 'They are not in the picker above, because you cannot craft from someone else’s '
-    + 'library — this answers who to ask.'));
+  card.append(el('h3', null, tx('Held by others')));
+  card.append(el('p', 'muted', tx('Blueprints the files you have been sent say somebody holds. They are not in the picker above, because you cannot craft from someone else’s library — this answers who to ask.')));
 
   const list = el('ul', 'shared-blueprints');
 
@@ -19040,7 +19056,7 @@ async function renderSharedBlueprints() {
 
   for (const row of rows) {
     const holders = byName.get(row.name) || [];
-    const who = row.imported.handle || 'someone';
+    const who = row.imported.handle || tx('someone');
     if (!holders.includes(who)) holders.push(who);
     byName.set(row.name, holders);
   }
@@ -20187,8 +20203,7 @@ async function renderContractsPaid(stats) {
   // Nothing priced is not nothing earned, and a zero here would say the second.
   if (!paid.records.length) {
     note.hidden = false;
-    note.textContent = 'The game has never stated what one of your contracts paid. '
-      + 'It prices a completion only now and then, and only for hauling.';
+    note.textContent = tx('The game has never stated what one of your contracts paid. It prices a completion only now and then, and only for hauling.');
     return;
   }
 
@@ -20196,7 +20211,7 @@ async function renderContractsPaid(stats) {
 
   const tile = el('div', 'tile');
   tile.append(el('div', 'n', money(paid.value)));
-  tile.append(el('div', 'l', 'Stated payouts'));
+  tile.append(el('div', 'l', tx('Stated payouts')));
 
   // The strip's shared panel is the last child tiles() appended.
   const panel = strip.children[strip.children.length - 1];
@@ -20209,8 +20224,8 @@ async function renderContractsPaid(stats) {
   strip.append(panel);
 
   note.hidden = false;
-  note.textContent = `From ${paid.records.length} of your ${stats.contractsCompleted} completed `
-    + 'contracts — the only ones the game put a price on. A floor, not your contract income.';
+  note.textContent = tx('From {priced} of your {completed} completed contracts — the only ones the game put a price on. A floor, not your contract income.',
+    { priced: paid.records.length, completed: stats.contractsCompleted });
 }
 
 /* ---------- why this number ---------- */
@@ -20229,8 +20244,8 @@ async function renderContractsPaid(stats) {
 function explainable(tile, panel, figure, days = 0) {
   const why = el('button', 'why', '?');
   why.type = 'button';
-  why.title = 'Where this number came from';
-  why.setAttribute('aria-label', 'Where this number came from');
+  why.title = tx('Where this number came from');
+  why.setAttribute('aria-label', why.title);
 
   why.addEventListener('click', async () => {
     // One panel for the whole strip, so pressing a second question swaps the
@@ -20242,7 +20257,7 @@ function explainable(tile, panel, figure, days = 0) {
 
     panel.hidden = false;
     panel.dataset.figure = figure;
-    panel.textContent = 'Working it out…';
+    panel.textContent = tx('Working it out…');
 
     await fillExplanation(panel, figure, days);
   });
@@ -20260,7 +20275,7 @@ async function fillExplanation(panel, figure, days) {
     // A figure this build cannot explain says so. Silence would read as "there
     // is nothing behind this number", which is a much bigger claim.
     panel.textContent = '';
-    panel.append(el('div', 'why-rule', 'Nothing here knows how to explain that one yet.'));
+    panel.append(el('div', 'why-rule', tx('Nothing here knows how to explain that one yet.')));
     return;
   }
 
@@ -20273,7 +20288,7 @@ async function fillExplanation(panel, figure, days) {
   // it is worded rather than left as a blank space under the exclusions.
   if (!explained.records.length) {
     panel.append(el('div', 'why-rule muted',
-      'This figure has no underlying records — only the rule above.'));
+      tx('This figure has no underlying records — only the rule above.')));
     return;
   }
 
@@ -20284,14 +20299,14 @@ async function fillExplanation(panel, figure, days) {
   for (const record of explained.records.slice(0, 12)) {
     const row = el('div', 'why-record');
     row.append(el('span', 'muted', dateOf(record.at)));
-    row.append(el('span', null, record.where ? `${record.what} at ${record.where}` : record.what));
+    row.append(el('span', null, record.where ? tx('{what} at {where}', { what: record.what, where: record.where }) : record.what));
     row.append(el('span', 'amount', record.amount === null ? '' : money(record.amount)));
     list.append(row);
   }
 
   if (explained.records.length > 12) {
     list.append(el('div', 'why-rule muted',
-      `and ${(explained.records.length - 12).toLocaleString()} more.`));
+      tx('and {count} more.', { count: (explained.records.length - 12).toLocaleString() })));
   }
 
   panel.append(list);
@@ -24687,13 +24702,13 @@ const atSameStop = (seller, destination) => {
 
 function sellerLabel(seller, item) {
   const stock = seller.scu
-    ? ` · ${Math.round(seller.scu).toLocaleString()} SCU${shortStock(seller, item) ? ' — short' : ''}`
+    ? ` · ${Math.round(seller.scu).toLocaleString()} SCU${shortStock(seller, item) ? ` — ${tx('short')}` : ''}`
     : '';
 
   // Where it is and whether the law reaches it: the cheapest counter is
   // routinely the one in Pyro, and that is a decision, not a detail.
   const where = seller.system ? ` · ${seller.system}` : '';
-  const risk = seller.security === 'lawless' ? ' — lawless' : '';
+  const risk = seller.security === 'lawless' ? ` — ${tx('lawless')}` : '';
 
   return seller.price > 0
     ? `${seller.terminal} · ${money(seller.price)}${stock}${where}${risk}`
@@ -24716,7 +24731,7 @@ async function planShoppingTrip(job, card) {
   const missing = job.items.filter((i) => !i.have);
 
   if (!missing.length) {
-    alertLine($('#jobs-list'), 'Everything on this list is already in hand.');
+    alertLine($('#jobs-list'), tx('Everything on this list is already in hand.'));
     return;
   }
 
@@ -24729,12 +24744,12 @@ async function planShoppingTrip(job, card) {
 
   const head = el('div', 'chooser-head');
   head.append(el('span', null, destination
-    ? `Where to buy — ${destination.name} first, fewest stops after`
-    : 'Where to buy — optimised for fewer stops'));
+    ? tx('Where to buy — {place} first, fewest stops after', { place: destination.name })
+    : tx('Where to buy — optimised for fewer stops')));
   chooser.append(head);
 
   const rows = el('div', 'chooser-rows');
-  rows.append(el('div', 'muted', 'Looking up sellers…'));
+  rows.append(el('div', 'muted', tx('Looking up sellers…')));
   chooser.append(rows);
   card.append(chooser);
 
@@ -24753,8 +24768,8 @@ async function planShoppingTrip(job, card) {
   const retally = () => {
     const stops = new Set([...chosen.values()].filter(Boolean));
     count.textContent = stops.size
-      ? `${stops.size} stop${stops.size === 1 ? '' : 's'}`
-      : 'nothing chosen';
+      ? txn(stops.size, '{count} stop', '{count} stops')
+      : tx('nothing chosen');
   };
 
   /*
@@ -24824,12 +24839,12 @@ async function planShoppingTrip(job, card) {
       const what = el('div', 'chooser-what');
       what.append(el('div', 'name', item.name));
       what.append(el('div', 'sub', item.needed > 0
-        ? `${item.needed}${item.unit ? ` ${item.unit}` : ''} needed`
-        : 'any amount'));
+        ? tx('{amount} needed', { amount: `${item.needed}${item.unit ? ` ${item.unit}` : ''}` })
+        : tx('any amount')));
       row.append(what);
 
       if (!sellers.length) {
-        row.append(el('div', 'chooser-none', 'no known seller — left off'));
+        row.append(el('div', 'chooser-none', tx('no known seller — left off')));
         rows.append(row);
         continue;
       }
@@ -24845,7 +24860,7 @@ async function planShoppingTrip(job, card) {
 
       const skip = document.createElement('option');
       skip.value = '';
-      skip.textContent = 'Leave this one off';
+      skip.textContent = tx('Leave this one off');
       select.append(skip);
 
       select.value = chosen.get(item.name) ?? defaultSeller(sellers, item, destination).terminal;
@@ -24896,15 +24911,15 @@ async function planShoppingTrip(job, card) {
         || a.cost - b.cost);
 
     if (!ranked.length) {
-      rows.append(el('div', 'muted', 'Nothing on this list has a known seller.'));
+      rows.append(el('div', 'muted', tx('Nothing on this list has a known seller.')));
       return;
     }
 
     // The plan starts stop-efficient. This button returns to that answer after
     // the pilot has ticked counters by hand.
     const fewest = el('div', 'chooser-actions');
-    const pack = el('button', 'ghost', 'Optimise stops');
-    pack.title = 'Re-group the list into a stop-efficient route';
+    const pack = el('button', 'ghost', tx('Optimise stops'));
+    pack.title = tx('Re-group the list into a stop-efficient route');
 
     pack.addEventListener('click', () => {
       optimiseStops();
@@ -24942,7 +24957,7 @@ async function planShoppingTrip(job, card) {
       name.append(el('span', null, counter.seller.terminal));
 
       if (counter.seller.security === 'lawless')
-        name.append(el('span', 'sec sec-lawless', 'lawless'));
+        name.append(el('span', 'sec sec-lawless', tx('lawless')));
 
       what.append(name);
 
@@ -24963,7 +24978,7 @@ async function planShoppingTrip(job, card) {
       row.append(what);
 
       const sum = el('div', 'stop-sum');
-      sum.append(el('div', null, `${counter.supplies.length} of ${options.length}`));
+      sum.append(el('div', null, tx('{count} of {total}', { count: counter.supplies.length, total: options.length })));
       if (counter.cost > 0) sum.append(el('div', 'muted', money(counter.cost)));
       if (counter.seller.system) sum.append(el('div', 'muted', counter.seller.system));
       row.append(sum);
@@ -24985,7 +25000,7 @@ async function planShoppingTrip(job, card) {
   const views = el('div', 'seg chooser-views');
 
   for (const [key, label] of [['item', 'By item'], ['location', 'By location']]) {
-    const button = el('button', key === 'item' ? 'active' : null, label);
+    const button = el('button', key === 'item' ? 'active' : null, tx(label));
 
     button.addEventListener('click', () => {
       views.querySelectorAll('button').forEach((b) => b.classList.remove('active'));
@@ -25018,7 +25033,7 @@ async function planShoppingTrip(job, card) {
   renderItems();
   retally();
 
-  const create = el('button', 'ghost', 'Create plan');
+  const create = el('button', 'ghost', tx('Create plan'));
   create.addEventListener('click', async () => {
     const byPlace = new Map();
 
@@ -25043,7 +25058,7 @@ async function planShoppingTrip(job, card) {
     }
 
     if (!byPlace.size) {
-      alertLine($('#jobs-list'), 'Nothing is chosen, so there is no run to fly.');
+      alertLine($('#jobs-list'), tx('Nothing is chosen, so there is no run to fly.'));
       return;
     }
 
@@ -25057,10 +25072,10 @@ async function planShoppingTrip(job, card) {
     }));
 
     chooser.remove();
-    await planTrip(`${job.title} run`, stops);
+    await planTrip(tx('{title} run', { title: job.title }), stops);
   });
 
-  const cancel = el('button', 'ghost', 'Cancel');
+  const cancel = el('button', 'ghost', tx('Cancel'));
   cancel.addEventListener('click', () => chooser.remove());
 
   foot.append(count);

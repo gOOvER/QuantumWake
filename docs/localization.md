@@ -297,3 +297,41 @@ the pilot's saved plan title, and the screenshot card's per-check lines.
   name, and the per-check lines, wait for the server phase.
 - `NowFrenchTests` covers the feed shapes, a sentence it was never taught,
   the kind column, status and party, and the menus read-back.
+
+### 0.18.5
+
+The rest of Operations: the command deck, Contracts, Checklists, Blueprints,
+Wikelo and Events, so the whole group is French. The key probe over the six
+pages found 126 lookups the catalogue could not answer before the change;
+rendered again against this install with a shopping list, a build and a
+checklist seeded into the copied data folder, what is left in English is
+contract titles and types, issuers, Wikelo's trade names and blurbs, the
+event's own bar names ("Your total", "Defense") and the pilot's own list
+titles. 328 entries added, 1,261 in all.
+
+- **Shared helpers translate at the source.** The period picker, the "Hide
+  summary" toggle, the bar charts' empty line and the "why?" panel under a
+  summary tile are used across the app, so they are French on every page
+  that has them. The rule the server writes into the "why?" panel is still
+  English: that is a server sentence, phase 3.
+- **Difficulty is page text, not game text.** `ContractName` normalises the
+  mission id's `VeryHard` to `Very Hard` from a fixed set of five, so the
+  column and the live contract card show "Très difficile". The C# literals
+  anchor those entries for the orphan test.
+- **Builds and shopping runs are data once saved**, like Routes' plans: a
+  build started from Blueprints (or from Reference → Crafting) is titled
+  "Fabriquer …", and one started earlier keeps "Craft …".
+- **French agreement versus a count in a sentence.** "3 failed" as "3
+  échoués" would be "1 échoués" for one, and these are not plural keys, so
+  they are worded around the count instead: "échecs : 3", "livrés : 2".
+- **One label shortened for width.** The shopping list's place picker clipped
+  "N'importe où — pas d'arrêt particulier"; it is "Partout — sans arrêt
+  précis".
+- **The probe's "MIXED" lines are not misses here.** A French value carrying
+  a no-break space serialises as `&nbsp;`, so the key probe cannot match it
+  back to the catalogue; the visible-text probe and the screenshots confirm
+  those paragraphs render French.
+- `OperationsFrenchTests` covers Contracts (outcome, difficulty, standing),
+  an event's tiers and plurals, Wikelo's gate and counts, a shopping list
+  and a checklist, and that the game's names and the pilot's titles stay as
+  written.
