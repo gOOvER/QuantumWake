@@ -62,6 +62,12 @@ public sealed class SessionBuilder
     /// </summary>
     private readonly Dictionary<string, MissionEndedEvent> _missionEndings = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Contracts whose outcome a mission ending wrote, as opposed to one read
+    /// off an objective. Only these are final - see <see cref="End"/>.
+    /// </summary>
+    private readonly HashSet<string> _endedByMission = new(StringComparer.Ordinal);
+
     private readonly HashSet<string> _blueprints = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<BlueprintReceipt> _blueprintReceipts = [];
     private readonly List<RefineryCompletion> _refineryCompletions = [];
@@ -954,9 +960,12 @@ public sealed class SessionBuilder
     /// </para>
     /// <para>
     /// So completion now comes from <see cref="ApplyMissionEnded"/> and this
-    /// only ever records progress. Abandonment is still taken from a withdrawn
-    /// objective as well, because that is a claim about the contract rather
-    /// than about one step of it, and it is never contradicted by the ending.
+    /// only ever records progress. A withdrawn or failed objective is still
+    /// read as the contract going that way, because a log that stops there has
+    /// nothing better to say - but only provisionally. Both happen to contracts
+    /// that carry on and complete: an optional target that escapes, a step the
+    /// mission retracts. The next objective puts the contract back in progress,
+    /// and the mission's own ending overrides either.
     /// </para>
     /// </remarks>
     private void ApplyObjectiveState(MissionObjectiveEvent objective)
@@ -994,7 +1003,7 @@ public sealed class SessionBuilder
         // An ending is terminal. Objectives keep arriving after one - the
         // server upserts them as it tears the mission down - and none of that
         // may reopen a contract that is over.
-        if (Ended(contract.Outcome))
+        if (_endedByMission.Contains(key))
         {
             _contracts[key] = progressed;
             return;
@@ -1035,14 +1044,19 @@ public sealed class SessionBuilder
         End(key, contract, ended);
     }
 
-    /// <summary>Whether an outcome is one a contract can come back from.</summary>
-    private static bool Ended(ContractOutcome outcome) =>
-        outcome is ContractOutcome.Completed or ContractOutcome.Abandoned or ContractOutcome.Failed;
-
-    /// <summary>Writes an ending onto a contract that is not already ended.</summary>
+    /// <summary>Writes an ending onto a contract no ending has been written onto yet.</summary>
+    /// <remarks>
+    /// An outcome taken from an objective does not count as one. A patrol whose
+    /// optional ace pilot escapes logs that objective as failed, and one whose
+    /// "Return to Location" step is withdrawn logs that, and both then end
+    /// <c>MISSION_STATE_COMPLETED</c> and pay out. Treating the objective as
+    /// final threw the completion away: on 2026-10-10 and 10-11 that was a
+    /// Patrol Easy and a Patrol Hard, 667 Discovery Month points the journal
+    /// counted and the app did not.
+    /// </remarks>
     private void End(string key, ContractRecord contract, MissionEndedEvent ended)
     {
-        if (Ended(contract.Outcome)) return;
+        if (!_endedByMission.Add(key)) return;
 
         var outcome = ended.Ending switch
         {

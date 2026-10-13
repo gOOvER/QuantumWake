@@ -180,6 +180,45 @@ public class MissionEndingTests
         Assert.Equal(ContractOutcome.Abandoned, dropped.Outcome);
     }
 
+    /// <summary>
+    /// A step going wrong is not the contract going wrong. A Discovery Month
+    /// patrol whose optional ace pilot escaped, and one whose "Return to
+    /// Location" step was withdrawn, both ended <c>MISSION_STATE_COMPLETED</c>
+    /// and paid - and were filed as lost, 667 points the journal had and the
+    /// app did not.
+    /// </summary>
+    [Theory]
+    [InlineData(ObjectiveState.Failed)]
+    [InlineData(ObjectiveState.Withdrawn)]
+    public void A_contract_that_lost_a_step_and_then_completed_is_completed(ObjectiveState lost)
+    {
+        var end = T0.AddMinutes(12);
+
+        var contract = Only(Built(
+            Marker(T0),
+            Step(T0.AddMinutes(2), "ace_0", ObjectiveState.InProgress),
+            Step(T0.AddMinutes(5), "ace_0", lost),
+            Ended(end, MissionEnding.Completed)));
+
+        Assert.Equal(ContractOutcome.Completed, contract.Outcome);
+        Assert.Equal(end, contract.CompletedAt);
+    }
+
+    /// <summary>
+    /// The same contract while it is still being flown: the next objective
+    /// says it carries on, so the Now page does not show it lost meanwhile.
+    /// </summary>
+    [Fact]
+    public void A_contract_that_lost_a_step_is_back_in_progress_on_the_next()
+    {
+        var contract = Only(Built(
+            Marker(T0),
+            Step(T0.AddMinutes(5), "ace_0", ObjectiveState.Failed),
+            Step(T0.AddMinutes(6), "targets_0", ObjectiveState.InProgress)));
+
+        Assert.Equal(ContractOutcome.InProgress, contract.Outcome);
+    }
+
     /// <summary>A failure is as terminal as any other ending.</summary>
     [Fact]
     public void A_failure_cannot_be_reopened_by_a_later_objective()
