@@ -3042,6 +3042,66 @@ body.overlay .slot-spec,
 body.overlay .loadout-empty-slot,
 body.overlay .loadout-item-inspect { display: none; }
 
+/* Narrow overlay loadout: the character screen is useful at dashboard size,
+   while a single-column manifest is the scanable answer over the game. */
+body.overlay .overlay-loadout-strip,
+body.overlay .overlay-loadout-empty {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 9px;
+  align-items: baseline;
+  margin: 0 0 6px;
+  padding: 8px 9px;
+  border: 1px solid var(--cyan-deep);
+  border-left: 3px solid var(--cyan);
+  background: linear-gradient(100deg, rgba(53, 200, 240, .13), rgba(6, 15, 24, .9) 58%);
+}
+body.overlay .overlay-loadout-kicker {
+  grid-row: span 2;
+  color: var(--cyan-hot);
+  font: 8px var(--mono);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+body.overlay .overlay-loadout-strip strong,
+body.overlay .overlay-loadout-empty strong { color: var(--text); font-size: 12px; line-height: 1.2; }
+body.overlay .overlay-loadout-facts,
+body.overlay .overlay-loadout-empty > span:last-child { grid-column: 2; color: var(--muted); font-size: 9.5px; line-height: 1.35; }
+body.overlay .overlay-loadout-empty { min-height: 56px; border-left-color: var(--amber); }
+body.overlay .overlay-loadout-empty .overlay-loadout-kicker { color: var(--amber); }
+
+body.overlay .loadout-character { display: block; }
+body.overlay .loadout-sheet { display: grid; gap: 6px; }
+body.overlay .loadout-avatar-rig,
+body.overlay .loadout-field-kit,
+body.overlay .loadout-inventory-grid { display: contents; }
+body.overlay .loadout-equipment { display: contents; }
+body.overlay .loadout-slot,
+body.overlay .loadout-inventory-slot {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  min-height: 0;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--cyan-deep);
+  background: linear-gradient(110deg, rgba(14, 37, 52, .7), rgba(5, 13, 22, .84) 66%);
+  text-align: left;
+}
+body.overlay .loadout-equipment-left .loadout-equip-slot,
+body.overlay .loadout-equipment-right .loadout-equip-slot {
+  flex-direction: initial;
+  border-right-color: var(--rule);
+  border-left-color: var(--cyan-deep);
+  text-align: left;
+}
+body.overlay .loadout-equip-slot::after { display: none; }
+body.overlay .loadout-slot .slot-body { min-width: 0; }
+body.overlay .loadout-slot .card-label { margin: 0 0 2px; font-size: 8px; }
+body.overlay .loadout-slot .slot-current { color: var(--text); font-size: 11.5px; line-height: 1.25; overflow-wrap: anywhere; }
+body.overlay .loadout-slot .slot-icon { grid-row: span 2; align-self: center; color: var(--cyan-hot); }
+body.overlay .loadout-inventory-slot { border-left-color: var(--amber); background: linear-gradient(110deg, rgba(255, 171, 61, .09), rgba(5, 13, 22, .84) 66%); }
+body.overlay .loadout-inventory-slot .slot-icon { color: var(--amber); }
 /* ---------- map: search, highlight, follow, detail card ---------- */
 
 /* Search mode: matches glow, the rest recede but stay for context. The dim is

@@ -21264,6 +21264,24 @@ function loadoutReadiness(slots, completeSighting) {
   return strip;
 }
 
+/** The overlay trades the desktop character illustration for a named manifest:
+ * at widget width, a readable inventory order answers faster than body-zone art. */
+function overlayLoadoutStrip(slots, asOf) {
+  const strip = el('section', 'overlay-loadout-strip');
+  strip.setAttribute('aria-label', 'Current loadout summary');
+  const equipped = slots.filter((slot) => loadoutPlacement(slot));
+  const stowed = slots.length - equipped.length;
+  const facts = [
+    `${equipped.length} worn`,
+    `${stowed} carried`,
+    asOf ? `seen ${relative(asOf)}` : 'latest observed kit',
+  ];
+  strip.append(el('span', 'overlay-loadout-kicker', 'Current kit'));
+  strip.append(el('strong', null, `${slots.length} observed slots`));
+  strip.append(el('span', 'overlay-loadout-facts', facts.join(' · ')));
+  return strip;
+}
+
 function renderLoadout(stats) {
   libraryStats = stats;
 
@@ -21271,7 +21289,16 @@ function renderLoadout(stats) {
   host.textContent = '';
 
   if (!stats.loadout || !stats.loadout.length) {
-    host.append(el('p', 'muted', 'No attachment events recorded yet.'));
+    const compactOverlay = isOverlay || document.body.classList.contains('overlay');
+    if (compactOverlay) {
+      const empty = el('section', 'overlay-loadout-empty');
+      empty.append(el('span', 'overlay-loadout-kicker', 'Current kit'));
+      empty.append(el('strong', null, 'No equipment observed yet'));
+      empty.append(el('span', null, 'Quantum Wake will list attachments after the game writes an equipment event.'));
+      host.append(empty);
+    } else {
+      host.append(el('p', 'muted', 'No attachment events recorded yet.'));
+    }
     return;
   }
 
@@ -21289,7 +21316,9 @@ function renderLoadout(stats) {
     return;
   }
 
+  const compactOverlay = isOverlay || document.body.classList.contains('overlay');
   const screen = el('section', 'loadout-character');
+  if (compactOverlay) screen.append(overlayLoadoutStrip(slots, stats.loadoutAsOf));
   const head = el('div', 'loadout-character-head');
   const meta = stats.loadoutAsOf
     ? `Last complete sighting ${relative(stats.loadoutAsOf)}`

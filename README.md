@@ -403,7 +403,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.17.10
+### 0.17.11
+
+**Loadout now fits the overlay.** The desktop’s character screen needs room; in a small in-game widget it left sparse side cards and nearly invisible empty states. The overlay now uses a compact Current kit manifest: worn and carried counts first, then one clear row per observed attachment. If the game has not written any equipment events yet, it says so plainly.
 
 **The overlay is now a clearer flight instrument.** Glance mode keeps the active objective, a tracked event’s progress rail, and current status in one short stack. Its header has one named layout control instead of a row of competing controls, and every pin, layout, view, glance, or fullscreen change confirms itself on the overlay — including once it is click-through. High visibility is available under Settings → Overlay for brighter text and markers over the game, and Tiny density no longer drops below a readable type size.
 
