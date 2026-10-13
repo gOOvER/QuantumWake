@@ -264,3 +264,36 @@ hull and real UEX prices, what is left is commodity, terminal and ship names.
 - `tx()` trims its key, so a label with a trailing space (`'Space: '`) loses
   the space in translation; it is `${tx('Space:')} ` instead.
 - `RoutesFrenchTests` runs `RouteReliabilityTests`' route in French.
+
+### 0.18.4
+
+The Now page - the page every launch lands on. Rendered against this install
+with a live frame replayed into the page (40 feed entries, a party member, a
+tracked plan, Discovery Month): what is left in English is game text -
+contract titles, the event's own track names, a ship's community-data role -
+the pilot's saved plan title, and the screenshot card's per-check lines.
+279 entries added, 933 in all.
+
+- **The live feed is translated by shape.** Its sentences are written by the
+  parser, in English, and kept in every stored session; making the parser
+  speak French would mean re-reading every log. They come in a fixed set of
+  shapes - `Boarded {ship}`, `Paid {amount} aUEC`, `Quantum to {place}` - so
+  `FEED_SENTENCES` in `app.js` matches the shape and translates it, keeping
+  the names. Longer shapes are listed first (`Bought 12 SCU` before
+  `Bought {item}`), and a sentence that matches nothing is shown as written,
+  so a parser that rewords a line costs a translation, not the line.
+- **French has no article before a name it cannot elide.** "Quitté le ANVL
+  Hornet" and "vous avez sorti le Anvil…" read as errors; the ship sentences
+  became "Débarqué : {ship}" and "votre {ship}" instead.
+- **Routes read the Now page's text back.** "From here" skipped the location
+  when it started with "In menus" - in French it never did, so a pilot in the
+  menus would have sent "Dans les menus" as an origin. It compares against
+  `tx('In menus')` now; a search for other English read-backs found none.
+- **The status toggles' labels moved into a `<span>`.** The browser
+  serialises `checked` as `checked=""`, so a key holding the `<input>` could
+  not match both the page and the orphan test.
+- **Screenshot summaries are half done.** The fixed ones ("a mobiGlas screen
+  this app cannot read yet") translate; the ones built around a count or a
+  name, and the per-check lines, wait for the server phase.
+- `NowFrenchTests` covers the feed shapes, a sentence it was never taught,
+  the kind column, status and party, and the menus read-back.

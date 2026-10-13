@@ -852,7 +852,7 @@ function renderHiddenNowCards() {
     if (!hiddenNowCards.has(name)) continue;
 
     const label = card.querySelector('.card-label')?.textContent.trim() || name;
-    const show = el('button', 'ghost tiny', `Show ${label}`);
+    const show = el('button', 'ghost tiny', tx('Show {card}', { card: label }));
     show.type = 'button';
     show.addEventListener('click', () => {
       hiddenNowCards.delete(name);
@@ -873,13 +873,13 @@ function initNowCardCollapsers() {
     const actions = el('div', 'now-card-actions');
     const button = el('button', 'now-collapse now-card-action');
     button.type = 'button';
-    button.title = 'Collapse this card';
-    button.setAttribute('aria-label', 'Collapse this card');
+    button.title = tx('Collapse this card');
+    button.setAttribute('aria-label', tx('Collapse this card'));
     button.addEventListener('click', () => {
       const collapsed = !card.classList.contains('collapsed');
       card.classList.toggle('collapsed', collapsed);
       button.textContent = collapsed ? '⌄' : '⌃';
-      button.title = collapsed ? 'Expand this card' : 'Collapse this card';
+      button.title = collapsed ? tx('Expand this card') : tx('Collapse this card');
       button.setAttribute('aria-label', button.title);
       button.setAttribute('aria-expanded', String(!collapsed));
       if (collapsed) collapsedNowCards.add(name);
@@ -890,13 +890,13 @@ function initNowCardCollapsers() {
     const collapsed = collapsedNowCards.has(name);
     card.classList.toggle('collapsed', collapsed);
     button.textContent = collapsed ? '⌄' : '⌃';
-    button.title = collapsed ? 'Expand this card' : 'Collapse this card';
+    button.title = collapsed ? tx('Expand this card') : tx('Collapse this card');
     button.setAttribute('aria-label', button.title);
     button.setAttribute('aria-expanded', String(!collapsed));
 
     const hide = el('button', 'now-hide now-card-action', '×');
     hide.type = 'button';
-    hide.title = 'Hide this card from the Now page';
+    hide.title = tx('Hide this card from the Now page');
     hide.setAttribute('aria-label', hide.title);
     hide.addEventListener('click', () => {
       hiddenNowCards.add(name);
@@ -906,7 +906,7 @@ function initNowCardCollapsers() {
     });
     const grip = el('button', 'now-grip now-card-action', '⠿');
     grip.type = 'button';
-    grip.title = 'Drag to move this card; the arrow keys move it too';
+    grip.title = tx('Drag to move this card; the arrow keys move it too');
     grip.setAttribute('aria-label', grip.title);
 
     // The card is the thing that drags, but only while the grip is held:
@@ -1081,11 +1081,11 @@ function contractFocus(contracts) {
   if (hauls.length) {
     const ends = [...new Set(hauls.map((c) => c.delivery).filter(Boolean))];
     const detail = hauls.length === 1
-      ? (hauls[0].delivery ? `Deliver to ${hauls[0].delivery}` : hauls[0].name)
-      : `${hauls.length} hauls open${ends.length ? ` — to ${ends.join(', ')}` : ''}`;
+      ? (hauls[0].delivery ? tx('Deliver to {place}', { place: hauls[0].delivery }) : hauls[0].name)
+      : `${txn(hauls.length, '{count} haul open', '{count} hauls open')}${ends.length ? ` — ${tx('to {places}', { places: ends.join(', ') })}` : ''}`;
     // Shopping keeps the run under the lists, off the bottom of the page
     // when a list is open: the button lands on the run, not on the header.
-    return { title: hauls.length === 1 ? 'Hauling' : 'Hauling run', detail, view: 'jobs', action: 'Plan the run', anchor: '#jobs-contracts' };
+    return { title: hauls.length === 1 ? tx('Hauling') : tx('Hauling run'), detail, view: 'jobs', action: tx('Plan the run'), anchor: '#jobs-contracts' };
   }
 
   // An event contract says what finishing it is worth: the journal shows the
@@ -1093,14 +1093,14 @@ function contractFocus(contracts) {
   const paying = contracts.find((c) => c.eventPoints);
   if (paying) {
     return {
-      title: 'Event contract',
-      detail: `${paying.name || 'Open contract'} · +${paying.eventPoints.toLocaleString()} pts to ${(paying.eventTracks || []).join(', ') || paying.event}`,
+      title: tx('Event contract'),
+      detail: `${paying.name || tx('Open contract')} · ${tx('+{points} pts to {tracks}', { points: paying.eventPoints.toLocaleString(), tracks: (paying.eventTracks || []).join(', ') || paying.event })}`,
       view: 'events',
-      action: 'Event progress',
+      action: tx('Event progress'),
     };
   }
 
-  return { title: 'Active contract', detail: contracts[0].name || 'Open contract', view: 'contracts', action: 'Contracts' };
+  return { title: tx('Active contract'), detail: contracts[0].name || tx('Open contract'), view: 'contracts', action: tx('Contracts') };
 }
 
 /** The one decision worth leading the hub with, before the configurable cards. */
@@ -1115,11 +1115,11 @@ function renderNowFocus(state, briefing = pilotBriefing) {
   const nextStop = (briefing?.stops || []).find(stop => !stop.done);
   let focus = null;
 
-  if (state?.travelling) focus = { title: 'In quantum', detail: state.travellingTo || 'Destination not identified', view: 'map', action: 'Map' };
-  else if (differing) focus = { title: 'Screenshot differs from the logs', detail: differing, view: 'log', action: 'Log' };
-  else if (nextStop) focus = { title: 'Next stop', detail: nextStop.place || briefing.tripTitle || 'Tracked flight plan', view: 'map', action: 'Map' };
+  if (state?.travelling) focus = { title: tx('In quantum'), detail: state.travellingTo || tx('Destination not identified'), view: 'map', action: tx('Map') };
+  else if (differing) focus = { title: tx('Screenshot differs from the logs'), detail: differing, view: 'log', action: tx('Log') };
+  else if (nextStop) focus = { title: tx('Next stop'), detail: nextStop.place || briefing.tripTitle || tx('Tracked flight plan'), view: 'map', action: tx('Map') };
   else if (state?.contracts?.length) focus = contractFocus(state.contracts);
-  else if (state?.location) focus = { title: 'At location', detail: state.location, view: 'map', action: 'Map' };
+  else if (state?.location) focus = { title: tx('At location'), detail: state.location, view: 'map', action: tx('Map') };
 
   strip.hidden = !focus;
   if (!focus) return;
@@ -1135,7 +1135,7 @@ function renderNow(state) {
   $('#link').classList.toggle('live', !!state.connected);
   $('#link').title = state.connected ? tx('live') : tx('disconnected');
 
-  $('#now-location').textContent = state.location || (state.inGame ? 'Unknown' : 'In menus');
+  $('#now-location').textContent = state.location || (state.inGame ? tx('Unknown') : tx('In menus'));
   $('#now-location-sub').textContent = [state.locationBody, state.locationSystem].filter(Boolean).join(' · ');
 
   // The map follows the live feed, so the marker moves as the player does -
@@ -1149,7 +1149,9 @@ function renderNow(state) {
   refreshPilotBriefing(state).catch(() => {});
 
   const confidence = $('#now-confidence');
-  confidence.textContent = state.location ? `${state.confidence.toLowerCase()} confidence` : '';
+  const CONFIDENCE = { none: tx('none confidence'), low: tx('low confidence'), medium: tx('medium confidence'), high: tx('high confidence') };
+  const level = (state.confidence || '').toLowerCase();
+  confidence.textContent = state.location ? (CONFIDENCE[level] || `${level} confidence`) : '';
   confidence.className = `confidence ${(state.confidence || '').toLowerCase()}`;
 
   const travel = $('#now-travel');
@@ -1159,7 +1161,7 @@ function renderNow(state) {
   renderNowShip(state.ship);
   $('#now-handle').textContent = state.handle || '—';
   $('#now-version').textContent = state.gameVersion || '';
-  $('#now-mode').textContent = state.inGame ? (state.gameRules || 'in game') : 'frontend / menus';
+  $('#now-mode').textContent = state.inGame ? (state.gameRules || tx('in game')) : tx('frontend / menus');
   $('#now-deaths').textContent = state.deaths ?? 0;
   $('#now-incaps').textContent = state.incapacitations ?? 0;
 
@@ -1169,8 +1171,7 @@ function renderNow(state) {
   // nothing that names a killer, and a counter stuck at zero reads as broken
   // rather than absent. The About page says where they went.
   $('#combat-note').textContent =
-    'Deaths are inferred from corpse item-recovery bursts — 4.9 and 4.10 no longer write '
-    + '<Actor Death>, and an Incapacitated notification is not always raised.';
+    tx('Deaths are inferred from corpse item-recovery bursts — 4.9 and 4.10 no longer write <Actor Death>, and an Incapacitated notification is not always raised.');
 
   sessionStarted = state.sessionStarted || null;
 
@@ -1193,7 +1194,7 @@ function renderNow(state) {
   feed.textContent = '';
 
   if (!state.recentEvents || state.recentEvents.length === 0) {
-    feed.append(el('li', 'empty', state.connected ? 'Nothing yet this session.' : 'Waiting for the game…'));
+    feed.append(el('li', 'empty', state.connected ? tx('Nothing yet this session.') : tx('Waiting for the game…')));
   } else {
     // The widget shows a short tail; the full feed belongs on the page.
     const entries = isOverlay ? state.recentEvents.slice(0, 12) : state.recentEvents;
@@ -1201,9 +1202,9 @@ function renderNow(state) {
     for (const entry of entries) {
       const li = el('li');
       li.append(el('span', 't', timeOf(entry.at)));
-      li.append(el('span', `k ${entry.kind}`, entry.kind));
-      li.append(el('span', 'x', entry.text));
-      if (entry.detail) li.append(el('span', 'd', withoutMarkup(entry.detail)));
+      li.append(el('span', `k ${entry.kind}`, feedKind(entry.kind)));
+      li.append(el('span', 'x', feedText(entry.text)));
+      if (entry.detail) li.append(el('span', 'd', feedText(withoutMarkup(entry.detail))));
       feed.append(li);
     }
   }
@@ -1224,6 +1225,63 @@ function withoutMarkup(text) {
   return typeof text === 'string' ? text.replace(/<\/?EM\d*>/gi, '').trim() : text;
 }
 
+/*
+ * The feed's sentences in the page language.
+ *
+ * The parser writes them in English while it reads the log, and every stored
+ * session keeps them that way, so translating them at the source would mean
+ * re-reading every log. They come in a fixed set of shapes - "Boarded {ship}",
+ * "Paid {amount} aUEC" - so the page matches the shape and translates that,
+ * keeping the names. A sentence that matches nothing is shown as written: a
+ * parser that changes its wording costs the French reader a translation, not
+ * the line.
+ */
+const FEED_SENTENCES = [
+  [/^Signed in as (.+)$/, (m) => tx('Signed in as {handle}', { handle: m[1] })],
+  [/^Sold (\d[\d,]*) SCU$/, (m) => tx('Sold {count} SCU', { count: m[1] })],
+  [/^Bought (\d[\d,]*) SCU$/, (m) => tx('Bought {count} SCU', { count: m[1] })],
+  [/^Sold (.+)$/, (m) => tx('Sold {item}', { item: m[1] })],
+  [/^Bought (.+)$/, (m) => tx('Bought {item}', { item: m[1] })],
+  [/^(.+) disabled$/, (m) => tx('{ship} disabled', { ship: m[1] })],
+  [/^(.+) destroyed$/, (m) => tx('{ship} destroyed', { ship: m[1] })],
+  [/^Joined (.+)$/, (m) => tx('Joined {server}', { server: m[1] })],
+  [/^Boarded (.+)$/, (m) => tx('Boarded {ship}', { ship: m[1] })],
+  [/^Left (.+)$/, (m) => tx('Left {ship}', { ship: m[1] })],
+  [/^Retrieved (.+)$/, (m) => tx('Retrieved {ship}', { ship: m[1] })],
+  [/^Quantum to (.+)$/, (m) => tx('Quantum to {place}', { place: m[1] })],
+  [/^(.+) came aboard$/, (m) => tx('{handle} came aboard', { handle: m[1] })],
+  [/^(.+) joined the party$/, (m) => tx('{handle} joined the party', { handle: m[1] })],
+  [/^(.+) left the party$/, (m) => tx('{handle} left the party', { handle: m[1] })],
+  [/^Paid (.+) aUEC$/, (m) => tx('Paid {amount} aUEC', { amount: m[1] })],
+  [/^Killed by (.+)$/, (m) => tx('Killed by {killer}', { killer: m[1] })],
+  [/^Killed (.+)$/, (m) => tx('Killed {victim}', { victim: m[1] })],
+];
+
+const FEED_WORDS = ['Disconnected', 'Woke up', 'Woke up here', 'Treated at a medical bed', 'Used a bed',
+  'Incapacitated', 'Contract accepted', 'Contract completed', 'Refinery order complete',
+  'Blueprint received', 'Died', 'in your party'];
+
+function feedText(text) {
+  if (QW_LANGUAGE === 'en' || typeof text !== 'string') return text;
+  if (FEED_WORDS.includes(text)) return tx(text);
+  for (const [shape, say] of FEED_SENTENCES) {
+    const match = shape.exec(text);
+    if (match) return say(match);
+  }
+  return text;
+}
+
+/* The feed's kind column: the class keeps the parser's word, the reader gets the page's. */
+const FEED_KINDS = {
+  login: 'login', sold: 'sold', bought: 'bought', 'vehicle-destroyed': 'vehicle-destroyed',
+  disconnect: 'disconnect', shard: 'shard', ship: 'ship', respawn: 'respawn', location: 'location',
+  quantum: 'quantum', incapacitated: 'incapacitated', party: 'party', contract: 'contract',
+  payout: 'payout', medbed: 'medbed', refinery: 'refinery', blueprint: 'blueprint',
+  'contract-done': 'contract-done', death: 'death', kill: 'kill', 'screen-differs': 'screen-differs',
+};
+
+const feedKind = (kind) => (FEED_KINDS[kind] ? tx(FEED_KINDS[kind]) : kind);
+
 const TOAST_MS = 9000;
 
 /**
@@ -1234,16 +1292,16 @@ const TOAST_MS = 9000;
  * notifier that fires on arrivals and medbeds trains people to ignore it.
  */
 const TOAST_KINDS = {
-  'contract-done': 'Contract complete',
-  payout: 'Paid',
+  'contract-done': tx('Contract complete'),
+  payout: tx('Paid'),
 
   // Only disagreements. A pilot photographing a loadout takes several frames
   // in a row, and a toast apiece would teach them to ignore the toasts.
-  'screen-differs': 'Screenshot differs',
+  'screen-differs': tx('Screenshot differs'),
 
   // The game's own word that a refinery order finished - unless the pilot
   // asked for the terminal's clock only, or for nothing; see refineryNotifyMode.
-  refinery: 'Refinery order complete',
+  refinery: tx('Refinery order complete'),
 };
 
 /**
@@ -1345,8 +1403,8 @@ function toast(kind, text, detail) {
   if (!host) return;
 
   const card = el('div', `toast ${kind}`);
-  card.append(el('span', 'toast-text', text));
-  if (detail) card.append(el('span', 'toast-detail', withoutMarkup(detail)));
+  card.append(el('span', 'toast-text', feedText(text)));
+  if (detail) card.append(el('span', 'toast-detail', feedText(withoutMarkup(detail))));
 
   card.addEventListener('click', () => card.remove());
   host.append(card);
@@ -1402,20 +1460,18 @@ async function loadEarnings() {
 
   if (noRate) {
     $('#now-earning-rate').hidden = false;
-    $('#now-earning-rate').textContent = 'No trading yet';
+    $('#now-earning-rate').textContent = tx('No trading yet');
     renderGoal(state);
     return;
   }
 
   $('#now-earning-rate').textContent = `${money(rate.perHour)}/h`;
   $('#now-earning-sub').textContent = state.basis === 'recent'
-    ? `trading profit, last ${rate.days} days · ${hoursOf(rate.inGame)} in game`
-    : `trading profit, all time · ${hoursOf(rate.inGame)} in game`;
+    ? tx('trading profit, last {days} days · {hours} in game', { days: rate.days, hours: hoursOf(rate.inGame) })
+    : tx('trading profit, all time · {hours} in game', { hours: hoursOf(rate.inGame) });
 
   $('#now-earning-note').textContent =
-    'Commodity sales are the only income the logs record, so contracts, bounties '
-    + 'and mission rewards are not in this. It is a floor on what you earn, and '
-    + 'menu time is left out of the hours.';
+    tx('Commodity sales are the only income the logs record, so contracts, bounties and mission rewards are not in this. It is a floor on what you earn, and menu time is left out of the hours.');
 
   renderGoal(state);
 }
@@ -1441,10 +1497,12 @@ function renderNowCash(read) {
   const moved = Number(read.movementsSince) || 0;
   line.hidden = false;
   note.hidden = false;
-  $('#now-cash-value').textContent = moved ? `about ${money(read.estimate)}` : money(read.balance);
+  $('#now-cash-value').textContent = moved ? tx('about {money}', { money: money(read.estimate) }) : money(read.balance);
   note.textContent = moved
-    ? `Estimate: ${money(read.balance)} on a screenshot ${dateOf(read.shotAt)}, carried by ${moved} movement${moved === 1 ? '' : 's'} logged since.`
-    : `From a screenshot ${dateOf(read.shotAt)}; nothing has moved in the logs since.`;
+    ? txn(moved, 'Estimate: {money} on a screenshot {date}, carried by {count} movement logged since.',
+      'Estimate: {money} on a screenshot {date}, carried by {count} movements logged since.',
+      { money: money(read.balance), date: dateOf(read.shotAt) })
+    : tx('From a screenshot {date}; nothing has moved in the logs since.', { date: dateOf(read.shotAt) });
 }
 
 /** Turns an ISO-ish duration from the server into hours a person reads. */
@@ -1494,8 +1552,8 @@ function renderGoal(state) {
   // Hours of flying, not a calendar date. The app has no idea how often
   // somebody plays, and a date would be inventing that.
   $('#now-goal-eta').textContent = state.hoursToGoal
-    ? `${hoursOf(state.hoursToGoal)} of trading`
-    : 'no rate yet';
+    ? tx('{hours} of trading', { hours: hoursOf(state.hoursToGoal) })
+    : tx('no rate yet');
 
 }
 
@@ -1547,17 +1605,23 @@ function renderNowParty(state) {
   for (const member of party) {
     const li = el('li');
     li.append(el('span', 't', timeOf(member.at)));
-    li.append(el('span', 'k party', member.moment));
+    li.append(el('span', 'k party', PARTY_MOMENTS[member.moment] ? tx(PARTY_MOMENTS[member.moment]) : member.moment));
     li.append(el('span', 'x', member.handle));
     list.append(li);
   }
 
   $('#now-party-note').textContent =
-    `${party.length} ${party.length === 1 ? 'person' : 'people'} named by party `
-    + 'notifications — a floor, not a roster. '
-    + 'Someone already online when you grouped up is never announced'
-    + (state.partyDisbanded ? '. The party has since disbanded.' : '.');
+    txn(party.length, '{count} person named by party notifications — a floor, not a roster.',
+      '{count} people named by party notifications — a floor, not a roster.')
+    + ` ${tx('Someone already online when you grouped up is never announced.')}`
+    + (state.partyDisbanded ? ` ${tx('The party has since disbanded.')}` : '');
 }
+
+/* The server's lower-cased PartyMoment names. */
+const PARTY_MOMENTS = {
+  connected: 'connected', disconnected: 'disconnected', becameleader: 'became leader',
+  disbanded: 'disbanded', joined: 'joined', left: 'left',
+};
 
 /**
  * The briefing answers the decisions that depend on a live location. It only
@@ -1651,10 +1715,10 @@ async function pinBriefingToOverlay() {
     // normal response rather than a thrown one, so it has to be looked at.
     const response = await fetch('/api/overlay?visible=true', { method: 'POST' });
 
-    button.textContent = response.ok ? '✓ pinned' : 'no overlay';
-    button.title = response.ok ? '' : 'The dashboard is running without the overlay.';
+    button.textContent = response.ok ? tx('✓ pinned') : tx('no overlay');
+    button.title = response.ok ? '' : tx('The dashboard is running without the overlay.');
   } catch {
-    button.textContent = 'failed';
+    button.textContent = tx('failed');
   } finally {
     button.disabled = false;
   }
@@ -1668,7 +1732,7 @@ function briefingStopRow(briefing, stop) {
   const row = el('div', 'briefing-row');
   const main = el('div', 'briefing-main');
   const name = el('button', 'briefing-link', stop.place);
-  name.title = 'Show this stop on the map';
+  name.title = tx('Show this stop on the map');
   name.addEventListener('click', () => briefingMap(stop.placeId, stop.place));
   main.append(name);
   if (stop.note) main.append(el('div', 'briefing-detail', stop.note));
@@ -1680,13 +1744,13 @@ function briefingStopRow(briefing, stop) {
     const quantity = action.quantity
       ? ` ${action.quantity.toLocaleString()}${action.unit ? ` ${action.unit}` : ''}`
       : '';
-    main.append(el('div', 'briefing-detail', `${action.kind}${quantity} · ${action.text}`));
+    main.append(el('div', 'briefing-detail', `${runActionLabel(action.kind)}${quantity} · ${action.text}`));
   }
 
   row.append(main);
 
-  const done = el('button', 'ghost tiny', 'Mark collected');
-  done.title = 'Cross this stop off';
+  const done = el('button', 'ghost tiny', tx('Mark collected'));
+  done.title = tx('Cross this stop off');
   done.addEventListener('click', async () => {
     done.disabled = true;
     try {
@@ -1704,11 +1768,11 @@ function briefingShoppingRow(item) {
   const row = el('div', 'briefing-row');
   const main = el('div', 'briefing-main');
   main.append(el('b', null, item.name));
-  main.append(el('div', 'briefing-detail', `${item.needed} ${item.unit || 'needed'} · ${item.terminal} · ${money(item.price)}`));
+  main.append(el('div', 'briefing-detail', `${item.needed} ${item.unit || tx('needed')} · ${item.terminal} · ${money(item.price)}`));
   row.append(main);
 
-  const map = el('button', 'ghost tiny', 'Map');
-  map.title = 'Show this seller on the map';
+  const map = el('button', 'ghost tiny', tx('Map'));
+  map.title = tx('Show this seller on the map');
   map.addEventListener('click', () => {
     showView('map');
     centreOnTerminal(item.terminal, null);
@@ -1738,10 +1802,10 @@ try {
 } catch { /* a bad preference must not blank the briefing */ }
 
 const FOCUS_LABELS = {
-  freight: 'Freight',
-  mining: 'Mining',
-  combat: 'Combat',
-  explore: 'Exploration',
+  freight: tx('Freight'),
+  mining: tx('Mining'),
+  combat: tx('Combat'),
+  explore: tx('Exploration'),
 };
 
 /**
@@ -1814,7 +1878,7 @@ function renderBriefingFocus(briefing) {
   if (!focus) {
     why.textContent = '';
   } else if (chosen) {
-    why.textContent = `${FOCUS_LABELS[focus] || focus} — your choice, not your ship's.`;
+    why.textContent = tx('{focus} — your choice, not your ship\'s.', { focus: FOCUS_LABELS[focus] || focus });
   } else {
     // "a light mining ship", not "a light mining". The dataset's roles are noun
     // phrases that need the word after them, and the compound ones - "Starter /
@@ -1822,8 +1886,9 @@ function renderBriefingFocus(briefing) {
     const from = briefing.focus;
     const role = from.role ? from.role.toLowerCase().replaceAll(' / ', ' or ') : null;
 
-    why.textContent = `${from.label} — you retrieved ${from.ship}`
-      + (role ? `, a ${role} ship.` : '.');
+    why.textContent = role
+      ? tx('{focus} — you retrieved {ship}, a {role} ship.', { focus: tx(from.label), ship: from.ship, role })
+      : tx('{focus} — you retrieved {ship}.', { focus: tx(from.label), ship: from.ship });
   }
 
   why.hidden = !why.textContent;
@@ -1856,17 +1921,17 @@ function renderBriefingMining(briefing, focus) {
     main.append(el('b', null, place.place));
     main.append(el('div', 'briefing-detail', [
       place.system,
-      place.best ? `best: ${place.best}` : null,
-      `${Math.round(place.ore)}% ore`,
+      place.best ? tx('best: {mineral}', { mineral: place.best }) : null,
+      tx('{percent}% ore', { percent: Math.round(place.ore) }),
     ].filter(Boolean).join(' · ')));
     row.append(main);
-    row.append(el('span', 'inward', `${money(place.perRock)}/rock`));
+    row.append(el('span', 'inward', tx('{money}/rock', { money: money(place.perRock) })));
     list.append(row);
   }
 
   list.append(el('div', 'briefing-caveat', rows[0].here
-    ? 'What a rock is worth, from the game’s own deposit tables.'
-    : 'The deposit tables place nothing in this system — these are the best anywhere.'));
+    ? tx('What a rock is worth, from the game’s own deposit tables.')
+    : tx('The deposit tables place nothing in this system — these are the best anywhere.')));
 }
 
 /**
@@ -1891,16 +1956,15 @@ function renderBriefingClaim(briefing, focus) {
   const main = el('div', 'briefing-main');
   main.append(el('b', null, claim.ship));
   main.append(el('div', 'briefing-detail', [
-    claim.standardMinutes ? `standard ~${Math.round(claim.standardMinutes)}m` : null,
-    claim.expeditedMinutes ? `expedited ~${Math.round(claim.expeditedMinutes)}m` : null,
-  ].filter(Boolean).join(' · ') || 'The reference data gives no claim time.'));
+    claim.standardMinutes ? tx('standard ~{minutes}m', { minutes: Math.round(claim.standardMinutes) }) : null,
+    claim.expeditedMinutes ? tx('expedited ~{minutes}m', { minutes: Math.round(claim.expeditedMinutes) }) : null,
+  ].filter(Boolean).join(' · ') || tx('The reference data gives no claim time.')));
   row.append(main);
   if (claim.expeditedCost) row.append(el('span', 'outward', money(claim.expeditedCost)));
   list.append(row);
 
   list.append(el('div', 'briefing-caveat',
-    'From the game’s own tables. Game.log records no insurance claim, '
-    + 'so this is what one costs — not one in progress.'));
+    tx('From the game’s own tables. Game.log records no insurance claim, so this is what one costs — not one in progress.')));
 }
 
 function renderPilotBriefing(briefing) {
@@ -1912,8 +1976,8 @@ function renderPilotBriefing(briefing) {
 
   $('#briefing-title').textContent = briefing.location;
   $('#briefing-sub').textContent = briefing.tripTitle
-    ? `Active flight plan · ${briefing.tripTitle}`
-    : 'No active flight plan';
+    ? `${tx('Active flight plan')} · ${briefing.tripTitle}`
+    : tx('No active flight plan');
 
   const stops = $('#briefing-stops');
   stops.textContent = '';
@@ -1933,17 +1997,17 @@ function renderPilotBriefing(briefing) {
       const row = el('div', 'briefing-row');
       const main = el('div', 'briefing-main');
       const commodity = el('button', 'briefing-link', lead.commodity);
-      commodity.title = 'Open this commodity in Market';
+      commodity.title = tx('Open this commodity in Market');
       commodity.addEventListener('click', () => openCommodity(lead.commodity));
       main.append(commodity);
       main.append(el('div', 'briefing-detail',
-        `buy ${money(lead.buyHere)} → sell ${money(lead.sellThere)} at ${lead.sellTerminal}`));
+        tx('buy {buy} → sell {sell} at {terminal}', { buy: money(lead.buyHere), sell: money(lead.sellThere), terminal: lead.sellTerminal })));
       row.append(main);
       row.append(el('span', 'inward', `+${money(lead.marginPerScu)}/SCU`));
       trade.append(row);
     }
     if ((briefing.trade || []).length)
-      trade.append(el('div', 'briefing-caveat', 'Leads only — cargo in your hold is not recorded by Game.log.'));
+      trade.append(el('div', 'briefing-caveat', tx('Leads only — cargo in your hold is not recorded by Game.log.')));
   }
   $('#briefing-trade-section').hidden = !cargoReady || !(briefing.trade || []).length;
 
@@ -1959,10 +2023,11 @@ function renderPilotBriefing(briefing) {
       chip.addEventListener('click', () => selectMapService(key, true));
     }
     chip.append(el('span', 'service-icon', SERVICE_META[key]?.icon || '•'));
-    chip.append(el('span', 'service-text', `${service.name}: ${service.status}`));
+    // Name and status are the server's English; the class above keeps its word.
+    chip.append(el('span', 'service-text', tx('{service}: {status}', { service: tx(service.name), status: tx(service.status) })));
     chip.title = canMap
-      ? `Show ${SERVICE_META[key].label.toLowerCase()} on the map`
-      : service.dataEnabled ? 'No map location is known for this service' : 'No installed data reports this service';
+      ? tx('Show {service} on the map', { service: tx(SERVICE_META[key].label).toLowerCase() })
+      : service.dataEnabled ? tx('No map location is known for this service') : tx('No installed data reports this service');
     services.append(chip);
   }
   $('#briefing-services-section').hidden = !(briefing.services || []).length;
@@ -1973,7 +2038,7 @@ function renderPilotBriefing(briefing) {
     const row = el('div', 'briefing-row');
     const main = el('div', 'briefing-main');
     main.append(el('b', null, item.name));
-    main.append(el('div', 'briefing-detail', item.category));
+    main.append(el('div', 'briefing-detail', tx(item.category)));
     row.append(main);
     stash.append(row);
   }
@@ -3739,7 +3804,7 @@ async function refreshTradeAdvice(place) {
   }
 
   $('#trade-advice-sub').textContent =
-    `${advice.terminal} · best margins per SCU, UEX community prices`;
+    `${advice.terminal} · ${tx('best margins per SCU, UEX community prices')}`;
 
   const list = $('#trade-advice');
   list.textContent = '';
@@ -3747,7 +3812,7 @@ async function refreshTradeAdvice(place) {
   for (const o of advice.opportunities) {
     const li = el('li');
     li.append(el('b', null, o.commodity));
-    li.append(el('span', 'muted', ` buy ${money(o.buyHere)} → sell ${money(o.sellThere)} at ${o.sellTerminal} `));
+    li.append(el('span', 'muted', ` ${tx('buy {buy} → sell {sell} at {terminal}', { buy: money(o.buyHere), sell: money(o.sellThere), terminal: o.sellTerminal })} `));
     li.append(el('span', 'inward', `+${money(o.marginPerScu)}/SCU`));
     list.append(li);
   }
@@ -4965,15 +5030,15 @@ const refineryRowId = (row) => (row.kind === 'order' ? row.order.id : row.done.i
 
 /** One line on how ready a row is, and on whose word. */
 function refineryReadyText(row, nowMs) {
-  if (row.kind === 'done') return `ready — the game said so at ${timeOf(row.done.at)}, ${dateOf(row.done.at)}`;
+  if (row.kind === 'done') return tx('ready — the game said so at {time}, {date}', { time: timeOf(row.done.at), date: dateOf(row.done.at) });
 
   const order = row.order;
   const due = order.dueAt ? shortTimeOf(order.dueAt) : null;
-  const quote = order.basis === 'quote' ? ' if you confirmed the quote' : '';
+  const quote = order.basis === 'quote' ? ` ${tx('if you confirmed the quote')}` : '';
 
-  if (row.state === 'done') return `ready — the game said so at ${timeOf(order.completedAt)}`;
-  if (row.state === 'due') return `should be ready since ${due}${quote}, by the terminal’s clock — the game has not said`;
-  return `due ${due} (${refineryClock((Date.parse(order.dueAt) - nowMs) / 1000)})${quote}`;
+  if (row.state === 'done') return tx('ready — the game said so at {time}', { time: timeOf(order.completedAt) });
+  if (row.state === 'due') return tx('should be ready since {time}{quote}, by the terminal’s clock — the game has not said', { time: due, quote });
+  return `${tx('due {time} ({left})', { time: due, left: refineryClock((Date.parse(order.dueAt) - nowMs) / 1000) })}${quote}`;
 }
 
 /** "Waiting for you at MIC-L5 Modern Icarus Station" - the line the pilot opened the page for. */
@@ -4981,7 +5046,8 @@ function refineryWaitingLine(groups) {
   const stations = [...new Set(groups.waiting.map(refineryRowStation))];
   if (!stations.length) return null;
   const orders = groups.waiting.length;
-  return `Waiting for you at ${stations.join(', ')}${orders > stations.length ? ` — ${orders} orders` : ''}`;
+  return tx('Waiting for you at {stations}', { stations: stations.join(', ') })
+    + (orders > stations.length ? ` — ${txn(orders, '{count} order', '{count} orders')}` : '');
 }
 
 /** Marks a row picked up, or takes that back, and redraws both places it shows. */
@@ -5111,7 +5177,7 @@ function renderNowRefinery() {
   if (card.hidden) return;
 
   $('#now-refinery').textContent = refineryWaitingLine(groups)
-    || `Refining at ${[...new Set(groups.refining.map(refineryRowStation))].join(', ')}`;
+    || tx('Refining at {stations}', { stations: [...new Set(groups.refining.map(refineryRowStation))].join(', ') });
 
   const list = $('#now-refinery-list');
   list.textContent = '';
@@ -5122,7 +5188,7 @@ function renderNowRefinery() {
     li.append(el('span', 'd', ` · ${refineryReadyText(row, now)}`));
 
     if (row.state !== 'running') {
-      const button = el('button', 'ghost tiny refinery-collect', 'Collected');
+      const button = el('button', 'ghost tiny refinery-collect', tx('Collected'));
       button.type = 'button';
       button.addEventListener('click', () => setRefineryCollected(refineryRowId(row), false));
       li.append(button);
@@ -7546,25 +7612,25 @@ async function parseClipboard(quiet = false) {
 
 /** What kind of screen a reading was, in words a pilot would use. */
 const SCREEN_KINDS = {
-  Tooltip: 'item',
-  Loadout: 'loadout',
-  Map: 'map',
-  Contracts: 'contracts',
-  Fleet: 'fleet',
-  Reputation: 'reputation',
-  Kiosk: 'kiosk',
-  Mining: 'rock scan',
-  Refinery: 'refinery',
+  Tooltip: tx('item'),
+  Loadout: tx('loadout'),
+  Map: tx('map'),
+  Contracts: tx('contracts'),
+  Fleet: tx('fleet'),
+  Reputation: tx('reputation'),
+  Kiosk: tx('kiosk'),
+  Mining: tx('rock scan'),
+  Refinery: tx('refinery'),
   MobiGlas: 'mobiGlas',
-  Unknown: 'unread',
+  Unknown: tx('unread'),
 };
 
 /** A check's verdict, worded for a reader. */
 const SCREEN_VERDICTS = {
-  agrees: 'agrees',
-  differs: 'differs',
-  new: 'new',
-  unchecked: 'not checked',
+  agrees: tx('agrees'),
+  differs: tx('differs'),
+  new: tx('new'),
+  unchecked: tx('not checked'),
 };
 
 /** One check as a feed row: the verdict, then what the screen said beside what the app thought. */
@@ -7577,7 +7643,7 @@ function screenCheckRow(check) {
 
   // The belief is shown whatever the verdict: an agreement with nothing
   // beside it looks like a screen that was taken on trust.
-  li.append(el('span', 'd', ` · logs: ${check.belief}`));
+  li.append(el('span', 'd', ` · ${tx('logs: {belief}', { belief: check.belief })}`));
 
   if (check.note) li.append(el('span', 'd', ` · ${check.note}`));
   return li;
@@ -9328,13 +9394,13 @@ function rememberEvent(id) {
   } catch { /* optional */ }
 }
 
-const eventPoints = (n) => `${Number(n || 0).toLocaleString()} pts`;
+const eventPoints = (n) => tx('{points} pts', { points: Number(n || 0).toLocaleString() });
 
 /** The tier the bar is working towards, as words: "750 to tier 2 (4,000)". */
 function eventNextText(track) {
-  if (track.nextTier == null) return 'every tier reached';
+  if (track.nextTier == null) return tx('every tier reached');
   const index = track.tiers.findIndex((t) => t.minPoints === track.nextTier);
-  return `${track.toNext.toLocaleString()} to tier ${index + 1} (${track.nextTier.toLocaleString()})`;
+  return tx('{left} to tier {tier} ({points})', { left: track.toNext.toLocaleString(), tier: index + 1, points: track.nextTier.toLocaleString() });
 }
 
 function renderEvents() {
@@ -9698,7 +9764,7 @@ function renderNowEvent() {
   const event = currentEvent();
   const overall = event ? (event.tracks.find((t) => t.overall) || event.tracks[0]) : null;
 
-  if (status) status.textContent = event && overall ? `${event.title} · ${eventPoints(overall.points)}` : 'Open events';
+  if (status) status.textContent = event && overall ? `${event.title} · ${eventPoints(overall.points)}` : tx('Open events');
 
   if (!card) return;
   card.hidden = !event;
@@ -9708,7 +9774,7 @@ function renderNowEvent() {
   card.classList.toggle('event-tracked', !!event && eventsData?.tracked === event.id);
   if (!event) return;
 
-  $('#now-event-label').textContent = eventsData?.tracked === event.id ? `${event.title} · tracked` : event.title;
+  $('#now-event-label').textContent = eventsData?.tracked === event.id ? `${event.title} · ${tx('tracked')}` : event.title;
   $('#now-event').textContent = overall ? `${eventPoints(overall.points)} · ${eventNextText(overall)}` : '—';
 
   const list = $('#now-event-list');
@@ -9729,7 +9795,7 @@ function renderNowEvent() {
     li.append(el('span', 'what', track.name));
     li.append(el('span', 'event-pts', track.nextTier != null
       ? `${track.points.toLocaleString()} / ${track.nextTier.toLocaleString()}`
-      : `${track.points.toLocaleString()} · every tier`));
+      : `${track.points.toLocaleString()} · ${tx('every tier')}`));
     list.append(li);
   }
 }
@@ -10270,9 +10336,11 @@ function renderNowScreenCard(s) {
     loadLedgerWallet().catch(() => {});
   }
 
-  $('#now-screen-summary').textContent = s.summary;
+  // The server's summary: the fixed ones translate, the ones built around a
+  // count or a name stay as written until the server speaks the language.
+  $('#now-screen-summary').textContent = tx(s.summary);
   $('#now-screen-when').textContent =
-    `${SCREEN_KINDS[s.kind] || s.kind} · ${new Date(s.shotAt).toLocaleTimeString()} · ${s.shot}`;
+    `${SCREEN_KINDS[s.kind] || s.kind} · ${new Date(s.shotAt).toLocaleTimeString(QW_DATE_LOCALES)} · ${s.shot}`;
 
   const checks = $('#now-screen-checks');
   checks.textContent = '';
@@ -10281,9 +10349,9 @@ function renderNowScreenCard(s) {
   const differs = (s.checks || []).filter((c) => c.verdict === 'differs').length;
 
   $('#now-screen-note').textContent =
-    differs ? `${differs} thing${differs === 1 ? '' : 's'} the screen and the logs disagree on.`
-    : (s.checks || []).length ? 'The logs and the screen agree on everything checked.'
-    : 'Nothing on this screen the logs could be checked against.';
+    differs ? txn(differs, '{count} thing the screen and the logs disagree on.', '{count} things the screen and the logs disagree on.')
+    : (s.checks || []).length ? tx('The logs and the screen agree on everything checked.')
+    : tx('Nothing on this screen the logs could be checked against.');
 }
 
 /**
@@ -13454,7 +13522,8 @@ async function loadRoutes() {
   const pad = $('#routes-pad').value || 'any';
   // "From here" reads the live location the Now page is already showing.
   const here = $('#now-location').textContent.trim();
-  const from = $('#routes-here').checked && here && here !== '—' && !here.startsWith('In menus')
+  // Compared in the page's language: the Now page writes this line translated.
+  const from = $('#routes-here').checked && here && here !== '—' && here !== tx('In menus')
     ? here
     : '';
   const originNote = $('#routes-origin-note');
@@ -13747,15 +13816,15 @@ async function loadRespawn() {
   // the two, and saying "woke there" under a different place read as though
   // both signals agreed when they do not.
   $('#now-respawn-sub').textContent = data.bed
-    ? `last medical bed · ${data.bed.place}, ${relative(data.bed.at)}`
+    ? `${tx('last medical bed')} · ${data.bed.place}, ${relative(data.bed.at)}`
     : '';
 
   // "Deaths" would be wrong for the commoner case: most wake-ups follow an
   // incapacitation rather than a corpse recovery, so both read as "times down".
   $('#now-respawn-bed').textContent = data.place
     ? (data.settled
-      ? `last woke · ${data.place}, ${data.agreeing} of your last ${data.of} times down`
-      : `last woke · ${data.place}, ${relative(data.at)}`)
+      ? `${tx('last woke')} · ${data.place}, ${tx('{agreeing} of your last {of} times down', { agreeing: data.agreeing, of: data.of })}`
+      : `${tx('last woke')} · ${data.place}, ${relative(data.at)}`)
     : '';
 
   field.dataset.statusAvailable = 'true';
@@ -14484,19 +14553,19 @@ function renderNowServer(state) {
 
   const before = state.shardVisitsBefore || 0;
   const parts = [before === 0
-    ? 'First time on this shard.'
-    : `Placed here ${before} time${before === 1 ? '' : 's'} before.`];
-  if (state.shardSeenName) parts.push(`Name shown by the game: “${state.shardSeenName}”.`);
-  if (state.shardDisposition === 'avoid') parts.push('You marked this shard avoid.');
-  if (state.shardDisposition === 'good') parts.push('You marked this shard good.');
-  if (state.shardNote) parts.push(`Your note: “${state.shardNote}”`);
+    ? tx('First time on this shard.')
+    : txn(before, 'Placed here {count} time before.', 'Placed here {count} times before.')];
+  if (state.shardSeenName) parts.push(tx('Name shown by the game: “{name}”.', { name: state.shardSeenName }));
+  if (state.shardDisposition === 'avoid') parts.push(tx('You marked this shard avoid.'));
+  if (state.shardDisposition === 'good') parts.push(tx('You marked this shard good.'));
+  if (state.shardNote) parts.push(tx('Your note: “{note}”', { note: state.shardNote }));
 
   const note = $('#now-server-note');
   note.textContent = parts.join(' ');
   note.className = `note${state.shardNote || state.shardDisposition === 'avoid' ? ' warn' : ''}`;
 
   const star = $('#now-server-star');
-  star.textContent = state.shardFavorite ? '★ Favourite' : '☆ Favourite';
+  star.textContent = state.shardFavorite ? tx('★ Favourite') : tx('☆ Favourite');
   star.className = `ghost tiny${state.shardFavorite ? ' on' : ''}`;
   star.onclick = () => setServerFavorite(state.shard, !state.shardFavorite).catch(() => {});
 
@@ -16920,7 +16989,7 @@ async function renderPinnedJob(jobs) {
   const progress = $('#now-job-progress');
   progress.textContent = '';
   progress.append(jobProgress(job.haveCount, job.totalCount,
-    `${job.haveCount} of ${job.totalCount} in hand`));
+    tx('{done} of {total} in hand', { done: job.haveCount, total: job.totalCount })));
 
   // What is still missing, which is the only part worth reading mid-flight.
   const list = $('#now-job-items');
@@ -16929,19 +16998,19 @@ async function renderPinnedJob(jobs) {
   const missing = job.items.filter((i) => !i.have);
 
   if (!missing.length) {
-    list.append(el('li', 'inward', 'Everything on this list is in hand.'));
+    list.append(el('li', 'inward', tx('Everything on this list is in hand.')));
   } else {
     for (const item of missing.slice(0, 6)) {
       const li = el('li');
       li.append(el('span', 'n', item.name
         + (item.needed > 0 ? ` ${item.needed}${item.unit ? ` ${item.unit}` : ''}` : '')));
 
-      if (item.buyAt) li.append(el('span', 'muted', `buy at ${item.buyAt}`));
+      if (item.buyAt) li.append(el('span', 'muted', tx('buy at {place}', { place: item.buyAt })));
       list.append(li);
     }
 
     if (missing.length > 6)
-      list.append(el('li', 'muted', `+${missing.length - 6} more`));
+      list.append(el('li', 'muted', tx('+{count} more', { count: missing.length - 6 })));
   }
 
   card.hidden = false;
@@ -17871,14 +17940,14 @@ function renderPinnedChecklist(lists = checklists) {
   const done = list.items.filter((item) => item.done).length;
   const progress = $('#now-checklist-progress');
   progress.textContent = '';
-  progress.append(jobProgress(done, list.items.length, `${done} of ${list.items.length} done`));
+  progress.append(jobProgress(done, list.items.length, tx('{done} of {total} done', { done, total: list.items.length })));
 
   const host = $('#now-checklist-items');
   host.textContent = '';
   const open = list.items.filter((item) => !item.done);
   for (const item of open.slice(0, 5)) host.append(checklistItemRow(list, item, true));
-  if (open.length > 5) host.append(el('li', 'muted', `+${open.length - 5} more`));
-  if (!open.length) host.append(el('li', 'inward', 'Everything is checked off.'));
+  if (open.length > 5) host.append(el('li', 'muted', tx('+{count} more', { count: open.length - 5 })));
+  if (!open.length) host.append(el('li', 'inward', tx('Everything is checked off.')));
 
   $('#now-checklist-open').onclick = () => showView('checklists');
   card.hidden = false;
@@ -20885,15 +20954,15 @@ function renderFleetShips() {
 
 /** "3 days ago", "2 months ago" - easier to scan than a date. */
 function relative(iso) {
-  if (!iso) return 'unknown';
+  if (!iso) return tx('unknown');
 
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-  if (days <= 0) return 'today';
-  if (days === 1) return 'yesterday';
-  if (days < 30) return `${days} days ago`;
+  if (days <= 0) return tx('today');
+  if (days === 1) return tx('yesterday');
+  if (days < 30) return tx('{n} days ago', { n: days });
 
   const months = Math.round(days / 30);
-  return months <= 1 ? 'a month ago' : `${months} months ago`;
+  return months <= 1 ? tx('a month ago') : tx('{n} months ago', { n: months });
 }
 
 /** Step chart of owned-vehicle count over time. */
@@ -23650,7 +23719,7 @@ async function runActionCall(url, method = 'POST', body = null) {
   await loadTrips();
 }
 
-const runActionLabel = (kind) => ({
+const runActionLabel = (kind) => tx({
   load: 'Load', unload: 'Unload', buy: 'Buy', sell: 'Sell', collect: 'Collect',
   refuel: 'Refuel', repair: 'Repair', do: 'Do',
 }[kind] || 'Do');
@@ -23660,7 +23729,7 @@ function runActionRow(trip, stop, action, editable = false) {
   const check = document.createElement('input');
   check.type = 'checkbox';
   check.checked = !!action.done;
-  check.title = action.done ? 'Mark as still to do' : 'Mark action complete';
+  check.title = action.done ? tx('Mark as still to do') : tx('Mark action complete');
   check.addEventListener('change', () =>
     runActionCall(`/api/trips/${trip.id}/stops/${stop.id}/actions/${action.id}/toggle`));
   row.append(check);
@@ -23676,7 +23745,7 @@ function runActionRow(trip, stop, action, editable = false) {
 
   if (editable) {
     const remove = el('button', 'ghost tiny', '×');
-    remove.title = 'Remove this action';
+    remove.title = tx('Remove this action');
     remove.addEventListener('click', () =>
       runActionCall(`/api/trips/${trip.id}/stops/${stop.id}/actions/${action.id}`, 'DELETE'));
     row.append(remove);
@@ -23695,23 +23764,23 @@ function runActionForm(trip, stop) {
   const text = document.createElement('input');
   text.type = 'text';
   text.className = 'search';
-  text.placeholder = 'What needs doing?';
+  text.placeholder = tx('What needs doing?');
 
   const quantity = document.createElement('input');
   quantity.type = 'number';
   quantity.className = 'search run-action-amount';
-  quantity.placeholder = 'Qty';
+  quantity.placeholder = tx('Qty');
   quantity.min = '0';
   quantity.step = 'any';
 
   const unit = document.createElement('select');
   unit.className = 'select';
-  unit.append(new Option('No unit', ''));
+  unit.append(new Option(tx('No unit'), ''));
   unit.append(new Option('SCU', 'SCU'));
-  unit.append(new Option('units', 'units'));
+  unit.append(new Option(tx('units'), 'units'));
   unit.append(new Option('aUEC', 'aUEC'));
 
-  const save = el('button', 'ghost tiny', 'Add');
+  const save = el('button', 'ghost tiny', tx('Add'));
   save.addEventListener('click', () => {
     if (!text.value.trim()) {
       text.focus();
@@ -23793,17 +23862,17 @@ function renderTripCard() {
   const progress = $('#now-trip-progress');
   progress.textContent = '';
   progress.append(jobProgress(done, trip.stops.length,
-    `${done} of ${trip.stops.length} stops`));
+    tx('{done} of {total} stops', { done, total: trip.stops.length })));
 
   const jump = $('#now-trip-next');
   jump.textContent = '';
 
   if (next) {
-    jump.append(el('div', 'now-trip-label', next.done ? 'At this stop' : 'Jump next'));
+    jump.append(el('div', 'now-trip-label', next.done ? tx('At this stop') : tx('Jump next')));
     jump.append(el('div', 'now-trip-where', next.place));
     if (next.note) jump.append(el('div', 'now-trip-note', next.note));
   } else {
-    jump.append(el('div', 'inward', 'Every stop is crossed off. Good run.'));
+    jump.append(el('div', 'inward', tx('Every stop is crossed off. Good run.')));
   }
 
   // The whole path, in order, ticked as it goes - the flight plan proper.
@@ -23825,14 +23894,14 @@ function tripStopRow(trip, stop, index, isNext, editable = false) {
   const row = el('div', `trip-stop${stop.done ? ' done' : ''}${isNext ? ' next' : ''}`);
 
   const number = el('button', 'trip-number', stop.done ? '✓' : String(index + 1));
-  number.title = stop.done ? 'Not done after all' : 'Cross this stop off';
+  number.title = stop.done ? tx('Not done after all') : tx('Cross this stop off');
   number.addEventListener('click',
     () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}/toggle`));
   row.append(number);
 
   const main = el('div', 'trip-stop-main');
   const name = el('button', 'trip-place', stop.place);
-  name.title = 'Show it on the map';
+  name.title = tx('Show it on the map');
   name.addEventListener('click', () => {
     showView('map');
     if (stop.placeId) centreOn(stop.placeId);
