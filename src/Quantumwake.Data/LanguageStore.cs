@@ -24,9 +24,9 @@ public sealed record DashboardLanguage(string Code, string Name, string? Covers)
 /// mid-flight.
 /// </para>
 /// <para>
-/// English is the default, and stays so while French is partial. A French
-/// Windows that updates should get the app it had, not a half-translated one it
-/// never asked for - see <c>docs/localization.md</c>.
+/// English is the default, always, and the Windows language is never read. A
+/// French Windows that updates gets the app it had; another language is
+/// something the pilot chooses - see <c>docs/localization.md</c>.
 /// </para>
 /// </remarks>
 public sealed class LanguageStore

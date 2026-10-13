@@ -93,10 +93,11 @@ nothing extra.
 text into the page; re-running all of them in place is a bug farm for a thing
 done once.
 
-**English stays the default until a language is complete.** A French Windows
-user who updates to 0.18.0 gets the app they had, not a half-French one they
-did not ask for. "Follow Windows" becomes the default for a language once it
-has no English left, which the catalogue test can count.
+**English is the default, for good.** The Windows language is never read: a
+French Windows user who updates gets the app they had, and another language is
+something the pilot picks. An earlier version of this plan had French follow
+Windows once it had no English left; Nicolas ruled that out on 2026-10-13, so
+there is no such phase.
 
 ## The game in French
 
@@ -181,8 +182,6 @@ the first thing to ask for.
    MFD labels need a width check, since a Cougar's screen does not stretch.
 5. **Playing the game in French.** Everything under
    [The game in French](#the-game-in-french), starting from a tester's log.
-6. **Follow Windows by default** for French once the catalogue test reports no
-   English left.
 
 ## Adding a language
 

@@ -403,11 +403,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.18.5
+### 0.18.6
 
 **Quantum Wake in French — the start of it.** Settings → General has a new **Language · Langue** card. Choose Français and the navigation, the search box, the command palette, the notices along the top (old prices, a new patch, a new version), the Now page, the whole of Settings → General and every Operations page — the command deck, Routes, Contracts, Checklists, Blueprints, Wikelo and Events — come up in French, in the browser and in the overlay alike — the live feed, status lines, price feeds, the table of what your logs still carry, every cargo run's evidence and every event tier included, with dates written the French way. Flight plans saved from Routes, and builds and shopping runs started from Operations, get French titles; the ones you saved before keep theirs. The rest of the app is still English for now, and the card says exactly what is covered so far; more pages follow through the 0.18 updates. Names from the game — ships, places, commodities, contract titles, Wikelo's trades — stay as the game writes them, so they still match your mobiGlas and the price sites.
 
-**Nothing changes unless you choose it.** English stays the default, even on a French Windows, until the translation is complete.
+**Nothing changes unless you choose it.** English is the default and stays the default, even on a French Windows: the app never switches language on its own, only when you pick one on that card.
 
 **Playing Star Citizen itself in French?** The game has a partial French translation of its own (`g_language = french_(france)` in `user.cfg`), and there are community ones too. If you play with either, a `Game.log` from one of your sessions would help a lot — ideally one where you accepted a contract and joined a party. Some of what Quantum Wake reads is text the game translates: the game's French table translates party joins and leaves, so the Now page's party list most likely misses them, and there is no French log here to check that or the rest against. Open an issue on GitHub and attach one.
 
