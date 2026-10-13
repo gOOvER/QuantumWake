@@ -216,7 +216,11 @@ public sealed class SessionStore : IDisposable
     //     logs on this install, and the build running that night summarises
     //     the log with no such field when it becomes a backup - without this
     //     the one completion there is would never be shown.
-    private const int PayloadVersion = 17;
+    // 18: a contract that loses a step - a failed optional objective, a
+    //     withdrawn one - and then completes is completed, not lost. Four in
+    //     509 contracts on this install, two of them Discovery Month patrols
+    //     worth 667 points that a stored summary would otherwise keep losing.
+    private const int PayloadVersion = 18;
 
 
     /// <summary>

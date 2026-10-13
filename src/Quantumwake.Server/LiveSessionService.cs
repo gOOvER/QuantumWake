@@ -462,6 +462,58 @@ public sealed partial class LiveSessionService : BackgroundService
             // not rotate, and clearing it would announce the newest one again.
             _screenNotes.Clear();
         }
+
+        // Outside the lock: a backup can take a second or two to parse, and the
+        // Now page should not stall behind it.
+        ReadRotatedBackups();
+    }
+
+    /// <summary>
+    /// Reads the backup the game has just rotated the log into, so the session
+    /// lands in the store under its own name.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every session read from <c>Game.log</c> shares one id, the file's name,
+    /// so the archive above is only ever a placeholder: the next rotation
+    /// overwrites it. Until 0.17.9 nothing read the backup while the app ran,
+    /// and two relaunches in one sitting lost the session between them
+    /// outright. On 2026-10-12 that was a whole evening of Discovery Month -
+    /// 2,123 points the journal had and the app did not, and a tier already
+    /// paid out still shown as not reached.
+    /// </para>
+    /// <para>
+    /// The scan is the one startup runs, so the placeholder is replaced the
+    /// same way it is on a cold start: the backup under its own id, the new
+    /// <c>Game.log</c> under the shared one. It only runs when a backup is
+    /// there to read. A rotation noticed before the game has finished moving
+    /// the old log would otherwise re-read the new one over the placeholder
+    /// and lose the session that way instead; left alone, the next rotation
+    /// or the next start picks the backup up.
+    /// </para>
+    /// </remarks>
+    private void ReadRotatedBackups()
+    {
+        if (_install is null) return;
+
+        try
+        {
+            var unread = _install.BackupLogs()
+                .Any(file => !_library.Store.IsCurrent(file, SessionStore.Fingerprint(new FileInfo(file))));
+
+            if (!unread)
+            {
+                _logger.LogInformation("No new backup yet; the rotated session stays archived until the next scan.");
+                return;
+            }
+
+            var parsed = _library.Scan(_install);
+            _logger.LogInformation("Read {Parsed} log files after the rotation.", parsed);
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "Could not read the rotated backup; the next start will.");
+        }
     }
 
     /// <summary>Builds a snapshot. Caller must hold the lock.</summary>

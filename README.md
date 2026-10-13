@@ -403,6 +403,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.17.9
+
+**Event points no longer go missing when the game is relaunched with the app open.** The session you are playing is kept under one shared name until the game moves its log into the backups, and nothing read that backup until the app was next started. Launch the game twice in one sitting with the app running and the earlier session was overwritten. On one install that was a whole evening of Discovery Month: 2,123 points the in-game journal had and the Events page did not, and a tier already paid out still shown as not reached. The app now reads the backup as soon as the game starts a new log. A session already lost this way comes back the next time you start the app.
+
+**Contracts that lose a step and still complete now count.** A patrol whose optional ace pilot escapes, or one whose "Return to Location" step is withdrawn, still ends complete and pays out, but the app filed it as lost. On one install that was two Discovery Month patrols worth 667 points, plus an older bounty and an escort. Your history is re-read once when the app starts; nothing needs replaying.
+
 ### 0.17.8
 
 **The MFD displays no longer get lost when Windows renumbers your screens.** The MFDs remembered their monitor only by the number Windows gives it, and Windows changes those numbers after a driver update, a sleep or a replugged cable. When it did, the frames and their black backdrop could wake up on your main screen, covering the taskbar and the tray icon you needed to fix it. Now:
