@@ -61,8 +61,8 @@ public partial class MainWindow : Window
     private Rect _glanceRestoreBounds;
     private bool _isGlance;
 
-    /// <summary>Height that holds the live status card without turning it into a scroll pane.</summary>
-    private const double GlanceHeight = 270;
+    /// <summary>Height that holds the focus strip, campaign rail and live status without scrolling.</summary>
+    private const double GlanceHeight = 304;
 
     /// <summary>
     /// Width of the transparent gutter around the WebView2 that acts as the
@@ -328,19 +328,34 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>Confirms a shell command inside the shared surface, including while pinned.</summary>
+    private async void ShowOverlayFeedback(string title, string detail)
+    {
+        if (Browser.CoreWebView2 is null)
+            return;
+
+        try
+        {
+            await Browser.ExecuteScriptAsync(
+                $"window.scOverlayFeedback && window.scOverlayFeedback({System.Text.Json.JsonSerializer.Serialize(title)}, {System.Text.Json.JsonSerializer.Serialize(detail)})");
+        }
+        catch (InvalidOperationException)
+        {
+            // The browser starts after the shell; the next action will confirm normally.
+        }
+    }
+
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
-    private void PrevButton_Click(object sender, RoutedEventArgs e) => CycleView(-1);
-    private void NextButton_Click(object sender, RoutedEventArgs e) => CycleView(1);
     private void CompactButton_Click(object sender, RoutedEventArgs e) => ToggleGlance();
     private void FullscreenButton_Click(object sender, RoutedEventArgs e) => ToggleFullscreen();
 
-    /// <summary>Opens the named layouts without adding another permanent widget control.</summary>
-    private void PresetButton_Click(object sender, RoutedEventArgs e)
+    /// <summary>Opens the layout picker without competing with live readings.</summary>
+    private void ModeButton_Click(object sender, RoutedEventArgs e)
     {
-        if (PresetButton.ContextMenu is not null)
+        if (ModeButton.ContextMenu is not null)
         {
-            PresetButton.ContextMenu.PlacementTarget = PresetButton;
-            PresetButton.ContextMenu.IsOpen = true;
+            ModeButton.ContextMenu.PlacementTarget = ModeButton;
+            ModeButton.ContextMenu.IsOpen = true;
         }
     }
 
@@ -355,6 +370,9 @@ public partial class MainWindow : Window
         {
             await Browser.ExecuteScriptAsync(
                 $"window.scOverlayPreset && window.scOverlayPreset({System.Text.Json.JsonSerializer.Serialize(name)})");
+            var label = name == "full" ? "Full" : char.ToUpperInvariant(name[0]) + name[1..];
+            ModeButton.Content = $"{label.ToUpperInvariant()} ▾";
+            ShowOverlayFeedback($"{label} layout", "Widget pages and readings updated");
         }
         catch (InvalidOperationException)
         {
@@ -391,6 +409,9 @@ public partial class MainWindow : Window
         }
 
         UpdateGlanceControl();
+        ShowOverlayFeedback(
+            _isGlance ? "Glance mode" : "Full widget",
+            _isGlance ? "Focus, campaign and current status stay visible" : "All chosen cards are back");
 
         if (Browser.CoreWebView2 is null) return;
 
@@ -410,7 +431,7 @@ public partial class MainWindow : Window
         CompactButton.Content = _isGlance ? "▴" : "▾";
         CompactButton.ToolTip = _isGlance
             ? "Expand widget (Ctrl+Alt+C)"
-            : "Glance view — current status only (Ctrl+Alt+C)";
+            : "Glance view — focus, campaign and current status (Ctrl+Alt+C)";
         CompactButton.IsEnabled = !_isFullscreen;
     }
 
@@ -455,6 +476,9 @@ public partial class MainWindow : Window
             ? "Back to widget size (Ctrl+Alt+F)"
             : "Fullscreen (Ctrl+Alt+F)";
         UpdateGlanceControl();
+        ShowOverlayFeedback(
+            _isFullscreen ? "Fullscreen" : "Widget size",
+            _isFullscreen ? "All overlay pages are available" : "Returned to your focused layout");
 
         if (Browser.CoreWebView2 is not null)
         {
@@ -493,6 +517,9 @@ public partial class MainWindow : Window
         _clickThrough = pinned;
         NativeWindowStyles.SetClickThrough(this, _clickThrough);
         ApplyInteractionMode();
+        ShowOverlayFeedback(
+            pinned ? "Overlay pinned" : "Overlay unlocked",
+            pinned ? "Clicks reach the game · Ctrl+Alt+O or the tray unlocks it" : "Drag, resize and change the layout here");
         PinnedChanged?.Invoke(pinned);
     }
 

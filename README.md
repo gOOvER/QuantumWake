@@ -403,7 +403,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.17.9
+### 0.17.10
+
+**The overlay is now a clearer flight instrument.** Glance mode keeps the active objective, a tracked event’s progress rail, and current status in one short stack. Its header has one named layout control instead of a row of competing controls, and every pin, layout, view, glance, or fullscreen change confirms itself on the overlay — including once it is click-through. High visibility is available under Settings → Overlay for brighter text and markers over the game, and Tiny density no longer drops below a readable type size.
 
 **Event points no longer go missing when the game is relaunched with the app open.** The session you are playing is kept under one shared name until the game moves its log into the backups, and nothing read that backup until the app was next started. Launch the game twice in one sitting with the app running and the earlier session was overwritten. On one install that was a whole evening of Discovery Month: 2,123 points the in-game journal had and the Events page did not, and a tier already paid out still shown as not reached. The app now reads the backup as soon as the game starts a new log. A session already lost this way comes back the next time you start the app.
 

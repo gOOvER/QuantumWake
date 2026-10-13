@@ -145,26 +145,13 @@
                     </StackPanel>
 
                     <StackPanel Grid.Column="1" Orientation="Horizontal">
-                        <!-- Pinning is the deliberate act, so it gets a button
-                             rather than a hotkey nobody was told about. Getting
-                             back is the tray menu: a pinned window cannot be
-                             clicked, so it cannot carry its own way out. -->
-                        <Button x:Name="PinButton" Content="📌"
-                                Style="{StaticResource HeaderButton}"
-                                Click="PinButton_Click" FontSize="11"
-                                ToolTip="Pin it out of the way — clicks reach the game (Ctrl+Alt+O, or the tray icon, brings it back)" />
-                        <Button x:Name="PrevButton" Content="◀"
-                                Style="{StaticResource HeaderButton}"
-                                Click="PrevButton_Click" FontSize="9"
-                                ToolTip="Previous tab (Ctrl+Alt+←)" />
-                        <Button x:Name="NextButton" Content="▶"
-                                Style="{StaticResource HeaderButton}"
-                                Click="NextButton_Click" FontSize="9"
-                                ToolTip="Next tab (Ctrl+Alt+→)" />
-                        <Button x:Name="PresetButton" Content="▦"
-                                Style="{StaticResource HeaderButton}"
-                                Click="PresetButton_Click" FontSize="13"
-                                ToolTip="Switch overlay layout">
+                        <!-- The header is a control deck, not a second tab bar. The
+                             layout pill carries the mode name while the keyboard keeps
+                             page stepping available even after the overlay is pinned. -->
+                        <Button x:Name="ModeButton" Content="LAYOUT ▾"
+                                Style="{StaticResource HeaderButton}" Width="78"
+                                Click="ModeButton_Click" FontSize="9"
+                                ToolTip="Choose a focused overlay layout">
                             <Button.ContextMenu>
                                 <ContextMenu Style="{StaticResource OverlayPresetMenu}">
                                     <MenuItem Style="{StaticResource OverlayPresetMenuItem}" Header="Flight" Tag="flight" Click="PresetMenuItem_Click" />
@@ -177,6 +164,10 @@
                                 </ContextMenu>
                             </Button.ContextMenu>
                         </Button>
+                        <Button x:Name="PinButton" Content="📌"
+                                Style="{StaticResource HeaderButton}"
+                                Click="PinButton_Click" FontSize="11"
+                                ToolTip="Pin it out of the way — clicks reach the game (Ctrl+Alt+O, or the tray icon, brings it back)" />
                         <Button x:Name="CompactButton" Content="▾"
                                 Style="{StaticResource HeaderButton}"
                                 Click="CompactButton_Click" FontSize="12"

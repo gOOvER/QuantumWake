@@ -1,4 +1,4 @@
-﻿/* Quantumwake - styled after Star Citizen's in-game HUD and mobiGlas.
+/* Quantumwake - styled after Star Citizen's in-game HUD and mobiGlas.
  *
  * The look leans on four devices: chamfered (not rounded) corners, thin glowing
  * cyan rules, wide-tracked uppercase labels, and corner brackets on panels.
@@ -6542,3 +6542,67 @@ td.armoury-cost { color: var(--amber); }
 .controls-change { white-space: normal; vertical-align: top; }
 .controls-mode-pick { max-width: 110px; font-size: 11px; }
 .controls-axis-live { font: 11px var(--mono); margin-left: 6px; }
+
+/* ---------- overlay flight deck ----------
+ *
+ * The desktop surface can afford a dashboard; the in-game widget has to answer
+ * one question before the player reads anything else. In Glance mode that is
+ * the live focus strip, then an optional tracked campaign rail, then status.
+ */
+body.overlay.glance .now-focus:not([hidden]) {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 5px 9px;
+  align-items: center;
+  margin: 0 0 5px;
+  min-height: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--cyan-deep);
+  border-left: 3px solid var(--cyan);
+  background: linear-gradient(100deg, rgba(53, 200, 240, .12), rgba(7, 15, 24, .9) 48%);
+}
+body.overlay.glance .now-focus-mark { grid-row: span 2; margin: 0; font-size: 8px; color: var(--cyan-hot); }
+body.overlay.glance .now-focus-copy { min-width: 0; }
+body.overlay.glance .now-focus-title { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+body.overlay.glance .now-focus-copy .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text); }
+body.overlay.glance #now-focus-open { display: none; }
+body.overlay.glance .now-focus[data-urgency="attention"] { border-left-color: var(--amber); background: linear-gradient(100deg, rgba(255, 171, 61, .14), rgba(7, 15, 24, .9) 48%); }
+body.overlay.glance .now-focus[data-urgency="attention"] .now-focus-mark { color: var(--amber); }
+body.overlay.glance .now-focus[data-urgency="live"] .now-focus-mark { animation: overlay-live-pulse 1.6s ease-in-out infinite; }
+
+/* The tracked event is a deliberate second signal, therefore a rail rather
+   than another card competing with the current flight state. */
+body.overlay.glance #now-event-card.event-tracked {
+  border-color: rgba(155, 113, 255, .56);
+  border-left: 3px solid #ad8cff;
+  background: linear-gradient(100deg, rgba(155, 113, 255, .13), rgba(10, 16, 29, .88) 56%);
+}
+body.overlay.glance #now-event-card.event-tracked .card-label { color: #cebfff; }
+
+/* The small action confirmations are visible even after the shell pins itself
+   and hides its header. They leave no permanent overlay over the game. */
+body.overlay .toast.overlay-action {
+  pointer-events: none;
+  min-width: 0;
+  max-width: min(290px, calc(100vw - 20px));
+  padding: 7px 10px;
+  border-left-color: var(--cyan-hot);
+  background: rgba(7, 17, 28, .96);
+}
+body.overlay .toast.overlay-action .toast-text { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+body.overlay .toast.overlay-action .toast-detail { font-size: 10px; }
+
+/* Tiny remains compact, but its labels stay at a size that can be read through
+   the game UI. High visibility is stored with the layout so both browsers use
+   the same choice. */
+body.overlay.density-tiny { font-size: 11px; }
+body.overlay.density-tiny .tabs button[data-view] { font-size: 9px; }
+body.overlay.high-contrast { --text: #f5fbff; --muted: #b5d0df; --dim: #8eafc3; --rule: #3d7090; --rule-hot: #66cbed; --cyan: #72dcff; --cyan-hot: #b7f1ff; }
+body.overlay.high-contrast .card { border-color: #4c85a4; background: linear-gradient(160deg, rgba(12, 27, 42, .98), rgba(4, 12, 21, .98)); }
+body.overlay.high-contrast .now-status-label, body.overlay.high-contrast .card-label { color: #b7f1ff; }
+
+@keyframes overlay-live-pulse { 50% { opacity: .58; } }
+@media (prefers-reduced-motion: reduce) {
+  body.overlay.glance .now-focus[data-urgency="live"] .now-focus-mark { animation: none; }
+  .toast { animation: none; }
+}
