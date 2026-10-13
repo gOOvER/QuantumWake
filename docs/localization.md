@@ -240,3 +240,27 @@ page. 246 entries added, 436 in all.
   a narrow one before `;` and `?` and inside guillemets.
 - `SettingsFrenchTests` renders the signal rows, the feeds, the wipe line and
   the date helpers in French.
+
+### 0.18.3
+
+The Routes page, after Nicolas found "Find a run worth taking" and "Cargo
+opportunities" still English. The visible probe counted 68 English strings on
+the page with a fighter selected; the key probe, which walks hidden parts too,
+found 89 lookups the catalogue could not answer. Rendered again with a 288 SCU
+hull and real UEX prices, what is left is commodity, terminal and ship names.
+218 entries added, 654 in all.
+
+- **Evidence marks are shared**, so `GAME LOG`, `COMMUNITY DATA` and the rest
+  are now French on every page that shows them. The mark's CSS class is still
+  built from the English label, so its colour does not depend on the language.
+- **Server words translated for display, not for logic.** Security
+  (`monitored`, `lawless`, `unknown`), what capped a run (`capital`, `stock`,
+  `demand`, `hold`, `per SCU`) and capacity (`enough`, `limited`) are read in
+  French; the classes and comparisons keep the server's word.
+- **Saved plans are data.** A plan saved from Routes now gets a French title
+  and stop notes, but one saved earlier keeps the English it was written in -
+  "Hauling run · 6 contracts" on the active-plan card is the pilot's own plan,
+  not page text.
+- `tx()` trims its key, so a label with a trailing space (`'Space: '`) loses
+  the space in translation; it is `${tx('Space:')} ` instead.
+- `RoutesFrenchTests` runs `RouteReliabilityTests`' route in French.

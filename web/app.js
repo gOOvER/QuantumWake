@@ -170,14 +170,16 @@ function sourceMarks(keys, qualifier = '') {
     .map((key) => DATA_SOURCES[key]).filter(Boolean);
   const marks = el('span', 'data-sources');
   marks.setAttribute('role', 'note');
-  marks.setAttribute('aria-label', `Data sources: ${known.map((source) => source.name).join(', ')}`);
+  marks.setAttribute('aria-label', tx('Data sources: {list}', { list: known.map((source) => tx(source.name)).join(', ') }));
 
   for (const source of known) {
-    const mark = el('span', `data-source ${source.label.toLowerCase().replace(/[^a-z]+/g, '-')}`, source.label);
-    mark.title = source.detail;
+    // The class comes from the English label, so the stylesheet's colours do
+    // not depend on the page language.
+    const mark = el('span', `data-source ${source.label.toLowerCase().replace(/[^a-z]+/g, '-')}`, tx(source.label));
+    mark.title = tx(source.detail);
     marks.append(mark);
   }
-  if (qualifier) marks.append(el('span', 'data-source data-source-qualifier', qualifier));
+  if (qualifier) marks.append(el('span', 'data-source data-source-qualifier', tx(qualifier)));
   return marks;
 }
 
@@ -2415,7 +2417,7 @@ function bars(container, rows, format) {
       const label = el('div', 'label');
       const link = el('button', 'place-link', row.label);
       link.type = 'button';
-      link.title = 'Show on the map';
+      link.title = tx('Show on the map');
       link.addEventListener('click', row.onClick);
       label.append(link);
       wrapper.append(label);
@@ -12990,8 +12992,8 @@ function planningBlocksCargo(candidate = activePlanningShip()) {
 }
 
 const cargoSourceName = (source) => ({
-  community: 'Community data', screenshot: 'Screenshot/OCR', manual: 'Local entry',
-}[source] || 'No source');
+  community: tx('Community data'), screenshot: tx('Screenshot/OCR'), manual: tx('Local entry'),
+}[source] || tx('No source'));
 
 function setRouteReadiness(kind, label, detail = '') {
   const badge = $('#route-readiness');
@@ -13007,21 +13009,21 @@ function renderRouteHeader() {
   if (!context) return;
   const active = activePlanningShip();
   if (!active) {
-    context.textContent = 'No ship selected · SCU unknown · no source';
-    setRouteReadiness('needs-cargo', 'Needs cargo SCU', 'Choose a cargo ship or add a locally verified hold size.');
+    context.textContent = tx('No ship selected · SCU unknown · no source');
+    setRouteReadiness('needs-cargo', tx('Needs cargo SCU'), tx('Choose a cargo ship or add a locally verified hold size.'));
     return;
   }
 
   const cargo = planningCargo(active);
   const source = planningCargoSource(active);
   const read = source === 'screenshot' && active.install?.cargoReadAt
-    ? ` · read ${ago(active.install.cargoReadAt)}`
-    : ' · last read unavailable';
+    ? ` · ${tx('read {ago}', { ago: ago(active.install.cargoReadAt) })}`
+    : ` · ${tx('last read unavailable')}`;
   context.textContent = cargo > 0
     ? `${active.ship.name} · ${cargo.toLocaleString()} SCU · ${cargoSourceName(source)}${read}`
-    : `${active.ship.name} · SCU unknown · no capacity source`;
-  setRouteReadiness(cargo > 0 ? 'ready' : 'needs-cargo', cargo > 0 ? 'Ready' : 'Needs cargo SCU',
-    cargo > 0 ? 'The selected ship has a cargo constraint, so routes can be sized.' : 'No verified cargo capacity is available for the selected ship.');
+    : `${active.ship.name} · ${tx('SCU unknown · no capacity source')}`;
+  setRouteReadiness(cargo > 0 ? 'ready' : 'needs-cargo', cargo > 0 ? tx('Ready') : tx('Needs cargo SCU'),
+    cargo > 0 ? tx('The selected ship has a cargo constraint, so routes can be sized.') : tx('No verified cargo capacity is available for the selected ship.'));
 }
 
 /** The plan is authored work, so give it equal weight with the price feed.
@@ -13036,21 +13038,21 @@ function renderRouteFlightBrief() {
   const trip = tracked();
   if (!trip || !trip.stops?.length) {
     card.dataset.state = 'waiting';
-    status.textContent = 'No active plan';
-    detail.textContent = 'Choose a trade run, a shopping list, or map stops to create a shared flight plan.';
-    for (const action of actions) action.textContent = 'Start on map';
+    status.textContent = tx('No active plan');
+    detail.textContent = tx('Choose a trade run, a shopping list, or map stops to create a shared flight plan.');
+    for (const action of actions) action.textContent = tx('Start on map');
     return;
   }
 
   const complete = trip.stops.filter((stop) => stop.done).length;
   const next = nextStop(trip);
   card.dataset.state = trip.flying ? 'flying' : complete === trip.stops.length ? 'complete' : 'ready';
-  status.textContent = trip.flying ? 'Run in progress'
-    : complete === trip.stops.length ? 'Flight plan complete' : 'Plan ready';
+  status.textContent = trip.flying ? tx('Run in progress')
+    : complete === trip.stops.length ? tx('Flight plan complete') : tx('Plan ready');
   detail.textContent = next
-    ? `${trip.title} · next: ${next.place} · ${complete} of ${trip.stops.length} stops complete`
-    : `${trip.title} · every stop is crossed off`;
-  for (const action of actions) action.textContent = 'Open active plan';
+    ? `${trip.title} · ${tx('next: {place}', { place: next.place })} · ${tx('{done} of {total} stops complete', { done: complete, total: trip.stops.length })}`
+    : `${trip.title} · ${tx('every stop is crossed off')}`;
+  for (const action of actions) action.textContent = tx('Open active plan');
 }
 
 let planningHangarLoad = null;
@@ -13087,12 +13089,12 @@ function renderShipPlan() {
   const resolved = resolvedPlanningShipName(candidates);
 
   select.textContent = '';
-  select.append(new Option('On foot / no ship selected', ''));
+  select.append(new Option(tx('On foot / no ship selected'), ''));
   for (const candidate of candidates) {
     const cargo = planningCargo(candidate);
     const suffix = candidate.reference
-      ? cargo > 0 ? `${cargo.toLocaleString()} SCU` : planningIsSpaceship(candidate) ? 'no cargo grid' : 'ground vehicle'
-      : cargo > 0 ? `${cargo.toLocaleString()} SCU · ${planningCargoSource(candidate) === 'screenshot' ? 'screenshot' : 'manual'}` : 'cargo capacity needed';
+      ? cargo > 0 ? `${cargo.toLocaleString()} SCU` : planningIsSpaceship(candidate) ? tx('no cargo grid') : tx('ground vehicle')
+      : cargo > 0 ? `${cargo.toLocaleString()} SCU · ${planningCargoSource(candidate) === 'screenshot' ? tx('screenshot') : tx('manual')}` : tx('cargo capacity needed');
     select.append(new Option(`${candidate.ship.name} · ${suffix}`, candidate.ship.name));
   }
   select.value = resolved;
@@ -13100,8 +13102,8 @@ function renderShipPlan() {
   const active = activePlanningShip();
   options.textContent = '';
   if (!active) {
-    title.textContent = candidates.length ? 'Choose a flown ship to constrain this plan' : 'No flown ships are available yet';
-    limit.textContent = 'This selection stays in this browser. It does not change your fleet or claim a ship is currently retrieved.';
+    title.textContent = candidates.length ? tx('Choose a flown ship to constrain this plan') : tx('No flown ships are available yet');
+    limit.textContent = tx('This selection stays in this browser. It does not change your fleet or claim a ship is currently retrieved.');
     renderRouteHeader();
     return;
   }
@@ -13113,36 +13115,39 @@ function renderShipPlan() {
   title.textContent = active.ship.name;
 
   if (cargo > 0 && !planningIsGroundVehicle(active)) {
-    options.append(planningCapability('Trade & cargo',
+    const hold = cargo.toLocaleString();
+    options.append(planningCapability(tx('Trade & cargo'),
       cargoSource === 'manual'
-        ? `Routes use your local ${cargo.toLocaleString()} SCU hold entry. Verify it against the vehicle terminal; it is not reference data.`
+        ? tx('Routes use your local {cargo} SCU hold entry. Verify it against the vehicle terminal; it is not reference data.', { cargo: hold })
         : cargoSource === 'screenshot'
-          ? `Routes use the ${cargo.toLocaleString()} SCU hold shown in your latest commodity-terminal screenshot${active.install?.cargoReadAt ? ` (${ago(active.install.cargoReadAt)})` : ''}.`
-        : `Routes are sized to this ${cargo.toLocaleString()} SCU cargo grid.`,
+          ? (active.install?.cargoReadAt
+            ? tx('Routes use the {cargo} SCU hold shown in your latest commodity-terminal screenshot ({ago}).', { cargo: hold, ago: ago(active.install.cargoReadAt) })
+            : tx('Routes use the {cargo} SCU hold shown in your latest commodity-terminal screenshot.', { cargo: hold }))
+        : tx('Routes are sized to this {cargo} SCU cargo grid.', { cargo: hold }),
       cargoSource === 'community' ? ['community'] : cargoSource === 'screenshot' ? ['screenshot'] : null));
   }
   if (spacefaring) {
-    options.append(planningCapability('Map & flight plans',
-      'Star-map stops and multi-stop flight plans are available for this spaceship.', ['install']));
+    options.append(planningCapability(tx('Map & flight plans'),
+      tx('Star-map stops and multi-stop flight plans are available for this spaceship.'), ['install']));
   }
   if (crew > 1) {
-    options.append(planningCapability('Crew',
-      `Reference capacity: up to ${crew} people. Party notifications remain a floor, not a roster.`, ['community', 'logs']));
+    options.append(planningCapability(tx('Crew'),
+      tx('Reference capacity: up to {crew} people. Party notifications remain a floor, not a roster.', { crew }), ['community', 'logs']));
   }
   if (planningIsGroundVehicle(active)) {
-    options.append(planningCapability('Ground vehicle',
-      'Ground-only planning is available; trade routes and quantum navigation are excluded.', ['install']));
+    options.append(planningCapability(tx('Ground vehicle'),
+      tx('Ground-only planning is available; trade routes and quantum navigation are excluded.'), ['install']));
   }
   if (spacefaring && !active.reference) {
     const manual = el('label', 'ship-plan-manual');
-    manual.append(el('span', 'muted', 'Cargo SCU (local):'));
+    manual.append(el('span', 'muted', tx('Cargo SCU (local):')));
     const input = el('input', 'search');
     input.type = 'number';
     input.min = '1';
     input.step = '1';
     input.value = planningManualCargoFor(active) || '';
-    input.placeholder = 'Enter hold size';
-    input.title = 'Local planning value only. Confirm this ship’s cargo grid in game before relying on routes.';
+    input.placeholder = tx('Enter hold size');
+    input.title = tx('Local planning value only. Confirm this ship’s cargo grid in game before relying on routes.');
     input.addEventListener('change', () => {
       const value = Math.max(0, Math.floor(Number(input.value) || 0));
       const key = planningCargoKey(active);
@@ -13156,15 +13161,15 @@ function renderShipPlan() {
     options.append(manual);
   }
   if (!options.childElementCount) {
-    options.append(planningCapability('No documented planning capability',
-      'This hull has no cargo, crew, or movement reference that can safely constrain a plan yet.', null));
+    options.append(planningCapability(tx('No documented planning capability'),
+      tx('This hull has no cargo, crew, or movement reference that can safely constrain a plan yet.'), null));
   }
 
   limit.textContent = !active.reference && cargoSource === 'manual'
-    ? 'The game install confirms this is a spaceship; its cargo size above is your browser-only entry. Enable the community ship dataset in Settings to replace it with reference data.'
+    ? tx('The game install confirms this is a spaceship; its cargo size above is your browser-only entry. Enable the community ship dataset in Settings to replace it with reference data.')
     : !active.reference
-    ? 'The game install confirms this is a spaceship but has no cargo-capacity field here. Enter the vehicle terminal’s hold size above for a local route constraint, or enable the community ship dataset.'
-    : 'Quantum fuel/range and vehicle-bay fit are not present in the installed or community reference data, so this planner does not guess either one.';
+    ? tx('The game install confirms this is a spaceship but has no cargo-capacity field here. Enter the vehicle terminal’s hold size above for a local route constraint, or enable the community ship dataset.')
+    : tx('Quantum fuel/range and vehicle-bay fit are not present in the installed or community reference data, so this planner does not guess either one.');
   renderRouteHeader();
 }
 
@@ -13215,9 +13220,9 @@ function routeRisk(route) {
   const endpoints = [route.buySecurity, route.sellSecurity];
   const lawless = endpoints.filter((security) => security === 'lawless').length;
   const unknown = endpoints.filter((security) => !security || security === 'unknown').length;
-  return lawless ? ['higher', `${lawless} lawless endpoint${lawless === 1 ? '' : 's'}`]
-    : unknown ? ['uncertain', `${unknown} endpoint${unknown === 1 ? '' : 's'} unmatched`]
-      : ['lower', 'monitored endpoints'];
+  return lawless ? ['higher', txn(lawless, '{count} lawless endpoint', '{count} lawless endpoints')]
+    : unknown ? ['uncertain', txn(unknown, '{count} endpoint unmatched', '{count} endpoints unmatched')]
+      : ['lower', tx('monitored endpoints')];
 }
 
 /* A partial primary buyer does not mean the hold has to leave empty. We only
@@ -13248,7 +13253,7 @@ function renderRouteProfiles() {
   if (!select) return;
   const previous = select.value;
   select.textContent = '';
-  select.append(new Option('Route presets…', ''));
+  select.append(new Option(tx('Route presets…'), ''));
   for (const profile of routeProfiles) select.append(new Option(profile.name, profile.id));
   select.value = routeProfiles.some((profile) => profile.id === previous) ? previous : '';
 }
@@ -13270,7 +13275,7 @@ function applyRouteProfile(profile) {
 }
 
 function saveRouteProfile() {
-  const name = window.prompt('Name this local route preset:', `Preset ${routeProfiles.length + 1}`)?.trim();
+  const name = window.prompt(tx('Name this local route preset:'), tx('Preset {n}', { n: routeProfiles.length + 1 }))?.trim();
   if (!name) return;
   const profile = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name,
@@ -13302,11 +13307,11 @@ function routeWatchNote(route) {
   if (!watch) return null;
   const before = Number(watch.profit);
   const now = Number(route.profit);
-  if (before <= 0) return `Saved ${ago(watch.at)}.`;
+  if (before <= 0) return tx('Saved {ago}.', { ago: ago(watch.at) });
   const change = (now - before) / before;
   return Math.abs(change) >= .05
-    ? `Since saved ${ago(watch.at)}: ${change > 0 ? '+' : ''}${Math.round(change * 100)}% projected profit.`
-    : `Saved ${ago(watch.at)} · projected profit within 5%.`;
+    ? tx('Since saved {ago}: {change}% projected profit.', { ago: ago(watch.at), change: `${change > 0 ? '+' : ''}${Math.round(change * 100)}` })
+    : tx('Saved {ago} · projected profit within 5%.', { ago: ago(watch.at) });
 }
 
 function renderRouteDashboard(rows) {
@@ -13315,13 +13320,13 @@ function renderRouteDashboard(rows) {
   const watched = rows.filter((route) => routeWatches.some((watch) => watch.key === routeKey(route)));
   panel.hidden = !(routeHistory.length || watched.length);
   if (panel.hidden) return;
-  $('#route-dashboard-summary').textContent = `${routeHistory.length} locally saved route${routeHistory.length === 1 ? '' : 's'} · ${watched.length} currently visible watch${watched.length === 1 ? '' : 'es'}`;
+  $('#route-dashboard-summary').textContent = `${txn(routeHistory.length, '{count} locally saved route', '{count} locally saved routes')} · ${txn(watched.length, '{count} currently visible watch', '{count} currently visible watches')}`;
   const watches = $('#route-watch-list');
   watches.textContent = '';
   for (const route of watched.slice(0, 4)) watches.append(el('div', 'route-watch', `${route.commodity}: ${routeWatchNote(route)}`));
   const history = $('#route-history-list');
   history.textContent = '';
-  for (const saved of routeHistory.slice(0, 5)) history.append(el('div', 'route-history', `${saved.commodity} · ${saved.buyAt} → ${saved.sellAt} · saved ${ago(saved.at)}`));
+  for (const saved of routeHistory.slice(0, 5)) history.append(el('div', 'route-history', `${saved.commodity} · ${saved.buyAt} → ${saved.sellAt} · ${tx('saved {ago}', { ago: ago(saved.at) })}`));
 }
 
 /* The query the table was built from, so the panels under it answer the same
@@ -13353,16 +13358,19 @@ async function loadRouteCircuits(query) {
     const card = el('article', 'route-circuit');
     card.append(el('b', null, `${circuit.commodity} → ${circuit.returnCommodity}`));
     card.append(el('div', 'muted', `${circuit.buyAt} → ${circuit.sellAt} → ${circuit.returnSellAt}`));
-    card.append(el('div', 'inward', `~${money(circuit.totalProfit)} total projected profit`));
-    const save = el('button', 'ghost tiny', 'Save circuit');
-    save.title = 'Save all three circuit stops as an editable flight plan';
+    card.append(el('div', 'inward', tx('~{money} total projected profit', { money: money(circuit.totalProfit) })));
+    const save = el('button', 'ghost tiny', tx('Save circuit'));
+    save.title = tx('Save all three circuit stops as an editable flight plan');
     save.addEventListener('click', () => {
       rememberRoute({ commodity: `${circuit.commodity} / ${circuit.returnCommodity}`, buyAt: circuit.buyAt,
         sellAt: circuit.returnSellAt, totalProfit: circuit.totalProfit }, 'circuit');
       planTrip(`${circuit.commodity} ⇄ ${circuit.returnCommodity}`, [
-        { placeId: circuit.buyAtId, place: circuit.buyAt, note: `Buy ${Math.floor(circuit.units)} SCU ${circuit.commodity}` },
-        { placeId: circuit.sellAtId, place: circuit.sellAt, note: `Sell ${circuit.commodity}; buy ${circuit.returnCommodity}` },
-        { placeId: circuit.returnSellAtId, place: circuit.returnSellAt, note: `Sell ${circuit.returnCommodity} · +${money(circuit.returnProfit)}` },
+        { placeId: circuit.buyAtId, place: circuit.buyAt,
+          note: tx('Buy {units} SCU {commodity}', { units: Math.floor(circuit.units), commodity: circuit.commodity }) },
+        { placeId: circuit.sellAtId, place: circuit.sellAt,
+          note: tx('Sell {commodity}; buy {next}', { commodity: circuit.commodity, next: circuit.returnCommodity }) },
+        { placeId: circuit.returnSellAtId, place: circuit.returnSellAt,
+          note: `${tx('Sell {commodity}', { commodity: circuit.returnCommodity })} · +${money(circuit.returnProfit)}` },
       ]);
     });
     card.append(save);
@@ -13374,16 +13382,16 @@ async function loadRouteCircuits(query) {
 /** Save either the best buyer or a named alternate as the same editable flight plan. */
 function saveTradeRoute(route, sellAt, sellAtId, sellPrice, label = '') {
   rememberRoute({ ...route, sellAt, sellPrice }, label ? 'alternate' : 'route');
-  planTrip(`${route.commodity} run${label}`, [
+  planTrip(`${tx('{commodity} run', { commodity: route.commodity })}${label}`, [
     {
       placeId: route.buyAtId || placeIdForTerminal(route.buyAt),
       place: route.buyAt,
-      note: `Buy ${Math.floor(route.units).toLocaleString()} SCU at ${money(route.buyPrice)}`,
+      note: tx('Buy {units} SCU at {price}', { units: Math.floor(route.units).toLocaleString(), price: money(route.buyPrice) }),
     },
     {
       placeId: sellAtId || placeIdForTerminal(sellAt),
       place: sellAt,
-      note: `Sell at ${money(sellPrice)} · +${money((Number(sellPrice) - Number(route.buyPrice)) * Number(route.units))}`,
+      note: `${tx('Sell at {price}', { price: money(sellPrice) })} · +${money((Number(sellPrice) - Number(route.buyPrice)) * Number(route.units))}`,
     },
   ]);
 }
@@ -13392,12 +13400,12 @@ function saveSplitTradeRoute(route, portions) {
   const units = portions.reduce((sum, portion) => sum + portion.units, 0);
   const profit = portions.reduce((sum, portion) => sum
     + ((Number(portion.sellPrice) - Number(route.buyPrice)) * portion.units), 0);
-  rememberRoute({ ...route, sellAt: `${portions.length} buyers`, profit, outlay: Number(route.buyPrice) * units }, 'split load');
-  planTrip(`${route.commodity} split load`, [
+  rememberRoute({ ...route, sellAt: txn(portions.length, '{count} buyer', '{count} buyers'), profit, outlay: Number(route.buyPrice) * units }, 'split load');
+  planTrip(tx('{commodity} split load', { commodity: route.commodity }), [
     { placeId: route.buyAtId || placeIdForTerminal(route.buyAt), place: route.buyAt,
-      note: `Buy ${units.toLocaleString()} SCU at ${money(route.buyPrice)}` },
+      note: tx('Buy {units} SCU at {price}', { units: units.toLocaleString(), price: money(route.buyPrice) }) },
     ...portions.map((portion) => ({ placeId: portion.placeId || placeIdForTerminal(portion.terminal), place: portion.terminal,
-      note: `Sell ${portion.units.toLocaleString()} SCU at ${money(portion.sellPrice)} · +${money((Number(portion.sellPrice) - Number(route.buyPrice)) * portion.units)}` })),
+      note: `${tx('Sell {units} SCU at {price}', { units: portion.units.toLocaleString(), price: money(portion.sellPrice) })} · +${money((Number(portion.sellPrice) - Number(route.buyPrice)) * portion.units)}` })),
   ]);
 }
 
@@ -13421,7 +13429,7 @@ async function loadRoutes() {
   const select = $('#routes-ship');
   if (!select) return;
 
-  setWorkspaceState('#routes-state', 'loading', 'Checking current price reports…');
+  setWorkspaceState('#routes-state', 'loading', tx('Checking current price reports…'));
 
   if (libraryStats) renderShipPlan();
   renderRouteFlightBrief();
@@ -13455,9 +13463,9 @@ async function loadRoutes() {
   // for a number the pilot may not have to hand.
   const unsized = active && !planningCargoKnown(active);
   originNote.textContent = (from
-    ? ` Origin: ${from}; results require UEX to match this terminal.`
+    ? ` ${tx('Origin: {place}; results require UEX to match this terminal.', { place: from })}`
     : '')
-    + (unsized ? ` Sized per SCU: ${active.ship.name}'s hold is not on record. Enter it above to size a full load.` : '');
+    + (unsized ? ` ${tx('Sized per SCU: {ship}\'s hold is not on record. Enter it above to size a full load.', { ship: active.ship.name })}` : '');
 
   const body = $('#routes-table tbody');
   body.textContent = '';
@@ -13469,15 +13477,15 @@ async function loadRoutes() {
   // per-SCU table would look like a viable haul despite the selected ship.
   // Only a known zero does this; an unknown hold is sized per SCU above.
   if (planningBlocksCargo(active)) {
-    setWorkspaceState('#routes-state', 'empty', 'This selected vehicle cannot carry cargo.');
+    setWorkspaceState('#routes-state', 'empty', tx('This selected vehicle cannot carry cargo.'));
     const tr = el('tr');
     const td = el('td', 'muted', planningIsGroundVehicle(active)
-      ? `${active.ship.name} is a ground vehicle, so cargo routes are hidden for this plan.`
-      : `${active.ship.name} has no documented cargo grid, so cargo routes are hidden for this plan.`);
+      ? tx('{ship} is a ground vehicle, so cargo routes are hidden for this plan.', { ship: active.ship.name })
+      : tx('{ship} has no documented cargo grid, so cargo routes are hidden for this plan.', { ship: active.ship.name }));
     td.colSpan = 12;
     tr.append(td);
     body.append(tr);
-    setRouteReadiness('needs-cargo', 'No cargo grid', 'The selected hull carries no cargo, so there is nothing to size a route for.');
+    setRouteReadiness('needs-cargo', tx('No cargo grid'), tx('The selected hull carries no cargo, so there is nothing to size a route for.'));
     highlightBestRoute = false;
     // The panels below the table describe the previous ship's plan otherwise.
     renderRouteDashboard([]);
@@ -13507,7 +13515,7 @@ async function loadRoutes() {
     // Name the filter that emptied the table. "No route from here" is the
     // wrong explanation for a table that a tickbox hid every row from, and
     // there are now two tickboxes that can do it.
-    const reason = routesUnavailable
+    const reason = tx(routesUnavailable
       ? 'Current route prices are unavailable. Refresh after the local server reconnects.'
       : safety === 'monitored'
       ? 'No route keeps both ends in monitored space. Try Avoid lawless or Any security.'
@@ -13527,15 +13535,15 @@ async function loadRoutes() {
           ? 'No route has both sides reporting enough capacity for this load. Try Reported capacity or Include unknown capacity.'
           : evidence === 'reported'
             ? 'No route has stock and demand reported on both sides. Try Include unknown capacity to see price-only estimates.'
-            : 'Nothing to show. Enable UEX prices on the Settings page.';
+            : 'Nothing to show. Enable UEX prices on the Settings page.');
     setWorkspaceState('#routes-state', routesUnavailable ? 'offline' : 'empty', reason);
     const td = el('td', 'muted', reason);
     td.colSpan = 12;
     tr.append(td);
     body.append(tr);
     setRouteReadiness(pad !== 'any' ? 'no-pad' : 'no-prices',
-      pad !== 'any' ? 'No viable landing pad' : 'No current prices',
-      pad !== 'any' ? 'No returned route has the landing-pad evidence requested at both endpoints.' : 'No route currently meets the selected ship, wallet, evidence, and safety criteria.');
+      pad !== 'any' ? tx('No viable landing pad') : tx('No current prices'),
+      pad !== 'any' ? tx('No returned route has the landing-pad evidence requested at both endpoints.') : tx('No route currently meets the selected ship, wallet, evidence, and safety criteria.'));
     highlightBestRoute = false;
     renderRouteDashboard(rows);
     loadRouteCircuits(query).catch(() => {});
@@ -13555,71 +13563,78 @@ async function loadRoutes() {
     tr.append(el('td', 'num', Math.floor(route.units).toLocaleString()));
     tr.append(el('td', 'num outward', money(route.outlay)));
     const projected = el('td', 'num inward', `~${money(route.profit)}`);
-    projected.title = 'Arithmetic from the two UEX prices, not a promise of live availability.';
+    projected.title = tx('Arithmetic from the two UEX prices, not a promise of live availability.');
     tr.append(projected);
 
     const report = el('td', 'route-report');
-    if (best) report.append(el('div', 'route-best', 'Best safe match'));
+    if (best) report.append(el('div', 'route-best', tx('Best safe match')));
     const availabilityWord = route.availability === 'reported-full'
-      ? `Reported full load · ${Math.floor(route.desiredUnits).toLocaleString()} SCU`
+      ? tx('Reported full load · {units} SCU', { units: Math.floor(route.desiredUnits).toLocaleString() })
       : route.availability === 'reported-partial'
-        ? `Reported partial · ${Math.floor(route.units).toLocaleString()} / ${Math.floor(route.desiredUnits).toLocaleString()} SCU`
-        : `Capacity unknown · projected ${Math.floor(route.units).toLocaleString()} SCU`;
+        ? tx('Reported partial · {units} / {wanted} SCU', { units: Math.floor(route.units).toLocaleString(), wanted: Math.floor(route.desiredUnits).toLocaleString() })
+        : tx('Capacity unknown · projected {units} SCU', { units: Math.floor(route.units).toLocaleString() });
     report.append(el('div', `route-feasibility ${route.availability || 'capacity-unknown'}`, availabilityWord));
-    const reportWord = route.freshness === 'fresh' ? 'Fresh reports'
-      : route.freshness === 'aging' ? 'Aging reports'
-        : route.freshness === 'stale' ? 'Stale reports' : 'Report age unknown';
+    const reportWord = route.freshness === 'fresh' ? tx('Fresh reports')
+      : route.freshness === 'aging' ? tx('Aging reports')
+        : route.freshness === 'stale' ? tx('Stale reports') : tx('Report age unknown');
     report.append(el('div', `route-freshness ${route.freshness || 'unknown'}`, reportWord));
-    const age = (at) => at ? ago(at) : 'unknown';
-    report.append(el('div', 'muted route-age', `Buy ${age(route.buySeenAt)} · sell ${age(route.sellSeenAt)}`));
+    const age = (at) => at ? ago(at) : tx('unknown');
+    report.append(el('div', 'muted route-age', tx('Buy {buy} · sell {sell}', { buy: age(route.buySeenAt), sell: age(route.sellSeenAt) })));
+    // The server's three capacity words, said in the page language.
+    const level = (value) => ({ enough: tx('enough'), limited: tx('limited'), unknown: tx('unknown') }[value] || value);
     const capacity = [];
     capacity.push(route.buyStockScu > 0
-      ? `buy stock ${Math.floor(route.buyStockScu)} SCU (${route.buyAvailability})`
-      : 'buy stock unknown');
+      ? tx('buy stock {units} SCU ({level})', { units: Math.floor(route.buyStockScu), level: level(route.buyAvailability) })
+      : tx('buy stock unknown'));
     capacity.push(route.sellDemandScu > 0
-      ? `sell demand ${Math.floor(route.sellDemandScu)} SCU (${route.sellAvailability})`
-      : 'sell demand unknown');
+      ? tx('sell demand {units} SCU ({level})', { units: Math.floor(route.sellDemandScu), level: level(route.sellAvailability) })
+      : tx('sell demand unknown'));
     report.append(el('div', 'muted route-capacity', capacity.join(' · ')));
 
     const access = el('div', 'route-access');
+    // The class keeps the server's word; only what is read is translated.
     const security = (value) => value || 'unknown';
-    access.append(el('span', 'muted', 'Space: '));
-    access.append(el('span', `sec sec-${security(route.buySecurity)}`, security(route.buySecurity)));
+    const securityWord = (value) => ({ monitored: tx('monitored'), lawless: tx('lawless'), unknown: tx('unknown') }[security(value)] || value);
+    access.append(el('span', 'muted', `${tx('Space:')} `));
+    access.append(el('span', `sec sec-${security(route.buySecurity)}`, securityWord(route.buySecurity)));
     access.append(el('span', 'muted', ' → '));
-    access.append(el('span', `sec sec-${security(route.sellSecurity)}`, security(route.sellSecurity)));
-    const padNames = (pads) => Array.isArray(pads) && pads.length ? pads.join(', ') : 'no pad record';
-    access.append(el('div', 'muted route-pad', `Pads: ${padNames(route.buyLandingPads)} → ${padNames(route.sellLandingPads)}`));
+    access.append(el('span', `sec sec-${security(route.sellSecurity)}`, securityWord(route.sellSecurity)));
+    const padNames = (pads) => Array.isArray(pads) && pads.length ? pads.join(', ') : tx('no pad record');
+    access.append(el('div', 'muted route-pad', tx('Pads: {buy} → {sell}', { buy: padNames(route.buyLandingPads), sell: padNames(route.sellLandingPads) })));
     const usefulAmenities = (items) => (items || []).filter((item) => /refuel|fuel|repair/i.test(item));
-    const services = (items) => usefulAmenities(items).length ? usefulAmenities(items).join(', ') : 'no refuel/repair record';
-    access.append(el('div', 'muted route-services', `Turnaround: ${services(route.buyAmenities)} → ${services(route.sellAmenities)}`));
-    access.append(el('div', 'muted route-timing', 'Time: not estimated — no quantum-drive, fuel, or route-time source is available.'));
+    const services = (items) => usefulAmenities(items).length ? usefulAmenities(items).join(', ') : tx('no refuel/repair record');
+    access.append(el('div', 'muted route-services', tx('Turnaround: {buy} → {sell}', { buy: services(route.buyAmenities), sell: services(route.sellAmenities) })));
+    access.append(el('div', 'muted route-timing', tx('Time: not estimated — no quantum-drive, fuel, or route-time source is available.')));
     report.append(access);
 
     const [riskLevel, riskDetail] = routeRisk(route);
     const score = el('div', `route-score ${riskLevel}`,
-      `Repeatability ${routeRepeatability(route)}/8 · ${riskDetail} · ${money(route.outlay)} cargo exposure`);
-    score.title = 'Repeatability combines UEX quote freshness, reported stock/demand, and alternate buyers. Exposure is the projected purchase cost, not an insurance estimate.';
+      tx('Repeatability {score}/8 · {risk} · {money} cargo exposure', { score: routeRepeatability(route), risk: riskDetail, money: money(route.outlay) }));
+    score.title = tx('Repeatability combines UEX quote freshness, reported stock/demand, and alternate buyers. Exposure is the projected purchase cost, not an insurance estimate.');
     report.append(score);
 
     if (route.fallbackSells?.length) {
       const alternatives = el('div', 'route-alternatives');
-      alternatives.append(el('div', 'route-fallback', 'Alternate buyers'));
+      alternatives.append(el('div', 'route-fallback', tx('Alternate buyers')));
       for (const fallback of route.fallbackSells) {
         const alternate = el('div', 'route-alternate');
-        alternate.append(el('span', 'muted', `${fallback.terminal} · ${money(fallback.sellPrice)} · ${security(fallback.security)}`));
-        const save = el('button', 'ghost tiny', 'Save alternate');
-        save.title = 'Save this buyer as an editable flight plan';
+        alternate.append(el('span', 'muted', `${fallback.terminal} · ${money(fallback.sellPrice)} · ${securityWord(fallback.security)}`));
+        const save = el('button', 'ghost tiny', tx('Save alternate'));
+        save.title = tx('Save this buyer as an editable flight plan');
         save.addEventListener('click', () => saveTradeRoute(
-          route, fallback.terminal, fallback.placeId, fallback.sellPrice, ' · alternate buyer'));
+          route, fallback.terminal, fallback.placeId, fallback.sellPrice, ` · ${tx('alternate buyer')}`));
         alternate.append(save);
         alternatives.append(alternate);
       }
       const portions = splitTradeRoute(route);
       if (portions.length) {
         const split = el('div', 'route-split');
-        split.append(el('span', 'muted', `Split load ${portions.reduce((sum, portion) => sum + portion.units, 0).toLocaleString()} SCU: ${portions.map((portion) => `${portion.terminal} ${portion.units.toLocaleString()}`).join(' · ')}`));
-        const saveSplit = el('button', 'ghost tiny', 'Save split');
-        saveSplit.title = 'Save the recorded multi-buyer allocation as an editable flight plan';
+        split.append(el('span', 'muted', tx('Split load {units} SCU: {buyers}', {
+          units: portions.reduce((sum, portion) => sum + portion.units, 0).toLocaleString(),
+          buyers: portions.map((portion) => `${portion.terminal} ${portion.units.toLocaleString()}`).join(' · '),
+        })));
+        const saveSplit = el('button', 'ghost tiny', tx('Save split'));
+        saveSplit.title = tx('Save the recorded multi-buyer allocation as an editable flight plan');
         saveSplit.addEventListener('click', () => saveSplitTradeRoute(route, portions));
         split.append(saveSplit);
         alternatives.append(split);
@@ -13631,28 +13646,29 @@ async function loadRoutes() {
     // Saving makes a normal editable flight plan: a route is advice until the
     // pilot chooses it, and the plan is where it can be changed or tracked.
     const plan = el('td');
-    const button = el('button', 'ghost tiny', route.mapReady ? 'Save route' : 'Save text route');
+    const button = el('button', 'ghost tiny', route.mapReady ? tx('Save route') : tx('Save text route'));
     button.title = route.mapReady
-      ? 'Save this run as an editable flight plan and draw both stops on the map'
-      : 'Save the stops as an editable flight plan without claiming both can be drawn on the map';
+      ? tx('Save this run as an editable flight plan and draw both stops on the map')
+      : tx('Save the stops as an editable flight plan without claiming both can be drawn on the map');
     button.addEventListener('click', () => saveTradeRoute(route, route.sellAt, route.sellAtId, route.sellPrice));
     plan.append(button);
 
-    const capped = el('td', 'muted', route.limitedBy);
+    const limits = { capital: tx('capital'), stock: tx('stock'), demand: tx('demand'), hold: tx('hold'), 'per SCU': tx('per SCU') };
+    const capped = el('td', 'muted', limits[route.limitedBy] || route.limitedBy);
     capped.title = route.limitedBy === 'capital'
-      ? 'Your capital runs out before the hold does'
+      ? tx('Your capital runs out before the hold does')
       : route.limitedBy === 'stock'
-        ? 'The shop does not stock enough to fill the hold'
+        ? tx('The shop does not stock enough to fill the hold')
         : route.limitedBy === 'demand'
-          ? 'The buyer does not report enough demand to take the full run'
-        : 'The hold is the limit - the good case';
+          ? tx('The buyer does not report enough demand to take the full run')
+        : tx('The hold is the limit - the good case');
     tr.append(capped);
     tr.append(plan);
 
     body.append(tr);
   }
 
-  setRouteReadiness('ready', 'Ready', 'At least one route meets the selected ship, wallet, safety, pad, and evidence filters.');
+  setRouteReadiness('ready', tx('Ready'), tx('At least one route meets the selected ship, wallet, safety, pad, and evidence filters.'));
   setWorkspaceState('#routes-state', 'ready');
   highlightBestRoute = false;
   renderRouteDashboard(rows);
@@ -22899,7 +22915,7 @@ function jumpToPlace(name) {
 function placeLink(name) {
   const link = el('button', 'place-link', name);
   link.type = 'button';
-  link.title = 'Show on the map';
+  link.title = tx('Show on the map');
   link.addEventListener('click', (e) => {
     e.stopPropagation();
     jumpToPlace(name);
