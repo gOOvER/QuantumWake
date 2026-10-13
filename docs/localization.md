@@ -36,7 +36,12 @@ picker says how far a language has got rather than implying it is done.
   the browser's locale (`[]` or nothing), so a French Windows already shows
   `1 234 567` and `11 oct. 2026`. That follows regional settings, not the page
   language, which is right: a Québécois reader on an English page still wants
-  their own date order.
+  their own date order. **Dates and times are the exception on a translated
+  page** (0.18.2): a month name and an AM/PM are words, and "Oct 12" inside a
+  French sentence is English on the page. The shared helpers - `dateOf`,
+  `dayOf`, `timeOf`, `shortTimeOf` and the four other `[]` calls - pass
+  `QW_DATE_LOCALES`, which is `[]` on an English page and the page language
+  otherwise. Digit grouping still follows the region.
 
 ## The design
 
@@ -209,3 +214,29 @@ claims more than it does.
   English** to decide what it did - the only place in `app.js` that reads its
   text back. It compares against `tx()` now, so translating Help cannot
   break it.
+
+### 0.18.2
+
+A second pass over what 0.18.1 claimed, because the claim was not quite true:
+Settings → General's live half and the notices along the top were still
+English. Found by rendering the French page in headless Chrome and listing
+every visible text node and attribute the catalogue did not produce - on
+Settings, and a banner and the footer in the shell - rather than by reading the
+page. 246 entries added, 436 in all.
+
+- **Server English, translated on the page.** The signal table's names,
+  groups and notes and the UEX feeds' titles, descriptions and sizes come from
+  the server. They go through `tx()` where the page draws them, keyed on the
+  server's own words, so phase 3 has less to do and there is still one
+  catalogue. The orphan test now also reads the C# string literals under
+  `src/` (with a sentence split across `+` joined back up), so an edit to one
+  of those strings still names the entry it orphans.
+- **`ago()` and `dayUtc()` translate at the source**, so "3d ago" and
+  "Oct 15, 2026" are French on every page that uses them, translated or not.
+- **The clipboard diagnostic summary stays English.** It is pasted into a
+  support thread and read against the code, the same reason log lines are
+  quoted verbatim.
+- **French spacing** matches the 0.18.0 entries: a no-break space before `:`,
+  a narrow one before `;` and `?` and inside guillemets.
+- `SettingsFrenchTests` renders the signal rows, the feeds, the wipe line and
+  the date helpers in French.

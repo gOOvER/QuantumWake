@@ -55,20 +55,50 @@ public class LocaleCatalogueTests
     private static string Placeholders(string text) =>
         string.Join(",", Placeholder.Matches(text).Select(m => m.Groups[1].Value).Order());
 
+    /// <summary>
+    /// The server's C# string literals, with a sentence split across <c>+</c>
+    /// joined back up.
+    /// </summary>
+    /// <remarks>
+    /// Some of what the page shows is the server's English - a feed's title, a
+    /// signal's name - translated on the page through the same catalogue, so
+    /// those entries are anchored here rather than in a script. Read from the
+    /// source tree, since the test output carries only the web folder.
+    /// </remarks>
+    private static string ServerLiterals()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Quantumwake.slnx")))
+            dir = dir.Parent;
+
+        Assert.True(dir is not null, "the repository root (Quantumwake.slnx) was not found above the test output");
+
+        var source = string.Join("\n", Directory
+            .GetFiles(Path.Combine(dir!.FullName, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+            .Select(File.ReadAllText));
+
+        return Regex.Replace(source, "\"\\s*\\+\\s*\"", "");
+    }
+
     [Theory]
     [MemberData(nameof(Catalogues))]
     public void Every_entry_still_has_its_english(string language)
     {
         var markup = Plain(File.ReadAllText(Web("index.html")));
         var scripts = File.ReadAllText(Web("app.js")) + File.ReadAllText(Web("i18n.js"));
+        var server = ServerLiterals();
 
         // As a script literal, in either quote, with any apostrophe escaped.
         bool InScript(string key) =>
             scripts.Contains($"'{key.Replace("'", "\\'")}'", StringComparison.Ordinal)
             || scripts.Contains($"\"{key}\"", StringComparison.Ordinal);
 
+        bool InServer(string key) =>
+            server.Contains($"\"{key.Replace("\"", "\\\"")}\"", StringComparison.Ordinal);
+
         var orphans = Read(language).Keys
-            .Where(key => !markup.Contains(Plain(key), StringComparison.Ordinal) && !InScript(key))
+            .Where(key => !markup.Contains(Plain(key), StringComparison.Ordinal) && !InScript(key) && !InServer(key))
             .ToList();
 
         Assert.True(orphans.Count == 0,

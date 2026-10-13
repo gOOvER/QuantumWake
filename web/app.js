@@ -72,9 +72,9 @@ function clock(fromIso) {
   return `${pad(h)}:${pad(m)}:${pad(s)}`;
 }
 
-const timeOf = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-const shortTimeOf = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-const dateOf = (iso) => new Date(iso).toLocaleDateString([], { year: 'numeric', month: 'short', day: '2-digit' });
+const timeOf = (iso) => new Date(iso).toLocaleTimeString(QW_DATE_LOCALES, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const shortTimeOf = (iso) => new Date(iso).toLocaleTimeString(QW_DATE_LOCALES, { hour: '2-digit', minute: '2-digit' });
+const dateOf = (iso) => new Date(iso).toLocaleDateString(QW_DATE_LOCALES, { year: 'numeric', month: 'short', day: '2-digit' });
 
 /**
  * A calendar day as it was written, not as the reader's clock re-reads it.
@@ -91,16 +91,22 @@ const UTC_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
 // Assembled from the UTC parts rather than asked of Intl: a timeZone option is
 // not honoured everywhere this page runs, and a date that quietly falls back to
 // local time is the bug this exists to prevent.
+//
+// The month and the order go through the catalogue, since a French reader
+// writes the day first: "15 oct. 2026", not "Oct 15, 2026".
 const dayUtc = (iso) => {
   const at = new Date(iso);
 
-  return `${UTC_MONTHS[at.getUTCMonth()]} ${String(at.getUTCDate()).padStart(2, '0')}, `
-    + `${at.getUTCFullYear()}`;
+  return tx('{month} {day}, {year}', {
+    month: tx(UTC_MONTHS[at.getUTCMonth()]),
+    day: String(at.getUTCDate()).padStart(2, '0'),
+    year: at.getUTCFullYear(),
+  });
 };
 
 /* Day and month only, for dense rows where a year wraps the line. */
 
-const dayOf = (iso) => new Date(iso).toLocaleDateString([], { month: 'short', day: '2-digit' });
+const dayOf = (iso) => new Date(iso).toLocaleDateString(QW_DATE_LOCALES, { month: 'short', day: '2-digit' });
 
 async function getJson(url) {
   const response = await fetch(url);
@@ -3441,7 +3447,7 @@ async function refreshCommunityOffer() {
 
 async function setCommunity(enabled, statusNode, button) {
   button.disabled = true;
-  statusNode.textContent = enabled ? 'downloading…' : 'removing…';
+  statusNode.textContent = enabled ? tx('downloading…') : tx('removing…');
 
   try {
     const result = await fetch(`/api/community/${enabled ? 'enable' : 'disable'}`, { method: 'POST' });
@@ -3459,7 +3465,7 @@ async function setCommunity(enabled, statusNode, button) {
     await loadHistory();       // the ledger names its cargo rows too
     await renderSettings();
   } catch (e) {
-    statusNode.textContent = `failed: ${e.message}`;
+    statusNode.textContent = tx('failed: {error}', { error: e.message });
   } finally {
     button.disabled = false;
   }
@@ -3533,7 +3539,7 @@ function redactPaths(text) {
 async function copyDiagnosticSummary(button) {
   const status = $('#diag-status');
   button.disabled = true;
-  status.textContent = 'Building the summary…';
+  status.textContent = tx('Building the summary…');
   try {
     const [version, gamedata, uex, feeds, report] = await Promise.all([
       getJson('/api/version').catch(() => null),
@@ -3550,10 +3556,10 @@ async function copyDiagnosticSummary(button) {
     const box = $('#diag-summary');
     if (box) { box.value = text; box.hidden = copied; }
     status.textContent = copied
-      ? 'Copied. Paste it into the issue or the thread; read it first if you like - it is the text below the report.'
-      : 'The clipboard is not available here; the summary is shown below to copy by hand.';
+      ? tx('Copied. Paste it into the issue or the thread; read it first if you like - it is the text below the report.')
+      : tx('The clipboard is not available here; the summary is shown below to copy by hand.');
   } catch (err) {
-    status.textContent = `The summary could not be built: ${err.message}`;
+    status.textContent = tx('The summary could not be built: {error}', { error: err.message });
   } finally {
     button.disabled = false;
   }
@@ -3580,16 +3586,16 @@ async function renderDiagnostics() {
     diagnosticsReport = report;
 
     const unread = report.parser.unread
-      ? `${report.parser.unread} unreadable ${report.parser.unread === 1 ? 'line' : 'lines'}`
-        + ` across ${report.parser.tags.length} tag${report.parser.tags.length === 1 ? '' : 's'}`
-      : 'nothing unreadable in what was parsed this run';
+      ? `${txn(report.parser.unread, '{count} unreadable line', '{count} unreadable lines')}`
+        + ` ${txn(report.parser.tags.length, 'across {count} tag', 'across {count} tags')}`
+      : tx('nothing unreadable in what was parsed this run');
 
     preview.textContent = [
-      `${report.library.sessions} session${report.library.sessions === 1 ? '' : 's'}`,
-      `${report.library.builds.length} game build${report.library.builds.length === 1 ? '' : 's'}`,
+      txn(report.library.sessions, '{count} session', '{count} sessions'),
+      txn(report.library.builds.length, '{count} game build', '{count} game builds'),
       unread,
       report.parser.samples && report.parser.unread
-        ? 'with an example of each'
+        ? tx('with an example of each')
         : null,
     ].filter(Boolean).join(' · ');
   } catch {
@@ -3607,12 +3613,12 @@ async function renderDiagnosticTrace() {
     toggle.checked = trace.enabled === true;
     save.hidden = !(trace.bytes > 0);
     status.textContent = trace.enabled
-      ? `${trace.bytes.toLocaleString()} bytes recorded locally; restart to trace startup.`
+      ? tx('{bytes} bytes recorded locally; restart to trace startup.', { bytes: trace.bytes.toLocaleString() })
       : trace.bytes > 0
-        ? `${trace.bytes.toLocaleString()} bytes kept locally from an earlier trace.`
-        : 'Off — turn it on before reproducing a crash.';
+        ? tx('{bytes} bytes kept locally from an earlier trace.', { bytes: trace.bytes.toLocaleString() })
+        : tx('Off — turn it on before reproducing a crash.');
   } catch {
-    status.textContent = 'Trace status is unavailable.';
+    status.textContent = tx('Trace status is unavailable.');
   }
 }
 
@@ -3628,10 +3634,10 @@ $('#diag-trace-enabled').addEventListener('change', async (e) => {
   try {
     const trace = await getJson2(`/api/diagnostics/trace?enabled=${toggle.checked}`);
     status.textContent = trace.enabled
-      ? 'Detailed tracing is on. Restart now to include startup.'
-      : 'Detailed tracing is off; the existing trace is kept until you save it.';
+      ? tx('Detailed tracing is on. Restart now to include startup.')
+      : tx('Detailed tracing is off; the existing trace is kept until you save it.');
   } catch (err) {
-    status.textContent = `Trace setting could not be saved: ${err.message}`;
+    status.textContent = tx('Trace setting could not be saved: {error}', { error: err.message });
   } finally {
     toggle.disabled = false;
     renderDiagnosticTrace();
@@ -3652,9 +3658,9 @@ $('#diag-trace-save').addEventListener('click', async (e) => {
     link.download = 'quantumwake-trace.log';
     link.click();
     URL.revokeObjectURL(url);
-    status.textContent = 'Saved quantumwake-trace.log. Read it before sharing.';
+    status.textContent = tx('Saved quantumwake-trace.log. Read it before sharing.');
   } catch (err) {
-    status.textContent = `Trace could not be saved: ${err.message}`;
+    status.textContent = tx('Trace could not be saved: {error}', { error: err.message });
   } finally {
     button.disabled = false;
   }
@@ -3665,7 +3671,7 @@ $('#diag-save').addEventListener('click', async (e) => {
   const status = $('#diag-status');
 
   button.disabled = true;
-  status.textContent = 'Building the report…';
+  status.textContent = tx('Building the report…');
 
   let url = null;
 
@@ -3687,9 +3693,9 @@ $('#diag-save').addEventListener('click', async (e) => {
     link.download = name;
     link.click();
 
-    status.textContent = `Saved ${name}. Read it, then attach it to an issue.`;
+    status.textContent = tx('Saved {name}. Read it, then attach it to an issue.', { name });
   } catch (err) {
-    status.textContent = `The report could not be built: ${err.message}`;
+    status.textContent = tx('The report could not be built: {error}', { error: err.message });
   } finally {
     if (url) URL.revokeObjectURL(url);
     button.disabled = false;
@@ -3762,19 +3768,19 @@ try { showPriceAge = localStorage.getItem('qw-uex-age') !== '0'; } catch { /* fi
 
 /** Fine-grained "how long ago" for prices, where days are too coarse. */
 function ago(iso) {
-  if (!iso) return 'unknown';
+  if (!iso) return tx('unknown');
 
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return tx('just now');
+  if (mins < 60) return tx('{n}m ago', { n: mins });
 
   const hours = Math.floor(mins / 60);
-  if (hours < 48) return `${hours}h ago`;
+  if (hours < 48) return tx('{n}h ago', { n: hours });
 
   const days = Math.floor(hours / 24);
-  if (days < 60) return `${days}d ago`;
+  if (days < 60) return tx('{n}d ago', { n: days });
 
-  return `${Math.round(days / 30)}mo ago`;
+  return tx('{n}mo ago', { n: Math.round(days / 30) });
 }
 
 async function loadMarket() {
@@ -12671,12 +12677,12 @@ $('#install-path-save')?.addEventListener('click', async (e) => {
   const path = $('#install-path').value.trim();
 
   if (!path) {
-    status.textContent = 'Type the folder first.';
+    status.textContent = tx('Type the folder first.');
     return;
   }
 
   e.currentTarget.disabled = true;
-  status.textContent = 'checking…';
+  status.textContent = tx('checking…');
 
   try {
     const response = await fetch('/api/install/path', {
@@ -12688,12 +12694,12 @@ $('#install-path-save')?.addEventListener('click', async (e) => {
     const result = await response.json();
 
     status.textContent = response.ok
-      ? `Found ${result.channel}. Restart Quantum Wake to read it.`
-      : result.message || 'That folder does not hold Star Citizen logs.';
+      ? tx('Found {channel}. Restart Quantum Wake to read it.', { channel: result.channel })
+      : result.message || tx('That folder does not hold Star Citizen logs.');
 
     if (response.ok) status.classList.add('inward');
   } catch {
-    status.textContent = 'Could not reach the server.';
+    status.textContent = tx('Could not reach the server.');
   } finally {
     e.currentTarget.disabled = false;
   }
@@ -16457,7 +16463,7 @@ function timeChart(svg, series, format) {
 
   for (const [edge, anchor] of [[t0, 'start'], [t1, 'end']]) {
     const label = svgEl('text', { x: x(edge), y: 214, 'text-anchor': anchor, class: 'axis' });
-    label.textContent = new Date(edge).toLocaleDateString([], { month: 'short', day: '2-digit' });
+    label.textContent = new Date(edge).toLocaleDateString(QW_DATE_LOCALES, { month: 'short', day: '2-digit' });
     svg.append(label);
   }
 
@@ -17739,7 +17745,7 @@ $('#job-form')?.addEventListener('submit', async (e) => {
 let checklists = [];
 
 const checklistDue = (dueAt) => dueAt
-  ? new Date(dueAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+  ? new Date(dueAt).toLocaleString(QW_DATE_LOCALES, { dateStyle: 'medium', timeStyle: 'short' })
   : '';
 
 async function checklistCall(url, method = 'POST', body = null) {
@@ -18422,7 +18428,7 @@ async function loadLogbook() {
     const li = el('li');
 
     const when = new Date(row.at);
-    const stamp = `${dateOf(row.at)} · ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    const stamp = `${dateOf(row.at)} · ${when.toLocaleTimeString(QW_DATE_LOCALES, { hour: '2-digit', minute: '2-digit' })}`;
     li.append(el('span', 't', stamp));
 
     li.append(el('span', `k ${row.kind}`, row.kind));
@@ -18562,18 +18568,17 @@ async function renderSettings() {
     // says when this machine asked, which is not how old the data is - the dump
     // for a patch lands days after the patch does.
     $('#settings-community-status').textContent = community.enabled
-      ? [`${community.commodities} commodities`,
-         community.dump ? `dumped for ${community.dump}` : 'dump unknown',
-         `fetched ${community.fetchedAt ? dateOf(community.fetchedAt) : '—'}`].join(' · ')
-      : 'not downloaded';
+      ? [txn(community.commodities, '{count} commodity', '{count} commodities'),
+         community.dump ? tx('dumped for {dump}', { dump: community.dump }) : tx('dump unknown'),
+         tx('fetched {date}', { date: community.fetchedAt ? dateOf(community.fetchedAt) : '—' })].join(' · ')
+      : tx('not downloaded');
 
     const behind = $('#settings-community-behind');
     behind.hidden = !community.behind;
 
     if (community.behind) {
-      behind.textContent = `Your logs are on build ${community.playing}, and this data was made`
-        + ` from ${community.dump}. Anything that patch added — ships, items,`
-        + ' commodities — has no name here until you refresh.';
+      behind.textContent = tx('Your logs are on build {build}, and this data was made from {dump}. Anything that patch added — ships, items, commodities — has no name here until you refresh.',
+        { build: community.playing, dump: community.dump });
     }
   } catch { /* as above */ }
 
@@ -18586,11 +18591,12 @@ async function renderSettings() {
     $('#uex-disable').hidden = !uex.enabled;
 
     $('#uex-status').textContent = uex.enabled
-      ? `${uex.prices} commodities priced, fetched ${uex.fetchedAt ? dateOf(uex.fetchedAt) : '—'}`
-      : 'not fetched';
+      ? txn(uex.prices, '{count} commodity priced, fetched {date}', '{count} commodities priced, fetched {date}',
+        { date: uex.fetchedAt ? dateOf(uex.fetchedAt) : '—' })
+      : tx('not fetched');
 
     $('#uex-preview').hidden = !(uex.enabled && uex.hasCredentials);
-    $('#uex-save-creds').textContent = uex.hasCredentials ? 'Replace keys' : 'Save keys';
+    $('#uex-save-creds').textContent = uex.hasCredentials ? tx('Replace keys') : tx('Save keys');
   } catch { /* as above */ }
 
   await renderUexAuto();
@@ -19010,7 +19016,7 @@ async function renderExportPreview() {
   const choice = exportChoice();
 
   if (!choice.receipts && !choice.blueprints && !choice.authored && !choice.points) {
-    line.textContent = 'Nothing ticked, so there is nothing to save.';
+    line.textContent = tx('Nothing ticked, so there is nothing to save.');
     return;
   }
 
@@ -19021,16 +19027,22 @@ async function renderExportPreview() {
 
     const parts = [];
     if (choice.receipts) {
-      parts.push(`${counts.receipts.toLocaleString()} ${counts.receipts === 1 ? 'trade' : 'trades'}`
-        + (choice.days ? ` from the last ${choice.days === 1 ? 'day' : `${choice.days} days`}` : ', all time'));
+      const trades = txn(counts.receipts, '{count} trade', '{count} trades', { count: counts.receipts.toLocaleString() });
+      parts.push(choice.days
+        ? `${trades} ${choice.days === 1 ? tx('from the last day') : tx('from the last {days} days', { days: choice.days })}`
+        : `${trades}, ${tx('all time')}`);
     }
-    if (choice.blueprints) parts.push(`${counts.blueprints} blueprints`);
+    if (choice.blueprints) parts.push(txn(counts.blueprints, '{count} blueprint', '{count} blueprints'));
     if (choice.authored) {
-      parts.push(`${counts.jobs} jobs, ${counts.checklists} checklists, ${counts.trips} flight plans`);
+      parts.push([
+        txn(counts.jobs, '{count} job', '{count} jobs'),
+        txn(counts.checklists, '{count} checklist', '{count} checklists'),
+        txn(counts.trips, '{count} flight plan', '{count} flight plans'),
+      ].join(', '));
     }
-    if (choice.points) parts.push(`${counts.points} point${counts.points === 1 ? '' : 's'} of interest`);
+    if (choice.points) parts.push(txn(counts.points, '{count} point of interest', '{count} points of interest'));
 
-    line.textContent = `Would save ${parts.join(' · ')}.`;
+    line.textContent = tx('Would save {list}.', { list: parts.join(' · ') });
   } catch {
     line.textContent = '';
   }
@@ -19075,17 +19087,21 @@ async function renderBackupPreview() {
   // Only what is actually there, so an empty install does not read as a list of
   // zeroes somebody has to be told to ignore.
   const parts = [
-    [counts.jobs, 'job'], [counts.checklists, 'checklist'], [counts.trips, 'flight plan'],
-    [counts.miningRuns, 'mining haul'], [counts.notes, 'map note'],
-    [counts.kits, 'kit'], [counts.pins, 'point of interest', 'points of interest'],
-  ].filter(([n]) => n > 0).map(([n, word, plural]) => `${n} ${n === 1 ? word : (plural || `${word}s`)}`);
+    [counts.jobs, '{count} job', '{count} jobs'],
+    [counts.checklists, '{count} checklist', '{count} checklists'],
+    [counts.trips, '{count} flight plan', '{count} flight plans'],
+    [counts.miningRuns, '{count} mining haul', '{count} mining hauls'],
+    [counts.notes, '{count} map note', '{count} map notes'],
+    [counts.kits, '{count} kit', '{count} kits'],
+    [counts.pins, '{count} point of interest', '{count} points of interest'],
+  ].filter(([n]) => n > 0).map(([n, one, other]) => txn(n, one, other));
 
-  if (counts.goal) parts.push('your goal');
-  if (counts.wipe) parts.push('your wipe line');
+  if (counts.goal) parts.push(tx('your goal'));
+  if (counts.wipe) parts.push(tx('your wipe line'));
 
   line.textContent = parts.length
-    ? `Would save ${parts.join(', ')}.`
-    : 'Nothing typed yet — a backup would be empty.';
+    ? tx('Would save {list}.', { list: parts.join(', ') })
+    : tx('Nothing typed yet — a backup would be empty.');
 }
 
 async function saveBackup() {
@@ -19093,7 +19109,7 @@ async function saveBackup() {
   const status = $('#backup-status');
 
   button.disabled = true;
-  status.textContent = 'Building the file…';
+  status.textContent = tx('Building the file…');
 
   let url = null;
 
@@ -19101,7 +19117,7 @@ async function saveBackup() {
     const response = await fetch('/api/backup');
 
     if (!response.ok) {
-      status.textContent = 'The backup could not be built.';
+      status.textContent = tx('The backup could not be built.');
       return;
     }
 
@@ -19116,9 +19132,9 @@ async function saveBackup() {
     link.download = name;
     link.click();
 
-    status.textContent = `Saved ${name} — ${Math.round(blob.size / 1024).toLocaleString()} KB.`;
+    status.textContent = tx('Saved {name} — {size} KB.', { name, size: Math.round(blob.size / 1024).toLocaleString() });
   } catch {
-    status.textContent = 'The backup could not be built.';
+    status.textContent = tx('The backup could not be built.');
   } finally {
     // Revoking frees the blob; doing it before the click lands cancels the save.
     if (url) setTimeout(() => URL.revokeObjectURL(url), 30000);
@@ -19134,22 +19150,22 @@ async function saveBackup() {
  * asked whether to overwrite their own more recent work.
  */
 const RESTORE_WHY = {
-  Add: 'not on this machine',
-  Replace: 'yours is older',
-  Conflict: 'yours is newer',
-  Deleted: 'you deleted this',
-  Same: 'already the same',
+  Add: tx('not on this machine'),
+  Replace: tx('yours is older'),
+  Conflict: tx('yours is newer'),
+  Deleted: tx('you deleted this'),
+  Same: tx('already the same'),
 };
 
 async function planRestore(text) {
   const status = $('#backup-status');
-  status.textContent = 'Reading the file…';
+  status.textContent = tx('Reading the file…');
 
   const response = await fetch('/api/backup/plan', { method: 'POST', body: text });
   const body = await response.json().catch(() => null);
 
   if (!response.ok) {
-    status.textContent = body?.problem || 'That file could not be read.';
+    status.textContent = body?.problem || tx('That file could not be read.');
     return;
   }
 
@@ -19170,11 +19186,11 @@ function renderRestorePlan() {
   summary.textContent = '';
 
   const counts = [
-    [restorePlan.adds, 'to bring back'],
-    [restorePlan.replaces, 'to replace'],
-    [restorePlan.conflicts, 'newer here'],
-    [restorePlan.deleted, 'you deleted'],
-    [restorePlan.unchanged, 'already the same'],
+    [restorePlan.adds, tx('to bring back')],
+    [restorePlan.replaces, tx('to replace')],
+    [restorePlan.conflicts, tx('newer here')],
+    [restorePlan.deleted, tx('you deleted')],
+    [restorePlan.unchanged, tx('already the same')],
   ].filter(([n]) => n > 0);
 
   for (const [n, word] of counts) {
@@ -19188,7 +19204,7 @@ function renderRestorePlan() {
   // question somebody will ask of a screen that rewrote their jobs.
   if (restorePlan.ignored > 0) {
     summary.append(el('span', 'restore-count muted',
-      `${restorePlan.ignored} pinned or tracked — left alone either way`));
+      tx('{count} pinned or tracked — left alone either way', { count: restorePlan.ignored })));
   }
 
   const body = $('#backup-plan-table').querySelector('tbody');
@@ -19202,7 +19218,7 @@ function renderRestorePlan() {
     box.type = 'checkbox';
     box.checked = line.takenByDefault;
     box.dataset.key = line.key;
-    box.title = line.takenByDefault ? 'Untick to leave this alone' : 'Tick to take the copy in the file';
+    box.title = line.takenByDefault ? tx('Untick to leave this alone') : tx('Tick to take the copy in the file');
     cell.append(box);
     row.append(cell);
 
@@ -19224,7 +19240,7 @@ function renderRestorePlan() {
 
   if (acting.length === 0) {
     summary.append(el('span', 'restore-count muted',
-      'Nothing to do — this file matches what you have.'));
+      tx('Nothing to do — this file matches what you have.')));
   }
 }
 
@@ -19247,7 +19263,7 @@ async function applyRestore() {
   }
 
   button.disabled = true;
-  status.textContent = 'Restoring…';
+  status.textContent = tx('Restoring…');
 
   // Built the way the rest of the app builds a query, rather than through
   // URLSearchParams: the keys are store:id pairs and both halves need escaping.
@@ -19260,7 +19276,7 @@ async function applyRestore() {
     const body = await response.json().catch(() => null);
 
     if (!response.ok) {
-      status.textContent = body?.problem || 'Nothing was restored.';
+      status.textContent = body?.problem || tx('Nothing was restored.');
       return;
     }
 
@@ -19269,21 +19285,20 @@ async function applyRestore() {
     // do, so a failure says what it was and whether it went back.
     if (body.failed) {
       status.textContent = body.rolledBack
-        ? 'A file could not be written, so nothing was restored — everything was put back as it was.'
-        : 'A file could not be written, and not all of it could be put back. '
-          + 'Check your jobs, plans and mining log before restoring again.';
+        ? tx('A file could not be written, so nothing was restored — everything was put back as it was.')
+        : tx('A file could not be written, and not all of it could be put back. Check your jobs, plans and mining log before restoring again.');
       return;
     }
 
     status.textContent = body.restored === 0
-      ? 'Nothing was restored — every line was left alone.'
-      : `Restored ${body.restored} record${body.restored === 1 ? '' : 's'}.`
-        + (body.skipped ? ` Left ${body.skipped} alone.` : '');
+      ? tx('Nothing was restored — every line was left alone.')
+      : txn(body.restored, 'Restored {count} record.', 'Restored {count} records.')
+        + (body.skipped ? ` ${tx('Left {count} alone.', { count: body.skipped })}` : '');
 
     closeRestore();
     await renderBackupPreview().catch(() => {});
   } catch {
-    status.textContent = 'Nothing was restored.';
+    status.textContent = tx('Nothing was restored.');
   } finally {
     button.disabled = false;
   }
@@ -19359,7 +19374,7 @@ function shareList(rows, empty) {
 async function buildShareReport() {
   const choice = shareChoice();
   if (!choice.session && !choice.fleet && !choice.trade)
-    throw new Error('Choose at least one section for the recap.');
+    throw new Error(tx('Choose at least one section for the recap.'));
 
   const report = { choice, madeAt: new Date().toISOString() };
   const needsSessions = choice.session || choice.handle;
@@ -19507,14 +19522,14 @@ function shareReportCss() {
 
 async function openShareReport() {
   const status = $('#share-status');
-  if (status) status.textContent = 'Building recap…';
+  if (status) status.textContent = tx('Building recap…');
   try {
     shareReportData = await buildShareReport();
     renderShareReport(shareReportData);
     if (status) status.textContent = '';
     showView('share');
   } catch (error) {
-    if (status) status.textContent = error.message || 'The recap could not be built.';
+    if (status) status.textContent = error.message || tx('The recap could not be built.');
   }
 }
 
@@ -19551,12 +19566,12 @@ async function saveExport() {
   const choice = exportChoice();
 
   if (!choice.receipts && !choice.blueprints && !choice.authored && !choice.points) {
-    status.textContent = 'Tick at least one thing first.';
+    status.textContent = tx('Tick at least one thing first.');
     return;
   }
 
   button.disabled = true;
-  status.textContent = 'Building the file…';
+  status.textContent = tx('Building the file…');
 
   let url = null;
 
@@ -19569,7 +19584,7 @@ async function saveExport() {
 
     if (!response.ok) {
       const problem = await response.json().catch(() => null);
-      status.textContent = problem?.message || 'The file could not be built.';
+      status.textContent = problem?.message || tx('The file could not be built.');
       return;
     }
 
@@ -19585,9 +19600,9 @@ async function saveExport() {
     link.download = name;
     link.click();
 
-    status.textContent = `Saved ${name} — ${Math.round(blob.size / 1024).toLocaleString()} KB.`;
+    status.textContent = tx('Saved {name} — {size} KB.', { name, size: Math.round(blob.size / 1024).toLocaleString() });
   } catch {
-    status.textContent = 'The file could not be built.';
+    status.textContent = tx('The file could not be built.');
   } finally {
     // Revoking frees the blob; doing it before the click lands cancels the save.
     if (url) setTimeout(() => URL.revokeObjectURL(url), 30000);
@@ -19637,7 +19652,9 @@ async function renderSignals() {
       group = row.group;
 
       const head = el('tr', 'group-row');
-      const cell = el('td', 'muted', group);
+      // Names and notes are the server's English, translated here: the same
+      // catalogue serves them, and the server has no idea of the page's language.
+      const cell = el('td', 'muted', tx(group));
       cell.colSpan = 4;
       head.append(cell);
       body.append(head);
@@ -19647,15 +19664,15 @@ async function renderSignals() {
     const quiet = seen !== null && played - seen > QUIET;
 
     const tr = el('tr');
-    tr.append(el('td', null, row.name));
+    tr.append(el('td', null, tx(row.name)));
     tr.append(el('td', row.total ? 'num' : 'num muted', row.total ? row.total.toLocaleString() : '—'));
     tr.append(el('td', row.sessions ? 'num' : 'num muted', row.sessions || '—'));
 
     const last = el('td', seen === null ? 'muted' : (quiet ? 'outward' : 'muted'));
-    last.textContent = seen === null ? 'never' : `${dateOf(row.lastSeen)}${quiet ? ' · gone quiet' : ''}`;
+    last.textContent = seen === null ? tx('never') : `${dateOf(row.lastSeen)}${quiet ? ` · ${tx('gone quiet')}` : ''}`;
     tr.append(last);
 
-    if (row.note) tr.title = row.note;
+    if (row.note) tr.title = tx(row.note);
     body.append(tr);
   }
 }
@@ -19680,15 +19697,15 @@ async function renderUexAuto() {
     toggle.disabled = !auto.uexEnabled;
 
     if (!auto.uexEnabled) {
-      note.textContent = 'fetch prices first';
+      note.textContent = tx('fetch prices first');
       return;
     }
 
-    const every = `every ${auto.staleAfterHours} hours`;
+    const every = tx('every {count} hours', { count: auto.staleAfterHours });
 
     note.textContent = auto.automatic
-      ? (auto.lastCheckedAt ? `${every} · last tried ${dateOf(auto.lastCheckedAt)}` : every)
-      : `off · prices stay as fetched`;
+      ? (auto.lastCheckedAt ? `${every} · ${tx('last tried {date}', { date: dateOf(auto.lastCheckedAt) })}` : every)
+      : tx('off · prices stay as fetched');
   } catch { /* Settings redraws on its next visit */ }
 }
 
@@ -19725,19 +19742,20 @@ async function renderUexFeeds() {
     const row = el('div', 'uex-feed');
 
     const head = el('div', 'uex-feed-head');
-    head.append(el('b', null, feed.title));
-    head.append(el('span', 'cost', feed.cost));
+    // The server's English, translated here, as the signal rows are.
+    head.append(el('b', null, tx(feed.title)));
+    head.append(el('span', 'cost', tx(feed.cost)));
     row.append(head);
 
-    row.append(el('div', 'muted feed-copy', feed.description));
+    row.append(el('div', 'muted feed-copy', tx(feed.description)));
 
     const actions = el('div', 'uex-feed-actions');
-    const button = el('button', 'ghost', feed.enabled ? 'Refresh' : 'Fetch');
+    const button = el('button', 'ghost', feed.enabled ? tx('Refresh') : tx('Fetch'));
     const status = el('span', 'muted');
 
     status.textContent = feed.enabled
-      ? `on · fetched ${feed.fetchedAt ? ago(feed.fetchedAt) : '—'}`
-      : 'off';
+      ? tx('on · fetched {ago}', { ago: feed.fetchedAt ? ago(feed.fetchedAt) : '—' })
+      : tx('off');
 
     button.addEventListener('click', () =>
       uexAction(`/api/uex/feeds/${feed.key}/enable`, status, button));
@@ -19745,7 +19763,7 @@ async function renderUexFeeds() {
     actions.append(button);
 
     if (feed.enabled) {
-      const drop = el('button', 'ghost', 'Drop');
+      const drop = el('button', 'ghost', tx('Drop'));
       drop.addEventListener('click', () =>
         uexAction(`/api/uex/feeds/${feed.key}/disable`, status, drop));
       actions.append(drop);
@@ -19759,14 +19777,14 @@ async function renderUexFeeds() {
 
 async function uexAction(path, statusNode, button) {
   button.disabled = true;
-  statusNode.textContent = 'working…';
+  statusNode.textContent = tx('working…');
 
   try {
     const result = await fetch(path, { method: 'POST' });
     if (!result.ok) throw new Error((await result.json()).title || result.statusText);
     statusNode.textContent = '';
   } catch (e) {
-    statusNode.textContent = `failed: ${e.message}`;
+    statusNode.textContent = tx('failed: {error}', { error: e.message });
   } finally {
     button.disabled = false;
     renderSettings();
@@ -19811,16 +19829,17 @@ $('#uex-preview').addEventListener('click', async () => {
     const skipped = rows.length - matched.length;
 
     status.textContent = matched.length
-      ? `${matched.length} price${matched.length === 1 ? '' : 's'} across `
-        + `${terminals.size} terminal${terminals.size === 1 ? '' : 's'}`
-        + (skipped ? ` · ${skipped} skipped (place not matched to a UEX terminal)` : '')
+      ? `${txn(matched.length, '{count} price', '{count} prices')} `
+        + txn(terminals.size, 'across {count} terminal', 'across {count} terminals')
+        + (skipped ? ` · ${tx('{count} skipped (place not matched to a UEX terminal)', { count: skipped })}` : '')
       : rows.length
-        ? `nothing sendable: ${rows.length} sale${rows.length === 1 ? '' : 's'} but no place matched a UEX terminal`
-        : 'no named sales in the last 30 days';
+        ? txn(rows.length, 'nothing sendable: {count} sale but no place matched a UEX terminal',
+          'nothing sendable: {count} sales but no place matched a UEX terminal')
+        : tx('no named sales in the last 30 days');
 
     $('#uex-send').hidden = matched.length === 0;
   } catch (e) {
-    status.textContent = `failed: ${e.message}`;
+    status.textContent = tx('failed: {error}', { error: e.message });
   }
 });
 
@@ -19829,17 +19848,17 @@ $('#uex-send').addEventListener('click', async (e) => {
   const status = $('#uex-push-status');
 
   button.disabled = true;
-  status.textContent = 'sending…';
+  status.textContent = tx('sending…');
 
   try {
     const result = await fetch('/api/uex/push', { method: 'POST' });
     const body = await result.json();
     if (!result.ok) throw new Error(body.title || result.statusText);
 
-    status.textContent = body.results.join(' · ') || 'nothing sent';
+    status.textContent = body.results.join(' · ') || tx('nothing sent');
     button.hidden = true;
   } catch (err) {
-    status.textContent = `failed: ${err.message}`;
+    status.textContent = tx('failed: {error}', { error: err.message });
   } finally {
     button.disabled = false;
   }
@@ -20016,7 +20035,7 @@ function makeTablesSortable() {
       if (!th.textContent.trim()) return;
 
       th.classList.add('sortable');
-      th.title = 'Sort';
+      th.title = tx('Sort');
 
       th.addEventListener('click', () => {
         const descending = !th.classList.contains('sort-desc');
@@ -21686,10 +21705,10 @@ async function loadGameData() {
   if (!label) return state;
 
   label.textContent = {
-    reading: state?.seconds ? `reading… ${Math.round(state.seconds)}s` : 'reading…',
-    ready: 'ready',
-    failed: 'could not be read',
-    noinstall: 'no install found',
+    reading: state?.seconds ? tx('reading… {seconds}s', { seconds: Math.round(state.seconds) }) : tx('reading…'),
+    ready: tx('ready'),
+    failed: tx('could not be read'),
+    noinstall: tx('no install found'),
   }[state?.state] || '';
 
   if (problem) {
@@ -21709,11 +21728,11 @@ async function loadGameData() {
   quote('#settings-install-spawnplaces', counts.spawnplaces);
 
   tiles('#gamedata-counts', [
-    ['Commodities', count(counts.commodities)],
-    ['Items', count(counts.items)],
-    ['Recipes', count(counts.recipes)],
-    ['Deposits', count(counts.deposits)],
-    ['Places', count(counts.places)],
+    [tx('Commodities'), count(counts.commodities)],
+    [tx('Items'), count(counts.items)],
+    [tx('Recipes'), count(counts.recipes)],
+    [tx('Deposits'), count(counts.deposits)],
+    [tx('Places'), count(counts.places)],
   ]);
 
   return state;
@@ -26649,13 +26668,13 @@ async function checkPriceAge() {
 
   if (age < STALE_AFTER_HOURS && !staleFeeds.length) return;
 
-  const parts = [`Prices last fetched ${ago(uex.fetchedAt)}`];
+  const parts = [tx('Prices last fetched {ago}', { ago: ago(uex.fetchedAt) })];
 
   if (staleFeeds.length) {
-    parts.push(`${staleFeeds.length} other feed${staleFeeds.length === 1 ? '' : 's'} as old`);
+    parts.push(txn(staleFeeds.length, '{count} other feed as old', '{count} other feeds as old'));
   }
 
-  parts.push('margins and best-price rankings are only as fresh as this');
+  parts.push(tx('margins and best-price rankings are only as fresh as this'));
 
   $('#stale-detail').textContent = `${parts.join(' · ')}.`;
   notice.hidden = false;
@@ -26671,14 +26690,14 @@ async function checkPriceAge() {
 const TEXT_STALE_DISMISSED = 'qw-text-stale-dismissed';
 
 function textStaleDetail(fresh) {
-  const count = `${fresh.missing.toLocaleString()} of the game's strings are missing from it`;
-  const what = ' - this patch’s new items and contract titles among them - so the game may show those as raw text keys.';
+  const what = tx('{count} of the game\'s strings are missing from it - this patch’s new items and contract titles among them - so the game may show those as raw text keys.',
+    { count: fresh.missing.toLocaleString() });
 
   if (fresh.owner === 'overlay' || fresh.owner === 'overlay+StarStrings')
-    return `${count}${what} Reinstalling the item labels adds them back in the game's own words.`;
+    return `${what} ${tx('Reinstalling the item labels adds them back in the game\'s own words.')}`;
   if (fresh.owner === 'StarStrings')
-    return `${count}${what} Install a StarStrings release made for this patch, or remove StarStrings, to get them back.`;
-  return `${count}${what} It belongs to a text mod Quantum Wake did not install; update or remove that mod.`;
+    return `${what} ${tx('Install a StarStrings release made for this patch, or remove StarStrings, to get them back.')}`;
+  return `${what} ${tx('It belongs to a text mod Quantum Wake did not install; update or remove that mod.')}`;
 }
 
 async function checkTextFreshness() {
@@ -26802,23 +26821,27 @@ function showWipeStatus(wipe) {
   if (!status) return;
 
   if (!wipe.at) {
-    status.textContent = `counting all ${(wipe.stored ?? 0).toLocaleString()} sessions`;
+    status.textContent = tx('counting all {count} sessions', { count: (wipe.stored ?? 0).toLocaleString() });
     return;
   }
 
   if (wipe.hidden === 0) {
-    status.textContent = 'nothing on record from before this';
+    status.textContent = tx('nothing on record from before this');
     return;
   }
 
   const covers = wipe.covers || [];
-  const sessions = `${wipe.hidden.toLocaleString()} session${wipe.hidden === 1 ? '' : 's'} before this`;
+  const scopeNames = { money: tx('money'), ships: tx('ships'), inventory: tx('inventory'), history: tx('history') };
+  const count = { count: wipe.hidden.toLocaleString() };
 
   // A partial wipe hides nothing outright, so saying "not counted" flat would
   // be a lie: those sessions still count towards everything it did not take.
   status.textContent = covers.length === Object.keys(WIPE_SCOPES).length
-    ? `${sessions} are kept but not counted`
-    : `${sessions} still count, except for ${covers.join(', ')}`;
+    ? txn(wipe.hidden, '{count} session before this is kept but not counted',
+      '{count} sessions before this are kept but not counted', count)
+    : txn(wipe.hidden, '{count} session before this still counts, except for {scopes}',
+      '{count} sessions before this still count, except for {scopes}',
+      { ...count, scopes: covers.map((name) => scopeNames[name] || name).join(', ') });
 }
 
 async function saveWipe(at, patch) {
@@ -26838,9 +26861,9 @@ async function saveWipe(at, patch) {
     await loadHistory();
     await loadWipe();
 
-    if (status) status.textContent = `${status.textContent} · saved`;
+    if (status) status.textContent = `${status.textContent} · ${tx('saved')}`;
   } catch (e) {
-    if (status) status.textContent = `could not save: ${e.message}`;
+    if (status) status.textContent = tx('could not save: {error}', { error: e.message });
   }
 }
 
@@ -26850,7 +26873,7 @@ function initWipe() {
 
   $('#wipe-save').addEventListener('click', () => {
     if (!field.value) {
-      $('#wipe-status').textContent = 'pick a date, or use "count everything"';
+      $('#wipe-status').textContent = tx('pick a date, or use "count everything"');
       return;
     }
 
@@ -26902,10 +26925,9 @@ async function checkForUpdate() {
 function askAboutUpdates(state) {
   const notice = $('#update');
 
-  $('#update-title').textContent = 'Look for a newer version?';
+  $('#update-title').textContent = tx('Look for a newer version?');
   $('#update-detail').textContent =
-    'One request to GitHub, sending nothing about you or this machine. '
-    + 'Nothing is downloaded or installed — you would get a link.';
+    tx('One request to GitHub, sending nothing about you or this machine. Nothing is downloaded or installed — you would get a link.');
 
   const actions = $('#update-actions');
   actions.textContent = '';
@@ -26917,13 +26939,13 @@ function askAboutUpdates(state) {
     if (thenCheck) await runUpdateCheck({ quiet: false, announce: true });
   };
 
-  const every = el('button', 'ghost', 'Yes, every start');
+  const every = el('button', 'ghost', tx('Yes, every start'));
   every.addEventListener('click', () => answer(true, true));
 
-  const once = el('button', 'ghost', 'Just this once');
+  const once = el('button', 'ghost', tx('Just this once'));
   once.addEventListener('click', () => answer(false, true));
 
-  const never = el('button', 'ghost', 'No thanks');
+  const never = el('button', 'ghost', tx('No thanks'));
   never.addEventListener('click', () => answer(false, false));
 
   actions.append(every, once, never);
@@ -26958,8 +26980,8 @@ async function runUpdateCheck({ quiet, announce = false }) {
 
     result = await response.json();
   } catch {
-    if (!quiet) $('#update-status').textContent = 'could not reach GitHub just now';
-    if (announce) tellUpdateNotice('Could not reach GitHub', 'The check did not get through. Try again in a moment.');
+    if (!quiet) $('#update-status').textContent = tx('could not reach GitHub just now');
+    if (announce) tellUpdateNotice(tx('Could not reach GitHub'), tx('The check did not get through. Try again in a moment.'));
     return;
   }
 
@@ -26972,15 +26994,15 @@ async function runUpdateCheck({ quiet, announce = false }) {
   await renderUpdateSettings().catch(() => { /* the toggle is still right */ });
 
   if (!result.newer) {
-    if (!quiet) $('#update-status').textContent = `up to date — ${result.current} is the newest`;
-    if (announce) tellUpdateNotice(`Quantum Wake ${result.current} is the newest`, 'Nothing to update.');
+    if (!quiet) $('#update-status').textContent = tx('up to date — {version} is the newest', { version: result.current });
+    if (announce) tellUpdateNotice(tx('Quantum Wake {version} is the newest', { version: result.current }), tx('Nothing to update.'));
     else notice.hidden = true;
     return;
   }
 
-  $('#update-title').textContent = `Quantum Wake ${result.latest} is out`;
-  $('#update-detail').textContent = `You are running ${result.current}.`
-    + (result.publishedAt ? ` Published ${dayUtc(result.publishedAt)}.` : '');
+  $('#update-title').textContent = tx('Quantum Wake {version} is out', { version: result.latest });
+  $('#update-detail').textContent = tx('You are running {version}.', { version: result.current })
+    + (result.publishedAt ? ` ${tx('Published {date}.', { date: dayUtc(result.publishedAt) })}` : '');
 
   const actions = $('#update-actions');
   actions.textContent = '';
@@ -26990,13 +27012,13 @@ async function runUpdateCheck({ quiet, announce = false }) {
   // pressed is worse than one that was never there.
   if (result.canInstall) actions.append(updateNowButton(result));
 
-  const open = el('button', 'ghost', result.canInstall ? 'Read the notes' : 'Open the release page');
+  const open = el('button', 'ghost', result.canInstall ? tx('Read the notes') : tx('Open the release page'));
   open.addEventListener('click', () => {
     window.open(result.url, '_blank', 'noreferrer');
     if (!result.canInstall) notice.hidden = true;
   });
 
-  const later = el('button', 'ghost', 'Later');
+  const later = el('button', 'ghost', tx('Later'));
   later.addEventListener('click', () => { notice.hidden = true; });
 
   actions.append(open, later);
@@ -27016,7 +27038,7 @@ function tellUpdateNotice(title, detail) {
   const actions = $('#update-actions');
   actions.textContent = '';
 
-  const close = el('button', 'ghost', 'Close');
+  const close = el('button', 'ghost', tx('Close'));
   close.addEventListener('click', () => { notice.hidden = true; });
   actions.append(close);
 
@@ -27039,17 +27061,16 @@ function updateNowButton(result) {
   // part of what is being agreed to: on a metered connection ninety megabytes
   // is somebody's actual money, and finding out afterwards is too late.
   const size = result.downloadBytes
-    ? ` · ${Math.round(result.downloadBytes / 1048576)} MB`
+    ? ` · ${tx('{size} MB', { size: Math.round(result.downloadBytes / 1048576) })}`
     : '';
 
-  const install = el('button', 'ghost on', `Update to ${result.latest}${size}`);
-  install.title = 'Downloads it, checks it, and restarts into the new version';
+  const install = el('button', 'ghost on', `${tx('Update to {version}', { version: result.latest })}${size}`);
+  install.title = tx('Downloads it, checks it, and restarts into the new version');
 
   install.addEventListener('click', async () => {
     install.disabled = true;
-    install.textContent = 'Downloading…';
-    $('#update-detail').textContent = 'Fetching the new version and checking it against '
-      + 'what GitHub published. This can take a minute.';
+    install.textContent = tx('Downloading…');
+    $('#update-detail').textContent = tx('Fetching the new version and checking it against what GitHub published. This can take a minute.');
 
     let answer;
     try {
@@ -27059,24 +27080,24 @@ function updateNowButton(result) {
       if (!response.ok) {
         // The server's own words: it knows whether the folder was writable,
         // the download was short, or something had the file open.
-        $('#update-detail').textContent = answer?.message || 'The update could not be applied.';
-        install.textContent = 'Try again';
+        $('#update-detail').textContent = answer?.message || tx('The update could not be applied.');
+        install.textContent = tx('Try again');
         install.disabled = false;
         return;
       }
     } catch {
-      $('#update-detail').textContent = 'The download did not finish, so nothing was replaced.';
-      install.textContent = 'Try again';
+      $('#update-detail').textContent = tx('The download did not finish, so nothing was replaced.');
+      install.textContent = tx('Try again');
       install.disabled = false;
       return;
     }
 
     // Two endings, and they are different promises. One restarts itself; the
     // other has already swapped the file and needs a hand.
-    install.textContent = answer.restarting ? 'Restarting…' : 'Installed';
+    install.textContent = answer.restarting ? tx('Restarting…') : tx('Installed');
     $('#update-detail').textContent = answer.restarting
-      ? `Quantum Wake ${answer.version} is installed. Restarting now.`
-      : `Quantum Wake ${answer.version} is installed. Close this and start it again to use it.`;
+      ? tx('Quantum Wake {version} is installed. Restarting now.', { version: answer.version })
+      : tx('Quantum Wake {version} is installed. Close this and start it again to use it.', { version: answer.version });
   });
 
   return install;
@@ -27142,8 +27163,8 @@ async function renderUpdateSettings() {
   if (!status) return;
 
   status.textContent = state.lastCheckedAt
-    ? `last checked ${ago(state.lastCheckedAt)}`
-    : 'never checked';
+    ? tx('last checked {ago}', { ago: ago(state.lastCheckedAt) })
+    : tx('never checked');
 }
 
 function initUpdates() {
@@ -27177,7 +27198,7 @@ function initUpdates() {
   $('#update-check').addEventListener('click', async (event) => {
     const button = event.currentTarget;
     button.disabled = true;
-    $('#update-status').textContent = 'looking…';
+    $('#update-status').textContent = tx('looking…');
 
     try {
       await runUpdateCheck({ quiet: false });
@@ -27234,10 +27255,10 @@ async function checkForWipe() {
 
   offeredPatch = found;
 
-  $('#patch-title').textContent = `${found.patch} arrived on ${dayUtc(found.at)}`;
+  $('#patch-title').textContent = tx('{patch} arrived on {date}', { patch: found.patch, date: dayUtc(found.at) });
   $('#patch-detail').textContent = wipe.at
-    ? `Your history is counted from ${dayUtc(wipe.at)}. If that patch wiped, the line belongs there instead.`
-    : 'Nothing is being held back at the moment. If that patch wiped, your totals are counting an account you no longer have.';
+    ? tx('Your history is counted from {date}. If that patch wiped, the line belongs there instead.', { date: dayUtc(wipe.at) })
+    : tx('Nothing is being held back at the moment. If that patch wiped, your totals are counting an account you no longer have.');
 
   notice.hidden = false;
 }
@@ -27349,8 +27370,8 @@ function paintScan(status, sawRunning) {
     $('#scan-file').textContent = status.file || '';
 
     $('#scan-label').textContent = status.parsed > 0
-      ? `Parsing logs — ${status.parsed} new`
-      : 'Checking logs…';
+      ? tx('Parsing logs — {count} new', { count: status.parsed })
+      : tx('Checking logs…');
 
     return false;
   }
@@ -27362,8 +27383,8 @@ function paintScan(status, sawRunning) {
     return false;
 
   $('#scan-fill').style.width = '100%';
-  $('#scan-label').textContent = 'Scan complete';
-  $('#scan-count').textContent = `${status.parsed} parsed · ${status.elapsedSeconds}s`;
+  $('#scan-label').textContent = tx('Scan complete');
+  $('#scan-count').textContent = `${tx('{count} parsed', { count: status.parsed })} · ${status.elapsedSeconds}s`;
   $('#scan-file').textContent = '';
 
   return true;
@@ -27625,7 +27646,7 @@ async function boot() {
 
     $('#about-version').textContent = build;
     $('#foot-version').textContent = `v${info.version}`;
-    $('#foot-version').title = `Build ${build}`;
+    $('#foot-version').title = tx('Build {build}', { build });
   } catch {
     $('#about-version').textContent = 'unknown';
   }

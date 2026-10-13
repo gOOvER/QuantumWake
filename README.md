@@ -403,9 +403,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.18.1
+### 0.18.2
 
-**Quantum Wake in French — the start of it.** Settings → General has a new **Language · Langue** card. Choose Français and the navigation, the search box, the command palette and the fixed text of Settings → General come up in French, in the browser and in the overlay alike. The rest of the app is still English for now, and the card says exactly what is covered so far; more pages follow through the 0.18 updates. Names from the game — ships, places, commodities — stay as the game writes them, so they still match your mobiGlas and the price sites.
+**Quantum Wake in French — the start of it.** Settings → General has a new **Language · Langue** card. Choose Français and the navigation, the search box, the command palette, the notices along the top (old prices, a new patch, a new version) and the whole of Settings → General come up in French, in the browser and in the overlay alike — its status lines, the price feeds and the table of what your logs still carry included, with dates written the French way. The rest of the app is still English for now, and the card says exactly what is covered so far; more pages follow through the 0.18 updates. Names from the game — ships, places, commodities — stay as the game writes them, so they still match your mobiGlas and the price sites.
 
 **Nothing changes unless you choose it.** English stays the default, even on a French Windows, until the translation is complete.
 

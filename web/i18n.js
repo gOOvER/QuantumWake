@@ -15,6 +15,16 @@ const QW_LANGUAGE = typeof window.QW_LANG === 'string' ? window.QW_LANG : 'en';
 const QW_CATALOGUE = window.QW_STRINGS && typeof window.QW_STRINGS === 'object' ? window.QW_STRINGS : {};
 
 /**
+ * The locale dates and times are written in.
+ *
+ * An English page follows the browser's region ([]), so a Québécois reader
+ * still gets their own date order. Any other page writes them in its own
+ * language: a month name and an AM/PM are words, and "Oct 12" inside a French
+ * sentence is English on the page. Digit grouping is left to the region.
+ */
+const QW_DATE_LOCALES = QW_LANGUAGE === 'en' ? [] : [QW_LANGUAGE];
+
+/**
  * Which plural form a count takes, per language.
  *
  * Written out rather than asked of Intl.PluralRules: the test engine has no
