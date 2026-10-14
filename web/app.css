@@ -1,4 +1,4 @@
-﻿/* Quantumwake - styled after Star Citizen's in-game HUD and mobiGlas.
+/* Quantumwake - styled after Star Citizen's in-game HUD and mobiGlas.
  *
  * The look leans on four devices: chamfered (not rounded) corners, thin glowing
  * cyan rules, wide-tracked uppercase labels, and corner brackets on panels.
@@ -2004,6 +2004,107 @@ body:has(#view-map.active)::before { opacity: .2; }
 }
 body.overlay .scan-file { display: none; }
 
+/* What the wait means for the page on screen. The bar says that something is
+   running; this says why the page under it is thin. */
+.scan-why {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text);
+}
+.scan-why:empty { display: none; }
+body.overlay .scan-why { display: none; }
+
+/* No percentage for the game files or a download, so the bar sweeps rather
+   than sitting at a width it would be making up. */
+.scan.indeterminate .scan-fill,
+.scan-track.indeterminate .scan-fill {
+  width: 30% !important;
+  animation: scan-sweep 1.4s ease-in-out infinite;
+}
+@keyframes scan-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(340%); }
+}
+
+/* ---- Activity chip: the one thing in the top bar that is about the app
+   rather than the game. Hidden whenever nothing is running. */
+.activity { position: relative; flex: none; }
+.status:has(#activity:not([hidden])) #install { display: none; }
+.activity-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 26ch;
+  padding: 4px 10px;
+  border: 1px solid var(--cyan);
+  border-radius: 3px;
+  background: rgba(53, 200, 240, .08);
+  color: var(--cyan);
+  font: 10px var(--mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.activity-chip #activity-text { overflow: hidden; text-overflow: ellipsis; }
+.activity-chip:hover, .activity-chip[aria-expanded="true"] { background: rgba(53, 200, 240, .16); }
+.activity-pulse {
+  width: 7px; height: 7px;
+  flex: none;
+  background: var(--cyan);
+  transform: rotate(45deg);
+  box-shadow: 0 0 9px var(--cyan);
+  animation: activity-pulse 1.1s ease-in-out infinite;
+}
+@keyframes activity-pulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+
+.activity.settled .activity-chip { border-color: var(--green); color: var(--green); background: rgba(79, 212, 138, .08); }
+.activity.settled .activity-pulse { background: var(--green); box-shadow: 0 0 9px var(--green); animation: none; }
+
+.activity-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 50;
+  width: min(380px, calc(100vw - 32px));
+  padding: 12px 14px;
+  /* It lives in the status corner, whose small capitals suit a label and
+     would turn a file name and a sentence into a shout. */
+  font-size: 12px;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--text);
+  border: 1px solid var(--rule-hot);
+  border-left: 3px solid var(--cyan);
+  background: linear-gradient(158deg, var(--panel), var(--deep));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .6);
+}
+.activity-head {
+  font-size: 10.5px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--cyan-hot);
+  margin-bottom: 8px;
+}
+.activity-row + .activity-row { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.activity-row-head { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
+.activity-count { color: var(--dim); font-family: var(--mono); white-space: nowrap; }
+.activity-row .ghost { margin-top: 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .activity-pulse, .scan.indeterminate .scan-fill, .scan-track.indeterminate .scan-fill { animation: none; }
+}
+
+/* The overlay is narrow: the chip keeps its pulse and loses its words, and the
+   full sentence is on its tooltip. The overlay drops the status corner, so
+   the chip is the one thing in it brought back - the overlay is where a pilot
+   is least likely to have seen Settings say a download began. */
+body.overlay .status:has(#activity:not([hidden])) { display: flex; }
+body.overlay .status > :not(.activity) { display: none; }
+body.overlay .activity-chip { padding: 4px 6px; }
+body.overlay .activity-chip #activity-text { display: none; }
+body.overlay .activity-panel { width: min(300px, calc(100vw - 16px)); }
+
 /* Heading with filter controls on the right. */
 .section-bar {
   display: flex;
@@ -2497,6 +2598,8 @@ body.overlay .foot { display: none; }
 .settings-share-card { background: linear-gradient(135deg, rgba(13, 45, 61, .84), var(--deep) 60%); }
 .settings-update-card { background: linear-gradient(135deg, rgba(32, 39, 49, .78), var(--deep) 65%); }
 .settings-update-card::before { background: var(--amber); }
+.settings-language-card { max-width: none; margin: 0 0 16px; }
+.settings-language-card select { min-width: 160px; }
 .settings-wipe-card { max-width: none; border-left: 3px solid var(--amber); background: linear-gradient(115deg, rgba(104, 68, 20, .11), var(--deep) 58%); }
 .settings-wipe-card .wipe-scope { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 20px; }
 .settings-group {
@@ -3042,6 +3145,66 @@ body.overlay .slot-spec,
 body.overlay .loadout-empty-slot,
 body.overlay .loadout-item-inspect { display: none; }
 
+/* Narrow overlay loadout: the character screen is useful at dashboard size,
+   while a single-column manifest is the scanable answer over the game. */
+body.overlay .overlay-loadout-strip,
+body.overlay .overlay-loadout-empty {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 9px;
+  align-items: baseline;
+  margin: 0 0 6px;
+  padding: 8px 9px;
+  border: 1px solid var(--cyan-deep);
+  border-left: 3px solid var(--cyan);
+  background: linear-gradient(100deg, rgba(53, 200, 240, .13), rgba(6, 15, 24, .9) 58%);
+}
+body.overlay .overlay-loadout-kicker {
+  grid-row: span 2;
+  color: var(--cyan-hot);
+  font: 8px var(--mono);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+body.overlay .overlay-loadout-strip strong,
+body.overlay .overlay-loadout-empty strong { color: var(--text); font-size: 12px; line-height: 1.2; }
+body.overlay .overlay-loadout-facts,
+body.overlay .overlay-loadout-empty > span:last-child { grid-column: 2; color: var(--muted); font-size: 9.5px; line-height: 1.35; }
+body.overlay .overlay-loadout-empty { min-height: 56px; border-left-color: var(--amber); }
+body.overlay .overlay-loadout-empty .overlay-loadout-kicker { color: var(--amber); }
+
+body.overlay .loadout-character { display: block; }
+body.overlay .loadout-sheet { display: grid; gap: 6px; }
+body.overlay .loadout-avatar-rig,
+body.overlay .loadout-field-kit,
+body.overlay .loadout-inventory-grid { display: contents; }
+body.overlay .loadout-equipment { display: contents; }
+body.overlay .loadout-slot,
+body.overlay .loadout-inventory-slot {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  min-height: 0;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--cyan-deep);
+  background: linear-gradient(110deg, rgba(14, 37, 52, .7), rgba(5, 13, 22, .84) 66%);
+  text-align: left;
+}
+body.overlay .loadout-equipment-left .loadout-equip-slot,
+body.overlay .loadout-equipment-right .loadout-equip-slot {
+  flex-direction: initial;
+  border-right-color: var(--rule);
+  border-left-color: var(--cyan-deep);
+  text-align: left;
+}
+body.overlay .loadout-equip-slot::after { display: none; }
+body.overlay .loadout-slot .slot-body { min-width: 0; }
+body.overlay .loadout-slot .card-label { margin: 0 0 2px; font-size: 8px; }
+body.overlay .loadout-slot .slot-current { color: var(--text); font-size: 11.5px; line-height: 1.25; overflow-wrap: anywhere; }
+body.overlay .loadout-slot .slot-icon { grid-row: span 2; align-self: center; color: var(--cyan-hot); }
+body.overlay .loadout-inventory-slot { border-left-color: var(--amber); background: linear-gradient(110deg, rgba(255, 171, 61, .09), rgba(5, 13, 22, .84) 66%); }
+body.overlay .loadout-inventory-slot .slot-icon { color: var(--amber); }
 /* ---------- map: search, highlight, follow, detail card ---------- */
 
 /* Search mode: matches glow, the rest recede but stay for context. The dim is
@@ -6542,3 +6705,67 @@ td.armoury-cost { color: var(--amber); }
 .controls-change { white-space: normal; vertical-align: top; }
 .controls-mode-pick { max-width: 110px; font-size: 11px; }
 .controls-axis-live { font: 11px var(--mono); margin-left: 6px; }
+
+/* ---------- overlay flight deck ----------
+ *
+ * The desktop surface can afford a dashboard; the in-game widget has to answer
+ * one question before the player reads anything else. In Glance mode that is
+ * the live focus strip, then an optional tracked campaign rail, then status.
+ */
+body.overlay.glance .now-focus:not([hidden]) {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 5px 9px;
+  align-items: center;
+  margin: 0 0 5px;
+  min-height: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--cyan-deep);
+  border-left: 3px solid var(--cyan);
+  background: linear-gradient(100deg, rgba(53, 200, 240, .12), rgba(7, 15, 24, .9) 48%);
+}
+body.overlay.glance .now-focus-mark { grid-row: span 2; margin: 0; font-size: 8px; color: var(--cyan-hot); }
+body.overlay.glance .now-focus-copy { min-width: 0; }
+body.overlay.glance .now-focus-title { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+body.overlay.glance .now-focus-copy .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text); }
+body.overlay.glance #now-focus-open { display: none; }
+body.overlay.glance .now-focus[data-urgency="attention"] { border-left-color: var(--amber); background: linear-gradient(100deg, rgba(255, 171, 61, .14), rgba(7, 15, 24, .9) 48%); }
+body.overlay.glance .now-focus[data-urgency="attention"] .now-focus-mark { color: var(--amber); }
+body.overlay.glance .now-focus[data-urgency="live"] .now-focus-mark { animation: overlay-live-pulse 1.6s ease-in-out infinite; }
+
+/* The tracked event is a deliberate second signal, therefore a rail rather
+   than another card competing with the current flight state. */
+body.overlay.glance #now-event-card.event-tracked {
+  border-color: rgba(155, 113, 255, .56);
+  border-left: 3px solid #ad8cff;
+  background: linear-gradient(100deg, rgba(155, 113, 255, .13), rgba(10, 16, 29, .88) 56%);
+}
+body.overlay.glance #now-event-card.event-tracked .card-label { color: #cebfff; }
+
+/* The small action confirmations are visible even after the shell pins itself
+   and hides its header. They leave no permanent overlay over the game. */
+body.overlay .toast.overlay-action {
+  pointer-events: none;
+  min-width: 0;
+  max-width: min(290px, calc(100vw - 20px));
+  padding: 7px 10px;
+  border-left-color: var(--cyan-hot);
+  background: rgba(7, 17, 28, .96);
+}
+body.overlay .toast.overlay-action .toast-text { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+body.overlay .toast.overlay-action .toast-detail { font-size: 10px; }
+
+/* Tiny remains compact, but its labels stay at a size that can be read through
+   the game UI. High visibility is stored with the layout so both browsers use
+   the same choice. */
+body.overlay.density-tiny { font-size: 11px; }
+body.overlay.density-tiny .tabs button[data-view] { font-size: 9px; }
+body.overlay.high-contrast { --text: #f5fbff; --muted: #b5d0df; --dim: #8eafc3; --rule: #3d7090; --rule-hot: #66cbed; --cyan: #72dcff; --cyan-hot: #b7f1ff; }
+body.overlay.high-contrast .card { border-color: #4c85a4; background: linear-gradient(160deg, rgba(12, 27, 42, .98), rgba(4, 12, 21, .98)); }
+body.overlay.high-contrast .now-status-label, body.overlay.high-contrast .card-label { color: #b7f1ff; }
+
+@keyframes overlay-live-pulse { 50% { opacity: .58; } }
+@media (prefers-reduced-motion: reduce) {
+  body.overlay.glance .now-focus[data-urgency="live"] .now-focus-mark { animation: none; }
+  .toast { animation: none; }
+}

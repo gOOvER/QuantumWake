@@ -26,6 +26,8 @@
   -->
   <ItemGroup>
     <None Include="..\..\web\app.js" Link="web\app.js" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\web\i18n.js" Link="web\i18n.js" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\web\locales\*.json" Link="web\locales\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\web\index.html" Link="web\index.html" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\web\app.css" Link="web\app.css" CopyToOutputDirectory="PreserveNewest" />
     <None Include="dom.js" CopyToOutputDirectory="PreserveNewest" />

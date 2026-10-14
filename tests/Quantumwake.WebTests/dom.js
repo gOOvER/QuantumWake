@@ -417,7 +417,10 @@ globalThis.fetch = (url, options) => {
 
 globalThis.window = globalThis;
 globalThis.self = globalThis;
-globalThis.location = { search: '', hash: '', href: 'http://localhost/', reload() {} };
+/* Counted rather than performed: changing language reloads the page, and the
+   assertion worth making is that it asked to. */
+globalThis.__reloads = 0;
+globalThis.location = { search: '', hash: '', href: 'http://localhost/', reload() { globalThis.__reloads++; } };
 globalThis.history = { replaceState() {} };
 globalThis.navigator = { userAgent: 'quantumwake-tests', clipboard: { writeText: () => Promise.resolve() } };
 

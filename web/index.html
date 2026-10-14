@@ -6,6 +6,11 @@
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
 <link rel="stylesheet" href="app.css?v=0.10.29">
+<!-- Blocking on purpose: the language and its catalogue arrive before the
+     body is drawn, so a French page never flashes English first. Served
+     without a server, the first 404s and the page is simply English. -->
+<script src="api/i18n.js"></script>
+<script src="i18n.js"></script>
 </head>
 <body>
 
@@ -107,6 +112,19 @@
              autocomplete="off" spellcheck="false" aria-label="Search everything">
       <div id="global-results" class="search-results" hidden></div>
     </div>
+    <!-- Whatever the app is busy with, from whichever page is open. It
+         stands in for the install label while it shows: the strip of tabs has
+         no width to spare, and this corner already says how the app is. -->
+    <div class="activity" id="activity" hidden>
+      <button type="button" class="activity-chip" id="activity-chip" aria-expanded="false" aria-controls="activity-panel">
+        <span class="activity-pulse" aria-hidden="true"></span>
+        <span id="activity-text">Working…</span>
+      </button>
+      <div class="activity-panel" id="activity-panel" hidden role="status" aria-live="polite">
+        <div class="activity-head">In progress</div>
+        <div id="activity-list"></div>
+      </div>
+    </div>
     <span id="install" class="muted">detecting…</span>
     <span id="link" class="dot" title="disconnected"></span>
   </div>
@@ -206,6 +224,7 @@
     </div>
     <div class="scan-track"><div class="scan-fill" id="scan-fill"></div></div>
     <div class="scan-file" id="scan-file"></div>
+    <div class="scan-why" id="scan-why"></div>
   </div>
 
 
@@ -277,12 +296,12 @@
         </div>
         <div class="now-status-options" id="now-status-options" hidden>
           <span>Show</span>
-          <label><input type="checkbox" data-status-field-toggle="location" checked> Location</label>
-          <label><input type="checkbox" data-status-field-toggle="ship" checked> Ship</label>
-          <label><input type="checkbox" data-status-field-toggle="session" checked> Session</label>
-          <label><input type="checkbox" data-status-field-toggle="handle" checked> Pilot</label>
-          <label><input type="checkbox" data-status-field-toggle="health" checked> Session health</label>
-          <label><input type="checkbox" data-status-field-toggle="respawn" checked> Wake up at</label>
+          <label><input type="checkbox" data-status-field-toggle="location" checked> <span>Location</span></label>
+          <label><input type="checkbox" data-status-field-toggle="ship" checked> <span>Ship</span></label>
+          <label><input type="checkbox" data-status-field-toggle="session" checked> <span>Session</span></label>
+          <label><input type="checkbox" data-status-field-toggle="handle" checked> <span>Pilot</span></label>
+          <label><input type="checkbox" data-status-field-toggle="health" checked> <span>Session health</span></label>
+          <label><input type="checkbox" data-status-field-toggle="respawn" checked> <span>Wake up at</span></label>
         </div>
         <div class="note" id="now-status-empty" hidden>Choose at least one reading to show in this card.</div>
       </article>
@@ -3335,6 +3354,11 @@
           <label class="toggle"><input type="radio" name="ov-density" value="tiny"><span>Tiny</span></label>
         </div>
       </div>
+      <div class="layout-group">
+        <div class="layout-label">Readability</div>
+        <label class="toggle"><input type="checkbox" id="overlay-high-contrast"><span>High visibility</span></label>
+        <p class="muted">Brighter text and markers for a widget you read over the game.</p>
+      </div>
     </div>
   </section>
 
@@ -3537,6 +3561,21 @@
       <span class="muted" id="update-status"></span>
     </div>
 
+    </div>
+
+    <!-- Named in both languages on purpose: someone who needs French has to
+         find this card while the page is still in English. -->
+    <div class="option-block settings-language-card">
+      <div class="option-head">
+        <h3>Language · Langue</h3>
+        <select id="language-pick" class="search" aria-label="Language"></select>
+      </div>
+      <p class="muted">
+        The language this dashboard and the overlay are read in. Names from the
+        game — ships, places, commodities — stay as the game writes them, so
+        they still match what the mobiGlas shows.
+      </p>
+      <p class="muted" id="language-covers"></p>
     </div>
 
     <div class="option-block settings-wipe-card">

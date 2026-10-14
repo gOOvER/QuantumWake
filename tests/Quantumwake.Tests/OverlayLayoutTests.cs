@@ -53,6 +53,17 @@ public class OverlayLayoutTests : IDisposable
     }
 
     [Fact]
+    public void High_visibility_survives_saving_the_layout()
+    {
+        var store = new OverlayLayoutStore(_directory);
+
+        var saved = store.Save(new OverlayLayout(["now"], ["location"], "normal", HighContrast: true));
+
+        Assert.True(saved.HighContrast);
+        Assert.True(new OverlayLayoutStore(_directory).Current.HighContrast);
+    }
+
+    [Fact]
     public void Unknown_names_are_dropped_and_the_widget_keeps_a_tab()
     {
         var store = new OverlayLayoutStore(_directory);

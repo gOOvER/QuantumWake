@@ -1,9 +1,13 @@
-﻿/* Quantumwake dashboard.
+/* Quantumwake dashboard.
  *
  * No framework and no external requests: the page is served by the local
  * process and also loaded by the overlay's WebView2, so it stays dependency
  * free. Live updates arrive over Server-Sent Events, which every browser
  * supports natively. */
+
+// First, before anything below holds a reference into the markup: i18n.js
+// replaces whole elements, and one replaced later would be unreachable.
+txDocument(document.body);
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -68,9 +72,9 @@ function clock(fromIso) {
   return `${pad(h)}:${pad(m)}:${pad(s)}`;
 }
 
-const timeOf = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-const shortTimeOf = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-const dateOf = (iso) => new Date(iso).toLocaleDateString([], { year: 'numeric', month: 'short', day: '2-digit' });
+const timeOf = (iso) => new Date(iso).toLocaleTimeString(QW_DATE_LOCALES, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const shortTimeOf = (iso) => new Date(iso).toLocaleTimeString(QW_DATE_LOCALES, { hour: '2-digit', minute: '2-digit' });
+const dateOf = (iso) => new Date(iso).toLocaleDateString(QW_DATE_LOCALES, { year: 'numeric', month: 'short', day: '2-digit' });
 
 /**
  * A calendar day as it was written, not as the reader's clock re-reads it.
@@ -87,16 +91,22 @@ const UTC_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
 // Assembled from the UTC parts rather than asked of Intl: a timeZone option is
 // not honoured everywhere this page runs, and a date that quietly falls back to
 // local time is the bug this exists to prevent.
+//
+// The month and the order go through the catalogue, since a French reader
+// writes the day first: "15 oct. 2026", not "Oct 15, 2026".
 const dayUtc = (iso) => {
   const at = new Date(iso);
 
-  return `${UTC_MONTHS[at.getUTCMonth()]} ${String(at.getUTCDate()).padStart(2, '0')}, `
-    + `${at.getUTCFullYear()}`;
+  return tx('{month} {day}, {year}', {
+    month: tx(UTC_MONTHS[at.getUTCMonth()]),
+    day: String(at.getUTCDate()).padStart(2, '0'),
+    year: at.getUTCFullYear(),
+  });
 };
 
 /* Day and month only, for dense rows where a year wraps the line. */
 
-const dayOf = (iso) => new Date(iso).toLocaleDateString([], { month: 'short', day: '2-digit' });
+const dayOf = (iso) => new Date(iso).toLocaleDateString(QW_DATE_LOCALES, { month: 'short', day: '2-digit' });
 
 async function getJson(url) {
   const response = await fetch(url);
@@ -160,14 +170,16 @@ function sourceMarks(keys, qualifier = '') {
     .map((key) => DATA_SOURCES[key]).filter(Boolean);
   const marks = el('span', 'data-sources');
   marks.setAttribute('role', 'note');
-  marks.setAttribute('aria-label', `Data sources: ${known.map((source) => source.name).join(', ')}`);
+  marks.setAttribute('aria-label', tx('Data sources: {list}', { list: known.map((source) => tx(source.name)).join(', ') }));
 
   for (const source of known) {
-    const mark = el('span', `data-source ${source.label.toLowerCase().replace(/[^a-z]+/g, '-')}`, source.label);
-    mark.title = source.detail;
+    // The class comes from the English label, so the stylesheet's colours do
+    // not depend on the page language.
+    const mark = el('span', `data-source ${source.label.toLowerCase().replace(/[^a-z]+/g, '-')}`, tx(source.label));
+    mark.title = tx(source.detail);
     marks.append(mark);
   }
-  if (qualifier) marks.append(el('span', 'data-source data-source-qualifier', qualifier));
+  if (qualifier) marks.append(el('span', 'data-source data-source-qualifier', tx(qualifier)));
   return marks;
 }
 
@@ -212,12 +224,12 @@ const PERIODS = [
 /** Fills every `select.period`. A view can reword its all-time option via data-all. */
 function buildPeriodSelects() {
   for (const select of $$('select.period')) {
-    const allLabel = select.dataset.all || PERIODS[0].label;
+    const allLabel = tx(select.dataset.all || PERIODS[0].label);
 
     for (const period of PERIODS) {
       const option = document.createElement('option');
       option.value = String(period.days);
-      option.textContent = period.days === 0 ? allLabel : period.label;
+      option.textContent = period.days === 0 ? allLabel : tx(period.label);
       select.append(option);
     }
   }
@@ -266,9 +278,9 @@ function renderContextRail() {
   rail.hidden = !focus;
   if (!focus) return;
 
-  title.textContent = focus.title || 'Current focus';
+  title.textContent = focus.title || tx('Current focus');
   detail.textContent = focus.detail || '';
-  action.textContent = focus.action || 'Open';
+  action.textContent = focus.action || tx('Open');
   action.onclick = () => {
     if (focus.anchor) jobsLandOn = focus.anchor;
     showView(focus.view || 'now');
@@ -300,6 +312,16 @@ const STALE_MATTERS_ON = new Set(['market', 'commodity', 'garage', 'jobs', 'rout
 /** A possible wipe needs its full explanation only where a pilot reviews their current history. */
 const PATCH_MATTERS_ON = new Set(['now', 'settings']);
 
+/**
+ * The view on screen, kept here: the stub has no layout to ask. Declared above
+ * showView because the fragment shows a view at load, long before the
+ * activity code near the end of the file has run.
+ */
+let shownView = 'now';
+
+/** The last answer from /api/activity, so a tab change can redraw without waiting for the next poll. */
+let lastActivity = null;
+
 function showView(name) {
   // Assets merged into Fleet; old #assets links and habits still land somewhere.
   if (name === 'assets') name = 'fleet';
@@ -324,6 +346,11 @@ function showView(name) {
     (b) => b.dataset.view === (name === 'commodity' ? 'market' : name === 'help' ? 'about' : name === 'share' ? 'settings' : name));
 
   if (!target) return;
+
+  // The page notice is about this page, so it is redrawn with it rather than
+  // on the next poll: Controls should not spend a second saying Ledger is waiting.
+  shownView = name;
+  if (lastActivity) paintPageWait(activityJobs(lastActivity));
 
   // A map drawer is useful beside the map, but it is not the cross-page
   // context. Leaving it over another workspace hid the work the pilot chose
@@ -530,13 +557,13 @@ function expandHelp(open) {
   const root = $('#view-help');
   for (const item of Array.from(root?.querySelectorAll('.faq-item') || [])) if (!item.hidden) item.open = open;
   const button = $('#help-expand');
-  if (button) button.textContent = open ? 'Collapse all' : 'Expand all';
+  if (button) button.textContent = open ? tx('Collapse all') : tx('Expand all');
 }
 
 $('#help-search')?.addEventListener('input', (event) => filterHelp(event.target.value));
 $('#help-expand')?.addEventListener('click', () => {
   const button = $('#help-expand');
-  expandHelp(button.textContent !== 'Collapse all');
+  expandHelp(button.textContent !== tx('Collapse all'));
 });
 
 /* Driven by the overlay shell's global hotkeys, so views can be changed without
@@ -553,6 +580,7 @@ window.scCycleView = (delta) => {
   const current = buttons.findIndex((b) => b.classList.contains('active'));
   const next = (current + delta + buttons.length) % buttons.length;
   showView(buttons[next].dataset.view);
+  if (isOverlay) window.scOverlayFeedback?.('View changed', buttons[next].textContent.trim());
 };
 
 window.scShowView = showView;
@@ -578,6 +606,11 @@ window.scOverlayGlance = (on) => {
   window.history.replaceState(null, '', url);
   if (glance) showView('now');
 };
+
+/* The native shell has no room for a permanent status line. Its commands still
+   need an answer in pinned mode, where the header disappears and clicks reach
+   the game, so reuse the transient toast surface already shared by the web UI. */
+window.scOverlayFeedback = (title, detail) => toast('overlay-action', String(title || ''), detail ? String(detail) : '');
 
 /* ---------- page stats collapse ----------
  *
@@ -614,10 +647,10 @@ function initPageStatsCollapsers() {
 
       // Named rather than an arrow, because a button reading "Summary" gives no
       // clue which way it goes - and the summary is gone when it matters most.
-      button.textContent = collapsed ? 'Show summary' : 'Hide summary';
+      button.textContent = collapsed ? tx('Show summary') : tx('Hide summary');
       button.title = collapsed
-        ? 'Show the summary, standing and charts again'
-        : 'Hide the summary and go straight to the contracts';
+        ? tx('Show the summary, standing and charts again')
+        : tx('Hide the summary and go straight to the contracts');
       button.setAttribute('aria-label', button.title);
       button.setAttribute('aria-expanded', String(!collapsed));
     };
@@ -840,7 +873,7 @@ function renderHiddenNowCards() {
     if (!hiddenNowCards.has(name)) continue;
 
     const label = card.querySelector('.card-label')?.textContent.trim() || name;
-    const show = el('button', 'ghost tiny', `Show ${label}`);
+    const show = el('button', 'ghost tiny', tx('Show {card}', { card: label }));
     show.type = 'button';
     show.addEventListener('click', () => {
       hiddenNowCards.delete(name);
@@ -861,13 +894,13 @@ function initNowCardCollapsers() {
     const actions = el('div', 'now-card-actions');
     const button = el('button', 'now-collapse now-card-action');
     button.type = 'button';
-    button.title = 'Collapse this card';
-    button.setAttribute('aria-label', 'Collapse this card');
+    button.title = tx('Collapse this card');
+    button.setAttribute('aria-label', tx('Collapse this card'));
     button.addEventListener('click', () => {
       const collapsed = !card.classList.contains('collapsed');
       card.classList.toggle('collapsed', collapsed);
       button.textContent = collapsed ? '⌄' : '⌃';
-      button.title = collapsed ? 'Expand this card' : 'Collapse this card';
+      button.title = collapsed ? tx('Expand this card') : tx('Collapse this card');
       button.setAttribute('aria-label', button.title);
       button.setAttribute('aria-expanded', String(!collapsed));
       if (collapsed) collapsedNowCards.add(name);
@@ -878,13 +911,13 @@ function initNowCardCollapsers() {
     const collapsed = collapsedNowCards.has(name);
     card.classList.toggle('collapsed', collapsed);
     button.textContent = collapsed ? '⌄' : '⌃';
-    button.title = collapsed ? 'Expand this card' : 'Collapse this card';
+    button.title = collapsed ? tx('Expand this card') : tx('Collapse this card');
     button.setAttribute('aria-label', button.title);
     button.setAttribute('aria-expanded', String(!collapsed));
 
     const hide = el('button', 'now-hide now-card-action', '×');
     hide.type = 'button';
-    hide.title = 'Hide this card from the Now page';
+    hide.title = tx('Hide this card from the Now page');
     hide.setAttribute('aria-label', hide.title);
     hide.addEventListener('click', () => {
       hiddenNowCards.add(name);
@@ -894,7 +927,7 @@ function initNowCardCollapsers() {
     });
     const grip = el('button', 'now-grip now-card-action', '⠿');
     grip.type = 'button';
-    grip.title = 'Drag to move this card; the arrow keys move it too';
+    grip.title = tx('Drag to move this card; the arrow keys move it too');
     grip.setAttribute('aria-label', grip.title);
 
     // The card is the thing that drags, but only while the grip is held:
@@ -998,14 +1031,20 @@ document.addEventListener('keydown', (event) => {
 let commandIndex = 0;
 function commandEntries() {
   const pages = $$('#tabs button[data-view]').map(button => ({
-    label: `Open ${button.textContent.trim()}`, hint: 'page', run: () => showView(button.dataset.view),
+    label: tx('Open {page}', { page: button.textContent.trim() }), hint: tx('page'), run: () => showView(button.dataset.view),
   }));
-  const presets = ['flight', 'mining', 'combat', 'trading', 'minimal', 'full'].map(name => ({
-    label: `${name[0].toUpperCase() + name.slice(1)} overlay layout`, hint: 'overlay', run: () => window.scOverlayPreset?.(name),
+  // Spelled out rather than built from the preset's name, so each is a whole
+  // phrase a translation can reorder.
+  const presets = [
+    ['flight', tx('Flight overlay layout')], ['mining', tx('Mining overlay layout')],
+    ['combat', tx('Combat overlay layout')], ['trading', tx('Trading overlay layout')],
+    ['minimal', tx('Minimal overlay layout')], ['full', tx('Full overlay layout')],
+  ].map(([name, label]) => ({
+    label, hint: tx('overlay'), run: () => window.scOverlayPreset?.(name),
   }));
   return [...pages, ...presets,
-    { label: 'Show overlay', hint: 'overlay', run: () => fetch('/api/overlay?visible=true', { method: 'POST' }) },
-    { label: 'Open MFD setup', hint: 'mfd', run: () => openMfdSetup() }];
+    { label: tx('Show overlay'), hint: tx('overlay'), run: () => fetch('/api/overlay?visible=true', { method: 'POST' }) },
+    { label: tx('Open MFD setup'), hint: tx('mfd'), run: () => openMfdSetup() }];
 }
 function renderCommandPalette() {
   const query = $('#command-query').value.trim().toLowerCase();
@@ -1063,11 +1102,11 @@ function contractFocus(contracts) {
   if (hauls.length) {
     const ends = [...new Set(hauls.map((c) => c.delivery).filter(Boolean))];
     const detail = hauls.length === 1
-      ? (hauls[0].delivery ? `Deliver to ${hauls[0].delivery}` : hauls[0].name)
-      : `${hauls.length} hauls open${ends.length ? ` — to ${ends.join(', ')}` : ''}`;
+      ? (hauls[0].delivery ? tx('Deliver to {place}', { place: hauls[0].delivery }) : hauls[0].name)
+      : `${txn(hauls.length, '{count} haul open', '{count} hauls open')}${ends.length ? ` — ${tx('to {places}', { places: ends.join(', ') })}` : ''}`;
     // Shopping keeps the run under the lists, off the bottom of the page
     // when a list is open: the button lands on the run, not on the header.
-    return { title: hauls.length === 1 ? 'Hauling' : 'Hauling run', detail, view: 'jobs', action: 'Plan the run', anchor: '#jobs-contracts' };
+    return { title: hauls.length === 1 ? tx('Hauling') : tx('Hauling run'), detail, view: 'jobs', action: tx('Plan the run'), anchor: '#jobs-contracts' };
   }
 
   // An event contract says what finishing it is worth: the journal shows the
@@ -1075,14 +1114,14 @@ function contractFocus(contracts) {
   const paying = contracts.find((c) => c.eventPoints);
   if (paying) {
     return {
-      title: 'Event contract',
-      detail: `${paying.name || 'Open contract'} · +${paying.eventPoints.toLocaleString()} pts to ${(paying.eventTracks || []).join(', ') || paying.event}`,
+      title: tx('Event contract'),
+      detail: `${paying.name || tx('Open contract')} · ${tx('+{points} pts to {tracks}', { points: paying.eventPoints.toLocaleString(), tracks: (paying.eventTracks || []).join(', ') || paying.event })}`,
       view: 'events',
-      action: 'Event progress',
+      action: tx('Event progress'),
     };
   }
 
-  return { title: 'Active contract', detail: contracts[0].name || 'Open contract', view: 'contracts', action: 'Contracts' };
+  return { title: tx('Active contract'), detail: contracts[0].name || tx('Open contract'), view: 'contracts', action: tx('Contracts') };
 }
 
 /** The one decision worth leading the hub with, before the configurable cards. */
@@ -1097,14 +1136,15 @@ function renderNowFocus(state, briefing = pilotBriefing) {
   const nextStop = (briefing?.stops || []).find(stop => !stop.done);
   let focus = null;
 
-  if (state?.travelling) focus = { title: 'In quantum', detail: state.travellingTo || 'Destination not identified', view: 'map', action: 'Map' };
-  else if (differing) focus = { title: 'Screenshot differs from the logs', detail: differing, view: 'log', action: 'Log' };
-  else if (nextStop) focus = { title: 'Next stop', detail: nextStop.place || briefing.tripTitle || 'Tracked flight plan', view: 'map', action: 'Map' };
-  else if (state?.contracts?.length) focus = contractFocus(state.contracts);
-  else if (state?.location) focus = { title: 'At location', detail: state.location, view: 'map', action: 'Map' };
+  if (state?.travelling) focus = { title: tx('In quantum'), detail: state.travellingTo || tx('Destination not identified'), view: 'map', action: tx('Map'), urgency: 'live' };
+  else if (differing) focus = { title: tx('Screenshot differs from the logs'), detail: differing, view: 'log', action: tx('Log'), urgency: 'attention' };
+  else if (nextStop) focus = { title: tx('Next stop'), detail: nextStop.place || briefing.tripTitle || tx('Tracked flight plan'), view: 'map', action: tx('Map'), urgency: 'ready' };
+  else if (state?.contracts?.length) focus = { ...contractFocus(state.contracts), urgency: 'ready' };
+  else if (state?.location) focus = { title: tx('At location'), detail: state.location, view: 'map', action: tx('Map'), urgency: 'quiet' };
 
   strip.hidden = !focus;
   if (!focus) return;
+  strip.dataset.urgency = focus.urgency || 'quiet';
   title.textContent = focus.title;
   detail.textContent = focus.detail;
   open.hidden = false;
@@ -1115,9 +1155,9 @@ function renderNowFocus(state, briefing = pilotBriefing) {
 function renderNow(state) {
   nowState = state;
   $('#link').classList.toggle('live', !!state.connected);
-  $('#link').title = state.connected ? 'live' : 'disconnected';
+  $('#link').title = state.connected ? tx('live') : tx('disconnected');
 
-  $('#now-location').textContent = state.location || (state.inGame ? 'Unknown' : 'In menus');
+  $('#now-location').textContent = state.location || (state.inGame ? tx('Unknown') : tx('In menus'));
   $('#now-location-sub').textContent = [state.locationBody, state.locationSystem].filter(Boolean).join(' · ');
 
   // The map follows the live feed, so the marker moves as the player does -
@@ -1131,7 +1171,9 @@ function renderNow(state) {
   refreshPilotBriefing(state).catch(() => {});
 
   const confidence = $('#now-confidence');
-  confidence.textContent = state.location ? `${state.confidence.toLowerCase()} confidence` : '';
+  const CONFIDENCE = { none: tx('none confidence'), low: tx('low confidence'), medium: tx('medium confidence'), high: tx('high confidence') };
+  const level = (state.confidence || '').toLowerCase();
+  confidence.textContent = state.location ? (CONFIDENCE[level] || `${level} confidence`) : '';
   confidence.className = `confidence ${(state.confidence || '').toLowerCase()}`;
 
   const travel = $('#now-travel');
@@ -1141,7 +1183,7 @@ function renderNow(state) {
   renderNowShip(state.ship);
   $('#now-handle').textContent = state.handle || '—';
   $('#now-version').textContent = state.gameVersion || '';
-  $('#now-mode').textContent = state.inGame ? (state.gameRules || 'in game') : 'frontend / menus';
+  $('#now-mode').textContent = state.inGame ? (state.gameRules || tx('in game')) : tx('frontend / menus');
   $('#now-deaths').textContent = state.deaths ?? 0;
   $('#now-incaps').textContent = state.incapacitations ?? 0;
 
@@ -1151,8 +1193,7 @@ function renderNow(state) {
   // nothing that names a killer, and a counter stuck at zero reads as broken
   // rather than absent. The About page says where they went.
   $('#combat-note').textContent =
-    'Deaths are inferred from corpse item-recovery bursts — 4.9 and 4.10 no longer write '
-    + '<Actor Death>, and an Incapacitated notification is not always raised.';
+    tx('Deaths are inferred from corpse item-recovery bursts — 4.9 and 4.10 no longer write <Actor Death>, and an Incapacitated notification is not always raised.');
 
   sessionStarted = state.sessionStarted || null;
 
@@ -1175,7 +1216,7 @@ function renderNow(state) {
   feed.textContent = '';
 
   if (!state.recentEvents || state.recentEvents.length === 0) {
-    feed.append(el('li', 'empty', state.connected ? 'Nothing yet this session.' : 'Waiting for the game…'));
+    feed.append(el('li', 'empty', state.connected ? tx('Nothing yet this session.') : tx('Waiting for the game…')));
   } else {
     // The widget shows a short tail; the full feed belongs on the page.
     const entries = isOverlay ? state.recentEvents.slice(0, 12) : state.recentEvents;
@@ -1183,9 +1224,9 @@ function renderNow(state) {
     for (const entry of entries) {
       const li = el('li');
       li.append(el('span', 't', timeOf(entry.at)));
-      li.append(el('span', `k ${entry.kind}`, entry.kind));
-      li.append(el('span', 'x', entry.text));
-      if (entry.detail) li.append(el('span', 'd', withoutMarkup(entry.detail)));
+      li.append(el('span', `k ${entry.kind}`, feedKind(entry.kind)));
+      li.append(el('span', 'x', feedText(entry.text)));
+      if (entry.detail) li.append(el('span', 'd', feedText(withoutMarkup(entry.detail))));
       feed.append(li);
     }
   }
@@ -1206,6 +1247,63 @@ function withoutMarkup(text) {
   return typeof text === 'string' ? text.replace(/<\/?EM\d*>/gi, '').trim() : text;
 }
 
+/*
+ * The feed's sentences in the page language.
+ *
+ * The parser writes them in English while it reads the log, and every stored
+ * session keeps them that way, so translating them at the source would mean
+ * re-reading every log. They come in a fixed set of shapes - "Boarded {ship}",
+ * "Paid {amount} aUEC" - so the page matches the shape and translates that,
+ * keeping the names. A sentence that matches nothing is shown as written: a
+ * parser that changes its wording costs the French reader a translation, not
+ * the line.
+ */
+const FEED_SENTENCES = [
+  [/^Signed in as (.+)$/, (m) => tx('Signed in as {handle}', { handle: m[1] })],
+  [/^Sold (\d[\d,]*) SCU$/, (m) => tx('Sold {count} SCU', { count: m[1] })],
+  [/^Bought (\d[\d,]*) SCU$/, (m) => tx('Bought {count} SCU', { count: m[1] })],
+  [/^Sold (.+)$/, (m) => tx('Sold {item}', { item: m[1] })],
+  [/^Bought (.+)$/, (m) => tx('Bought {item}', { item: m[1] })],
+  [/^(.+) disabled$/, (m) => tx('{ship} disabled', { ship: m[1] })],
+  [/^(.+) destroyed$/, (m) => tx('{ship} destroyed', { ship: m[1] })],
+  [/^Joined (.+)$/, (m) => tx('Joined {server}', { server: m[1] })],
+  [/^Boarded (.+)$/, (m) => tx('Boarded {ship}', { ship: m[1] })],
+  [/^Left (.+)$/, (m) => tx('Left {ship}', { ship: m[1] })],
+  [/^Retrieved (.+)$/, (m) => tx('Retrieved {ship}', { ship: m[1] })],
+  [/^Quantum to (.+)$/, (m) => tx('Quantum to {place}', { place: m[1] })],
+  [/^(.+) came aboard$/, (m) => tx('{handle} came aboard', { handle: m[1] })],
+  [/^(.+) joined the party$/, (m) => tx('{handle} joined the party', { handle: m[1] })],
+  [/^(.+) left the party$/, (m) => tx('{handle} left the party', { handle: m[1] })],
+  [/^Paid (.+) aUEC$/, (m) => tx('Paid {amount} aUEC', { amount: m[1] })],
+  [/^Killed by (.+)$/, (m) => tx('Killed by {killer}', { killer: m[1] })],
+  [/^Killed (.+)$/, (m) => tx('Killed {victim}', { victim: m[1] })],
+];
+
+const FEED_WORDS = ['Disconnected', 'Woke up', 'Woke up here', 'Treated at a medical bed', 'Used a bed',
+  'Incapacitated', 'Contract accepted', 'Contract completed', 'Refinery order complete',
+  'Blueprint received', 'Died', 'in your party'];
+
+function feedText(text) {
+  if (QW_LANGUAGE === 'en' || typeof text !== 'string') return text;
+  if (FEED_WORDS.includes(text)) return tx(text);
+  for (const [shape, say] of FEED_SENTENCES) {
+    const match = shape.exec(text);
+    if (match) return say(match);
+  }
+  return text;
+}
+
+/* The feed's kind column: the class keeps the parser's word, the reader gets the page's. */
+const FEED_KINDS = {
+  login: 'login', sold: 'sold', bought: 'bought', 'vehicle-destroyed': 'vehicle-destroyed',
+  disconnect: 'disconnect', shard: 'shard', ship: 'ship', respawn: 'respawn', location: 'location',
+  quantum: 'quantum', incapacitated: 'incapacitated', party: 'party', contract: 'contract',
+  payout: 'payout', medbed: 'medbed', refinery: 'refinery', blueprint: 'blueprint',
+  'contract-done': 'contract-done', death: 'death', kill: 'kill', 'screen-differs': 'screen-differs',
+};
+
+const feedKind = (kind) => (FEED_KINDS[kind] ? tx(FEED_KINDS[kind]) : kind);
+
 const TOAST_MS = 9000;
 
 /**
@@ -1216,16 +1314,16 @@ const TOAST_MS = 9000;
  * notifier that fires on arrivals and medbeds trains people to ignore it.
  */
 const TOAST_KINDS = {
-  'contract-done': 'Contract complete',
-  payout: 'Paid',
+  'contract-done': tx('Contract complete'),
+  payout: tx('Paid'),
 
   // Only disagreements. A pilot photographing a loadout takes several frames
   // in a row, and a toast apiece would teach them to ignore the toasts.
-  'screen-differs': 'Screenshot differs',
+  'screen-differs': tx('Screenshot differs'),
 
   // The game's own word that a refinery order finished - unless the pilot
   // asked for the terminal's clock only, or for nothing; see refineryNotifyMode.
-  refinery: 'Refinery order complete',
+  refinery: tx('Refinery order complete'),
 };
 
 /**
@@ -1327,8 +1425,8 @@ function toast(kind, text, detail) {
   if (!host) return;
 
   const card = el('div', `toast ${kind}`);
-  card.append(el('span', 'toast-text', text));
-  if (detail) card.append(el('span', 'toast-detail', withoutMarkup(detail)));
+  card.append(el('span', 'toast-text', feedText(text)));
+  if (detail) card.append(el('span', 'toast-detail', feedText(withoutMarkup(detail))));
 
   card.addEventListener('click', () => card.remove());
   host.append(card);
@@ -1384,20 +1482,18 @@ async function loadEarnings() {
 
   if (noRate) {
     $('#now-earning-rate').hidden = false;
-    $('#now-earning-rate').textContent = 'No trading yet';
+    $('#now-earning-rate').textContent = tx('No trading yet');
     renderGoal(state);
     return;
   }
 
   $('#now-earning-rate').textContent = `${money(rate.perHour)}/h`;
   $('#now-earning-sub').textContent = state.basis === 'recent'
-    ? `trading profit, last ${rate.days} days · ${hoursOf(rate.inGame)} in game`
-    : `trading profit, all time · ${hoursOf(rate.inGame)} in game`;
+    ? tx('trading profit, last {days} days · {hours} in game', { days: rate.days, hours: hoursOf(rate.inGame) })
+    : tx('trading profit, all time · {hours} in game', { hours: hoursOf(rate.inGame) });
 
   $('#now-earning-note').textContent =
-    'Commodity sales are the only income the logs record, so contracts, bounties '
-    + 'and mission rewards are not in this. It is a floor on what you earn, and '
-    + 'menu time is left out of the hours.';
+    tx('Commodity sales are the only income the logs record, so contracts, bounties and mission rewards are not in this. It is a floor on what you earn, and menu time is left out of the hours.');
 
   renderGoal(state);
 }
@@ -1423,10 +1519,12 @@ function renderNowCash(read) {
   const moved = Number(read.movementsSince) || 0;
   line.hidden = false;
   note.hidden = false;
-  $('#now-cash-value').textContent = moved ? `about ${money(read.estimate)}` : money(read.balance);
+  $('#now-cash-value').textContent = moved ? tx('about {money}', { money: money(read.estimate) }) : money(read.balance);
   note.textContent = moved
-    ? `Estimate: ${money(read.balance)} on a screenshot ${dateOf(read.shotAt)}, carried by ${moved} movement${moved === 1 ? '' : 's'} logged since.`
-    : `From a screenshot ${dateOf(read.shotAt)}; nothing has moved in the logs since.`;
+    ? txn(moved, 'Estimate: {money} on a screenshot {date}, carried by {count} movement logged since.',
+      'Estimate: {money} on a screenshot {date}, carried by {count} movements logged since.',
+      { money: money(read.balance), date: dateOf(read.shotAt) })
+    : tx('From a screenshot {date}; nothing has moved in the logs since.', { date: dateOf(read.shotAt) });
 }
 
 /** Turns an ISO-ish duration from the server into hours a person reads. */
@@ -1476,8 +1574,8 @@ function renderGoal(state) {
   // Hours of flying, not a calendar date. The app has no idea how often
   // somebody plays, and a date would be inventing that.
   $('#now-goal-eta').textContent = state.hoursToGoal
-    ? `${hoursOf(state.hoursToGoal)} of trading`
-    : 'no rate yet';
+    ? tx('{hours} of trading', { hours: hoursOf(state.hoursToGoal) })
+    : tx('no rate yet');
 
 }
 
@@ -1529,17 +1627,23 @@ function renderNowParty(state) {
   for (const member of party) {
     const li = el('li');
     li.append(el('span', 't', timeOf(member.at)));
-    li.append(el('span', 'k party', member.moment));
+    li.append(el('span', 'k party', PARTY_MOMENTS[member.moment] ? tx(PARTY_MOMENTS[member.moment]) : member.moment));
     li.append(el('span', 'x', member.handle));
     list.append(li);
   }
 
   $('#now-party-note').textContent =
-    `${party.length} ${party.length === 1 ? 'person' : 'people'} named by party `
-    + 'notifications — a floor, not a roster. '
-    + 'Someone already online when you grouped up is never announced'
-    + (state.partyDisbanded ? '. The party has since disbanded.' : '.');
+    txn(party.length, '{count} person named by party notifications — a floor, not a roster.',
+      '{count} people named by party notifications — a floor, not a roster.')
+    + ` ${tx('Someone already online when you grouped up is never announced.')}`
+    + (state.partyDisbanded ? ` ${tx('The party has since disbanded.')}` : '');
 }
+
+/* The server's lower-cased PartyMoment names. */
+const PARTY_MOMENTS = {
+  connected: 'connected', disconnected: 'disconnected', becameleader: 'became leader',
+  disbanded: 'disbanded', joined: 'joined', left: 'left',
+};
 
 /**
  * The briefing answers the decisions that depend on a live location. It only
@@ -1633,10 +1737,10 @@ async function pinBriefingToOverlay() {
     // normal response rather than a thrown one, so it has to be looked at.
     const response = await fetch('/api/overlay?visible=true', { method: 'POST' });
 
-    button.textContent = response.ok ? '✓ pinned' : 'no overlay';
-    button.title = response.ok ? '' : 'The dashboard is running without the overlay.';
+    button.textContent = response.ok ? tx('✓ pinned') : tx('no overlay');
+    button.title = response.ok ? '' : tx('The dashboard is running without the overlay.');
   } catch {
-    button.textContent = 'failed';
+    button.textContent = tx('failed');
   } finally {
     button.disabled = false;
   }
@@ -1650,7 +1754,7 @@ function briefingStopRow(briefing, stop) {
   const row = el('div', 'briefing-row');
   const main = el('div', 'briefing-main');
   const name = el('button', 'briefing-link', stop.place);
-  name.title = 'Show this stop on the map';
+  name.title = tx('Show this stop on the map');
   name.addEventListener('click', () => briefingMap(stop.placeId, stop.place));
   main.append(name);
   if (stop.note) main.append(el('div', 'briefing-detail', stop.note));
@@ -1662,13 +1766,13 @@ function briefingStopRow(briefing, stop) {
     const quantity = action.quantity
       ? ` ${action.quantity.toLocaleString()}${action.unit ? ` ${action.unit}` : ''}`
       : '';
-    main.append(el('div', 'briefing-detail', `${action.kind}${quantity} · ${action.text}`));
+    main.append(el('div', 'briefing-detail', `${runActionLabel(action.kind)}${quantity} · ${action.text}`));
   }
 
   row.append(main);
 
-  const done = el('button', 'ghost tiny', 'Mark collected');
-  done.title = 'Cross this stop off';
+  const done = el('button', 'ghost tiny', tx('Mark collected'));
+  done.title = tx('Cross this stop off');
   done.addEventListener('click', async () => {
     done.disabled = true;
     try {
@@ -1686,11 +1790,11 @@ function briefingShoppingRow(item) {
   const row = el('div', 'briefing-row');
   const main = el('div', 'briefing-main');
   main.append(el('b', null, item.name));
-  main.append(el('div', 'briefing-detail', `${item.needed} ${item.unit || 'needed'} · ${item.terminal} · ${money(item.price)}`));
+  main.append(el('div', 'briefing-detail', `${item.needed} ${item.unit || tx('needed')} · ${item.terminal} · ${money(item.price)}`));
   row.append(main);
 
-  const map = el('button', 'ghost tiny', 'Map');
-  map.title = 'Show this seller on the map';
+  const map = el('button', 'ghost tiny', tx('Map'));
+  map.title = tx('Show this seller on the map');
   map.addEventListener('click', () => {
     showView('map');
     centreOnTerminal(item.terminal, null);
@@ -1720,10 +1824,10 @@ try {
 } catch { /* a bad preference must not blank the briefing */ }
 
 const FOCUS_LABELS = {
-  freight: 'Freight',
-  mining: 'Mining',
-  combat: 'Combat',
-  explore: 'Exploration',
+  freight: tx('Freight'),
+  mining: tx('Mining'),
+  combat: tx('Combat'),
+  explore: tx('Exploration'),
 };
 
 /**
@@ -1796,7 +1900,7 @@ function renderBriefingFocus(briefing) {
   if (!focus) {
     why.textContent = '';
   } else if (chosen) {
-    why.textContent = `${FOCUS_LABELS[focus] || focus} — your choice, not your ship's.`;
+    why.textContent = tx('{focus} — your choice, not your ship\'s.', { focus: FOCUS_LABELS[focus] || focus });
   } else {
     // "a light mining ship", not "a light mining". The dataset's roles are noun
     // phrases that need the word after them, and the compound ones - "Starter /
@@ -1804,8 +1908,9 @@ function renderBriefingFocus(briefing) {
     const from = briefing.focus;
     const role = from.role ? from.role.toLowerCase().replaceAll(' / ', ' or ') : null;
 
-    why.textContent = `${from.label} — you retrieved ${from.ship}`
-      + (role ? `, a ${role} ship.` : '.');
+    why.textContent = role
+      ? tx('{focus} — you retrieved {ship}, a {role} ship.', { focus: tx(from.label), ship: from.ship, role })
+      : tx('{focus} — you retrieved {ship}.', { focus: tx(from.label), ship: from.ship });
   }
 
   why.hidden = !why.textContent;
@@ -1838,17 +1943,17 @@ function renderBriefingMining(briefing, focus) {
     main.append(el('b', null, place.place));
     main.append(el('div', 'briefing-detail', [
       place.system,
-      place.best ? `best: ${place.best}` : null,
-      `${Math.round(place.ore)}% ore`,
+      place.best ? tx('best: {mineral}', { mineral: place.best }) : null,
+      tx('{percent}% ore', { percent: Math.round(place.ore) }),
     ].filter(Boolean).join(' · ')));
     row.append(main);
-    row.append(el('span', 'inward', `${money(place.perRock)}/rock`));
+    row.append(el('span', 'inward', tx('{money}/rock', { money: money(place.perRock) })));
     list.append(row);
   }
 
   list.append(el('div', 'briefing-caveat', rows[0].here
-    ? 'What a rock is worth, from the game’s own deposit tables.'
-    : 'The deposit tables place nothing in this system — these are the best anywhere.'));
+    ? tx('What a rock is worth, from the game’s own deposit tables.')
+    : tx('The deposit tables place nothing in this system — these are the best anywhere.')));
 }
 
 /**
@@ -1873,16 +1978,15 @@ function renderBriefingClaim(briefing, focus) {
   const main = el('div', 'briefing-main');
   main.append(el('b', null, claim.ship));
   main.append(el('div', 'briefing-detail', [
-    claim.standardMinutes ? `standard ~${Math.round(claim.standardMinutes)}m` : null,
-    claim.expeditedMinutes ? `expedited ~${Math.round(claim.expeditedMinutes)}m` : null,
-  ].filter(Boolean).join(' · ') || 'The reference data gives no claim time.'));
+    claim.standardMinutes ? tx('standard ~{minutes}m', { minutes: Math.round(claim.standardMinutes) }) : null,
+    claim.expeditedMinutes ? tx('expedited ~{minutes}m', { minutes: Math.round(claim.expeditedMinutes) }) : null,
+  ].filter(Boolean).join(' · ') || tx('The reference data gives no claim time.')));
   row.append(main);
   if (claim.expeditedCost) row.append(el('span', 'outward', money(claim.expeditedCost)));
   list.append(row);
 
   list.append(el('div', 'briefing-caveat',
-    'From the game’s own tables. Game.log records no insurance claim, '
-    + 'so this is what one costs — not one in progress.'));
+    tx('From the game’s own tables. Game.log records no insurance claim, so this is what one costs — not one in progress.')));
 }
 
 function renderPilotBriefing(briefing) {
@@ -1894,8 +1998,8 @@ function renderPilotBriefing(briefing) {
 
   $('#briefing-title').textContent = briefing.location;
   $('#briefing-sub').textContent = briefing.tripTitle
-    ? `Active flight plan · ${briefing.tripTitle}`
-    : 'No active flight plan';
+    ? `${tx('Active flight plan')} · ${briefing.tripTitle}`
+    : tx('No active flight plan');
 
   const stops = $('#briefing-stops');
   stops.textContent = '';
@@ -1915,17 +2019,17 @@ function renderPilotBriefing(briefing) {
       const row = el('div', 'briefing-row');
       const main = el('div', 'briefing-main');
       const commodity = el('button', 'briefing-link', lead.commodity);
-      commodity.title = 'Open this commodity in Market';
+      commodity.title = tx('Open this commodity in Market');
       commodity.addEventListener('click', () => openCommodity(lead.commodity));
       main.append(commodity);
       main.append(el('div', 'briefing-detail',
-        `buy ${money(lead.buyHere)} → sell ${money(lead.sellThere)} at ${lead.sellTerminal}`));
+        tx('buy {buy} → sell {sell} at {terminal}', { buy: money(lead.buyHere), sell: money(lead.sellThere), terminal: lead.sellTerminal })));
       row.append(main);
       row.append(el('span', 'inward', `+${money(lead.marginPerScu)}/SCU`));
       trade.append(row);
     }
     if ((briefing.trade || []).length)
-      trade.append(el('div', 'briefing-caveat', 'Leads only — cargo in your hold is not recorded by Game.log.'));
+      trade.append(el('div', 'briefing-caveat', tx('Leads only — cargo in your hold is not recorded by Game.log.')));
   }
   $('#briefing-trade-section').hidden = !cargoReady || !(briefing.trade || []).length;
 
@@ -1941,10 +2045,11 @@ function renderPilotBriefing(briefing) {
       chip.addEventListener('click', () => selectMapService(key, true));
     }
     chip.append(el('span', 'service-icon', SERVICE_META[key]?.icon || '•'));
-    chip.append(el('span', 'service-text', `${service.name}: ${service.status}`));
+    // Name and status are the server's English; the class above keeps its word.
+    chip.append(el('span', 'service-text', tx('{service}: {status}', { service: tx(service.name), status: tx(service.status) })));
     chip.title = canMap
-      ? `Show ${SERVICE_META[key].label.toLowerCase()} on the map`
-      : service.dataEnabled ? 'No map location is known for this service' : 'No installed data reports this service';
+      ? tx('Show {service} on the map', { service: tx(SERVICE_META[key].label).toLowerCase() })
+      : service.dataEnabled ? tx('No map location is known for this service') : tx('No installed data reports this service');
     services.append(chip);
   }
   $('#briefing-services-section').hidden = !(briefing.services || []).length;
@@ -1955,7 +2060,7 @@ function renderPilotBriefing(briefing) {
     const row = el('div', 'briefing-row');
     const main = el('div', 'briefing-main');
     main.append(el('b', null, item.name));
-    main.append(el('div', 'briefing-detail', item.category));
+    main.append(el('div', 'briefing-detail', tx(item.category)));
     row.append(main);
     stash.append(row);
   }
@@ -2121,17 +2226,17 @@ function renderEntity(card) {
     setContextFocus({
       kind: 'ship',
       title: card.name,
-      detail: card.subtitle || 'Ship reference',
+      detail: card.subtitle || tx('Ship reference'),
       view: 'routes',
-      action: 'Plan with ship',
+      action: tx('Plan with ship'),
     });
   } else if (card.kind === 'place') {
     setContextFocus({
       kind: 'place',
       title: card.name,
-      detail: card.subtitle || 'Map place',
+      detail: card.subtitle || tx('Map place'),
       view: 'map',
-      action: 'Open map',
+      action: tx('Open map'),
     });
   }
 
@@ -2385,7 +2490,7 @@ function bars(container, rows, format) {
   node.textContent = '';
 
   if (!rows || rows.length === 0) {
-    node.append(el('p', 'muted', 'No data yet.'));
+    node.append(el('p', 'muted', tx('No data yet.')));
     return;
   }
 
@@ -2399,7 +2504,7 @@ function bars(container, rows, format) {
       const label = el('div', 'label');
       const link = el('button', 'place-link', row.label);
       link.type = 'button';
-      link.title = 'Show on the map';
+      link.title = tx('Show on the map');
       link.addEventListener('click', row.onClick);
       label.append(link);
       wrapper.append(label);
@@ -2511,14 +2616,14 @@ function renderContracts(stats) {
   // worth seeing; a permanent zero beside four real figures is furniture, and
   // it would read as "nothing ever went wrong" on an install too new to know.
   const contractTiles = [
-    ['Contracts seen', stats.contractsSeen],
-    ['Completed', stats.contractsCompleted],
-    ['Abandoned', stats.contractsAbandoned],
+    [tx('Contracts seen'), stats.contractsSeen],
+    [tx('Completed'), stats.contractsCompleted],
+    [tx('Abandoned'), stats.contractsAbandoned],
   ];
 
-  if (stats.contractsFailed > 0) contractTiles.push(['Failed', stats.contractsFailed]);
+  if (stats.contractsFailed > 0) contractTiles.push([tx('Failed'), stats.contractsFailed]);
 
-  contractTiles.push(['Completion rate', stats.contractsSeen
+  contractTiles.push([tx('Completion rate'), stats.contractsSeen
     ? `${Math.round((stats.contractsCompleted / stats.contractsSeen) * 100)}%`
     : '—']);
 
@@ -2562,7 +2667,7 @@ async function loadStanding() {
 
   if (!rows.length) {
     const tr = el('tr');
-    const td = el('td', 'muted', 'No contracts in that range.');
+    const td = el('td', 'muted', tx('No contracts in that range.'));
     td.colSpan = 6;
     tr.append(td);
     body.append(tr);
@@ -2587,7 +2692,7 @@ async function loadStanding() {
 
     // Failures ride the abandoned column rather than adding a fifth that is
     // empty for every issuer but one. The count is there when it is not zero.
-    if (row.failed > 0) dropped.append(el('span', 'muted', ` · ${row.failed} failed`));
+    if (row.failed > 0) dropped.append(el('span', 'muted', ` · ${tx('{count} failed', { count: row.failed })}`));
 
     tr.append(dropped);
 
@@ -2597,11 +2702,11 @@ async function loadStanding() {
 
     if (row.repFrom > 0) {
       rep.append(el('span', null, row.rep.toLocaleString()));
-      rep.append(el('span', 'muted', ` · from ${row.repFrom}`));
-      rep.title = `Read from ${row.repFrom} contract title${row.repFrom === 1 ? '' : 's'} the StarStrings mod has annotated`;
+      rep.append(el('span', 'muted', ` · ${tx('from {count}', { count: row.repFrom })}`));
+      rep.title = txn(row.repFrom, 'Read from {count} contract title the StarStrings mod has annotated', 'Read from {count} contract titles the StarStrings mod has annotated');
     } else {
       rep.append(el('span', 'muted', '—'));
-      rep.title = 'No annotated title among these, so nobody has written down what they pay';
+      rep.title = tx('No annotated title among these, so nobody has written down what they pay');
     }
 
     tr.append(rep);
@@ -2619,16 +2724,16 @@ async function loadStanding() {
 async function loadContractList() {
   const days = Number($('#contracts-period').value) || 0;
   const body = $('#contracts-table tbody');
-  setWorkspaceState('#contracts-state', 'loading', 'Loading contract history…');
+  setWorkspaceState('#contracts-state', 'loading', tx('Loading contract history…'));
   body.textContent = '';
 
   let rows;
   try {
     rows = await getJson(`/api/contracts?days=${days}`);
   } catch {
-    setWorkspaceState('#contracts-state', 'offline', 'Contract history is unavailable. Refresh after the local server reconnects.');
+    setWorkspaceState('#contracts-state', 'offline', tx('Contract history is unavailable. Refresh after the local server reconnects.'));
     const tr = el('tr');
-    const td = el('td', 'muted', 'Contract history is unavailable.');
+    const td = el('td', 'muted', tx('Contract history is unavailable.'));
     td.colSpan = 9;
     tr.append(td);
     body.append(tr);
@@ -2636,9 +2741,9 @@ async function loadContractList() {
   }
 
   if (!rows.length) {
-    setWorkspaceState('#contracts-state', 'empty', 'No contracts match this range.');
+    setWorkspaceState('#contracts-state', 'empty', tx('No contracts match this range.'));
     const tr = el('tr');
-    const td = el('td', 'muted', 'No contracts in that range.');
+    const td = el('td', 'muted', tx('No contracts in that range.'));
     td.colSpan = 9;
     tr.append(td);
     body.append(tr);
@@ -2648,14 +2753,14 @@ async function loadContractList() {
   setWorkspaceState('#contracts-state', 'ready');
 
   const OUTCOMES = {
-    Completed: ['done', 'completed'],
-    Abandoned: ['outward', 'abandoned'],
+    Completed: ['done', tx('completed')],
+    Abandoned: ['outward', tx('abandoned')],
 
     // Worded as something that happened to you rather than something you did,
     // because that is the distinction the game is drawing and the whole reason
     // this is not filed as an abandonment.
-    Failed: ['outward', 'failed'],
-    InProgress: ['muted', 'in progress'],
+    Failed: ['outward', tx('failed')],
+    InProgress: ['muted', tx('in progress')],
     Unknown: ['muted', '—'],
   };
 
@@ -2667,7 +2772,7 @@ async function loadContractList() {
     // carry those and the full name rides the row's tooltip.
     tr.append(el('td', null, row.issuer || '—'));
     tr.append(el('td', 'muted', row.type || '—'));
-    tr.append(el('td', 'muted', row.difficulty || '—'));
+    tr.append(el('td', 'muted', row.difficulty ? tx(row.difficulty) : '—'));
     tr.append(el('td', 'muted', row.system || '—'));
     tr.title = row.name;
 
@@ -2680,22 +2785,22 @@ async function loadContractList() {
     const pays = el('td');
 
     if (row.rep) {
-      const chip = el('span', 'tag-rep', `${row.rep.toLocaleString()} rep`);
-      chip.title = 'From the contract title, annotated by the StarStrings mod';
+      const chip = el('span', 'tag-rep', tx('{rep} rep', { rep: row.rep.toLocaleString() }));
+      chip.title = tx('From the contract title, annotated by the StarStrings mod');
       pays.append(chip);
     }
 
     if (row.blueprint) {
       const chip = el('span', 'tag-bp', 'BP');
-      chip.title = 'Tagged as awarding a blueprint';
+      chip.title = tx('Tagged as awarding a blueprint');
       pays.append(chip);
     }
 
     // What it pays into an event journal, from the installed game's own
     // points table - not annotated by anyone, so it is shown on every row.
     if (row.eventPoints) {
-      const chip = el('span', 'tag-event', `${row.eventPoints.toLocaleString()} pts`);
-      chip.title = `${row.event}: counts toward ${(row.eventTracks || []).join(', ')}`;
+      const chip = el('span', 'tag-event', tx('{points} pts', { points: row.eventPoints.toLocaleString() }));
+      chip.title = tx('{event}: counts toward {tracks}', { event: row.event, tracks: (row.eventTracks || []).join(', ') });
       pays.append(chip);
     }
 
@@ -3431,7 +3536,7 @@ async function refreshCommunityOffer() {
 
 async function setCommunity(enabled, statusNode, button) {
   button.disabled = true;
-  statusNode.textContent = enabled ? 'downloading…' : 'removing…';
+  statusNode.textContent = enabled ? tx('downloading…') : tx('removing…');
 
   try {
     const result = await fetch(`/api/community/${enabled ? 'enable' : 'disable'}`, { method: 'POST' });
@@ -3449,7 +3554,7 @@ async function setCommunity(enabled, statusNode, button) {
     await loadHistory();       // the ledger names its cargo rows too
     await renderSettings();
   } catch (e) {
-    statusNode.textContent = `failed: ${e.message}`;
+    statusNode.textContent = tx('failed: {error}', { error: e.message });
   } finally {
     button.disabled = false;
   }
@@ -3523,7 +3628,7 @@ function redactPaths(text) {
 async function copyDiagnosticSummary(button) {
   const status = $('#diag-status');
   button.disabled = true;
-  status.textContent = 'Building the summary…';
+  status.textContent = tx('Building the summary…');
   try {
     const [version, gamedata, uex, feeds, report] = await Promise.all([
       getJson('/api/version').catch(() => null),
@@ -3540,10 +3645,10 @@ async function copyDiagnosticSummary(button) {
     const box = $('#diag-summary');
     if (box) { box.value = text; box.hidden = copied; }
     status.textContent = copied
-      ? 'Copied. Paste it into the issue or the thread; read it first if you like - it is the text below the report.'
-      : 'The clipboard is not available here; the summary is shown below to copy by hand.';
+      ? tx('Copied. Paste it into the issue or the thread; read it first if you like - it is the text below the report.')
+      : tx('The clipboard is not available here; the summary is shown below to copy by hand.');
   } catch (err) {
-    status.textContent = `The summary could not be built: ${err.message}`;
+    status.textContent = tx('The summary could not be built: {error}', { error: err.message });
   } finally {
     button.disabled = false;
   }
@@ -3570,16 +3675,16 @@ async function renderDiagnostics() {
     diagnosticsReport = report;
 
     const unread = report.parser.unread
-      ? `${report.parser.unread} unreadable ${report.parser.unread === 1 ? 'line' : 'lines'}`
-        + ` across ${report.parser.tags.length} tag${report.parser.tags.length === 1 ? '' : 's'}`
-      : 'nothing unreadable in what was parsed this run';
+      ? `${txn(report.parser.unread, '{count} unreadable line', '{count} unreadable lines')}`
+        + ` ${txn(report.parser.tags.length, 'across {count} tag', 'across {count} tags')}`
+      : tx('nothing unreadable in what was parsed this run');
 
     preview.textContent = [
-      `${report.library.sessions} session${report.library.sessions === 1 ? '' : 's'}`,
-      `${report.library.builds.length} game build${report.library.builds.length === 1 ? '' : 's'}`,
+      txn(report.library.sessions, '{count} session', '{count} sessions'),
+      txn(report.library.builds.length, '{count} game build', '{count} game builds'),
       unread,
       report.parser.samples && report.parser.unread
-        ? 'with an example of each'
+        ? tx('with an example of each')
         : null,
     ].filter(Boolean).join(' · ');
   } catch {
@@ -3597,12 +3702,12 @@ async function renderDiagnosticTrace() {
     toggle.checked = trace.enabled === true;
     save.hidden = !(trace.bytes > 0);
     status.textContent = trace.enabled
-      ? `${trace.bytes.toLocaleString()} bytes recorded locally; restart to trace startup.`
+      ? tx('{bytes} bytes recorded locally; restart to trace startup.', { bytes: trace.bytes.toLocaleString() })
       : trace.bytes > 0
-        ? `${trace.bytes.toLocaleString()} bytes kept locally from an earlier trace.`
-        : 'Off — turn it on before reproducing a crash.';
+        ? tx('{bytes} bytes kept locally from an earlier trace.', { bytes: trace.bytes.toLocaleString() })
+        : tx('Off — turn it on before reproducing a crash.');
   } catch {
-    status.textContent = 'Trace status is unavailable.';
+    status.textContent = tx('Trace status is unavailable.');
   }
 }
 
@@ -3618,10 +3723,10 @@ $('#diag-trace-enabled').addEventListener('change', async (e) => {
   try {
     const trace = await getJson2(`/api/diagnostics/trace?enabled=${toggle.checked}`);
     status.textContent = trace.enabled
-      ? 'Detailed tracing is on. Restart now to include startup.'
-      : 'Detailed tracing is off; the existing trace is kept until you save it.';
+      ? tx('Detailed tracing is on. Restart now to include startup.')
+      : tx('Detailed tracing is off; the existing trace is kept until you save it.');
   } catch (err) {
-    status.textContent = `Trace setting could not be saved: ${err.message}`;
+    status.textContent = tx('Trace setting could not be saved: {error}', { error: err.message });
   } finally {
     toggle.disabled = false;
     renderDiagnosticTrace();
@@ -3642,9 +3747,9 @@ $('#diag-trace-save').addEventListener('click', async (e) => {
     link.download = 'quantumwake-trace.log';
     link.click();
     URL.revokeObjectURL(url);
-    status.textContent = 'Saved quantumwake-trace.log. Read it before sharing.';
+    status.textContent = tx('Saved quantumwake-trace.log. Read it before sharing.');
   } catch (err) {
-    status.textContent = `Trace could not be saved: ${err.message}`;
+    status.textContent = tx('Trace could not be saved: {error}', { error: err.message });
   } finally {
     button.disabled = false;
   }
@@ -3655,7 +3760,7 @@ $('#diag-save').addEventListener('click', async (e) => {
   const status = $('#diag-status');
 
   button.disabled = true;
-  status.textContent = 'Building the report…';
+  status.textContent = tx('Building the report…');
 
   let url = null;
 
@@ -3677,9 +3782,9 @@ $('#diag-save').addEventListener('click', async (e) => {
     link.download = name;
     link.click();
 
-    status.textContent = `Saved ${name}. Read it, then attach it to an issue.`;
+    status.textContent = tx('Saved {name}. Read it, then attach it to an issue.', { name });
   } catch (err) {
-    status.textContent = `The report could not be built: ${err.message}`;
+    status.textContent = tx('The report could not be built: {error}', { error: err.message });
   } finally {
     if (url) URL.revokeObjectURL(url);
     button.disabled = false;
@@ -3721,7 +3826,7 @@ async function refreshTradeAdvice(place) {
   }
 
   $('#trade-advice-sub').textContent =
-    `${advice.terminal} · best margins per SCU, UEX community prices`;
+    `${advice.terminal} · ${tx('best margins per SCU, UEX community prices')}`;
 
   const list = $('#trade-advice');
   list.textContent = '';
@@ -3729,7 +3834,7 @@ async function refreshTradeAdvice(place) {
   for (const o of advice.opportunities) {
     const li = el('li');
     li.append(el('b', null, o.commodity));
-    li.append(el('span', 'muted', ` buy ${money(o.buyHere)} → sell ${money(o.sellThere)} at ${o.sellTerminal} `));
+    li.append(el('span', 'muted', ` ${tx('buy {buy} → sell {sell} at {terminal}', { buy: money(o.buyHere), sell: money(o.sellThere), terminal: o.sellTerminal })} `));
     li.append(el('span', 'inward', `+${money(o.marginPerScu)}/SCU`));
     list.append(li);
   }
@@ -3752,19 +3857,19 @@ try { showPriceAge = localStorage.getItem('qw-uex-age') !== '0'; } catch { /* fi
 
 /** Fine-grained "how long ago" for prices, where days are too coarse. */
 function ago(iso) {
-  if (!iso) return 'unknown';
+  if (!iso) return tx('unknown');
 
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return tx('just now');
+  if (mins < 60) return tx('{n}m ago', { n: mins });
 
   const hours = Math.floor(mins / 60);
-  if (hours < 48) return `${hours}h ago`;
+  if (hours < 48) return tx('{n}h ago', { n: hours });
 
   const days = Math.floor(hours / 24);
-  if (days < 60) return `${days}d ago`;
+  if (days < 60) return tx('{n}d ago', { n: days });
 
-  return `${Math.round(days / 30)}mo ago`;
+  return tx('{n}mo ago', { n: Math.round(days / 30) });
 }
 
 async function loadMarket() {
@@ -4947,15 +5052,15 @@ const refineryRowId = (row) => (row.kind === 'order' ? row.order.id : row.done.i
 
 /** One line on how ready a row is, and on whose word. */
 function refineryReadyText(row, nowMs) {
-  if (row.kind === 'done') return `ready — the game said so at ${timeOf(row.done.at)}, ${dateOf(row.done.at)}`;
+  if (row.kind === 'done') return tx('ready — the game said so at {time}, {date}', { time: timeOf(row.done.at), date: dateOf(row.done.at) });
 
   const order = row.order;
   const due = order.dueAt ? shortTimeOf(order.dueAt) : null;
-  const quote = order.basis === 'quote' ? ' if you confirmed the quote' : '';
+  const quote = order.basis === 'quote' ? ` ${tx('if you confirmed the quote')}` : '';
 
-  if (row.state === 'done') return `ready — the game said so at ${timeOf(order.completedAt)}`;
-  if (row.state === 'due') return `should be ready since ${due}${quote}, by the terminal’s clock — the game has not said`;
-  return `due ${due} (${refineryClock((Date.parse(order.dueAt) - nowMs) / 1000)})${quote}`;
+  if (row.state === 'done') return tx('ready — the game said so at {time}', { time: timeOf(order.completedAt) });
+  if (row.state === 'due') return tx('should be ready since {time}{quote}, by the terminal’s clock — the game has not said', { time: due, quote });
+  return `${tx('due {time} ({left})', { time: due, left: refineryClock((Date.parse(order.dueAt) - nowMs) / 1000) })}${quote}`;
 }
 
 /** "Waiting for you at MIC-L5 Modern Icarus Station" - the line the pilot opened the page for. */
@@ -4963,7 +5068,8 @@ function refineryWaitingLine(groups) {
   const stations = [...new Set(groups.waiting.map(refineryRowStation))];
   if (!stations.length) return null;
   const orders = groups.waiting.length;
-  return `Waiting for you at ${stations.join(', ')}${orders > stations.length ? ` — ${orders} orders` : ''}`;
+  return tx('Waiting for you at {stations}', { stations: stations.join(', ') })
+    + (orders > stations.length ? ` — ${txn(orders, '{count} order', '{count} orders')}` : '');
 }
 
 /** Marks a row picked up, or takes that back, and redraws both places it shows. */
@@ -5093,7 +5199,7 @@ function renderNowRefinery() {
   if (card.hidden) return;
 
   $('#now-refinery').textContent = refineryWaitingLine(groups)
-    || `Refining at ${[...new Set(groups.refining.map(refineryRowStation))].join(', ')}`;
+    || tx('Refining at {stations}', { stations: [...new Set(groups.refining.map(refineryRowStation))].join(', ') });
 
   const list = $('#now-refinery-list');
   list.textContent = '';
@@ -5104,7 +5210,7 @@ function renderNowRefinery() {
     li.append(el('span', 'd', ` · ${refineryReadyText(row, now)}`));
 
     if (row.state !== 'running') {
-      const button = el('button', 'ghost tiny refinery-collect', 'Collected');
+      const button = el('button', 'ghost tiny refinery-collect', tx('Collected'));
       button.type = 'button';
       button.addEventListener('click', () => setRefineryCollected(refineryRowId(row), false));
       li.append(button);
@@ -7268,9 +7374,9 @@ function renderCraftingRef() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            title: `Craft ${bp.output}`,
+            title: tx('Craft {item}', { item: bp.output }),
             kind: 'craft',
-            source: `${bp.output} blueprint · ${craftTime(bp.craftSeconds)} to craft`,
+            source: tx('{item} blueprint · {time} to craft', { item: bp.output, time: craftTime(bp.craftSeconds) }),
             items: parseJobItems(bp.materials.join('\n')),
           }),
         }).catch(() => { button.textContent = 'failed'; });
@@ -7528,25 +7634,25 @@ async function parseClipboard(quiet = false) {
 
 /** What kind of screen a reading was, in words a pilot would use. */
 const SCREEN_KINDS = {
-  Tooltip: 'item',
-  Loadout: 'loadout',
-  Map: 'map',
-  Contracts: 'contracts',
-  Fleet: 'fleet',
-  Reputation: 'reputation',
-  Kiosk: 'kiosk',
-  Mining: 'rock scan',
-  Refinery: 'refinery',
+  Tooltip: tx('item'),
+  Loadout: tx('loadout'),
+  Map: tx('map'),
+  Contracts: tx('contracts'),
+  Fleet: tx('fleet'),
+  Reputation: tx('reputation'),
+  Kiosk: tx('kiosk'),
+  Mining: tx('rock scan'),
+  Refinery: tx('refinery'),
   MobiGlas: 'mobiGlas',
-  Unknown: 'unread',
+  Unknown: tx('unread'),
 };
 
 /** A check's verdict, worded for a reader. */
 const SCREEN_VERDICTS = {
-  agrees: 'agrees',
-  differs: 'differs',
-  new: 'new',
-  unchecked: 'not checked',
+  agrees: tx('agrees'),
+  differs: tx('differs'),
+  new: tx('new'),
+  unchecked: tx('not checked'),
 };
 
 /** One check as a feed row: the verdict, then what the screen said beside what the app thought. */
@@ -7559,7 +7665,7 @@ function screenCheckRow(check) {
 
   // The belief is shown whatever the verdict: an agreement with nothing
   // beside it looks like a screen that was taken on trust.
-  li.append(el('span', 'd', ` · logs: ${check.belief}`));
+  li.append(el('span', 'd', ` · ${tx('logs: {belief}', { belief: check.belief })}`));
 
   if (check.note) li.append(el('span', 'd', ` · ${check.note}`));
   return li;
@@ -9003,7 +9109,7 @@ async function loadWikelo() {
     wikeloAll = await getJson('/api/wikelo');
   } catch {
     list.textContent = '';
-    list.append(el('p', 'muted', 'Could not load the emporium — is the app still running?'));
+    list.append(el('p', 'muted', tx('Could not load the emporium — is the app still running?')));
     return;
   }
 
@@ -9024,7 +9130,7 @@ function renderWikeloGroups() {
   for (const [key, label] of Object.entries(WIKELO_GROUPS)) {
     const count = trades.filter((t) => t.group === key).length;
     if (!count) continue;
-    const button = el('button', wikeloGroup === key ? 'ghost' : 'ghost off', `${label} · ${count}`);
+    const button = el('button', wikeloGroup === key ? 'ghost' : 'ghost off', `${tx(label)} · ${count}`);
     button.type = 'button';
     button.dataset.group = key;
     button.addEventListener('click', () => { wikeloGroup = key; renderWikelo(); });
@@ -9046,9 +9152,9 @@ function renderWikeloGoal(trades) {
   }
 
   goal.hidden = false;
-  goal.append(el('span', 'strong', 'Current goal'));
+  goal.append(el('span', 'strong', tx('Current goal')));
   goal.append(el('span', null, trade.title));
-  const clear = el('button', 'ghost tiny wikelo-goal-clear', 'Clear');
+  const clear = el('button', 'ghost tiny wikelo-goal-clear', tx('Clear'));
   clear.type = 'button';
   clear.addEventListener('click', () => { rememberWikeloGoal(null); renderWikelo(); });
   goal.append(clear);
@@ -9067,8 +9173,7 @@ function renderWikelo() {
     renderWikeloGoal([]);
     if (count) count.textContent = '';
     list.append(el('p', 'muted',
-      'The emporium is read from the game files, and this install has not been read yet — '
-      + 'Settings says when the game data is ready. Nothing here comes from a website.'));
+      tx('The emporium is read from the game files, and this install has not been read yet — Settings says when the game data is ready. Nothing here comes from a website.')));
     return;
   }
 
@@ -9076,8 +9181,8 @@ function renderWikelo() {
   renderWikeloGoal(trades);
   const retired = (wikeloAll.trades || []).length - trades.length;
   if (count) {
-    count.textContent = `${trades.length} trades`
-      + (retired ? ` · ${retired} retired in the file, not shown` : '');
+    count.textContent = txn(trades.length, '{count} trade', '{count} trades')
+      + (retired ? ` · ${tx('{count} retired in the file, not shown', { count: retired })}` : '');
   }
 
   const query = ($('#wikelo-search')?.value || '').trim().toLowerCase();
@@ -9090,7 +9195,7 @@ function renderWikelo() {
   });
 
   if (!shown.length) {
-    list.append(el('p', 'muted', query ? 'No trade matches that.' : 'Nothing in this group.'));
+    list.append(el('p', 'muted', query ? tx('No trade matches that.') : tx('Nothing in this group.')));
     return;
   }
 
@@ -9101,7 +9206,9 @@ function renderWikelo() {
 function wikeloGate(trade) {
   if (!trade.minStanding) return null;
   const standing = (wikeloAll?.standings || []).find((s) => s.id === trade.minStanding);
-  return standing ? `${standing.name} (${standing.minReputation.toLocaleString()} rep) or better` : `rank ${trade.minStanding}`;
+  return standing
+    ? tx('{rank} ({rep} rep) or better', { rank: standing.name, rep: standing.minReputation.toLocaleString() })
+    : tx('rank {rank}', { rank: trade.minStanding });
 }
 
 /** One trade's card - new, or redrawn in place once it is tracked, so the message under it survives. */
@@ -9116,7 +9223,7 @@ function wikeloCard(trade, into = null) {
   head.append(el('div', 'point-name-read', trade.title));
   const held = trade.requirements.filter((r) => r.have).length;
   head.append(el('div', 'muted', trade.requirements.length
-    ? `${held} of ${trade.requirements.length} seen in your stash`
+    ? tx('{held} of {total} seen in your stash', { held, total: trade.requirements.length })
     : ''));
   card.append(head);
 
@@ -9130,20 +9237,20 @@ function wikeloCard(trade, into = null) {
   if (trade.rewards.length) {
     gives.append(el('span', 'strong', trade.rewards.map((r) => `${r.count > 1 ? `${r.count}× ` : ''}${r.name}`).join(', ')));
   } else {
-    gives.append(el('span', 'muted', 'a reward the file does not name — a blueprint or food pool'));
+    gives.append(el('span', 'muted', tx('a reward the file does not name — a blueprint or food pool')));
   }
-  if (trade.reputation) gives.append(el('span', 'muted', ` · +${trade.reputation} rep`));
+  if (trade.reputation) gives.append(el('span', 'muted', ` · +${tx('{rep} rep', { rep: trade.reputation })}`));
   card.append(gives);
 
   const gate = wikeloGate(trade);
-  if (gate) card.append(el('div', 'muted warn wikelo-gate', `Needs ${gate}. Your standing is not in the logs, so this is a fact about the trade, not about you.`));
+  if (gate) card.append(el('div', 'muted warn wikelo-gate', tx('Needs {gate}. Your standing is not in the logs, so this is a fact about the trade, not about you.', { gate })));
 
   const wants = el('ul', 'wikelo-wants');
   for (const r of trade.requirements) {
     const li = el('li', r.have ? 'have' : 'lack');
     li.append(el('span', 'mark', r.have ? '✓' : '○'));
     li.append(el('span', 'what', `${r.unit === 'SCU' ? `${r.count} SCU` : `${r.count}×`} ${r.name}`));
-    if (r.have) li.append(el('span', 'muted', ` · seen at ${r.where.join(', ')}`));
+    if (r.have) li.append(el('span', 'muted', ` · ${tx('seen at {places}', { places: r.where.join(', ') })}`));
     wants.append(li);
   }
   card.append(wants);
@@ -9151,9 +9258,9 @@ function wikeloCard(trade, into = null) {
   const actions = el('div', 'point-actions');
   const said = el('span', 'muted point-said');
 
-  const pin = el('button', 'ghost wikelo-pin', trade.id === wikeloGoalId ? 'Current goal' : 'Set current goal');
+  const pin = el('button', 'ghost wikelo-pin', trade.id === wikeloGoalId ? tx('Current goal') : tx('Set current goal'));
   pin.type = 'button';
-  pin.title = trade.id === wikeloGoalId ? 'Clear this as the current goal' : 'Keep this trade above the emporium while you work on it';
+  pin.title = trade.id === wikeloGoalId ? tx('Clear this as the current goal') : tx('Keep this trade above the emporium while you work on it');
   pin.addEventListener('click', () => {
     rememberWikeloGoal(trade.id === wikeloGoalId ? null : trade.id);
     renderWikelo();
@@ -9161,14 +9268,14 @@ function wikeloCard(trade, into = null) {
   actions.append(pin);
 
   if (trade.trackedJobId) {
-    const open = el('button', 'ghost wikelo-open', 'Tracking — open the list');
+    const open = el('button', 'ghost wikelo-open', tx('Tracking — open the list'));
     open.type = 'button';
     open.addEventListener('click', () => showView('jobs'));
     actions.append(open);
   } else {
-    const track = el('button', 'ghost wikelo-track', trade.trackedDone ? 'Track again' : 'Track as a goal');
+    const track = el('button', 'ghost wikelo-track', trade.trackedDone ? tx('Track again') : tx('Track as a goal'));
     track.type = 'button';
-    track.title = 'Make a shopping list of everything this trade wants';
+    track.title = tx('Make a shopping list of everything this trade wants');
     track.addEventListener('click', () => trackWikelo(trade, card, track, said));
     actions.append(track);
   }
@@ -9180,7 +9287,7 @@ function wikeloCard(trade, into = null) {
 
 async function trackWikelo(trade, card, button, said) {
   button.disabled = true;
-  said.textContent = 'Making the list…';
+  said.textContent = tx('Making the list…');
 
   try {
     const response = await fetch(`/api/wikelo/${encodeURIComponent(trade.id)}/track`, { method: 'POST' });
@@ -9192,11 +9299,11 @@ async function trackWikelo(trade, card, button, said) {
     trade.trackedJobId = answer.job?.id || 'tracked';
     wikeloCard(trade, card);
     card.querySelector('.point-said').textContent = answer.existed
-      ? 'Already tracking — the list is on Jobs.'
-      : 'Listed on Jobs. Pin it there to see it on Now and the MFD.';
+      ? tx('Already tracking — the list is on Jobs.')
+      : tx('Listed on Jobs. Pin it there to see it on Now and the MFD.');
     loadJobs().catch(() => {});
   } catch (e) {
-    said.textContent = e.message || 'Could not make the list.';
+    said.textContent = e.message || tx('Could not make the list.');
     button.disabled = false;
   }
 }
@@ -9268,7 +9375,7 @@ function announceEventTiers(before, after) {
     for (const track of event.tracks) {
       track.tiers.forEach((tier, index) => {
         if (!tier.reached || had.has(`${event.id}|${track.id}|${tier.minPoints}`)) return;
-        toast('event-tier', `${track.name} tier ${index + 1} reached`,
+        toast('event-tier', tx('{track} tier {tier} reached', { track: track.name, tier: index + 1 }),
           tier.reward ? `${event.title} - ${tier.reward}` : event.title);
       });
     }
@@ -9310,13 +9417,13 @@ function rememberEvent(id) {
   } catch { /* optional */ }
 }
 
-const eventPoints = (n) => `${Number(n || 0).toLocaleString()} pts`;
+const eventPoints = (n) => tx('{points} pts', { points: Number(n || 0).toLocaleString() });
 
 /** The tier the bar is working towards, as words: "750 to tier 2 (4,000)". */
 function eventNextText(track) {
-  if (track.nextTier == null) return 'every tier reached';
+  if (track.nextTier == null) return tx('every tier reached');
   const index = track.tiers.findIndex((t) => t.minPoints === track.nextTier);
-  return `${track.toNext.toLocaleString()} to tier ${index + 1} (${track.nextTier.toLocaleString()})`;
+  return tx('{left} to tier {tier} ({points})', { left: track.toNext.toLocaleString(), tier: index + 1, points: track.nextTier.toLocaleString() });
 }
 
 function renderEvents() {
@@ -9328,7 +9435,7 @@ function renderEvents() {
   picker.textContent = '';
 
   if (!eventsData) {
-    body.append(el('p', 'muted', 'Could not load the events — is the app still running?'));
+    body.append(el('p', 'muted', tx('Could not load the events — is the app still running?')));
     return;
   }
 
@@ -9336,21 +9443,21 @@ function renderEvents() {
   // patch with no events in it.
   if (!eventsData.available) {
     $('#events-count').textContent = '';
-    body.append(el('p', 'muted', 'The game files have not been read yet, so the event tiers and contract points are not known. Point Settings at your Star Citizen install and they will be.'));
+    body.append(el('p', 'muted', tx('The game files have not been read yet, so the event tiers and contract points are not known. Point Settings at your Star Citizen install and they will be.')));
     return;
   }
 
   const events = eventsData.events || [];
-  $('#events-count').textContent = `${events.length} in this patch`;
+  $('#events-count').textContent = tx('{count} in this patch', { count: events.length });
 
   const shown = chosenEvent();
   for (const event of events) {
     const state = eventsData.tracked === event.id ? 'tracked' : (eventsData.open || []).some(o => o.event === event.title) ? 'open' : eventRecent(event) ? 'recent' : '';
     const button = el('button', event.id === shown?.id ? 'ghost' : 'ghost off', event.title);
     button.type = 'button';
-    button.title = event.firstSeen ? `In your logs since ${dateOf(event.firstSeen)}` : 'Not in your logs yet';
+    button.title = event.firstSeen ? tx('In your logs since {date}', { date: dateOf(event.firstSeen) }) : tx('Not in your logs yet');
     if (event.firstSeen) button.append(el('span', 'event-seen', '●'));
-    if (state) button.append(el('span', 'muted', ` · ${state}`));
+    if (state) button.append(el('span', 'muted', ` · ${tx(state)}`));
     button.addEventListener('click', () => { rememberEvent(event.id); renderEvents(); });
     picker.append(button);
   }
@@ -9369,22 +9476,22 @@ function eventView(event) {
 
   const facts = el('p', 'event-facts');
   if (event.firstSeen) {
-    facts.append(el('span', null, `${event.completed.toLocaleString()} of its contracts finished since ${dateOf(event.firstSeen)}`));
+    facts.append(el('span', null, tx('{count} of its contracts finished since {date}', { count: event.completed.toLocaleString(), date: dateOf(event.firstSeen) })));
   } else {
-    facts.append(el('span', 'muted', 'None of its contracts are in your logs yet. Finish one and it is counted from then.'));
+    facts.append(el('span', 'muted', tx('None of its contracts are in your logs yet. Finish one and it is counted from then.')));
   }
-  if (event.lastSeen) facts.append(el('span', 'muted', ` · last event contract seen ${dateOf(event.lastSeen)}`));
-  if (eventsData?.countedFrom) facts.append(el('span', 'muted', ` · counting from your wipe on ${dayUtc(eventsData.countedFrom)}`));
-  if (event.percent) facts.append(el('span', 'muted', ' · the journal shows these bars in percent; here they are in points'));
+  if (event.lastSeen) facts.append(el('span', 'muted', ` · ${tx('last event contract seen {date}', { date: dateOf(event.lastSeen) })}`));
+  if (eventsData?.countedFrom) facts.append(el('span', 'muted', ` · ${tx('counting from your wipe on {date}', { date: dayUtc(eventsData.countedFrom) })}`));
+  if (event.percent) facts.append(el('span', 'muted', ` · ${tx('the journal shows these bars in percent; here they are in points')}`));
   box.append(facts);
 
   const actions = el('div', 'point-actions event-actions');
   const tracked = eventsData?.tracked === event.id;
-  const track = el('button', 'ghost event-track-now', tracked ? 'Tracked on Now — stop' : 'Track on Now');
+  const track = el('button', 'ghost event-track-now', tracked ? tx('Tracked on Now — stop') : tx('Track on Now'));
   track.type = 'button';
   track.title = tracked
-    ? 'Let the Now card follow what you play again'
-    : 'Keep this event on the Now page and the overlay, whatever you are playing';
+    ? tx('Let the Now card follow what you play again')
+    : tx('Keep this event on the Now page and the overlay, whatever you are playing');
   track.addEventListener('click', () => trackEvent(tracked ? null : event.id, track));
   actions.append(track);
   box.append(actions);
@@ -9393,7 +9500,9 @@ function eventView(event) {
   // contract that looks like this event's and is not in the table is named.
   if (event.unrecognised) {
     box.append(el('p', 'warn event-unrecognised',
-      `${event.unrecognised} contract${event.unrecognised === 1 ? '' : 's'} in your logs look like this event's but are not in the installed game's points table, so they are not counted.`));
+      txn(event.unrecognised,
+        '{count} contract in your logs looks like this event\'s but is not in the installed game\'s points table, so it is not counted.',
+        '{count} contracts in your logs look like this event\'s but are not in the installed game\'s points table, so they are not counted.')));
   }
 
   const open = (eventsData?.open || []).filter((o) => o.event === event.title);
@@ -9402,10 +9511,10 @@ function eventView(event) {
     for (const contract of open) {
       const li = el('li', 'want');
       li.append(el('span', 'what', `+${contract.points.toLocaleString()}`));
-      li.append(el('span', 'd', ` · ${contract.title} — counts toward ${contract.tracks.join(', ')}`));
+      li.append(el('span', 'd', ` · ${tx('{contract} — counts toward {tracks}', { contract: contract.title, tracks: contract.tracks.join(', ') })}`));
       now.append(li);
     }
-    box.append(el('div', 'card-label', 'In your journal now'));
+    box.append(el('div', 'card-label', tx('In your journal now')));
     box.append(now);
   }
 
@@ -9414,7 +9523,7 @@ function eventView(event) {
   box.append(tracks);
 
   const details = document.createElement('details'); details.className = 'event-details';
-  details.append(el('summary', null, `All ${event.contracts.length} paying contracts`));
+  details.append(el('summary', null, tx('All {count} paying contracts', { count: event.contracts.length })));
   details.append(eventContractsTable(event)); box.append(details);
   return box;
 }
@@ -9436,12 +9545,12 @@ const REWARD_GLYPHS = {
 /** "Power plant · S1 · grade C · Sovereign": what a reward is, from the install's catalogue. */
 function rewardKindLine(item, facts) {
   const type = facts?.type || item.kind;
-  const bits = [REWARD_KINDS[type] || prettyType(type)];
+  const bits = [REWARD_KINDS[type] ? tx(REWARD_KINDS[type]) : prettyType(type)];
   // Size and grade mean something on a ship component; on a livery, a blade or
   // a handheld tool the file still says S1 grade A, which would read as a fact.
   if (REWARD_GRADED.has(type)) {
     if (facts?.size) bits.push(`S${facts.size}`);
-    if (facts?.grade) bits.push(`grade ${gradeLetter(facts.grade)}`);
+    if (facts?.grade) bits.push(tx('grade {grade}', { grade: gradeLetter(facts.grade) }));
   }
   if (facts?.maker) bits.push(facts.maker);
   return bits.filter((b) => b && b !== '—').join(' · ');
@@ -9484,14 +9593,14 @@ function eventRewardItems(items) {
     }
 
     const text = el('div', 'event-reward-text');
-    text.append(el('div', 'event-reward-name', `${item.oneOf ? 'One of: ' : ''}${item.name}`));
+    text.append(el('div', 'event-reward-name', item.oneOf ? tx('One of: {name}', { name: item.name }) : item.name));
     text.append(el('div', 'muted event-reward-kind', item.class
       ? rewardKindLine(item, facts)
-      : 'not in the installed game’s catalogue under this name'));
+      : tx('not in the installed game’s catalogue under this name')));
 
     if (item.class && eventsData?.prices) {
-      if (facts?.price != null) text.append(el('div', 'event-reward-price', `≈ ${money(facts.price)} · UEX typical`));
-      else if (sayUnsoldPerCard) text.append(el('div', 'muted event-reward-price', 'not sold at any terminal UEX lists'));
+      if (facts?.price != null) text.append(el('div', 'event-reward-price', tx('≈ {price} · UEX typical', { price: money(facts.price) })));
+      else if (sayUnsoldPerCard) text.append(el('div', 'muted event-reward-price', tx('not sold at any terminal UEX lists')));
     }
 
     card.append(text);
@@ -9499,7 +9608,7 @@ function eventRewardItems(items) {
   }
 
   if (eventsData?.prices && !sayUnsoldPerCard && items.some((i) => i.class)) {
-    box.append(el('div', 'muted event-reward-unsold', 'None of these is sold at any terminal UEX lists - event rewards usually are not.'));
+    box.append(el('div', 'muted event-reward-unsold', tx('None of these is sold at any terminal UEX lists - event rewards usually are not.')));
   }
 
   return box;
@@ -9515,10 +9624,10 @@ function eventMatchesPreference(contract) {
 function eventPlan(event) {
   const track = event.tracks.find(t => t.overall && t.nextTier != null) || event.tracks.find(t => t.nextTier != null);
   const plan = el('section', 'event-plan');
-  if (!track) { plan.append(el('div', 'event-plan-target', 'Every recorded tier reached')); return plan; }
+  if (!track) { plan.append(el('div', 'event-plan-target', tx('Every recorded tier reached'))); return plan; }
   const head = el('div', 'event-plan-head');
-  head.append(el('span', 'card-label', 'Next event target'));
-  head.append(el('strong', 'event-plan-target', `${track.toNext.toLocaleString()} pts to ${track.name} tier ${track.tiers.findIndex(t => t.minPoints === track.nextTier) + 1}`));
+  head.append(el('span', 'card-label', tx('Next event target')));
+  head.append(el('strong', 'event-plan-target', tx('{points} pts to {track} tier {tier}', { points: track.toNext.toLocaleString(), track: track.name, tier: track.tiers.findIndex(t => t.minPoints === track.nextTier) + 1 })));
   plan.append(head);
   const top = track.tiers[track.tiers.length - 1]?.minPoints || track.nextTier;
   const bar = el('div', 'event-plan-bar'); const fill = el('span'); fill.style.width = `${Math.min(100, (track.points / top) * 100)}%`; bar.append(fill); plan.append(bar);
@@ -9527,12 +9636,15 @@ function eventPlan(event) {
   plan.append(milestones);
   const choices = event.contracts.filter(eventMatchesPreference).map(c => ({ ...c, needed: Math.ceil(track.toNext / c.points) }))
     .sort((a,b) => a.needed - b.needed || b.points - a.points).slice(0, 3);
-  plan.append(el('p', 'muted', choices.length ? `Best ${eventPreference === 'all' ? 'available' : eventPreference} path: ${choices.map(c => `${c.needed} × ${c.title} (${c.points.toLocaleString()} pts)`).join(' · ')}` : `No ${eventPreference} contracts are listed for this event; choose Any activity to see every path.`));
+  const kind = tx(eventPreference === 'all' ? 'available' : eventPreference);
+  plan.append(el('p', 'muted', choices.length
+    ? tx('Best {kind} path: {paths}', { kind, paths: choices.map(c => `${c.needed} × ${c.title} (${eventPoints(c.points)})`).join(' · ') })
+    : tx('No {kind} contracts are listed for this event; choose Any activity to see every path.', { kind })));
   const lanes = el('div', 'event-lanes');
-  for (const [name, icon] of [['combat','✦'],['mining','◇'],['hauling','↗']]) { const pick = event.contracts.filter(c => { const saved = eventPreference; eventPreference = name; const hit = eventMatchesPreference(c); eventPreference = saved; return hit; }).sort((a,b)=>b.points-a.points)[0]; const lane = el('div','event-lane'); lane.append(el('b',null,`${icon} ${name}`)); lane.append(el('span',null,pick ? `${pick.title} · ${pick.points.toLocaleString()} pts` : 'No listed path')); lanes.append(lane); }
+  for (const [name, icon] of [['combat','✦'],['mining','◇'],['hauling','↗']]) { const pick = event.contracts.filter(c => { const saved = eventPreference; eventPreference = name; const hit = eventMatchesPreference(c); eventPreference = saved; return hit; }).sort((a,b)=>b.points-a.points)[0]; const lane = el('div','event-lane'); lane.append(el('b',null,`${icon} ${tx(name)}`)); lane.append(el('span',null,pick ? `${pick.title} · ${eventPoints(pick.points)}` : tx('No listed path'))); lanes.append(lane); }
   plan.append(lanes);
   const actions = el('div', 'event-plan-actions');
-  for (const [label, view] of [['View contracts', 'contracts'], ['Plan route', 'routes'], ['Open map', 'map']]) { const button = el('button', 'ghost tiny', label); button.type = 'button'; button.onclick = () => showView(view); actions.append(button); }
+  for (const [label, view] of [['View contracts', 'contracts'], ['Plan route', 'routes'], ['Open map', 'map']]) { const button = el('button', 'ghost tiny', tx(label)); button.type = 'button'; button.onclick = () => showView(view); actions.append(button); }
   plan.append(actions); return plan;
 }
 
@@ -9555,7 +9667,7 @@ function eventTrackCard(track) {
   for (const tier of track.tiers) {
     const tick = el('span', `event-tick${tier.reached ? ' reached' : ''}`);
     tick.style.left = `${top ? (tier.minPoints / top) * 100 : 0}%`;
-    tick.title = `${tier.minPoints.toLocaleString()} pts`;
+    tick.title = eventPoints(tier.minPoints);
     bar.append(tick);
   }
   card.append(bar);
@@ -9571,14 +9683,14 @@ function eventTrackCard(track) {
     const head = el(items.length ? 'button' : 'div', 'event-tier-head');
     head.append(el('span', 'mark', tier.reached ? '✓' : '○'));
     const line = el('span', 'event-tier-line');
-    line.append(el('span', 'what', `Tier ${index + 1} · ${tier.minPoints.toLocaleString()}`));
+    line.append(el('span', 'what', `${tx('Tier {tier}', { tier: index + 1 })} · ${tier.minPoints.toLocaleString()}`));
     if (tier.reward) line.append(el('span', 'muted', ` — ${tier.reward}`));
     head.append(line);
     li.append(head);
 
     if (items.length) {
       head.type = 'button';
-      head.title = 'Show what this tier gives';
+      head.title = tx('Show what this tier gives');
       head.setAttribute('aria-expanded', 'false');
       head.append(el('span', 'event-tier-caret', '▸'));
 
@@ -9597,17 +9709,19 @@ function eventTrackCard(track) {
   });
   const tierDetails = document.createElement('details');
   tierDetails.className = 'event-details';
-  tierDetails.append(el('summary', null, `${track.tiers.length} tiers and rewards`));
+  tierDetails.append(el('summary', null, txn(track.tiers.length, '{count} tier and rewards', '{count} tiers and rewards')));
   tierDetails.append(tiers); card.append(tierDetails);
 
   if (track.fastest.length) {
     const fast = el('div', 'event-fastest');
-    fast.append(el('div', 'card-label', 'Fewest contracts to the next tier'));
+    fast.append(el('div', 'card-label', tx('Fewest contracts to the next tier')));
     const list = el('ul', 'feed');
     for (const s of track.fastest) {
       const li = el('li');
       li.append(el('span', 'what', `${s.needed} ×`));
-      li.append(el('span', 'd', ` ${s.title} (${s.points.toLocaleString()} each${s.done ? `, done ${s.done}× before` : ''})`));
+      li.append(el('span', 'd', ` ${s.title} (${s.done
+        ? tx('{points} each, done {done}× before', { points: s.points.toLocaleString(), done: s.done })
+        : tx('{points} each', { points: s.points.toLocaleString() })})`));
       list.append(li);
     }
     fast.append(list);
@@ -9622,7 +9736,7 @@ function eventContractsTable(event) {
   const table = el('table', 'data');
   const head = el('tr');
   for (const [label, cls] of [['Contract', null], ['Offered by', null], ['Counts toward', null], ['Points', 'num'], ['Done', 'num']])
-    head.append(el('th', cls, label));
+    head.append(el('th', cls, tx(label)));
   const thead = el('thead');
   thead.append(head);
   table.append(thead);
@@ -9655,7 +9769,7 @@ async function trackEvent(id, button) {
     if (response.ok && eventsData) eventsData.tracked = (await response.json()).tracked ?? null;
   } catch {
     const status = $('#events-plan-status');
-    if (status) status.textContent = 'Could not save the tracked event. It will keep following your current contracts.';
+    if (status) status.textContent = tx('Could not save the tracked event. It will keep following your current contracts.');
   }
 
   renderEvents();
@@ -9680,7 +9794,7 @@ function renderNowEvent() {
   const event = currentEvent();
   const overall = event ? (event.tracks.find((t) => t.overall) || event.tracks[0]) : null;
 
-  if (status) status.textContent = event && overall ? `${event.title} · ${eventPoints(overall.points)}` : 'Open events';
+  if (status) status.textContent = event && overall ? `${event.title} · ${eventPoints(overall.points)}` : tx('Open events');
 
   if (!card) return;
   card.hidden = !event;
@@ -9690,7 +9804,7 @@ function renderNowEvent() {
   card.classList.toggle('event-tracked', !!event && eventsData?.tracked === event.id);
   if (!event) return;
 
-  $('#now-event-label').textContent = eventsData?.tracked === event.id ? `${event.title} · tracked` : event.title;
+  $('#now-event-label').textContent = eventsData?.tracked === event.id ? `${event.title} · ${tx('tracked')}` : event.title;
   $('#now-event').textContent = overall ? `${eventPoints(overall.points)} · ${eventNextText(overall)}` : '—';
 
   const list = $('#now-event-list');
@@ -9711,7 +9825,7 @@ function renderNowEvent() {
     li.append(el('span', 'what', track.name));
     li.append(el('span', 'event-pts', track.nextTier != null
       ? `${track.points.toLocaleString()} / ${track.nextTier.toLocaleString()}`
-      : `${track.points.toLocaleString()} · every tier`));
+      : `${track.points.toLocaleString()} · ${tx('every tier')}`));
     list.append(li);
   }
 }
@@ -10252,9 +10366,11 @@ function renderNowScreenCard(s) {
     loadLedgerWallet().catch(() => {});
   }
 
-  $('#now-screen-summary').textContent = s.summary;
+  // The server's summary: the fixed ones translate, the ones built around a
+  // count or a name stay as written until the server speaks the language.
+  $('#now-screen-summary').textContent = tx(s.summary);
   $('#now-screen-when').textContent =
-    `${SCREEN_KINDS[s.kind] || s.kind} · ${new Date(s.shotAt).toLocaleTimeString()} · ${s.shot}`;
+    `${SCREEN_KINDS[s.kind] || s.kind} · ${new Date(s.shotAt).toLocaleTimeString(QW_DATE_LOCALES)} · ${s.shot}`;
 
   const checks = $('#now-screen-checks');
   checks.textContent = '';
@@ -10263,9 +10379,9 @@ function renderNowScreenCard(s) {
   const differs = (s.checks || []).filter((c) => c.verdict === 'differs').length;
 
   $('#now-screen-note').textContent =
-    differs ? `${differs} thing${differs === 1 ? '' : 's'} the screen and the logs disagree on.`
-    : (s.checks || []).length ? 'The logs and the screen agree on everything checked.'
-    : 'Nothing on this screen the logs could be checked against.';
+    differs ? txn(differs, '{count} thing the screen and the logs disagree on.', '{count} things the screen and the logs disagree on.')
+    : (s.checks || []).length ? tx('The logs and the screen agree on everything checked.')
+    : tx('Nothing on this screen the logs could be checked against.');
 }
 
 /**
@@ -12653,6 +12769,12 @@ async function renderOverlayLayout() {
     radio.onchange = saveOverlayLayout;
   }
 
+  const contrast = $('#overlay-high-contrast');
+  if (contrast) {
+    contrast.checked = Boolean(data.current.highContrast);
+    contrast.onchange = saveOverlayLayout;
+  }
+
   $('#overlay-layout-status').textContent = '';
 }
 
@@ -12661,12 +12783,12 @@ $('#install-path-save')?.addEventListener('click', async (e) => {
   const path = $('#install-path').value.trim();
 
   if (!path) {
-    status.textContent = 'Type the folder first.';
+    status.textContent = tx('Type the folder first.');
     return;
   }
 
   e.currentTarget.disabled = true;
-  status.textContent = 'checking…';
+  status.textContent = tx('checking…');
 
   try {
     const response = await fetch('/api/install/path', {
@@ -12678,12 +12800,12 @@ $('#install-path-save')?.addEventListener('click', async (e) => {
     const result = await response.json();
 
     status.textContent = response.ok
-      ? `Found ${result.channel}. Restart Quantum Wake to read it.`
-      : result.message || 'That folder does not hold Star Citizen logs.';
+      ? tx('Found {channel}. Restart Quantum Wake to read it.', { channel: result.channel })
+      : result.message || tx('That folder does not hold Star Citizen logs.');
 
     if (response.ok) status.classList.add('inward');
   } catch {
-    status.textContent = 'Could not reach the server.';
+    status.textContent = tx('Could not reach the server.');
   } finally {
     e.currentTarget.disabled = false;
   }
@@ -12709,6 +12831,7 @@ async function saveOverlayLayout(savedMessage = 'saved', chosen = null) {
     tabs: pick('#overlay-tabs'),
     cards: pick('#overlay-cards'),
     density: $$('#overlay-density input').find((r) => r.checked)?.value || 'normal',
+    highContrast: Boolean($('#overlay-high-contrast')?.checked),
   };
 
   const status = $('#overlay-layout-status');
@@ -12780,10 +12903,14 @@ async function applyOverlayPreset(name) {
   // Full is the only layout whose contents change as the app gains cards. The
   // header menu lives in a page that has not opened Settings, so read the
   // offered lists when this browser has no cached copy yet.
-  const available = overlayLayoutData || (preset ? null : await getJson('/api/overlay/layout'));
-  const next = preset || { tabs: available?.tabs || [], cards: available?.cards || [], density: 'normal' };
+  const available = overlayLayoutData || await getJson('/api/overlay/layout');
+  const next = preset
+    ? { ...preset, highContrast: Boolean(available?.current?.highContrast) }
+    : { tabs: available?.tabs || [], cards: available?.cards || [], density: 'normal', highContrast: Boolean(available?.current?.highContrast) };
   all('#overlay-tabs', next.tabs); all('#overlay-cards', next.cards);
   $$('#overlay-density input').forEach(box => { box.checked = box.value === next.density; });
+  const contrast = $('#overlay-high-contrast');
+  if (contrast) contrast.checked = Boolean(next.highContrast);
   await saveOverlayLayout(
     `${name === 'full' ? 'Full' : name[0].toUpperCase() + name.slice(1)} layout saved`, next);
 }
@@ -12835,6 +12962,7 @@ async function applyOverlayLayout() {
 
   document.body.classList.remove('density-compact', 'density-tiny');
   if (layout.density !== 'normal') document.body.classList.add(`density-${layout.density}`);
+  document.body.classList.toggle('high-contrast', Boolean(layout.highContrast));
 
   // The active view may have just been hidden; fall back to the first shown.
   const active = $('#tabs button.active[data-view]');
@@ -12974,8 +13102,8 @@ function planningBlocksCargo(candidate = activePlanningShip()) {
 }
 
 const cargoSourceName = (source) => ({
-  community: 'Community data', screenshot: 'Screenshot/OCR', manual: 'Local entry',
-}[source] || 'No source');
+  community: tx('Community data'), screenshot: tx('Screenshot/OCR'), manual: tx('Local entry'),
+}[source] || tx('No source'));
 
 function setRouteReadiness(kind, label, detail = '') {
   const badge = $('#route-readiness');
@@ -12991,21 +13119,21 @@ function renderRouteHeader() {
   if (!context) return;
   const active = activePlanningShip();
   if (!active) {
-    context.textContent = 'No ship selected · SCU unknown · no source';
-    setRouteReadiness('needs-cargo', 'Needs cargo SCU', 'Choose a cargo ship or add a locally verified hold size.');
+    context.textContent = tx('No ship selected · SCU unknown · no source');
+    setRouteReadiness('needs-cargo', tx('Needs cargo SCU'), tx('Choose a cargo ship or add a locally verified hold size.'));
     return;
   }
 
   const cargo = planningCargo(active);
   const source = planningCargoSource(active);
   const read = source === 'screenshot' && active.install?.cargoReadAt
-    ? ` · read ${ago(active.install.cargoReadAt)}`
-    : ' · last read unavailable';
+    ? ` · ${tx('read {ago}', { ago: ago(active.install.cargoReadAt) })}`
+    : ` · ${tx('last read unavailable')}`;
   context.textContent = cargo > 0
     ? `${active.ship.name} · ${cargo.toLocaleString()} SCU · ${cargoSourceName(source)}${read}`
-    : `${active.ship.name} · SCU unknown · no capacity source`;
-  setRouteReadiness(cargo > 0 ? 'ready' : 'needs-cargo', cargo > 0 ? 'Ready' : 'Needs cargo SCU',
-    cargo > 0 ? 'The selected ship has a cargo constraint, so routes can be sized.' : 'No verified cargo capacity is available for the selected ship.');
+    : `${active.ship.name} · ${tx('SCU unknown · no capacity source')}`;
+  setRouteReadiness(cargo > 0 ? 'ready' : 'needs-cargo', cargo > 0 ? tx('Ready') : tx('Needs cargo SCU'),
+    cargo > 0 ? tx('The selected ship has a cargo constraint, so routes can be sized.') : tx('No verified cargo capacity is available for the selected ship.'));
 }
 
 /** The plan is authored work, so give it equal weight with the price feed.
@@ -13020,21 +13148,21 @@ function renderRouteFlightBrief() {
   const trip = tracked();
   if (!trip || !trip.stops?.length) {
     card.dataset.state = 'waiting';
-    status.textContent = 'No active plan';
-    detail.textContent = 'Choose a trade run, a shopping list, or map stops to create a shared flight plan.';
-    for (const action of actions) action.textContent = 'Start on map';
+    status.textContent = tx('No active plan');
+    detail.textContent = tx('Choose a trade run, a shopping list, or map stops to create a shared flight plan.');
+    for (const action of actions) action.textContent = tx('Start on map');
     return;
   }
 
   const complete = trip.stops.filter((stop) => stop.done).length;
   const next = nextStop(trip);
   card.dataset.state = trip.flying ? 'flying' : complete === trip.stops.length ? 'complete' : 'ready';
-  status.textContent = trip.flying ? 'Run in progress'
-    : complete === trip.stops.length ? 'Flight plan complete' : 'Plan ready';
+  status.textContent = trip.flying ? tx('Run in progress')
+    : complete === trip.stops.length ? tx('Flight plan complete') : tx('Plan ready');
   detail.textContent = next
-    ? `${trip.title} · next: ${next.place} · ${complete} of ${trip.stops.length} stops complete`
-    : `${trip.title} · every stop is crossed off`;
-  for (const action of actions) action.textContent = 'Open active plan';
+    ? `${trip.title} · ${tx('next: {place}', { place: next.place })} · ${tx('{done} of {total} stops complete', { done: complete, total: trip.stops.length })}`
+    : `${trip.title} · ${tx('every stop is crossed off')}`;
+  for (const action of actions) action.textContent = tx('Open active plan');
 }
 
 let planningHangarLoad = null;
@@ -13071,12 +13199,12 @@ function renderShipPlan() {
   const resolved = resolvedPlanningShipName(candidates);
 
   select.textContent = '';
-  select.append(new Option('On foot / no ship selected', ''));
+  select.append(new Option(tx('On foot / no ship selected'), ''));
   for (const candidate of candidates) {
     const cargo = planningCargo(candidate);
     const suffix = candidate.reference
-      ? cargo > 0 ? `${cargo.toLocaleString()} SCU` : planningIsSpaceship(candidate) ? 'no cargo grid' : 'ground vehicle'
-      : cargo > 0 ? `${cargo.toLocaleString()} SCU · ${planningCargoSource(candidate) === 'screenshot' ? 'screenshot' : 'manual'}` : 'cargo capacity needed';
+      ? cargo > 0 ? `${cargo.toLocaleString()} SCU` : planningIsSpaceship(candidate) ? tx('no cargo grid') : tx('ground vehicle')
+      : cargo > 0 ? `${cargo.toLocaleString()} SCU · ${planningCargoSource(candidate) === 'screenshot' ? tx('screenshot') : tx('manual')}` : tx('cargo capacity needed');
     select.append(new Option(`${candidate.ship.name} · ${suffix}`, candidate.ship.name));
   }
   select.value = resolved;
@@ -13084,8 +13212,8 @@ function renderShipPlan() {
   const active = activePlanningShip();
   options.textContent = '';
   if (!active) {
-    title.textContent = candidates.length ? 'Choose a flown ship to constrain this plan' : 'No flown ships are available yet';
-    limit.textContent = 'This selection stays in this browser. It does not change your fleet or claim a ship is currently retrieved.';
+    title.textContent = candidates.length ? tx('Choose a flown ship to constrain this plan') : tx('No flown ships are available yet');
+    limit.textContent = tx('This selection stays in this browser. It does not change your fleet or claim a ship is currently retrieved.');
     renderRouteHeader();
     return;
   }
@@ -13097,36 +13225,39 @@ function renderShipPlan() {
   title.textContent = active.ship.name;
 
   if (cargo > 0 && !planningIsGroundVehicle(active)) {
-    options.append(planningCapability('Trade & cargo',
+    const hold = cargo.toLocaleString();
+    options.append(planningCapability(tx('Trade & cargo'),
       cargoSource === 'manual'
-        ? `Routes use your local ${cargo.toLocaleString()} SCU hold entry. Verify it against the vehicle terminal; it is not reference data.`
+        ? tx('Routes use your local {cargo} SCU hold entry. Verify it against the vehicle terminal; it is not reference data.', { cargo: hold })
         : cargoSource === 'screenshot'
-          ? `Routes use the ${cargo.toLocaleString()} SCU hold shown in your latest commodity-terminal screenshot${active.install?.cargoReadAt ? ` (${ago(active.install.cargoReadAt)})` : ''}.`
-        : `Routes are sized to this ${cargo.toLocaleString()} SCU cargo grid.`,
+          ? (active.install?.cargoReadAt
+            ? tx('Routes use the {cargo} SCU hold shown in your latest commodity-terminal screenshot ({ago}).', { cargo: hold, ago: ago(active.install.cargoReadAt) })
+            : tx('Routes use the {cargo} SCU hold shown in your latest commodity-terminal screenshot.', { cargo: hold }))
+        : tx('Routes are sized to this {cargo} SCU cargo grid.', { cargo: hold }),
       cargoSource === 'community' ? ['community'] : cargoSource === 'screenshot' ? ['screenshot'] : null));
   }
   if (spacefaring) {
-    options.append(planningCapability('Map & flight plans',
-      'Star-map stops and multi-stop flight plans are available for this spaceship.', ['install']));
+    options.append(planningCapability(tx('Map & flight plans'),
+      tx('Star-map stops and multi-stop flight plans are available for this spaceship.'), ['install']));
   }
   if (crew > 1) {
-    options.append(planningCapability('Crew',
-      `Reference capacity: up to ${crew} people. Party notifications remain a floor, not a roster.`, ['community', 'logs']));
+    options.append(planningCapability(tx('Crew'),
+      tx('Reference capacity: up to {crew} people. Party notifications remain a floor, not a roster.', { crew }), ['community', 'logs']));
   }
   if (planningIsGroundVehicle(active)) {
-    options.append(planningCapability('Ground vehicle',
-      'Ground-only planning is available; trade routes and quantum navigation are excluded.', ['install']));
+    options.append(planningCapability(tx('Ground vehicle'),
+      tx('Ground-only planning is available; trade routes and quantum navigation are excluded.'), ['install']));
   }
   if (spacefaring && !active.reference) {
     const manual = el('label', 'ship-plan-manual');
-    manual.append(el('span', 'muted', 'Cargo SCU (local):'));
+    manual.append(el('span', 'muted', tx('Cargo SCU (local):')));
     const input = el('input', 'search');
     input.type = 'number';
     input.min = '1';
     input.step = '1';
     input.value = planningManualCargoFor(active) || '';
-    input.placeholder = 'Enter hold size';
-    input.title = 'Local planning value only. Confirm this ship’s cargo grid in game before relying on routes.';
+    input.placeholder = tx('Enter hold size');
+    input.title = tx('Local planning value only. Confirm this ship’s cargo grid in game before relying on routes.');
     input.addEventListener('change', () => {
       const value = Math.max(0, Math.floor(Number(input.value) || 0));
       const key = planningCargoKey(active);
@@ -13140,15 +13271,15 @@ function renderShipPlan() {
     options.append(manual);
   }
   if (!options.childElementCount) {
-    options.append(planningCapability('No documented planning capability',
-      'This hull has no cargo, crew, or movement reference that can safely constrain a plan yet.', null));
+    options.append(planningCapability(tx('No documented planning capability'),
+      tx('This hull has no cargo, crew, or movement reference that can safely constrain a plan yet.'), null));
   }
 
   limit.textContent = !active.reference && cargoSource === 'manual'
-    ? 'The game install confirms this is a spaceship; its cargo size above is your browser-only entry. Enable the community ship dataset in Settings to replace it with reference data.'
+    ? tx('The game install confirms this is a spaceship; its cargo size above is your browser-only entry. Enable the community ship dataset in Settings to replace it with reference data.')
     : !active.reference
-    ? 'The game install confirms this is a spaceship but has no cargo-capacity field here. Enter the vehicle terminal’s hold size above for a local route constraint, or enable the community ship dataset.'
-    : 'Quantum fuel/range and vehicle-bay fit are not present in the installed or community reference data, so this planner does not guess either one.';
+    ? tx('The game install confirms this is a spaceship but has no cargo-capacity field here. Enter the vehicle terminal’s hold size above for a local route constraint, or enable the community ship dataset.')
+    : tx('Quantum fuel/range and vehicle-bay fit are not present in the installed or community reference data, so this planner does not guess either one.');
   renderRouteHeader();
 }
 
@@ -13162,9 +13293,9 @@ function choosePlanningShip(name) {
     setContextFocus({
       kind: 'ship',
       title: ship.ship.name,
-      detail: cargo > 0 ? `${cargo.toLocaleString()} SCU selected for route planning` : 'Selected for route planning',
+      detail: cargo > 0 ? tx('{cargo} SCU selected for route planning', { cargo: cargo.toLocaleString() }) : tx('Selected for route planning'),
       view: 'routes',
-      action: 'Open routes',
+      action: tx('Open routes'),
     });
   } else if (contextFocus?.kind === 'ship') {
     clearContextFocus();
@@ -13199,9 +13330,9 @@ function routeRisk(route) {
   const endpoints = [route.buySecurity, route.sellSecurity];
   const lawless = endpoints.filter((security) => security === 'lawless').length;
   const unknown = endpoints.filter((security) => !security || security === 'unknown').length;
-  return lawless ? ['higher', `${lawless} lawless endpoint${lawless === 1 ? '' : 's'}`]
-    : unknown ? ['uncertain', `${unknown} endpoint${unknown === 1 ? '' : 's'} unmatched`]
-      : ['lower', 'monitored endpoints'];
+  return lawless ? ['higher', txn(lawless, '{count} lawless endpoint', '{count} lawless endpoints')]
+    : unknown ? ['uncertain', txn(unknown, '{count} endpoint unmatched', '{count} endpoints unmatched')]
+      : ['lower', tx('monitored endpoints')];
 }
 
 /* A partial primary buyer does not mean the hold has to leave empty. We only
@@ -13232,7 +13363,7 @@ function renderRouteProfiles() {
   if (!select) return;
   const previous = select.value;
   select.textContent = '';
-  select.append(new Option('Route presets…', ''));
+  select.append(new Option(tx('Route presets…'), ''));
   for (const profile of routeProfiles) select.append(new Option(profile.name, profile.id));
   select.value = routeProfiles.some((profile) => profile.id === previous) ? previous : '';
 }
@@ -13254,7 +13385,7 @@ function applyRouteProfile(profile) {
 }
 
 function saveRouteProfile() {
-  const name = window.prompt('Name this local route preset:', `Preset ${routeProfiles.length + 1}`)?.trim();
+  const name = window.prompt(tx('Name this local route preset:'), tx('Preset {n}', { n: routeProfiles.length + 1 }))?.trim();
   if (!name) return;
   const profile = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name,
@@ -13286,11 +13417,11 @@ function routeWatchNote(route) {
   if (!watch) return null;
   const before = Number(watch.profit);
   const now = Number(route.profit);
-  if (before <= 0) return `Saved ${ago(watch.at)}.`;
+  if (before <= 0) return tx('Saved {ago}.', { ago: ago(watch.at) });
   const change = (now - before) / before;
   return Math.abs(change) >= .05
-    ? `Since saved ${ago(watch.at)}: ${change > 0 ? '+' : ''}${Math.round(change * 100)}% projected profit.`
-    : `Saved ${ago(watch.at)} · projected profit within 5%.`;
+    ? tx('Since saved {ago}: {change}% projected profit.', { ago: ago(watch.at), change: `${change > 0 ? '+' : ''}${Math.round(change * 100)}` })
+    : tx('Saved {ago} · projected profit within 5%.', { ago: ago(watch.at) });
 }
 
 function renderRouteDashboard(rows) {
@@ -13299,13 +13430,13 @@ function renderRouteDashboard(rows) {
   const watched = rows.filter((route) => routeWatches.some((watch) => watch.key === routeKey(route)));
   panel.hidden = !(routeHistory.length || watched.length);
   if (panel.hidden) return;
-  $('#route-dashboard-summary').textContent = `${routeHistory.length} locally saved route${routeHistory.length === 1 ? '' : 's'} · ${watched.length} currently visible watch${watched.length === 1 ? '' : 'es'}`;
+  $('#route-dashboard-summary').textContent = `${txn(routeHistory.length, '{count} locally saved route', '{count} locally saved routes')} · ${txn(watched.length, '{count} currently visible watch', '{count} currently visible watches')}`;
   const watches = $('#route-watch-list');
   watches.textContent = '';
   for (const route of watched.slice(0, 4)) watches.append(el('div', 'route-watch', `${route.commodity}: ${routeWatchNote(route)}`));
   const history = $('#route-history-list');
   history.textContent = '';
-  for (const saved of routeHistory.slice(0, 5)) history.append(el('div', 'route-history', `${saved.commodity} · ${saved.buyAt} → ${saved.sellAt} · saved ${ago(saved.at)}`));
+  for (const saved of routeHistory.slice(0, 5)) history.append(el('div', 'route-history', `${saved.commodity} · ${saved.buyAt} → ${saved.sellAt} · ${tx('saved {ago}', { ago: ago(saved.at) })}`));
 }
 
 /* The query the table was built from, so the panels under it answer the same
@@ -13337,16 +13468,19 @@ async function loadRouteCircuits(query) {
     const card = el('article', 'route-circuit');
     card.append(el('b', null, `${circuit.commodity} → ${circuit.returnCommodity}`));
     card.append(el('div', 'muted', `${circuit.buyAt} → ${circuit.sellAt} → ${circuit.returnSellAt}`));
-    card.append(el('div', 'inward', `~${money(circuit.totalProfit)} total projected profit`));
-    const save = el('button', 'ghost tiny', 'Save circuit');
-    save.title = 'Save all three circuit stops as an editable flight plan';
+    card.append(el('div', 'inward', tx('~{money} total projected profit', { money: money(circuit.totalProfit) })));
+    const save = el('button', 'ghost tiny', tx('Save circuit'));
+    save.title = tx('Save all three circuit stops as an editable flight plan');
     save.addEventListener('click', () => {
       rememberRoute({ commodity: `${circuit.commodity} / ${circuit.returnCommodity}`, buyAt: circuit.buyAt,
         sellAt: circuit.returnSellAt, totalProfit: circuit.totalProfit }, 'circuit');
       planTrip(`${circuit.commodity} ⇄ ${circuit.returnCommodity}`, [
-        { placeId: circuit.buyAtId, place: circuit.buyAt, note: `Buy ${Math.floor(circuit.units)} SCU ${circuit.commodity}` },
-        { placeId: circuit.sellAtId, place: circuit.sellAt, note: `Sell ${circuit.commodity}; buy ${circuit.returnCommodity}` },
-        { placeId: circuit.returnSellAtId, place: circuit.returnSellAt, note: `Sell ${circuit.returnCommodity} · +${money(circuit.returnProfit)}` },
+        { placeId: circuit.buyAtId, place: circuit.buyAt,
+          note: tx('Buy {units} SCU {commodity}', { units: Math.floor(circuit.units), commodity: circuit.commodity }) },
+        { placeId: circuit.sellAtId, place: circuit.sellAt,
+          note: tx('Sell {commodity}; buy {next}', { commodity: circuit.commodity, next: circuit.returnCommodity }) },
+        { placeId: circuit.returnSellAtId, place: circuit.returnSellAt,
+          note: `${tx('Sell {commodity}', { commodity: circuit.returnCommodity })} · +${money(circuit.returnProfit)}` },
       ]);
     });
     card.append(save);
@@ -13358,16 +13492,16 @@ async function loadRouteCircuits(query) {
 /** Save either the best buyer or a named alternate as the same editable flight plan. */
 function saveTradeRoute(route, sellAt, sellAtId, sellPrice, label = '') {
   rememberRoute({ ...route, sellAt, sellPrice }, label ? 'alternate' : 'route');
-  planTrip(`${route.commodity} run${label}`, [
+  planTrip(`${tx('{commodity} run', { commodity: route.commodity })}${label}`, [
     {
       placeId: route.buyAtId || placeIdForTerminal(route.buyAt),
       place: route.buyAt,
-      note: `Buy ${Math.floor(route.units).toLocaleString()} SCU at ${money(route.buyPrice)}`,
+      note: tx('Buy {units} SCU at {price}', { units: Math.floor(route.units).toLocaleString(), price: money(route.buyPrice) }),
     },
     {
       placeId: sellAtId || placeIdForTerminal(sellAt),
       place: sellAt,
-      note: `Sell at ${money(sellPrice)} · +${money((Number(sellPrice) - Number(route.buyPrice)) * Number(route.units))}`,
+      note: `${tx('Sell at {price}', { price: money(sellPrice) })} · +${money((Number(sellPrice) - Number(route.buyPrice)) * Number(route.units))}`,
     },
   ]);
 }
@@ -13376,12 +13510,12 @@ function saveSplitTradeRoute(route, portions) {
   const units = portions.reduce((sum, portion) => sum + portion.units, 0);
   const profit = portions.reduce((sum, portion) => sum
     + ((Number(portion.sellPrice) - Number(route.buyPrice)) * portion.units), 0);
-  rememberRoute({ ...route, sellAt: `${portions.length} buyers`, profit, outlay: Number(route.buyPrice) * units }, 'split load');
-  planTrip(`${route.commodity} split load`, [
+  rememberRoute({ ...route, sellAt: txn(portions.length, '{count} buyer', '{count} buyers'), profit, outlay: Number(route.buyPrice) * units }, 'split load');
+  planTrip(tx('{commodity} split load', { commodity: route.commodity }), [
     { placeId: route.buyAtId || placeIdForTerminal(route.buyAt), place: route.buyAt,
-      note: `Buy ${units.toLocaleString()} SCU at ${money(route.buyPrice)}` },
+      note: tx('Buy {units} SCU at {price}', { units: units.toLocaleString(), price: money(route.buyPrice) }) },
     ...portions.map((portion) => ({ placeId: portion.placeId || placeIdForTerminal(portion.terminal), place: portion.terminal,
-      note: `Sell ${portion.units.toLocaleString()} SCU at ${money(portion.sellPrice)} · +${money((Number(portion.sellPrice) - Number(route.buyPrice)) * portion.units)}` })),
+      note: `${tx('Sell {units} SCU at {price}', { units: portion.units.toLocaleString(), price: money(portion.sellPrice) })} · +${money((Number(portion.sellPrice) - Number(route.buyPrice)) * portion.units)}` })),
   ]);
 }
 
@@ -13405,7 +13539,7 @@ async function loadRoutes() {
   const select = $('#routes-ship');
   if (!select) return;
 
-  setWorkspaceState('#routes-state', 'loading', 'Checking current price reports…');
+  setWorkspaceState('#routes-state', 'loading', tx('Checking current price reports…'));
 
   if (libraryStats) renderShipPlan();
   renderRouteFlightBrief();
@@ -13430,7 +13564,8 @@ async function loadRoutes() {
   const pad = $('#routes-pad').value || 'any';
   // "From here" reads the live location the Now page is already showing.
   const here = $('#now-location').textContent.trim();
-  const from = $('#routes-here').checked && here && here !== '—' && !here.startsWith('In menus')
+  // Compared in the page's language: the Now page writes this line translated.
+  const from = $('#routes-here').checked && here && here !== '—' && here !== tx('In menus')
     ? here
     : '';
   const originNote = $('#routes-origin-note');
@@ -13439,9 +13574,9 @@ async function loadRoutes() {
   // for a number the pilot may not have to hand.
   const unsized = active && !planningCargoKnown(active);
   originNote.textContent = (from
-    ? ` Origin: ${from}; results require UEX to match this terminal.`
+    ? ` ${tx('Origin: {place}; results require UEX to match this terminal.', { place: from })}`
     : '')
-    + (unsized ? ` Sized per SCU: ${active.ship.name}'s hold is not on record. Enter it above to size a full load.` : '');
+    + (unsized ? ` ${tx('Sized per SCU: {ship}\'s hold is not on record. Enter it above to size a full load.', { ship: active.ship.name })}` : '');
 
   const body = $('#routes-table tbody');
   body.textContent = '';
@@ -13453,15 +13588,15 @@ async function loadRoutes() {
   // per-SCU table would look like a viable haul despite the selected ship.
   // Only a known zero does this; an unknown hold is sized per SCU above.
   if (planningBlocksCargo(active)) {
-    setWorkspaceState('#routes-state', 'empty', 'This selected vehicle cannot carry cargo.');
+    setWorkspaceState('#routes-state', 'empty', tx('This selected vehicle cannot carry cargo.'));
     const tr = el('tr');
     const td = el('td', 'muted', planningIsGroundVehicle(active)
-      ? `${active.ship.name} is a ground vehicle, so cargo routes are hidden for this plan.`
-      : `${active.ship.name} has no documented cargo grid, so cargo routes are hidden for this plan.`);
+      ? tx('{ship} is a ground vehicle, so cargo routes are hidden for this plan.', { ship: active.ship.name })
+      : tx('{ship} has no documented cargo grid, so cargo routes are hidden for this plan.', { ship: active.ship.name }));
     td.colSpan = 12;
     tr.append(td);
     body.append(tr);
-    setRouteReadiness('needs-cargo', 'No cargo grid', 'The selected hull carries no cargo, so there is nothing to size a route for.');
+    setRouteReadiness('needs-cargo', tx('No cargo grid'), tx('The selected hull carries no cargo, so there is nothing to size a route for.'));
     highlightBestRoute = false;
     // The panels below the table describe the previous ship's plan otherwise.
     renderRouteDashboard([]);
@@ -13491,7 +13626,7 @@ async function loadRoutes() {
     // Name the filter that emptied the table. "No route from here" is the
     // wrong explanation for a table that a tickbox hid every row from, and
     // there are now two tickboxes that can do it.
-    const reason = routesUnavailable
+    const reason = tx(routesUnavailable
       ? 'Current route prices are unavailable. Refresh after the local server reconnects.'
       : safety === 'monitored'
       ? 'No route keeps both ends in monitored space. Try Avoid lawless or Any security.'
@@ -13511,15 +13646,15 @@ async function loadRoutes() {
           ? 'No route has both sides reporting enough capacity for this load. Try Reported capacity or Include unknown capacity.'
           : evidence === 'reported'
             ? 'No route has stock and demand reported on both sides. Try Include unknown capacity to see price-only estimates.'
-            : 'Nothing to show. Enable UEX prices on the Settings page.';
+            : 'Nothing to show. Enable UEX prices on the Settings page.');
     setWorkspaceState('#routes-state', routesUnavailable ? 'offline' : 'empty', reason);
     const td = el('td', 'muted', reason);
     td.colSpan = 12;
     tr.append(td);
     body.append(tr);
     setRouteReadiness(pad !== 'any' ? 'no-pad' : 'no-prices',
-      pad !== 'any' ? 'No viable landing pad' : 'No current prices',
-      pad !== 'any' ? 'No returned route has the landing-pad evidence requested at both endpoints.' : 'No route currently meets the selected ship, wallet, evidence, and safety criteria.');
+      pad !== 'any' ? tx('No viable landing pad') : tx('No current prices'),
+      pad !== 'any' ? tx('No returned route has the landing-pad evidence requested at both endpoints.') : tx('No route currently meets the selected ship, wallet, evidence, and safety criteria.'));
     highlightBestRoute = false;
     renderRouteDashboard(rows);
     loadRouteCircuits(query).catch(() => {});
@@ -13539,71 +13674,78 @@ async function loadRoutes() {
     tr.append(el('td', 'num', Math.floor(route.units).toLocaleString()));
     tr.append(el('td', 'num outward', money(route.outlay)));
     const projected = el('td', 'num inward', `~${money(route.profit)}`);
-    projected.title = 'Arithmetic from the two UEX prices, not a promise of live availability.';
+    projected.title = tx('Arithmetic from the two UEX prices, not a promise of live availability.');
     tr.append(projected);
 
     const report = el('td', 'route-report');
-    if (best) report.append(el('div', 'route-best', 'Best safe match'));
+    if (best) report.append(el('div', 'route-best', tx('Best safe match')));
     const availabilityWord = route.availability === 'reported-full'
-      ? `Reported full load · ${Math.floor(route.desiredUnits).toLocaleString()} SCU`
+      ? tx('Reported full load · {units} SCU', { units: Math.floor(route.desiredUnits).toLocaleString() })
       : route.availability === 'reported-partial'
-        ? `Reported partial · ${Math.floor(route.units).toLocaleString()} / ${Math.floor(route.desiredUnits).toLocaleString()} SCU`
-        : `Capacity unknown · projected ${Math.floor(route.units).toLocaleString()} SCU`;
+        ? tx('Reported partial · {units} / {wanted} SCU', { units: Math.floor(route.units).toLocaleString(), wanted: Math.floor(route.desiredUnits).toLocaleString() })
+        : tx('Capacity unknown · projected {units} SCU', { units: Math.floor(route.units).toLocaleString() });
     report.append(el('div', `route-feasibility ${route.availability || 'capacity-unknown'}`, availabilityWord));
-    const reportWord = route.freshness === 'fresh' ? 'Fresh reports'
-      : route.freshness === 'aging' ? 'Aging reports'
-        : route.freshness === 'stale' ? 'Stale reports' : 'Report age unknown';
+    const reportWord = route.freshness === 'fresh' ? tx('Fresh reports')
+      : route.freshness === 'aging' ? tx('Aging reports')
+        : route.freshness === 'stale' ? tx('Stale reports') : tx('Report age unknown');
     report.append(el('div', `route-freshness ${route.freshness || 'unknown'}`, reportWord));
-    const age = (at) => at ? ago(at) : 'unknown';
-    report.append(el('div', 'muted route-age', `Buy ${age(route.buySeenAt)} · sell ${age(route.sellSeenAt)}`));
+    const age = (at) => at ? ago(at) : tx('unknown');
+    report.append(el('div', 'muted route-age', tx('Buy {buy} · sell {sell}', { buy: age(route.buySeenAt), sell: age(route.sellSeenAt) })));
+    // The server's three capacity words, said in the page language.
+    const level = (value) => ({ enough: tx('enough'), limited: tx('limited'), unknown: tx('unknown') }[value] || value);
     const capacity = [];
     capacity.push(route.buyStockScu > 0
-      ? `buy stock ${Math.floor(route.buyStockScu)} SCU (${route.buyAvailability})`
-      : 'buy stock unknown');
+      ? tx('buy stock {units} SCU ({level})', { units: Math.floor(route.buyStockScu), level: level(route.buyAvailability) })
+      : tx('buy stock unknown'));
     capacity.push(route.sellDemandScu > 0
-      ? `sell demand ${Math.floor(route.sellDemandScu)} SCU (${route.sellAvailability})`
-      : 'sell demand unknown');
+      ? tx('sell demand {units} SCU ({level})', { units: Math.floor(route.sellDemandScu), level: level(route.sellAvailability) })
+      : tx('sell demand unknown'));
     report.append(el('div', 'muted route-capacity', capacity.join(' · ')));
 
     const access = el('div', 'route-access');
+    // The class keeps the server's word; only what is read is translated.
     const security = (value) => value || 'unknown';
-    access.append(el('span', 'muted', 'Space: '));
-    access.append(el('span', `sec sec-${security(route.buySecurity)}`, security(route.buySecurity)));
+    const securityWord = (value) => ({ monitored: tx('monitored'), lawless: tx('lawless'), unknown: tx('unknown') }[security(value)] || value);
+    access.append(el('span', 'muted', `${tx('Space:')} `));
+    access.append(el('span', `sec sec-${security(route.buySecurity)}`, securityWord(route.buySecurity)));
     access.append(el('span', 'muted', ' → '));
-    access.append(el('span', `sec sec-${security(route.sellSecurity)}`, security(route.sellSecurity)));
-    const padNames = (pads) => Array.isArray(pads) && pads.length ? pads.join(', ') : 'no pad record';
-    access.append(el('div', 'muted route-pad', `Pads: ${padNames(route.buyLandingPads)} → ${padNames(route.sellLandingPads)}`));
+    access.append(el('span', `sec sec-${security(route.sellSecurity)}`, securityWord(route.sellSecurity)));
+    const padNames = (pads) => Array.isArray(pads) && pads.length ? pads.join(', ') : tx('no pad record');
+    access.append(el('div', 'muted route-pad', tx('Pads: {buy} → {sell}', { buy: padNames(route.buyLandingPads), sell: padNames(route.sellLandingPads) })));
     const usefulAmenities = (items) => (items || []).filter((item) => /refuel|fuel|repair/i.test(item));
-    const services = (items) => usefulAmenities(items).length ? usefulAmenities(items).join(', ') : 'no refuel/repair record';
-    access.append(el('div', 'muted route-services', `Turnaround: ${services(route.buyAmenities)} → ${services(route.sellAmenities)}`));
-    access.append(el('div', 'muted route-timing', 'Time: not estimated — no quantum-drive, fuel, or route-time source is available.'));
+    const services = (items) => usefulAmenities(items).length ? usefulAmenities(items).join(', ') : tx('no refuel/repair record');
+    access.append(el('div', 'muted route-services', tx('Turnaround: {buy} → {sell}', { buy: services(route.buyAmenities), sell: services(route.sellAmenities) })));
+    access.append(el('div', 'muted route-timing', tx('Time: not estimated — no quantum-drive, fuel, or route-time source is available.')));
     report.append(access);
 
     const [riskLevel, riskDetail] = routeRisk(route);
     const score = el('div', `route-score ${riskLevel}`,
-      `Repeatability ${routeRepeatability(route)}/8 · ${riskDetail} · ${money(route.outlay)} cargo exposure`);
-    score.title = 'Repeatability combines UEX quote freshness, reported stock/demand, and alternate buyers. Exposure is the projected purchase cost, not an insurance estimate.';
+      tx('Repeatability {score}/8 · {risk} · {money} cargo exposure', { score: routeRepeatability(route), risk: riskDetail, money: money(route.outlay) }));
+    score.title = tx('Repeatability combines UEX quote freshness, reported stock/demand, and alternate buyers. Exposure is the projected purchase cost, not an insurance estimate.');
     report.append(score);
 
     if (route.fallbackSells?.length) {
       const alternatives = el('div', 'route-alternatives');
-      alternatives.append(el('div', 'route-fallback', 'Alternate buyers'));
+      alternatives.append(el('div', 'route-fallback', tx('Alternate buyers')));
       for (const fallback of route.fallbackSells) {
         const alternate = el('div', 'route-alternate');
-        alternate.append(el('span', 'muted', `${fallback.terminal} · ${money(fallback.sellPrice)} · ${security(fallback.security)}`));
-        const save = el('button', 'ghost tiny', 'Save alternate');
-        save.title = 'Save this buyer as an editable flight plan';
+        alternate.append(el('span', 'muted', `${fallback.terminal} · ${money(fallback.sellPrice)} · ${securityWord(fallback.security)}`));
+        const save = el('button', 'ghost tiny', tx('Save alternate'));
+        save.title = tx('Save this buyer as an editable flight plan');
         save.addEventListener('click', () => saveTradeRoute(
-          route, fallback.terminal, fallback.placeId, fallback.sellPrice, ' · alternate buyer'));
+          route, fallback.terminal, fallback.placeId, fallback.sellPrice, ` · ${tx('alternate buyer')}`));
         alternate.append(save);
         alternatives.append(alternate);
       }
       const portions = splitTradeRoute(route);
       if (portions.length) {
         const split = el('div', 'route-split');
-        split.append(el('span', 'muted', `Split load ${portions.reduce((sum, portion) => sum + portion.units, 0).toLocaleString()} SCU: ${portions.map((portion) => `${portion.terminal} ${portion.units.toLocaleString()}`).join(' · ')}`));
-        const saveSplit = el('button', 'ghost tiny', 'Save split');
-        saveSplit.title = 'Save the recorded multi-buyer allocation as an editable flight plan';
+        split.append(el('span', 'muted', tx('Split load {units} SCU: {buyers}', {
+          units: portions.reduce((sum, portion) => sum + portion.units, 0).toLocaleString(),
+          buyers: portions.map((portion) => `${portion.terminal} ${portion.units.toLocaleString()}`).join(' · '),
+        })));
+        const saveSplit = el('button', 'ghost tiny', tx('Save split'));
+        saveSplit.title = tx('Save the recorded multi-buyer allocation as an editable flight plan');
         saveSplit.addEventListener('click', () => saveSplitTradeRoute(route, portions));
         split.append(saveSplit);
         alternatives.append(split);
@@ -13615,28 +13757,29 @@ async function loadRoutes() {
     // Saving makes a normal editable flight plan: a route is advice until the
     // pilot chooses it, and the plan is where it can be changed or tracked.
     const plan = el('td');
-    const button = el('button', 'ghost tiny', route.mapReady ? 'Save route' : 'Save text route');
+    const button = el('button', 'ghost tiny', route.mapReady ? tx('Save route') : tx('Save text route'));
     button.title = route.mapReady
-      ? 'Save this run as an editable flight plan and draw both stops on the map'
-      : 'Save the stops as an editable flight plan without claiming both can be drawn on the map';
+      ? tx('Save this run as an editable flight plan and draw both stops on the map')
+      : tx('Save the stops as an editable flight plan without claiming both can be drawn on the map');
     button.addEventListener('click', () => saveTradeRoute(route, route.sellAt, route.sellAtId, route.sellPrice));
     plan.append(button);
 
-    const capped = el('td', 'muted', route.limitedBy);
+    const limits = { capital: tx('capital'), stock: tx('stock'), demand: tx('demand'), hold: tx('hold'), 'per SCU': tx('per SCU') };
+    const capped = el('td', 'muted', limits[route.limitedBy] || route.limitedBy);
     capped.title = route.limitedBy === 'capital'
-      ? 'Your capital runs out before the hold does'
+      ? tx('Your capital runs out before the hold does')
       : route.limitedBy === 'stock'
-        ? 'The shop does not stock enough to fill the hold'
+        ? tx('The shop does not stock enough to fill the hold')
         : route.limitedBy === 'demand'
-          ? 'The buyer does not report enough demand to take the full run'
-        : 'The hold is the limit - the good case';
+          ? tx('The buyer does not report enough demand to take the full run')
+        : tx('The hold is the limit - the good case');
     tr.append(capped);
     tr.append(plan);
 
     body.append(tr);
   }
 
-  setRouteReadiness('ready', 'Ready', 'At least one route meets the selected ship, wallet, safety, pad, and evidence filters.');
+  setRouteReadiness('ready', tx('Ready'), tx('At least one route meets the selected ship, wallet, safety, pad, and evidence filters.'));
   setWorkspaceState('#routes-state', 'ready');
   highlightBestRoute = false;
   renderRouteDashboard(rows);
@@ -13715,15 +13858,15 @@ async function loadRespawn() {
   // the two, and saying "woke there" under a different place read as though
   // both signals agreed when they do not.
   $('#now-respawn-sub').textContent = data.bed
-    ? `last medical bed · ${data.bed.place}, ${relative(data.bed.at)}`
+    ? `${tx('last medical bed')} · ${data.bed.place}, ${relative(data.bed.at)}`
     : '';
 
   // "Deaths" would be wrong for the commoner case: most wake-ups follow an
   // incapacitation rather than a corpse recovery, so both read as "times down".
   $('#now-respawn-bed').textContent = data.place
     ? (data.settled
-      ? `last woke · ${data.place}, ${data.agreeing} of your last ${data.of} times down`
-      : `last woke · ${data.place}, ${relative(data.at)}`)
+      ? `${tx('last woke')} · ${data.place}, ${tx('{agreeing} of your last {of} times down', { agreeing: data.agreeing, of: data.of })}`
+      : `${tx('last woke')} · ${data.place}, ${relative(data.at)}`)
     : '';
 
   field.dataset.statusAvailable = 'true';
@@ -14452,19 +14595,19 @@ function renderNowServer(state) {
 
   const before = state.shardVisitsBefore || 0;
   const parts = [before === 0
-    ? 'First time on this shard.'
-    : `Placed here ${before} time${before === 1 ? '' : 's'} before.`];
-  if (state.shardSeenName) parts.push(`Name shown by the game: “${state.shardSeenName}”.`);
-  if (state.shardDisposition === 'avoid') parts.push('You marked this shard avoid.');
-  if (state.shardDisposition === 'good') parts.push('You marked this shard good.');
-  if (state.shardNote) parts.push(`Your note: “${state.shardNote}”`);
+    ? tx('First time on this shard.')
+    : txn(before, 'Placed here {count} time before.', 'Placed here {count} times before.')];
+  if (state.shardSeenName) parts.push(tx('Name shown by the game: “{name}”.', { name: state.shardSeenName }));
+  if (state.shardDisposition === 'avoid') parts.push(tx('You marked this shard avoid.'));
+  if (state.shardDisposition === 'good') parts.push(tx('You marked this shard good.'));
+  if (state.shardNote) parts.push(tx('Your note: “{note}”', { note: state.shardNote }));
 
   const note = $('#now-server-note');
   note.textContent = parts.join(' ');
   note.className = `note${state.shardNote || state.shardDisposition === 'avoid' ? ' warn' : ''}`;
 
   const star = $('#now-server-star');
-  star.textContent = state.shardFavorite ? '★ Favourite' : '☆ Favourite';
+  star.textContent = state.shardFavorite ? tx('★ Favourite') : tx('☆ Favourite');
   star.className = `ghost tiny${state.shardFavorite ? ' on' : ''}`;
   star.onclick = () => setServerFavorite(state.shard, !state.shardFavorite).catch(() => {});
 
@@ -16447,7 +16590,7 @@ function timeChart(svg, series, format) {
 
   for (const [edge, anchor] of [[t0, 'start'], [t1, 'end']]) {
     const label = svgEl('text', { x: x(edge), y: 214, 'text-anchor': anchor, class: 'axis' });
-    label.textContent = new Date(edge).toLocaleDateString([], { month: 'short', day: '2-digit' });
+    label.textContent = new Date(edge).toLocaleDateString(QW_DATE_LOCALES, { month: 'short', day: '2-digit' });
     svg.append(label);
   }
 
@@ -16830,13 +16973,13 @@ async function fillBlueprintGoals() {
 
   if (owned.length) {
     const group = document.createElement('optgroup');
-    group.label = `Yours (${owned.length})`;
+    group.label = tx('Yours ({count})', { count: owned.length });
     for (const bp of owned) group.append(new Option(bp.output, bp.output));
     select.append(group);
   }
 
   const others = document.createElement('optgroup');
-  others.label = owned.length ? 'Everything else' : 'Blueprints';
+  others.label = owned.length ? tx('Everything else') : tx('Blueprints');
   for (const bp of rest.slice(0, 400)) others.append(new Option(bp.output, bp.output));
   select.append(others);
 
@@ -16855,10 +16998,10 @@ $('#jobs-plan')?.addEventListener('click', async (e) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title: `Craft ${bp.output}`,
+        title: tx('Craft {item}', { item: bp.output }),
         kind: 'craft',
-        source: `${bp.output} blueprint · ${craftTime(bp.craftSeconds)} to craft`
-          + (bp.owned ? ' · in your library' : ''),
+        source: tx('{item} blueprint · {time} to craft', { item: bp.output, time: craftTime(bp.craftSeconds) })
+          + (bp.owned ? ` · ${tx('in your library')}` : ''),
         items: parseJobItems(bp.materials.join('\n')),
       }),
     });
@@ -16888,7 +17031,7 @@ async function renderPinnedJob(jobs) {
   const progress = $('#now-job-progress');
   progress.textContent = '';
   progress.append(jobProgress(job.haveCount, job.totalCount,
-    `${job.haveCount} of ${job.totalCount} in hand`));
+    tx('{done} of {total} in hand', { done: job.haveCount, total: job.totalCount })));
 
   // What is still missing, which is the only part worth reading mid-flight.
   const list = $('#now-job-items');
@@ -16897,19 +17040,19 @@ async function renderPinnedJob(jobs) {
   const missing = job.items.filter((i) => !i.have);
 
   if (!missing.length) {
-    list.append(el('li', 'inward', 'Everything on this list is in hand.'));
+    list.append(el('li', 'inward', tx('Everything on this list is in hand.')));
   } else {
     for (const item of missing.slice(0, 6)) {
       const li = el('li');
       li.append(el('span', 'n', item.name
         + (item.needed > 0 ? ` ${item.needed}${item.unit ? ` ${item.unit}` : ''}` : '')));
 
-      if (item.buyAt) li.append(el('span', 'muted', `buy at ${item.buyAt}`));
+      if (item.buyAt) li.append(el('span', 'muted', tx('buy at {place}', { place: item.buyAt })));
       list.append(li);
     }
 
     if (missing.length > 6)
-      list.append(el('li', 'muted', `+${missing.length - 6} more`));
+      list.append(el('li', 'muted', tx('+{count} more', { count: missing.length - 6 })));
   }
 
   card.hidden = false;
@@ -16949,10 +17092,9 @@ async function loadJobContracts() {
   if (request !== jobContractsRequest) return;
 
   if (!live?.inGame) {
-    setOperationsStatus('#operations-contract-status', 'Waiting for a game session');
+    setOperationsStatus('#operations-contract-status', tx('Waiting for a game session'));
     host.append(el('p', 'muted',
-      'Nothing active — the game is not running. Contracts are dropped when you leave, '
-      + 'so only a live session can have any.'));
+      tx('Nothing active — the game is not running. Contracts are dropped when you leave, so only a live session can have any.')));
     landOnJobs();
     return;
   }
@@ -16973,8 +17115,8 @@ async function loadJobContracts() {
     c.outcome === 'InProgress' && new Date(c.at).getTime() >= since);
 
   if (!open.length && !plan?.contracts?.length) {
-    setOperationsStatus('#operations-contract-status', 'No live contracts');
-    host.append(el('p', 'muted', 'No contract open in this session.'));
+    setOperationsStatus('#operations-contract-status', tx('No live contracts'));
+    host.append(el('p', 'muted', tx('No contract open in this session.')));
     landOnJobs();
     return;
   }
@@ -16983,7 +17125,7 @@ async function loadJobContracts() {
 
   const activeCount = Math.max(open.length, plan?.contracts?.length || 0);
   setOperationsStatus('#operations-contract-status',
-    `${activeCount} live contract${activeCount === 1 ? '' : 's'}`, 'active');
+    txn(activeCount, '{count} live contract', '{count} live contracts'), 'active');
 
   // Everything that is not a haul keeps its plain card; the hauls are on
   // the run above, with their legs.
@@ -17002,27 +17144,27 @@ async function loadJobContracts() {
 
     const head = el('div', 'job-head');
     head.append(el('b', null, contract.name || `${contract.issuer} · ${contract.type}`));
-    if (contract.difficulty) head.append(el('span', 'job-kind', contract.difficulty));
-    const focus = el('button', 'ghost tiny', 'Focus');
-    focus.title = 'Keep this contract available while you plan';
+    if (contract.difficulty) head.append(el('span', 'job-kind', tx(contract.difficulty)));
+    const focus = el('button', 'ghost tiny', tx('Focus'));
+    focus.title = tx('Keep this contract available while you plan');
     focus.addEventListener('click', () => setContextFocus({
       kind: 'contract',
       title: contract.name || `${contract.issuer} · ${contract.type}`,
-      detail: [contract.issuer, contract.type, contract.system].filter(Boolean).join(' · ') || 'Live contract',
+      detail: [contract.issuer, contract.type, contract.system].filter(Boolean).join(' · ') || tx('Live contract'),
       view: 'jobs',
       anchor: '#jobs-contracts',
-      action: 'Open contracts',
+      action: tx('Open contracts'),
     }));
     head.append(focus);
     card.append(head);
 
-    const sub = [contract.issuer, contract.type, contract.system, `taken ${relative(contract.at)}`]
+    const sub = [contract.issuer, contract.type, contract.system, tx('taken {when}', { when: relative(contract.at) })]
       .filter(Boolean).join(' · ');
     card.append(el('div', 'muted', sub));
 
     if (contract.steps > 0) {
       card.append(jobProgress(contract.stepsDone, contract.steps,
-        `${contract.stepsDone} of ${contract.steps} objectives done`));
+        tx('{done} of {total} objectives done', { done: contract.stepsDone, total: contract.steps })));
     }
 
     host.append(card);
@@ -17049,7 +17191,7 @@ let haulPlanNotice = null;
 
 function renderHaulPlan(host, plan) {
   const section = el('div', 'haul-plan');
-  section.append(el('h3', 'spaced', 'Hauling run'));
+  section.append(el('h3', 'spaced', tx('Hauling run')));
 
   if (haulPlanNotice) {
     section.append(el('p', 'outward caption', haulPlanNotice));
@@ -17058,24 +17200,34 @@ function renderHaulPlan(host, plan) {
 
   const read = plan.contracts.filter((c) => c.source === 'screenshot').length;
   const summary = [
-    `${plan.contracts.length} contract${plan.contracts.length === 1 ? '' : 's'}`,
-    `${read} with the card read`,
+    txn(plan.contracts.length, '{count} contract', '{count} contracts'),
+    tx('{count} with the card read', { count: read }),
     plan.knownScu > 0
-      ? `${plan.knownScu} SCU remaining${read < plan.contracts.length ? ' known (a floor)' : ''}`
+      ? (read < plan.contracts.length
+        ? tx('{scu} SCU remaining known (a floor)', { scu: plan.knownScu })
+        : tx('{scu} SCU remaining', { scu: plan.knownScu }))
       : null,
-    plan.ship && plan.shipScu ? `${plan.ship} holds ${plan.shipScu} SCU` : null,
+    plan.ship && plan.shipScu ? tx('{ship} holds {scu} SCU', { ship: plan.ship, scu: plan.shipScu }) : null,
   ].filter(Boolean).join(' · ');
   section.append(el('p', 'muted caption', summary));
 
+  const CONFIDENCE = { none: 'none confidence', low: 'low confidence', medium: 'medium confidence', high: 'high confidence' };
+  const confidence = (plan.locationConfidence || '').toLowerCase();
+  const known = [
+    tx('last known location'),
+    confidence ? tx(CONFIDENCE[confidence] || `${confidence} confidence`) : null,
+    plan.travelling ? tx('in transit') : null,
+  ].filter(Boolean).join(', ');
   section.append(el('p', 'muted haul-origin', plan.start
-    ? `Route from ${plan.start.name}${plan.start.body ? ` · ${plan.start.body}` : ''} (last known location${plan.locationConfidence ? `, ${plan.locationConfidence.toLowerCase()} confidence` : ''}${plan.travelling ? ', in transit' : ''}). Pickups first, grouped by body and system; distances are not known.`
-    : 'Current location unknown — this route cannot choose a nearby starting stop.'));
+    ? tx('Route from {place} ({known}). Pickups first, grouped by body and system; distances are not known.',
+      { place: `${plan.start.name}${plan.start.body ? ` · ${plan.start.body}` : ''}`, known })
+    : tx('Current location unknown — this route cannot choose a nearby starting stop.')));
   section.append(el('p', 'muted caption',
-    'Cargo below is projected after completing each stop, assuming the listed pickups still need collecting. It is not a live inventory of your hold.'));
+    tx('Cargo below is projected after completing each stop, assuming the listed pickups still need collecting. It is not a live inventory of your hold.')));
 
   if (plan.knownScu > 0 && plan.shipScu && plan.knownScu > plan.shipScu) {
     section.append(el('p', 'outward caption',
-      `${plan.knownScu} SCU is more than the ${plan.ship} holds — two trips, or another hull.`));
+      tx('{scu} SCU is more than the {ship} holds — two trips, or another hull.', { scu: plan.knownScu, ship: plan.ship })));
   }
 
   for (const c of plan.contracts) {
@@ -17083,7 +17235,7 @@ function renderHaulPlan(host, plan) {
 
     const head = el('div', 'job-head');
     head.append(el('b', null, c.title));
-    const source = c.source === 'screenshot' ? 'card read' : c.source === 'title' ? 'title only' : 'unread';
+    const source = c.source === 'screenshot' ? tx('card read') : c.source === 'title' ? tx('title only') : tx('unread');
     head.append(el('span', 'job-kind', source));
     if (c.commodity) head.append(el('span', 'muted', c.commodity));
     card.append(head);
@@ -17093,10 +17245,10 @@ function renderHaulPlan(host, plan) {
       for (const leg of c.legs) {
         const from = leg.pickup
           ? `${leg.pickup}${leg.pickupBody ? ` (${leg.pickupBody})` : ''}`
-          : 'pickup not known';
+          : tx('pickup not known');
         const to = leg.delivery
           ? `${leg.delivery}${leg.deliveryBody ? ` (${leg.deliveryBody})` : ''}`
-          : 'drop-off not known';
+          : tx('drop-off not known');
         const scu = leg.scu != null ? ` · ${leg.scuDone || 0}/${leg.scu} SCU` : '';
         legs.append(el('li', leg.pickup && leg.delivery ? null : 'muted', `${from} → ${to}${scu}`));
       }
@@ -17107,18 +17259,19 @@ function renderHaulPlan(host, plan) {
       const remaining = c.remainingScu != null ? c.remainingScu : c.scu;
       const delivered = c.scuDone || 0;
       card.append(el('div', 'muted haul-progress',
-        `${c.scu} SCU contracted · ${remaining} remaining${delivered ? ` · ${delivered} delivered` : ''}`));
+        tx('{scu} SCU contracted · {remaining} remaining', { scu: c.scu, remaining })
+          + (delivered ? ` · ${tx('{count} delivered', { count: delivered })}` : '')));
     }
 
     if (c.pickups > 0 || c.deliveries > 0) {
       const bits = [];
-      if (c.pickups > 0) bits.push(`${c.pickupsDone} of ${c.pickups} pickup${c.pickups === 1 ? '' : 's'} done`);
-      if (c.deliveries > 0) bits.push(`${c.deliveriesDone} of ${c.deliveries} drop-off${c.deliveries === 1 ? '' : 's'} done`);
+      if (c.pickups > 0) bits.push(txn(c.pickups, '{done} of {count} pickup done', '{done} of {count} pickups done', { done: c.pickupsDone }));
+      if (c.deliveries > 0) bits.push(txn(c.deliveries, '{done} of {count} drop-off done', '{done} of {count} drop-offs done', { done: c.deliveriesDone }));
       card.append(el('div', 'muted haul-progress', bits.join(' · ')));
     }
 
     if (c.note) card.append(el('div', 'muted haul-note', c.note));
-    if (c.shot) card.append(el('div', 'muted haul-note', `read from ${c.shot}`));
+    if (c.shot) card.append(el('div', 'muted haul-note', tx('read from {file}', { file: c.shot })));
 
     section.append(card);
   }
@@ -17134,27 +17287,28 @@ function renderHaulPlan(host, plan) {
       const where = el('td');
       where.append(el('b', null, stop.place));
       if (stop.body) where.append(el('span', 'muted', ` · ${stop.body}`));
-      if (!stop.placeId) where.append(el('span', 'muted', ' · not on the map'));
+      if (!stop.placeId) where.append(el('span', 'muted', ` · ${tx('not on the map')}`));
       tr.append(where);
 
       const what = el('td');
       for (const a of stop.actions) {
         const scu = a.scu != null ? `${a.scu} SCU ` : '';
-        const delivered = a.scuDone ? ` (${a.scuDone} delivered)` : '';
+        const delivered = a.scuDone ? ` (${tx('{count} delivered', { count: a.scuDone })})` : '';
+        const verb = a.kind === 'load' ? tx('load') : a.kind === 'unload' ? tx('unload') : a.kind;
         what.append(el('div', a.kind === 'load' ? 'haul-load' : 'haul-unload',
-          `${a.kind} ${scu}${a.commodity || 'cargo'}${delivered} — ${a.contractTitle}${a.note ? ` (${a.note})` : ''}`));
+          `${verb} ${scu}${a.commodity || tx('cargo')}${delivered} — ${a.contractTitle}${a.note ? ` (${a.note})` : ''}`));
       }
       if (stop.aboard?.length) {
         const cargo = stop.aboard.map((item) => {
           if (item.amountUnknown) return item.knownScu > 0
-            ? `${item.commodity} at least ${item.knownScu} SCU`
-            : `${item.commodity} quantity not yet known`;
+            ? tx('{commodity} at least {scu} SCU', { commodity: item.commodity, scu: item.knownScu })
+            : tx('{commodity} quantity not yet known', { commodity: item.commodity });
           return `${item.commodity} ${item.knownScu} SCU`;
         }).join(' · ');
-        what.append(el('div', 'muted haul-aboard', `projected aboard after this stop: ${cargo}`));
+        what.append(el('div', 'muted haul-aboard', tx('projected aboard after this stop: {cargo}', { cargo })));
         for (const item of stop.aboard.filter((item) => item.amountUnknown)) {
           what.append(el('div', 'muted haul-cargo-note', item.note
-            || `The amount of ${item.commodity} at each pickup was not read. Check this contract's cargo details before loading.`));
+            || tx('The amount of {commodity} at each pickup was not read. Check this contract\'s cargo details before loading.', { commodity: item.commodity })));
         }
       }
       if (stop.note) what.append(el('div', 'muted', stop.note));
@@ -17167,8 +17321,8 @@ function renderHaulPlan(host, plan) {
     section.append(table);
 
     const actions = el('div', 'haul-actions');
-    const make = el('button', 'ghost haul-make', 'Make it the flight plan');
-    make.title = 'Write these stops into a tracked flight plan, with the loads and unloads at each';
+    const make = el('button', 'ghost haul-make', tx('Make it the flight plan'));
+    make.title = tx('Write these stops into a tracked flight plan, with the loads and unloads at each');
     make.addEventListener('click', async () => {
       make.disabled = true;
       try {
@@ -17181,10 +17335,10 @@ function renderHaulPlan(host, plan) {
           body: JSON.stringify({ planId: plan.planId || null }),
         }).then((r) => r.json());
         if (result?.id) {
-          make.textContent = `✓ ${result.title} — ${result.stops} stops, tracked`;
+          make.textContent = `✓ ${result.title} — ${txn(result.stops, '{count} stop, tracked', '{count} stops, tracked')}`;
           if (typeof loadTrips === 'function') loadTrips().catch(() => {});
         } else {
-          make.textContent = result?.message || 'could not plan';
+          make.textContent = result?.message || tx('could not plan');
           make.disabled = false;
 
           // The run moved under it: show the new one rather than leave the
@@ -17197,14 +17351,14 @@ function renderHaulPlan(host, plan) {
           }
         }
       } catch {
-        make.textContent = 'failed';
+        make.textContent = tx('failed');
         make.disabled = false;
       }
     });
     actions.append(make);
     section.append(actions);
     section.append(el('p', 'muted caption',
-      'Arrival marks the stop reached. Load and unload actions stay manual: the log does not identify which named contract leg changed.'));
+      tx('Arrival marks the stop reached. Load and unload actions stay manual: the log does not identify which named contract leg changed.')));
   }
 
   for (const note of plan.notes || []) section.append(el('p', 'muted caption', note));
@@ -17218,8 +17372,8 @@ function renderHaulPlan(host, plan) {
  * else a new one - and says where it went.
  */
 function trackButton(name, needed = 1, unit = '') {
-  const button = el('button', 'ghost track', '+ list');
-  button.title = `Add ${name} to your shopping list`;
+  const button = el('button', 'ghost track', tx('+ list'));
+  button.title = tx('Add {item} to your shopping list', { item: name });
 
   button.addEventListener('click', async () => {
     button.disabled = true;
@@ -17231,10 +17385,10 @@ function trackButton(name, needed = 1, unit = '') {
         body: JSON.stringify({ name, needed, unit }),
       }).then((r) => r.json());
 
-      button.textContent = '✓ added';
-      button.title = `On "${result.title}"`;
+      button.textContent = tx('✓ added');
+      button.title = tx('On "{list}"', { list: result.title });
     } catch {
-      button.textContent = 'failed';
+      button.textContent = tx('failed');
       button.disabled = false;
     }
   });
@@ -17269,13 +17423,13 @@ function jobLines(job) {
     const whereCell = el('td', 'muted');
 
     if (item.inventoryUnconfirmed) {
-      whereCell.append(el('span', 'note-inline', 'seen in inventory — not counted'));
+      whereCell.append(el('span', 'note-inline', tx('seen in inventory — not counted')));
       if (item.where.length) {
         whereCell.append(document.createTextNode(' · '));
         whereCell.append(placeLink(item.where[0]));
       }
     } else if (item.wornNow) {
-      whereCell.textContent = 'worn now';
+      whereCell.textContent = tx('worn now');
     } else if (item.where.length) {
       whereCell.append(placeLink(item.where[0]));
       if (item.where.length > 1) {
@@ -17284,7 +17438,7 @@ function jobLines(job) {
         whereCell.append(more);
       }
     } else if (item.buyAt) {
-      whereCell.append(el('span', 'note-inline', 'buy at '));
+      whereCell.append(el('span', 'note-inline', `${tx('buy at')} `));
       whereCell.append(placeLink(item.buyAt));
     } else {
       whereCell.textContent = '—';
@@ -17309,8 +17463,8 @@ function jobLines(job) {
  * the app does not.
  */
 function importedChip(from) {
-  const chip = el('span', 'job-kind from-a-file', `from ${from.handle || 'a file'}`);
-  chip.title = `Imported ${dateOf(from.importedAt)} from a shared file. Not your data.`
+  const chip = el('span', 'job-kind from-a-file', from.handle ? tx('from {handle}', { handle: from.handle }) : tx('from a file'));
+  chip.title = tx('Imported {date} from a shared file. Not your data.', { date: dateOf(from.importedAt) })
     + (from.note ? `\n${from.note}` : '');
   return chip;
 }
@@ -17326,8 +17480,8 @@ function importedChip(from) {
  * SCU to a line you already had produces a number you never chose.
  */
 function copyToMine(job) {
-  const copy = el('button', 'ghost tiny', 'Copy to my lists');
-  copy.title = 'Makes your own copy. Theirs stays where it is.';
+  const copy = el('button', 'ghost tiny', tx('Copy to my lists'));
+  copy.title = tx('Makes your own copy. Theirs stays where it is.');
 
   copy.addEventListener('click', async () => {
     copy.disabled = true;
@@ -17339,7 +17493,7 @@ function copyToMine(job) {
         body: JSON.stringify({
           title: job.title,
           kind: job.kind,
-          source: `copied from ${job.imported.handle || 'a shared file'}`,
+          source: job.imported.handle ? tx('copied from {handle}', { handle: job.imported.handle }) : tx('copied from a shared file'),
           items: job.items.map((i) => ({ name: i.name, needed: i.needed, unit: i.unit })),
         }),
       });
@@ -17372,7 +17526,7 @@ async function loadJobList() {
   const craftHost = $('#blueprint-jobs');
   host.textContent = '';
   if (craftHost) craftHost.textContent = '';
-  setWorkspaceState('#jobs-state', 'loading', 'Loading shopping lists…');
+  setWorkspaceState('#jobs-state', 'loading', tx('Loading shopping lists…'));
 
   let jobs = [];
   let jobsUnavailable = false;
@@ -17391,14 +17545,14 @@ async function loadJobList() {
   const openLists = lists.filter((j) => !j.done);
   const missing = openLists.reduce((sum, j) => sum + Math.max(0, (j.totalCount || 0) - (j.haveCount || 0)), 0);
   setOperationsStatus('#operations-shopping-status', jobsUnavailable
-    ? 'Shopping lists unavailable'
+    ? tx('Shopping lists unavailable')
     : openLists.length
-    ? `${openLists.length} active ${openLists.length === 1 ? 'list' : 'lists'}${missing ? ` · ${missing} item${missing === 1 ? '' : 's'} to find` : ' · all items in hand'}`
-    : 'Start a shopping list', jobsUnavailable ? 'outward' : openLists.length ? 'active' : '');
+    ? `${txn(openLists.length, '{count} active list', '{count} active lists')} · ${missing ? txn(missing, '{count} item to find', '{count} items to find') : tx('all items in hand')}`
+    : tx('Start a shopping list'), jobsUnavailable ? 'outward' : openLists.length ? 'active' : '');
   setWorkspaceState('#jobs-state', jobsUnavailable ? 'offline' : openLists.length ? 'ready' : 'empty',
     jobsUnavailable
-      ? 'Shopping lists are unavailable. Refresh after the local server reconnects.'
-      : 'No active shopping lists. Start one here or add items from Market, Parts, or Mining.');
+      ? tx('Shopping lists are unavailable. Refresh after the local server reconnects.')
+      : tx('No active shopping lists. Start one here or add items from Market, Parts, or Mining.'));
 
   // No second empty message inside the list: the state line above already
   // says both "nothing yet" and "unavailable", and with no lists the two
@@ -17406,7 +17560,7 @@ async function loadJobList() {
 
   if (craftHost && !builds.length) {
     craftHost.append(el('p', 'muted',
-      'No builds planned. Pick a blueprint above, or hit Plan on Reference → Crafting.'));
+      tx('No builds planned. Pick a blueprint above, or hit Plan on Reference → Crafting.')));
   }
 
   for (const job of jobs) {
@@ -17415,7 +17569,7 @@ async function loadJobList() {
 
     const head = el('div', 'job-head');
     head.append(el('b', null, job.title));
-    head.append(el('span', 'job-kind', job.kind === 'craft' ? 'craft' : 'list'));
+    head.append(el('span', 'job-kind', job.kind === 'craft' ? tx('craft') : tx('list')));
     if (job.imported) head.append(importedChip(job.imported));
 
     // An imported card carries no control that changes anything.
@@ -17431,7 +17585,7 @@ async function loadJobList() {
       head.append(copyToMine(job));
       card.append(head);
       card.append(jobProgress(job.haveCount, job.totalCount,
-        `you have ${job.haveCount} of the ${job.totalCount} things this needs`));
+        tx('you have {have} of the {total} things this needs', { have: job.haveCount, total: job.totalCount })));
       card.append(jobLines(job));
 
       // The same split as any other card: a build belongs on Crafting whoever
@@ -17443,7 +17597,7 @@ async function loadJobList() {
     // Where this list is for, changeable here because it is a plan rather than
     // a fact: the run you meant on Tuesday is not the run you fly on Friday.
     const where = el('select', 'select job-place-edit');
-    where.title = 'Where you mean to shop';
+    where.title = tx('Where you mean to shop');
     fillPlaceOptions(where, job.destinationId || job.destination || '');
 
     where.addEventListener('change', async () => {
@@ -17464,10 +17618,10 @@ async function loadJobList() {
     head.append(spacer);
 
     // Pinning puts the job on Now, which is also what the overlay shows.
-    const pin = el('button', job.pinned ? 'ghost on' : 'ghost', job.pinned ? 'On Now' : 'Pin to Now');
+    const pin = el('button', job.pinned ? 'ghost on' : 'ghost', job.pinned ? tx('On Now') : tx('Pin to Now'));
     pin.title = job.pinned
-      ? 'Showing on the Now page and in the overlay'
-      : 'Show this job on the Now page and in the overlay';
+      ? tx('Showing on the Now page and in the overlay')
+      : tx('Show this job on the Now page and in the overlay');
 
     pin.addEventListener('click', async () => {
       await fetch(`/api/jobs/${job.id}/pin`, { method: 'POST' });
@@ -17475,10 +17629,10 @@ async function loadJobList() {
         setContextFocus({
           kind: 'shopping',
           title: job.title,
-          detail: `${job.haveCount} of ${job.totalCount} items in hand`,
+          detail: tx('{have} of {total} items in hand', { have: job.haveCount, total: job.totalCount }),
           view: 'jobs',
           anchor: '#jobs-list',
-          action: 'Open list',
+          action: tx('Open list'),
         });
       } else if (contextFocus?.kind === 'shopping' && contextFocus.title === job.title) {
         clearContextFocus();
@@ -17487,7 +17641,7 @@ async function loadJobList() {
     });
     head.append(pin);
 
-    const toggle = el('button', 'ghost', job.done ? 'Reopen' : 'Mark done');
+    const toggle = el('button', 'ghost', job.done ? tx('Reopen') : tx('Mark done'));
     toggle.addEventListener('click', async () => {
       await fetch(`/api/jobs/${job.id}/toggle`, { method: 'POST' });
       loadJobList();
@@ -17496,12 +17650,12 @@ async function loadJobList() {
 
     // A list knows where its missing things are sold, which is a shopping trip
     // waiting to be flown - once the player has said which seller they meant.
-    const shop = el('button', 'ghost', 'Plan trip');
-    shop.title = 'Turn what is still missing into a flight plan';
+    const shop = el('button', 'ghost', tx('Plan trip'));
+    shop.title = tx('Turn what is still missing into a flight plan');
     shop.addEventListener('click', () => planShoppingTrip(job, card));
     head.append(shop);
 
-    const remove = el('button', 'ghost danger', 'Delete');
+    const remove = el('button', 'ghost danger', tx('Delete'));
     remove.addEventListener('click', async () => {
       await fetch(`/api/jobs/${job.id}`, { method: 'DELETE' });
       loadJobList();
@@ -17509,10 +17663,10 @@ async function loadJobList() {
     head.append(remove);
     card.append(head);
 
-    if (job.source) card.append(el('div', 'muted', `from ${job.source}`));
+    if (job.source) card.append(el('div', 'muted', tx('from {source}', { source: job.source })));
 
     card.append(jobProgress(job.haveCount, job.totalCount,
-      `${job.haveCount} of ${job.totalCount} in hand`));
+      tx('{done} of {total} in hand', { done: job.haveCount, total: job.totalCount })));
 
     card.append(jobLines(job));
     (job.kind === 'craft' && craftHost ? craftHost : host).append(card);
@@ -17561,7 +17715,7 @@ function fillPlaceOptions(select, selected) {
 
   const anywhere = document.createElement('option');
   anywhere.value = '';
-  anywhere.textContent = 'Anywhere — no particular stop';
+  anywhere.textContent = tx('Anywhere — no particular stop');
   select.append(anywhere);
 
   const been = atlas.filter((l) => l.visits > 0).sort((a, b) => b.visits - a.visits);
@@ -17571,7 +17725,7 @@ function fillPlaceOptions(select, selected) {
     if (!places.length) return;
 
     const group = document.createElement('optgroup');
-    group.label = label;
+    group.label = tx(label);
 
     for (const place of places) {
       const option = document.createElement('option');
@@ -17628,7 +17782,7 @@ async function fillItemOptions(select) {
 
   const placeholder = document.createElement('option');
   placeholder.value = '';
-  placeholder.textContent = 'Add something we know…';
+  placeholder.textContent = tx('Add something we know…');
   select.append(placeholder);
 
   catalogue ??= await getJson('/api/shopping/catalogue').catch(() => ({ commodities: [], items: [] }));
@@ -17637,7 +17791,7 @@ async function fillItemOptions(select) {
     if (!names?.length) return;
 
     const group = document.createElement('optgroup');
-    group.label = label;
+    group.label = tx(label);
 
     for (const name of names) {
       const option = document.createElement('option');
@@ -17729,7 +17883,7 @@ $('#job-form')?.addEventListener('submit', async (e) => {
 let checklists = [];
 
 const checklistDue = (dueAt) => dueAt
-  ? new Date(dueAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+  ? new Date(dueAt).toLocaleString(QW_DATE_LOCALES, { dateStyle: 'medium', timeStyle: 'short' })
   : '';
 
 async function checklistCall(url, method = 'POST', body = null) {
@@ -17744,21 +17898,21 @@ async function checklistCall(url, method = 'POST', body = null) {
 function showChecklistAttachment(attachment) {
   if (attachment.kind === 'location') {
     const button = el('button', 'checklist-attachment place-link', `⌖ ${attachment.label}`);
-    button.title = 'Show this place on the map';
+    button.title = tx('Show this place on the map');
     button.addEventListener('click', () => briefingMap(attachment.placeId, attachment.target || attachment.label));
     return button;
   }
 
   if (attachment.kind === 'commodity') {
     const button = el('button', 'checklist-attachment', `◇ ${attachment.label}`);
-    button.title = 'Open this commodity';
+    button.title = tx('Open this commodity');
     button.addEventListener('click', () => openCommodity(attachment.target || attachment.label));
     return button;
   }
 
   if (attachment.kind === 'item') {
     const button = el('button', 'checklist-attachment', `▦ ${attachment.label}`);
-    button.title = 'Find this item in Parts';
+    button.title = tx('Find this item in Parts');
     button.addEventListener('click', () => {
       showView('parts');
       $('#parts-search').value = attachment.target || attachment.label;
@@ -17789,7 +17943,7 @@ function checklistItemRow(list, item, compact = false) {
   const check = document.createElement('input');
   check.type = 'checkbox';
   check.checked = item.done;
-  check.title = item.done ? 'Reopen task' : 'Mark task done';
+  check.title = item.done ? tx('Reopen task') : tx('Mark task done');
   check.addEventListener('change', () => checklistCall(`/api/checklists/${list.id}/items/${item.id}/toggle`));
   row.append(check);
 
@@ -17799,9 +17953,8 @@ function checklistItemRow(list, item, compact = false) {
   if (item.dueAt) main.append(el('div', 'checklist-due', `◷ ${checklistDue(item.dueAt)}`));
 
   if (bought) {
-    const note = el('div', 'checklist-bought', `bought ${dayOf(item.bought)}`);
-    note.title = 'Your logs show this was bought after you wrote this line. '
-      + 'Tick it to take it off for good.';
+    const note = el('div', 'checklist-bought', tx('bought {date}', { date: dayOf(item.bought) }));
+    note.title = tx('Your logs show this was bought after you wrote this line. Tick it to take it off for good.');
     main.append(note);
   }
 
@@ -17815,7 +17968,7 @@ function checklistItemRow(list, item, compact = false) {
 
   if (!compact) {
     const remove = el('button', 'ghost tiny', '×');
-    remove.title = 'Remove task';
+    remove.title = tx('Remove task');
     remove.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}/items/${item.id}`, 'DELETE'));
     row.append(remove);
   }
@@ -17839,14 +17992,14 @@ function renderPinnedChecklist(lists = checklists) {
   const done = list.items.filter((item) => item.done).length;
   const progress = $('#now-checklist-progress');
   progress.textContent = '';
-  progress.append(jobProgress(done, list.items.length, `${done} of ${list.items.length} done`));
+  progress.append(jobProgress(done, list.items.length, tx('{done} of {total} done', { done, total: list.items.length })));
 
   const host = $('#now-checklist-items');
   host.textContent = '';
   const open = list.items.filter((item) => !item.done);
   for (const item of open.slice(0, 5)) host.append(checklistItemRow(list, item, true));
-  if (open.length > 5) host.append(el('li', 'muted', `+${open.length - 5} more`));
-  if (!open.length) host.append(el('li', 'inward', 'Everything is checked off.'));
+  if (open.length > 5) host.append(el('li', 'muted', tx('+{count} more', { count: open.length - 5 })));
+  if (!open.length) host.append(el('li', 'inward', tx('Everything is checked off.')));
 
   $('#now-checklist-open').onclick = () => showView('checklists');
   card.hidden = false;
@@ -17856,14 +18009,14 @@ function checklistComposer(list) {
   const form = el('form', 'checklist-composer');
   const task = document.createElement('input');
   task.type = 'text';
-  task.placeholder = 'Add a task, e.g. bring tractor beam';
+  task.placeholder = tx('Add a task, e.g. bring tractor beam');
   task.required = true;
   form.append(task);
 
   const fields = el('div', 'checklist-fields');
   const place = document.createElement('select');
   place.className = 'select';
-  place.title = 'Optional map location';
+  place.title = tx('Optional map location');
   fillPlaceOptions(place, '');
   fields.append(place);
 
@@ -17871,15 +18024,15 @@ function checklistComposer(list) {
   item.type = 'search';
   item.className = 'search';
   item.setAttribute('list', 'checklist-catalogue');
-  item.placeholder = 'Optional commodity, part or gear';
-  item.title = 'Optional commodity, part or gear reference';
+  item.placeholder = tx('Optional commodity, part or gear');
+  item.title = tx('Optional commodity, part or gear reference');
   fields.append(item);
   fillChecklistReferenceOptions();
 
   const due = document.createElement('input');
   due.type = 'datetime-local';
   due.className = 'search';
-  due.title = 'Optional date and time';
+  due.title = tx('Optional date and time');
   fields.append(due);
   form.append(fields);
 
@@ -17887,16 +18040,16 @@ function checklistComposer(list) {
   const note = document.createElement('input');
   note.type = 'text';
   note.className = 'search';
-  note.placeholder = 'Optional note';
+  note.placeholder = tx('Optional note');
   detail.append(note);
   const url = document.createElement('input');
   url.type = 'url';
   url.className = 'search';
-  url.placeholder = 'Optional https:// link';
+  url.placeholder = tx('Optional https:// link');
   detail.append(url);
   form.append(detail);
 
-  const add = el('button', 'ghost', 'Add task');
+  const add = el('button', 'ghost', tx('Add task'));
   form.append(add);
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -17968,7 +18121,7 @@ function renderChecklists(lists) {
   host.textContent = '';
 
   if (!lists.length) {
-    host.append(el('p', 'muted', 'No checklists yet. Make one for a departure, an operation, or anything you do not want to forget.'));
+    host.append(el('p', 'muted', tx('No checklists yet. Make one for a departure, an operation, or anything you do not want to forget.')));
     return;
   }
 
@@ -17976,23 +18129,23 @@ function renderChecklists(lists) {
     const card = el('article', 'checklist-card');
     const head = el('div', 'job-head');
     head.append(el('b', null, list.title));
-    if (list.pinned) head.append(el('span', 'job-kind owned', 'on Now'));
+    if (list.pinned) head.append(el('span', 'job-kind owned', tx('on Now')));
     head.append(el('span', 'spacer'));
 
-    const pin = el('button', list.pinned ? 'ghost on' : 'ghost', list.pinned ? 'On Now' : 'Pin to Now');
-    pin.title = 'Only one checklist is shown on Now and in the overlay';
+    const pin = el('button', list.pinned ? 'ghost on' : 'ghost', list.pinned ? tx('On Now') : tx('Pin to Now'));
+    pin.title = tx('Only one checklist is shown on Now and in the overlay');
     pin.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}/pin`));
     head.append(pin);
-    const remove = el('button', 'ghost danger', 'Delete');
+    const remove = el('button', 'ghost danger', tx('Delete'));
     remove.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}`, 'DELETE'));
     head.append(remove);
     card.append(head);
 
     const done = list.items.filter((item) => item.done).length;
-    card.append(jobProgress(done, list.items.length, `${done} of ${list.items.length} done`));
+    card.append(jobProgress(done, list.items.length, tx('{done} of {total} done', { done, total: list.items.length })));
     const items = el('ul', 'checklist-items');
     for (const entry of list.items) items.append(checklistItemRow(list, entry));
-    if (!list.items.length) items.append(el('li', 'muted', 'No tasks yet — add the first thing you want to remember.'));
+    if (!list.items.length) items.append(el('li', 'muted', tx('No tasks yet — add the first thing you want to remember.')));
     card.append(items, checklistComposer(list));
     host.append(card);
   }
@@ -18412,7 +18565,7 @@ async function loadLogbook() {
     const li = el('li');
 
     const when = new Date(row.at);
-    const stamp = `${dateOf(row.at)} · ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    const stamp = `${dateOf(row.at)} · ${when.toLocaleTimeString(QW_DATE_LOCALES, { hour: '2-digit', minute: '2-digit' })}`;
     li.append(el('span', 't', stamp));
 
     li.append(el('span', `k ${row.kind}`, row.kind));
@@ -18552,18 +18705,17 @@ async function renderSettings() {
     // says when this machine asked, which is not how old the data is - the dump
     // for a patch lands days after the patch does.
     $('#settings-community-status').textContent = community.enabled
-      ? [`${community.commodities} commodities`,
-         community.dump ? `dumped for ${community.dump}` : 'dump unknown',
-         `fetched ${community.fetchedAt ? dateOf(community.fetchedAt) : '—'}`].join(' · ')
-      : 'not downloaded';
+      ? [txn(community.commodities, '{count} commodity', '{count} commodities'),
+         community.dump ? tx('dumped for {dump}', { dump: community.dump }) : tx('dump unknown'),
+         tx('fetched {date}', { date: community.fetchedAt ? dateOf(community.fetchedAt) : '—' })].join(' · ')
+      : tx('not downloaded');
 
     const behind = $('#settings-community-behind');
     behind.hidden = !community.behind;
 
     if (community.behind) {
-      behind.textContent = `Your logs are on build ${community.playing}, and this data was made`
-        + ` from ${community.dump}. Anything that patch added — ships, items,`
-        + ' commodities — has no name here until you refresh.';
+      behind.textContent = tx('Your logs are on build {build}, and this data was made from {dump}. Anything that patch added — ships, items, commodities — has no name here until you refresh.',
+        { build: community.playing, dump: community.dump });
     }
   } catch { /* as above */ }
 
@@ -18576,11 +18728,12 @@ async function renderSettings() {
     $('#uex-disable').hidden = !uex.enabled;
 
     $('#uex-status').textContent = uex.enabled
-      ? `${uex.prices} commodities priced, fetched ${uex.fetchedAt ? dateOf(uex.fetchedAt) : '—'}`
-      : 'not fetched';
+      ? txn(uex.prices, '{count} commodity priced, fetched {date}', '{count} commodities priced, fetched {date}',
+        { date: uex.fetchedAt ? dateOf(uex.fetchedAt) : '—' })
+      : tx('not fetched');
 
     $('#uex-preview').hidden = !(uex.enabled && uex.hasCredentials);
-    $('#uex-save-creds').textContent = uex.hasCredentials ? 'Replace keys' : 'Save keys';
+    $('#uex-save-creds').textContent = uex.hasCredentials ? tx('Replace keys') : tx('Save keys');
   } catch { /* as above */ }
 
   await renderUexAuto();
@@ -18926,10 +19079,8 @@ async function renderSharedBlueprints() {
   if (!rows.length) return;
 
   const card = el('section', 'shared-block');
-  card.append(el('h3', null, 'Held by others'));
-  card.append(el('p', 'muted', 'Blueprints the files you have been sent say somebody holds. '
-    + 'They are not in the picker above, because you cannot craft from someone else’s '
-    + 'library — this answers who to ask.'));
+  card.append(el('h3', null, tx('Held by others')));
+  card.append(el('p', 'muted', tx('Blueprints the files you have been sent say somebody holds. They are not in the picker above, because you cannot craft from someone else’s library — this answers who to ask.')));
 
   const list = el('ul', 'shared-blueprints');
 
@@ -18939,7 +19090,7 @@ async function renderSharedBlueprints() {
 
   for (const row of rows) {
     const holders = byName.get(row.name) || [];
-    const who = row.imported.handle || 'someone';
+    const who = row.imported.handle || tx('someone');
     if (!holders.includes(who)) holders.push(who);
     byName.set(row.name, holders);
   }
@@ -19000,7 +19151,7 @@ async function renderExportPreview() {
   const choice = exportChoice();
 
   if (!choice.receipts && !choice.blueprints && !choice.authored && !choice.points) {
-    line.textContent = 'Nothing ticked, so there is nothing to save.';
+    line.textContent = tx('Nothing ticked, so there is nothing to save.');
     return;
   }
 
@@ -19011,16 +19162,22 @@ async function renderExportPreview() {
 
     const parts = [];
     if (choice.receipts) {
-      parts.push(`${counts.receipts.toLocaleString()} ${counts.receipts === 1 ? 'trade' : 'trades'}`
-        + (choice.days ? ` from the last ${choice.days === 1 ? 'day' : `${choice.days} days`}` : ', all time'));
+      const trades = txn(counts.receipts, '{count} trade', '{count} trades', { count: counts.receipts.toLocaleString() });
+      parts.push(choice.days
+        ? `${trades} ${choice.days === 1 ? tx('from the last day') : tx('from the last {days} days', { days: choice.days })}`
+        : `${trades}, ${tx('all time')}`);
     }
-    if (choice.blueprints) parts.push(`${counts.blueprints} blueprints`);
+    if (choice.blueprints) parts.push(txn(counts.blueprints, '{count} blueprint', '{count} blueprints'));
     if (choice.authored) {
-      parts.push(`${counts.jobs} jobs, ${counts.checklists} checklists, ${counts.trips} flight plans`);
+      parts.push([
+        txn(counts.jobs, '{count} job', '{count} jobs'),
+        txn(counts.checklists, '{count} checklist', '{count} checklists'),
+        txn(counts.trips, '{count} flight plan', '{count} flight plans'),
+      ].join(', '));
     }
-    if (choice.points) parts.push(`${counts.points} point${counts.points === 1 ? '' : 's'} of interest`);
+    if (choice.points) parts.push(txn(counts.points, '{count} point of interest', '{count} points of interest'));
 
-    line.textContent = `Would save ${parts.join(' · ')}.`;
+    line.textContent = tx('Would save {list}.', { list: parts.join(' · ') });
   } catch {
     line.textContent = '';
   }
@@ -19065,17 +19222,21 @@ async function renderBackupPreview() {
   // Only what is actually there, so an empty install does not read as a list of
   // zeroes somebody has to be told to ignore.
   const parts = [
-    [counts.jobs, 'job'], [counts.checklists, 'checklist'], [counts.trips, 'flight plan'],
-    [counts.miningRuns, 'mining haul'], [counts.notes, 'map note'],
-    [counts.kits, 'kit'], [counts.pins, 'point of interest', 'points of interest'],
-  ].filter(([n]) => n > 0).map(([n, word, plural]) => `${n} ${n === 1 ? word : (plural || `${word}s`)}`);
+    [counts.jobs, '{count} job', '{count} jobs'],
+    [counts.checklists, '{count} checklist', '{count} checklists'],
+    [counts.trips, '{count} flight plan', '{count} flight plans'],
+    [counts.miningRuns, '{count} mining haul', '{count} mining hauls'],
+    [counts.notes, '{count} map note', '{count} map notes'],
+    [counts.kits, '{count} kit', '{count} kits'],
+    [counts.pins, '{count} point of interest', '{count} points of interest'],
+  ].filter(([n]) => n > 0).map(([n, one, other]) => txn(n, one, other));
 
-  if (counts.goal) parts.push('your goal');
-  if (counts.wipe) parts.push('your wipe line');
+  if (counts.goal) parts.push(tx('your goal'));
+  if (counts.wipe) parts.push(tx('your wipe line'));
 
   line.textContent = parts.length
-    ? `Would save ${parts.join(', ')}.`
-    : 'Nothing typed yet — a backup would be empty.';
+    ? tx('Would save {list}.', { list: parts.join(', ') })
+    : tx('Nothing typed yet — a backup would be empty.');
 }
 
 async function saveBackup() {
@@ -19083,7 +19244,7 @@ async function saveBackup() {
   const status = $('#backup-status');
 
   button.disabled = true;
-  status.textContent = 'Building the file…';
+  status.textContent = tx('Building the file…');
 
   let url = null;
 
@@ -19091,7 +19252,7 @@ async function saveBackup() {
     const response = await fetch('/api/backup');
 
     if (!response.ok) {
-      status.textContent = 'The backup could not be built.';
+      status.textContent = tx('The backup could not be built.');
       return;
     }
 
@@ -19106,9 +19267,9 @@ async function saveBackup() {
     link.download = name;
     link.click();
 
-    status.textContent = `Saved ${name} — ${Math.round(blob.size / 1024).toLocaleString()} KB.`;
+    status.textContent = tx('Saved {name} — {size} KB.', { name, size: Math.round(blob.size / 1024).toLocaleString() });
   } catch {
-    status.textContent = 'The backup could not be built.';
+    status.textContent = tx('The backup could not be built.');
   } finally {
     // Revoking frees the blob; doing it before the click lands cancels the save.
     if (url) setTimeout(() => URL.revokeObjectURL(url), 30000);
@@ -19124,22 +19285,22 @@ async function saveBackup() {
  * asked whether to overwrite their own more recent work.
  */
 const RESTORE_WHY = {
-  Add: 'not on this machine',
-  Replace: 'yours is older',
-  Conflict: 'yours is newer',
-  Deleted: 'you deleted this',
-  Same: 'already the same',
+  Add: tx('not on this machine'),
+  Replace: tx('yours is older'),
+  Conflict: tx('yours is newer'),
+  Deleted: tx('you deleted this'),
+  Same: tx('already the same'),
 };
 
 async function planRestore(text) {
   const status = $('#backup-status');
-  status.textContent = 'Reading the file…';
+  status.textContent = tx('Reading the file…');
 
   const response = await fetch('/api/backup/plan', { method: 'POST', body: text });
   const body = await response.json().catch(() => null);
 
   if (!response.ok) {
-    status.textContent = body?.problem || 'That file could not be read.';
+    status.textContent = body?.problem || tx('That file could not be read.');
     return;
   }
 
@@ -19160,11 +19321,11 @@ function renderRestorePlan() {
   summary.textContent = '';
 
   const counts = [
-    [restorePlan.adds, 'to bring back'],
-    [restorePlan.replaces, 'to replace'],
-    [restorePlan.conflicts, 'newer here'],
-    [restorePlan.deleted, 'you deleted'],
-    [restorePlan.unchanged, 'already the same'],
+    [restorePlan.adds, tx('to bring back')],
+    [restorePlan.replaces, tx('to replace')],
+    [restorePlan.conflicts, tx('newer here')],
+    [restorePlan.deleted, tx('you deleted')],
+    [restorePlan.unchanged, tx('already the same')],
   ].filter(([n]) => n > 0);
 
   for (const [n, word] of counts) {
@@ -19178,7 +19339,7 @@ function renderRestorePlan() {
   // question somebody will ask of a screen that rewrote their jobs.
   if (restorePlan.ignored > 0) {
     summary.append(el('span', 'restore-count muted',
-      `${restorePlan.ignored} pinned or tracked — left alone either way`));
+      tx('{count} pinned or tracked — left alone either way', { count: restorePlan.ignored })));
   }
 
   const body = $('#backup-plan-table').querySelector('tbody');
@@ -19192,7 +19353,7 @@ function renderRestorePlan() {
     box.type = 'checkbox';
     box.checked = line.takenByDefault;
     box.dataset.key = line.key;
-    box.title = line.takenByDefault ? 'Untick to leave this alone' : 'Tick to take the copy in the file';
+    box.title = line.takenByDefault ? tx('Untick to leave this alone') : tx('Tick to take the copy in the file');
     cell.append(box);
     row.append(cell);
 
@@ -19214,7 +19375,7 @@ function renderRestorePlan() {
 
   if (acting.length === 0) {
     summary.append(el('span', 'restore-count muted',
-      'Nothing to do — this file matches what you have.'));
+      tx('Nothing to do — this file matches what you have.')));
   }
 }
 
@@ -19237,7 +19398,7 @@ async function applyRestore() {
   }
 
   button.disabled = true;
-  status.textContent = 'Restoring…';
+  status.textContent = tx('Restoring…');
 
   // Built the way the rest of the app builds a query, rather than through
   // URLSearchParams: the keys are store:id pairs and both halves need escaping.
@@ -19250,7 +19411,7 @@ async function applyRestore() {
     const body = await response.json().catch(() => null);
 
     if (!response.ok) {
-      status.textContent = body?.problem || 'Nothing was restored.';
+      status.textContent = body?.problem || tx('Nothing was restored.');
       return;
     }
 
@@ -19259,21 +19420,20 @@ async function applyRestore() {
     // do, so a failure says what it was and whether it went back.
     if (body.failed) {
       status.textContent = body.rolledBack
-        ? 'A file could not be written, so nothing was restored — everything was put back as it was.'
-        : 'A file could not be written, and not all of it could be put back. '
-          + 'Check your jobs, plans and mining log before restoring again.';
+        ? tx('A file could not be written, so nothing was restored — everything was put back as it was.')
+        : tx('A file could not be written, and not all of it could be put back. Check your jobs, plans and mining log before restoring again.');
       return;
     }
 
     status.textContent = body.restored === 0
-      ? 'Nothing was restored — every line was left alone.'
-      : `Restored ${body.restored} record${body.restored === 1 ? '' : 's'}.`
-        + (body.skipped ? ` Left ${body.skipped} alone.` : '');
+      ? tx('Nothing was restored — every line was left alone.')
+      : txn(body.restored, 'Restored {count} record.', 'Restored {count} records.')
+        + (body.skipped ? ` ${tx('Left {count} alone.', { count: body.skipped })}` : '');
 
     closeRestore();
     await renderBackupPreview().catch(() => {});
   } catch {
-    status.textContent = 'Nothing was restored.';
+    status.textContent = tx('Nothing was restored.');
   } finally {
     button.disabled = false;
   }
@@ -19349,7 +19509,7 @@ function shareList(rows, empty) {
 async function buildShareReport() {
   const choice = shareChoice();
   if (!choice.session && !choice.fleet && !choice.trade)
-    throw new Error('Choose at least one section for the recap.');
+    throw new Error(tx('Choose at least one section for the recap.'));
 
   const report = { choice, madeAt: new Date().toISOString() };
   const needsSessions = choice.session || choice.handle;
@@ -19497,14 +19657,14 @@ function shareReportCss() {
 
 async function openShareReport() {
   const status = $('#share-status');
-  if (status) status.textContent = 'Building recap…';
+  if (status) status.textContent = tx('Building recap…');
   try {
     shareReportData = await buildShareReport();
     renderShareReport(shareReportData);
     if (status) status.textContent = '';
     showView('share');
   } catch (error) {
-    if (status) status.textContent = error.message || 'The recap could not be built.';
+    if (status) status.textContent = error.message || tx('The recap could not be built.');
   }
 }
 
@@ -19541,12 +19701,12 @@ async function saveExport() {
   const choice = exportChoice();
 
   if (!choice.receipts && !choice.blueprints && !choice.authored && !choice.points) {
-    status.textContent = 'Tick at least one thing first.';
+    status.textContent = tx('Tick at least one thing first.');
     return;
   }
 
   button.disabled = true;
-  status.textContent = 'Building the file…';
+  status.textContent = tx('Building the file…');
 
   let url = null;
 
@@ -19559,7 +19719,7 @@ async function saveExport() {
 
     if (!response.ok) {
       const problem = await response.json().catch(() => null);
-      status.textContent = problem?.message || 'The file could not be built.';
+      status.textContent = problem?.message || tx('The file could not be built.');
       return;
     }
 
@@ -19575,9 +19735,9 @@ async function saveExport() {
     link.download = name;
     link.click();
 
-    status.textContent = `Saved ${name} — ${Math.round(blob.size / 1024).toLocaleString()} KB.`;
+    status.textContent = tx('Saved {name} — {size} KB.', { name, size: Math.round(blob.size / 1024).toLocaleString() });
   } catch {
-    status.textContent = 'The file could not be built.';
+    status.textContent = tx('The file could not be built.');
   } finally {
     // Revoking frees the blob; doing it before the click lands cancels the save.
     if (url) setTimeout(() => URL.revokeObjectURL(url), 30000);
@@ -19627,7 +19787,9 @@ async function renderSignals() {
       group = row.group;
 
       const head = el('tr', 'group-row');
-      const cell = el('td', 'muted', group);
+      // Names and notes are the server's English, translated here: the same
+      // catalogue serves them, and the server has no idea of the page's language.
+      const cell = el('td', 'muted', tx(group));
       cell.colSpan = 4;
       head.append(cell);
       body.append(head);
@@ -19637,15 +19799,15 @@ async function renderSignals() {
     const quiet = seen !== null && played - seen > QUIET;
 
     const tr = el('tr');
-    tr.append(el('td', null, row.name));
+    tr.append(el('td', null, tx(row.name)));
     tr.append(el('td', row.total ? 'num' : 'num muted', row.total ? row.total.toLocaleString() : '—'));
     tr.append(el('td', row.sessions ? 'num' : 'num muted', row.sessions || '—'));
 
     const last = el('td', seen === null ? 'muted' : (quiet ? 'outward' : 'muted'));
-    last.textContent = seen === null ? 'never' : `${dateOf(row.lastSeen)}${quiet ? ' · gone quiet' : ''}`;
+    last.textContent = seen === null ? tx('never') : `${dateOf(row.lastSeen)}${quiet ? ` · ${tx('gone quiet')}` : ''}`;
     tr.append(last);
 
-    if (row.note) tr.title = row.note;
+    if (row.note) tr.title = tx(row.note);
     body.append(tr);
   }
 }
@@ -19670,15 +19832,15 @@ async function renderUexAuto() {
     toggle.disabled = !auto.uexEnabled;
 
     if (!auto.uexEnabled) {
-      note.textContent = 'fetch prices first';
+      note.textContent = tx('fetch prices first');
       return;
     }
 
-    const every = `every ${auto.staleAfterHours} hours`;
+    const every = tx('every {count} hours', { count: auto.staleAfterHours });
 
     note.textContent = auto.automatic
-      ? (auto.lastCheckedAt ? `${every} · last tried ${dateOf(auto.lastCheckedAt)}` : every)
-      : `off · prices stay as fetched`;
+      ? (auto.lastCheckedAt ? `${every} · ${tx('last tried {date}', { date: dateOf(auto.lastCheckedAt) })}` : every)
+      : tx('off · prices stay as fetched');
   } catch { /* Settings redraws on its next visit */ }
 }
 
@@ -19715,19 +19877,20 @@ async function renderUexFeeds() {
     const row = el('div', 'uex-feed');
 
     const head = el('div', 'uex-feed-head');
-    head.append(el('b', null, feed.title));
-    head.append(el('span', 'cost', feed.cost));
+    // The server's English, translated here, as the signal rows are.
+    head.append(el('b', null, tx(feed.title)));
+    head.append(el('span', 'cost', tx(feed.cost)));
     row.append(head);
 
-    row.append(el('div', 'muted feed-copy', feed.description));
+    row.append(el('div', 'muted feed-copy', tx(feed.description)));
 
     const actions = el('div', 'uex-feed-actions');
-    const button = el('button', 'ghost', feed.enabled ? 'Refresh' : 'Fetch');
+    const button = el('button', 'ghost', feed.enabled ? tx('Refresh') : tx('Fetch'));
     const status = el('span', 'muted');
 
     status.textContent = feed.enabled
-      ? `on · fetched ${feed.fetchedAt ? ago(feed.fetchedAt) : '—'}`
-      : 'off';
+      ? tx('on · fetched {ago}', { ago: feed.fetchedAt ? ago(feed.fetchedAt) : '—' })
+      : tx('off');
 
     button.addEventListener('click', () =>
       uexAction(`/api/uex/feeds/${feed.key}/enable`, status, button));
@@ -19735,7 +19898,7 @@ async function renderUexFeeds() {
     actions.append(button);
 
     if (feed.enabled) {
-      const drop = el('button', 'ghost', 'Drop');
+      const drop = el('button', 'ghost', tx('Drop'));
       drop.addEventListener('click', () =>
         uexAction(`/api/uex/feeds/${feed.key}/disable`, status, drop));
       actions.append(drop);
@@ -19749,14 +19912,14 @@ async function renderUexFeeds() {
 
 async function uexAction(path, statusNode, button) {
   button.disabled = true;
-  statusNode.textContent = 'working…';
+  statusNode.textContent = tx('working…');
 
   try {
     const result = await fetch(path, { method: 'POST' });
     if (!result.ok) throw new Error((await result.json()).title || result.statusText);
     statusNode.textContent = '';
   } catch (e) {
-    statusNode.textContent = `failed: ${e.message}`;
+    statusNode.textContent = tx('failed: {error}', { error: e.message });
   } finally {
     button.disabled = false;
     renderSettings();
@@ -19801,16 +19964,17 @@ $('#uex-preview').addEventListener('click', async () => {
     const skipped = rows.length - matched.length;
 
     status.textContent = matched.length
-      ? `${matched.length} price${matched.length === 1 ? '' : 's'} across `
-        + `${terminals.size} terminal${terminals.size === 1 ? '' : 's'}`
-        + (skipped ? ` · ${skipped} skipped (place not matched to a UEX terminal)` : '')
+      ? `${txn(matched.length, '{count} price', '{count} prices')} `
+        + txn(terminals.size, 'across {count} terminal', 'across {count} terminals')
+        + (skipped ? ` · ${tx('{count} skipped (place not matched to a UEX terminal)', { count: skipped })}` : '')
       : rows.length
-        ? `nothing sendable: ${rows.length} sale${rows.length === 1 ? '' : 's'} but no place matched a UEX terminal`
-        : 'no named sales in the last 30 days';
+        ? txn(rows.length, 'nothing sendable: {count} sale but no place matched a UEX terminal',
+          'nothing sendable: {count} sales but no place matched a UEX terminal')
+        : tx('no named sales in the last 30 days');
 
     $('#uex-send').hidden = matched.length === 0;
   } catch (e) {
-    status.textContent = `failed: ${e.message}`;
+    status.textContent = tx('failed: {error}', { error: e.message });
   }
 });
 
@@ -19819,17 +19983,17 @@ $('#uex-send').addEventListener('click', async (e) => {
   const status = $('#uex-push-status');
 
   button.disabled = true;
-  status.textContent = 'sending…';
+  status.textContent = tx('sending…');
 
   try {
     const result = await fetch('/api/uex/push', { method: 'POST' });
     const body = await result.json();
     if (!result.ok) throw new Error(body.title || result.statusText);
 
-    status.textContent = body.results.join(' · ') || 'nothing sent';
+    status.textContent = body.results.join(' · ') || tx('nothing sent');
     button.hidden = true;
   } catch (err) {
-    status.textContent = `failed: ${err.message}`;
+    status.textContent = tx('failed: {error}', { error: err.message });
   } finally {
     button.disabled = false;
   }
@@ -20006,7 +20170,7 @@ function makeTablesSortable() {
       if (!th.textContent.trim()) return;
 
       th.classList.add('sortable');
-      th.title = 'Sort';
+      th.title = tx('Sort');
 
       th.addEventListener('click', () => {
         const descending = !th.classList.contains('sort-desc');
@@ -20073,8 +20237,7 @@ async function renderContractsPaid(stats) {
   // Nothing priced is not nothing earned, and a zero here would say the second.
   if (!paid.records.length) {
     note.hidden = false;
-    note.textContent = 'The game has never stated what one of your contracts paid. '
-      + 'It prices a completion only now and then, and only for hauling.';
+    note.textContent = tx('The game has never stated what one of your contracts paid. It prices a completion only now and then, and only for hauling.');
     return;
   }
 
@@ -20082,7 +20245,7 @@ async function renderContractsPaid(stats) {
 
   const tile = el('div', 'tile');
   tile.append(el('div', 'n', money(paid.value)));
-  tile.append(el('div', 'l', 'Stated payouts'));
+  tile.append(el('div', 'l', tx('Stated payouts')));
 
   // The strip's shared panel is the last child tiles() appended.
   const panel = strip.children[strip.children.length - 1];
@@ -20095,8 +20258,8 @@ async function renderContractsPaid(stats) {
   strip.append(panel);
 
   note.hidden = false;
-  note.textContent = `From ${paid.records.length} of your ${stats.contractsCompleted} completed `
-    + 'contracts — the only ones the game put a price on. A floor, not your contract income.';
+  note.textContent = tx('From {priced} of your {completed} completed contracts — the only ones the game put a price on. A floor, not your contract income.',
+    { priced: paid.records.length, completed: stats.contractsCompleted });
 }
 
 /* ---------- why this number ---------- */
@@ -20115,8 +20278,8 @@ async function renderContractsPaid(stats) {
 function explainable(tile, panel, figure, days = 0) {
   const why = el('button', 'why', '?');
   why.type = 'button';
-  why.title = 'Where this number came from';
-  why.setAttribute('aria-label', 'Where this number came from');
+  why.title = tx('Where this number came from');
+  why.setAttribute('aria-label', why.title);
 
   why.addEventListener('click', async () => {
     // One panel for the whole strip, so pressing a second question swaps the
@@ -20128,7 +20291,7 @@ function explainable(tile, panel, figure, days = 0) {
 
     panel.hidden = false;
     panel.dataset.figure = figure;
-    panel.textContent = 'Working it out…';
+    panel.textContent = tx('Working it out…');
 
     await fillExplanation(panel, figure, days);
   });
@@ -20146,7 +20309,7 @@ async function fillExplanation(panel, figure, days) {
     // A figure this build cannot explain says so. Silence would read as "there
     // is nothing behind this number", which is a much bigger claim.
     panel.textContent = '';
-    panel.append(el('div', 'why-rule', 'Nothing here knows how to explain that one yet.'));
+    panel.append(el('div', 'why-rule', tx('Nothing here knows how to explain that one yet.')));
     return;
   }
 
@@ -20159,7 +20322,7 @@ async function fillExplanation(panel, figure, days) {
   // it is worded rather than left as a blank space under the exclusions.
   if (!explained.records.length) {
     panel.append(el('div', 'why-rule muted',
-      'This figure has no underlying records — only the rule above.'));
+      tx('This figure has no underlying records — only the rule above.')));
     return;
   }
 
@@ -20170,14 +20333,14 @@ async function fillExplanation(panel, figure, days) {
   for (const record of explained.records.slice(0, 12)) {
     const row = el('div', 'why-record');
     row.append(el('span', 'muted', dateOf(record.at)));
-    row.append(el('span', null, record.where ? `${record.what} at ${record.where}` : record.what));
+    row.append(el('span', null, record.where ? tx('{what} at {where}', { what: record.what, where: record.where }) : record.what));
     row.append(el('span', 'amount', record.amount === null ? '' : money(record.amount)));
     list.append(row);
   }
 
   if (explained.records.length > 12) {
     list.append(el('div', 'why-rule muted',
-      `and ${(explained.records.length - 12).toLocaleString()} more.`));
+      tx('and {count} more.', { count: (explained.records.length - 12).toLocaleString() })));
   }
 
   panel.append(list);
@@ -20840,15 +21003,15 @@ function renderFleetShips() {
 
 /** "3 days ago", "2 months ago" - easier to scan than a date. */
 function relative(iso) {
-  if (!iso) return 'unknown';
+  if (!iso) return tx('unknown');
 
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-  if (days <= 0) return 'today';
-  if (days === 1) return 'yesterday';
-  if (days < 30) return `${days} days ago`;
+  if (days <= 0) return tx('today');
+  if (days === 1) return tx('yesterday');
+  if (days < 30) return tx('{n} days ago', { n: days });
 
   const months = Math.round(days / 30);
-  return months <= 1 ? 'a month ago' : `${months} months ago`;
+  return months <= 1 ? tx('a month ago') : tx('{n} months ago', { n: months });
 }
 
 /** Step chart of owned-vehicle count over time. */
@@ -21245,6 +21408,24 @@ function loadoutReadiness(slots, completeSighting) {
   return strip;
 }
 
+/** The overlay trades the desktop character illustration for a named manifest:
+ * at widget width, a readable inventory order answers faster than body-zone art. */
+function overlayLoadoutStrip(slots, asOf) {
+  const strip = el('section', 'overlay-loadout-strip');
+  strip.setAttribute('aria-label', 'Current loadout summary');
+  const equipped = slots.filter((slot) => loadoutPlacement(slot));
+  const stowed = slots.length - equipped.length;
+  const facts = [
+    `${equipped.length} worn`,
+    `${stowed} carried`,
+    asOf ? `seen ${relative(asOf)}` : 'latest observed kit',
+  ];
+  strip.append(el('span', 'overlay-loadout-kicker', 'Current kit'));
+  strip.append(el('strong', null, `${slots.length} observed slots`));
+  strip.append(el('span', 'overlay-loadout-facts', facts.join(' · ')));
+  return strip;
+}
+
 function renderLoadout(stats) {
   libraryStats = stats;
 
@@ -21252,7 +21433,16 @@ function renderLoadout(stats) {
   host.textContent = '';
 
   if (!stats.loadout || !stats.loadout.length) {
-    host.append(el('p', 'muted', 'No attachment events recorded yet.'));
+    const compactOverlay = isOverlay || document.body.classList.contains('overlay');
+    if (compactOverlay) {
+      const empty = el('section', 'overlay-loadout-empty');
+      empty.append(el('span', 'overlay-loadout-kicker', 'Current kit'));
+      empty.append(el('strong', null, 'No equipment observed yet'));
+      empty.append(el('span', null, 'Quantum Wake will list attachments after the game writes an equipment event.'));
+      host.append(empty);
+    } else {
+      host.append(el('p', 'muted', 'No attachment events recorded yet.'));
+    }
     return;
   }
 
@@ -21270,7 +21460,9 @@ function renderLoadout(stats) {
     return;
   }
 
+  const compactOverlay = isOverlay || document.body.classList.contains('overlay');
   const screen = el('section', 'loadout-character');
+  if (compactOverlay) screen.append(overlayLoadoutStrip(slots, stats.loadoutAsOf));
   const head = el('div', 'loadout-character-head');
   const meta = stats.loadoutAsOf
     ? `Last complete sighting ${relative(stats.loadoutAsOf)}`
@@ -21676,10 +21868,10 @@ async function loadGameData() {
   if (!label) return state;
 
   label.textContent = {
-    reading: state?.seconds ? `reading… ${Math.round(state.seconds)}s` : 'reading…',
-    ready: 'ready',
-    failed: 'could not be read',
-    noinstall: 'no install found',
+    reading: state?.seconds ? tx('reading… {seconds}s', { seconds: Math.round(state.seconds) }) : tx('reading…'),
+    ready: tx('ready'),
+    failed: tx('could not be read'),
+    noinstall: tx('no install found'),
   }[state?.state] || '';
 
   if (problem) {
@@ -21699,11 +21891,11 @@ async function loadGameData() {
   quote('#settings-install-spawnplaces', counts.spawnplaces);
 
   tiles('#gamedata-counts', [
-    ['Commodities', count(counts.commodities)],
-    ['Items', count(counts.items)],
-    ['Recipes', count(counts.recipes)],
-    ['Deposits', count(counts.deposits)],
-    ['Places', count(counts.places)],
+    [tx('Commodities'), count(counts.commodities)],
+    [tx('Items'), count(counts.items)],
+    [tx('Recipes'), count(counts.recipes)],
+    [tx('Deposits'), count(counts.deposits)],
+    [tx('Places'), count(counts.places)],
   ]);
 
   return state;
@@ -22870,7 +23062,7 @@ function jumpToPlace(name) {
 function placeLink(name) {
   const link = el('button', 'place-link', name);
   link.type = 'button';
-  link.title = 'Show on the map';
+  link.title = tx('Show on the map');
   link.addEventListener('click', (e) => {
     e.stopPropagation();
     jumpToPlace(name);
@@ -23605,7 +23797,7 @@ async function runActionCall(url, method = 'POST', body = null) {
   await loadTrips();
 }
 
-const runActionLabel = (kind) => ({
+const runActionLabel = (kind) => tx({
   load: 'Load', unload: 'Unload', buy: 'Buy', sell: 'Sell', collect: 'Collect',
   refuel: 'Refuel', repair: 'Repair', do: 'Do',
 }[kind] || 'Do');
@@ -23615,7 +23807,7 @@ function runActionRow(trip, stop, action, editable = false) {
   const check = document.createElement('input');
   check.type = 'checkbox';
   check.checked = !!action.done;
-  check.title = action.done ? 'Mark as still to do' : 'Mark action complete';
+  check.title = action.done ? tx('Mark as still to do') : tx('Mark action complete');
   check.addEventListener('change', () =>
     runActionCall(`/api/trips/${trip.id}/stops/${stop.id}/actions/${action.id}/toggle`));
   row.append(check);
@@ -23631,7 +23823,7 @@ function runActionRow(trip, stop, action, editable = false) {
 
   if (editable) {
     const remove = el('button', 'ghost tiny', '×');
-    remove.title = 'Remove this action';
+    remove.title = tx('Remove this action');
     remove.addEventListener('click', () =>
       runActionCall(`/api/trips/${trip.id}/stops/${stop.id}/actions/${action.id}`, 'DELETE'));
     row.append(remove);
@@ -23650,23 +23842,23 @@ function runActionForm(trip, stop) {
   const text = document.createElement('input');
   text.type = 'text';
   text.className = 'search';
-  text.placeholder = 'What needs doing?';
+  text.placeholder = tx('What needs doing?');
 
   const quantity = document.createElement('input');
   quantity.type = 'number';
   quantity.className = 'search run-action-amount';
-  quantity.placeholder = 'Qty';
+  quantity.placeholder = tx('Qty');
   quantity.min = '0';
   quantity.step = 'any';
 
   const unit = document.createElement('select');
   unit.className = 'select';
-  unit.append(new Option('No unit', ''));
+  unit.append(new Option(tx('No unit'), ''));
   unit.append(new Option('SCU', 'SCU'));
-  unit.append(new Option('units', 'units'));
+  unit.append(new Option(tx('units'), 'units'));
   unit.append(new Option('aUEC', 'aUEC'));
 
-  const save = el('button', 'ghost tiny', 'Add');
+  const save = el('button', 'ghost tiny', tx('Add'));
   save.addEventListener('click', () => {
     if (!text.value.trim()) {
       text.focus();
@@ -23706,10 +23898,10 @@ async function planTrip(title, stops) {
   setContextFocus({
     kind: 'flight-plan',
     title,
-    detail: `${stops.length} stop${stops.length === 1 ? '' : 's'} ready to route`,
+    detail: txn(stops.length, '{count} stop ready to route', '{count} stops ready to route'),
     view: 'map',
     plan: true,
-    action: 'Open plan',
+    action: tx('Open plan'),
   });
   await fetch('/api/trips', {
     method: 'POST',
@@ -23748,17 +23940,17 @@ function renderTripCard() {
   const progress = $('#now-trip-progress');
   progress.textContent = '';
   progress.append(jobProgress(done, trip.stops.length,
-    `${done} of ${trip.stops.length} stops`));
+    tx('{done} of {total} stops', { done, total: trip.stops.length })));
 
   const jump = $('#now-trip-next');
   jump.textContent = '';
 
   if (next) {
-    jump.append(el('div', 'now-trip-label', next.done ? 'At this stop' : 'Jump next'));
+    jump.append(el('div', 'now-trip-label', next.done ? tx('At this stop') : tx('Jump next')));
     jump.append(el('div', 'now-trip-where', next.place));
     if (next.note) jump.append(el('div', 'now-trip-note', next.note));
   } else {
-    jump.append(el('div', 'inward', 'Every stop is crossed off. Good run.'));
+    jump.append(el('div', 'inward', tx('Every stop is crossed off. Good run.')));
   }
 
   // The whole path, in order, ticked as it goes - the flight plan proper.
@@ -23780,14 +23972,14 @@ function tripStopRow(trip, stop, index, isNext, editable = false) {
   const row = el('div', `trip-stop${stop.done ? ' done' : ''}${isNext ? ' next' : ''}`);
 
   const number = el('button', 'trip-number', stop.done ? '✓' : String(index + 1));
-  number.title = stop.done ? 'Not done after all' : 'Cross this stop off';
+  number.title = stop.done ? tx('Not done after all') : tx('Cross this stop off');
   number.addEventListener('click',
     () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}/toggle`));
   row.append(number);
 
   const main = el('div', 'trip-stop-main');
   const name = el('button', 'trip-place', stop.place);
-  name.title = 'Show it on the map';
+  name.title = tx('Show it on the map');
   name.addEventListener('click', () => {
     showView('map');
     if (stop.placeId) centreOn(stop.placeId);
@@ -24573,13 +24765,13 @@ const atSameStop = (seller, destination) => {
 
 function sellerLabel(seller, item) {
   const stock = seller.scu
-    ? ` · ${Math.round(seller.scu).toLocaleString()} SCU${shortStock(seller, item) ? ' — short' : ''}`
+    ? ` · ${Math.round(seller.scu).toLocaleString()} SCU${shortStock(seller, item) ? ` — ${tx('short')}` : ''}`
     : '';
 
   // Where it is and whether the law reaches it: the cheapest counter is
   // routinely the one in Pyro, and that is a decision, not a detail.
   const where = seller.system ? ` · ${seller.system}` : '';
-  const risk = seller.security === 'lawless' ? ' — lawless' : '';
+  const risk = seller.security === 'lawless' ? ` — ${tx('lawless')}` : '';
 
   return seller.price > 0
     ? `${seller.terminal} · ${money(seller.price)}${stock}${where}${risk}`
@@ -24602,7 +24794,7 @@ async function planShoppingTrip(job, card) {
   const missing = job.items.filter((i) => !i.have);
 
   if (!missing.length) {
-    alertLine($('#jobs-list'), 'Everything on this list is already in hand.');
+    alertLine($('#jobs-list'), tx('Everything on this list is already in hand.'));
     return;
   }
 
@@ -24615,12 +24807,12 @@ async function planShoppingTrip(job, card) {
 
   const head = el('div', 'chooser-head');
   head.append(el('span', null, destination
-    ? `Where to buy — ${destination.name} first, fewest stops after`
-    : 'Where to buy — optimised for fewer stops'));
+    ? tx('Where to buy — {place} first, fewest stops after', { place: destination.name })
+    : tx('Where to buy — optimised for fewer stops')));
   chooser.append(head);
 
   const rows = el('div', 'chooser-rows');
-  rows.append(el('div', 'muted', 'Looking up sellers…'));
+  rows.append(el('div', 'muted', tx('Looking up sellers…')));
   chooser.append(rows);
   card.append(chooser);
 
@@ -24639,8 +24831,8 @@ async function planShoppingTrip(job, card) {
   const retally = () => {
     const stops = new Set([...chosen.values()].filter(Boolean));
     count.textContent = stops.size
-      ? `${stops.size} stop${stops.size === 1 ? '' : 's'}`
-      : 'nothing chosen';
+      ? txn(stops.size, '{count} stop', '{count} stops')
+      : tx('nothing chosen');
   };
 
   /*
@@ -24710,12 +24902,12 @@ async function planShoppingTrip(job, card) {
       const what = el('div', 'chooser-what');
       what.append(el('div', 'name', item.name));
       what.append(el('div', 'sub', item.needed > 0
-        ? `${item.needed}${item.unit ? ` ${item.unit}` : ''} needed`
-        : 'any amount'));
+        ? tx('{amount} needed', { amount: `${item.needed}${item.unit ? ` ${item.unit}` : ''}` })
+        : tx('any amount')));
       row.append(what);
 
       if (!sellers.length) {
-        row.append(el('div', 'chooser-none', 'no known seller — left off'));
+        row.append(el('div', 'chooser-none', tx('no known seller — left off')));
         rows.append(row);
         continue;
       }
@@ -24731,7 +24923,7 @@ async function planShoppingTrip(job, card) {
 
       const skip = document.createElement('option');
       skip.value = '';
-      skip.textContent = 'Leave this one off';
+      skip.textContent = tx('Leave this one off');
       select.append(skip);
 
       select.value = chosen.get(item.name) ?? defaultSeller(sellers, item, destination).terminal;
@@ -24782,15 +24974,15 @@ async function planShoppingTrip(job, card) {
         || a.cost - b.cost);
 
     if (!ranked.length) {
-      rows.append(el('div', 'muted', 'Nothing on this list has a known seller.'));
+      rows.append(el('div', 'muted', tx('Nothing on this list has a known seller.')));
       return;
     }
 
     // The plan starts stop-efficient. This button returns to that answer after
     // the pilot has ticked counters by hand.
     const fewest = el('div', 'chooser-actions');
-    const pack = el('button', 'ghost', 'Optimise stops');
-    pack.title = 'Re-group the list into a stop-efficient route';
+    const pack = el('button', 'ghost', tx('Optimise stops'));
+    pack.title = tx('Re-group the list into a stop-efficient route');
 
     pack.addEventListener('click', () => {
       optimiseStops();
@@ -24828,7 +25020,7 @@ async function planShoppingTrip(job, card) {
       name.append(el('span', null, counter.seller.terminal));
 
       if (counter.seller.security === 'lawless')
-        name.append(el('span', 'sec sec-lawless', 'lawless'));
+        name.append(el('span', 'sec sec-lawless', tx('lawless')));
 
       what.append(name);
 
@@ -24849,7 +25041,7 @@ async function planShoppingTrip(job, card) {
       row.append(what);
 
       const sum = el('div', 'stop-sum');
-      sum.append(el('div', null, `${counter.supplies.length} of ${options.length}`));
+      sum.append(el('div', null, tx('{count} of {total}', { count: counter.supplies.length, total: options.length })));
       if (counter.cost > 0) sum.append(el('div', 'muted', money(counter.cost)));
       if (counter.seller.system) sum.append(el('div', 'muted', counter.seller.system));
       row.append(sum);
@@ -24871,7 +25063,7 @@ async function planShoppingTrip(job, card) {
   const views = el('div', 'seg chooser-views');
 
   for (const [key, label] of [['item', 'By item'], ['location', 'By location']]) {
-    const button = el('button', key === 'item' ? 'active' : null, label);
+    const button = el('button', key === 'item' ? 'active' : null, tx(label));
 
     button.addEventListener('click', () => {
       views.querySelectorAll('button').forEach((b) => b.classList.remove('active'));
@@ -24904,7 +25096,7 @@ async function planShoppingTrip(job, card) {
   renderItems();
   retally();
 
-  const create = el('button', 'ghost', 'Create plan');
+  const create = el('button', 'ghost', tx('Create plan'));
   create.addEventListener('click', async () => {
     const byPlace = new Map();
 
@@ -24929,7 +25121,7 @@ async function planShoppingTrip(job, card) {
     }
 
     if (!byPlace.size) {
-      alertLine($('#jobs-list'), 'Nothing is chosen, so there is no run to fly.');
+      alertLine($('#jobs-list'), tx('Nothing is chosen, so there is no run to fly.'));
       return;
     }
 
@@ -24943,10 +25135,10 @@ async function planShoppingTrip(job, card) {
     }));
 
     chooser.remove();
-    await planTrip(`${job.title} run`, stops);
+    await planTrip(tx('{title} run', { title: job.title }), stops);
   });
 
-  const cancel = el('button', 'ghost', 'Cancel');
+  const cancel = el('button', 'ghost', tx('Cancel'));
   cancel.addEventListener('click', () => chooser.remove());
 
   foot.append(count);
@@ -25256,10 +25448,10 @@ async function showMapInfo(location) {
   setContextFocus({
     kind: 'place',
     title: location.name,
-    detail: [location.body, location.system].filter(Boolean).join(' · ') || 'Map place',
+    detail: [location.body, location.system].filter(Boolean).join(' · ') || tx('Map place'),
     view: 'map',
     placeId: location.rawId,
-    action: 'Open map',
+    action: tx('Open map'),
   });
   $('#entity-drawer').classList.add('map-place-open');
 
@@ -26639,13 +26831,13 @@ async function checkPriceAge() {
 
   if (age < STALE_AFTER_HOURS && !staleFeeds.length) return;
 
-  const parts = [`Prices last fetched ${ago(uex.fetchedAt)}`];
+  const parts = [tx('Prices last fetched {ago}', { ago: ago(uex.fetchedAt) })];
 
   if (staleFeeds.length) {
-    parts.push(`${staleFeeds.length} other feed${staleFeeds.length === 1 ? '' : 's'} as old`);
+    parts.push(txn(staleFeeds.length, '{count} other feed as old', '{count} other feeds as old'));
   }
 
-  parts.push('margins and best-price rankings are only as fresh as this');
+  parts.push(tx('margins and best-price rankings are only as fresh as this'));
 
   $('#stale-detail').textContent = `${parts.join(' · ')}.`;
   notice.hidden = false;
@@ -26661,14 +26853,14 @@ async function checkPriceAge() {
 const TEXT_STALE_DISMISSED = 'qw-text-stale-dismissed';
 
 function textStaleDetail(fresh) {
-  const count = `${fresh.missing.toLocaleString()} of the game's strings are missing from it`;
-  const what = ' - this patch’s new items and contract titles among them - so the game may show those as raw text keys.';
+  const what = tx('{count} of the game\'s strings are missing from it - this patch’s new items and contract titles among them - so the game may show those as raw text keys.',
+    { count: fresh.missing.toLocaleString() });
 
   if (fresh.owner === 'overlay' || fresh.owner === 'overlay+StarStrings')
-    return `${count}${what} Reinstalling the item labels adds them back in the game's own words.`;
+    return `${what} ${tx('Reinstalling the item labels adds them back in the game\'s own words.')}`;
   if (fresh.owner === 'StarStrings')
-    return `${count}${what} Install a StarStrings release made for this patch, or remove StarStrings, to get them back.`;
-  return `${count}${what} It belongs to a text mod Quantum Wake did not install; update or remove that mod.`;
+    return `${what} ${tx('Install a StarStrings release made for this patch, or remove StarStrings, to get them back.')}`;
+  return `${what} ${tx('It belongs to a text mod Quantum Wake did not install; update or remove that mod.')}`;
 }
 
 async function checkTextFreshness() {
@@ -26792,23 +26984,27 @@ function showWipeStatus(wipe) {
   if (!status) return;
 
   if (!wipe.at) {
-    status.textContent = `counting all ${(wipe.stored ?? 0).toLocaleString()} sessions`;
+    status.textContent = tx('counting all {count} sessions', { count: (wipe.stored ?? 0).toLocaleString() });
     return;
   }
 
   if (wipe.hidden === 0) {
-    status.textContent = 'nothing on record from before this';
+    status.textContent = tx('nothing on record from before this');
     return;
   }
 
   const covers = wipe.covers || [];
-  const sessions = `${wipe.hidden.toLocaleString()} session${wipe.hidden === 1 ? '' : 's'} before this`;
+  const scopeNames = { money: tx('money'), ships: tx('ships'), inventory: tx('inventory'), history: tx('history') };
+  const count = { count: wipe.hidden.toLocaleString() };
 
   // A partial wipe hides nothing outright, so saying "not counted" flat would
   // be a lie: those sessions still count towards everything it did not take.
   status.textContent = covers.length === Object.keys(WIPE_SCOPES).length
-    ? `${sessions} are kept but not counted`
-    : `${sessions} still count, except for ${covers.join(', ')}`;
+    ? txn(wipe.hidden, '{count} session before this is kept but not counted',
+      '{count} sessions before this are kept but not counted', count)
+    : txn(wipe.hidden, '{count} session before this still counts, except for {scopes}',
+      '{count} sessions before this still count, except for {scopes}',
+      { ...count, scopes: covers.map((name) => scopeNames[name] || name).join(', ') });
 }
 
 async function saveWipe(at, patch) {
@@ -26828,9 +27024,9 @@ async function saveWipe(at, patch) {
     await loadHistory();
     await loadWipe();
 
-    if (status) status.textContent = `${status.textContent} · saved`;
+    if (status) status.textContent = `${status.textContent} · ${tx('saved')}`;
   } catch (e) {
-    if (status) status.textContent = `could not save: ${e.message}`;
+    if (status) status.textContent = tx('could not save: {error}', { error: e.message });
   }
 }
 
@@ -26840,7 +27036,7 @@ function initWipe() {
 
   $('#wipe-save').addEventListener('click', () => {
     if (!field.value) {
-      $('#wipe-status').textContent = 'pick a date, or use "count everything"';
+      $('#wipe-status').textContent = tx('pick a date, or use "count everything"');
       return;
     }
 
@@ -26892,10 +27088,9 @@ async function checkForUpdate() {
 function askAboutUpdates(state) {
   const notice = $('#update');
 
-  $('#update-title').textContent = 'Look for a newer version?';
+  $('#update-title').textContent = tx('Look for a newer version?');
   $('#update-detail').textContent =
-    'One request to GitHub, sending nothing about you or this machine. '
-    + 'Nothing is downloaded or installed — you would get a link.';
+    tx('One request to GitHub, sending nothing about you or this machine. Nothing is downloaded or installed — you would get a link.');
 
   const actions = $('#update-actions');
   actions.textContent = '';
@@ -26907,13 +27102,13 @@ function askAboutUpdates(state) {
     if (thenCheck) await runUpdateCheck({ quiet: false, announce: true });
   };
 
-  const every = el('button', 'ghost', 'Yes, every start');
+  const every = el('button', 'ghost', tx('Yes, every start'));
   every.addEventListener('click', () => answer(true, true));
 
-  const once = el('button', 'ghost', 'Just this once');
+  const once = el('button', 'ghost', tx('Just this once'));
   once.addEventListener('click', () => answer(false, true));
 
-  const never = el('button', 'ghost', 'No thanks');
+  const never = el('button', 'ghost', tx('No thanks'));
   never.addEventListener('click', () => answer(false, false));
 
   actions.append(every, once, never);
@@ -26948,8 +27143,8 @@ async function runUpdateCheck({ quiet, announce = false }) {
 
     result = await response.json();
   } catch {
-    if (!quiet) $('#update-status').textContent = 'could not reach GitHub just now';
-    if (announce) tellUpdateNotice('Could not reach GitHub', 'The check did not get through. Try again in a moment.');
+    if (!quiet) $('#update-status').textContent = tx('could not reach GitHub just now');
+    if (announce) tellUpdateNotice(tx('Could not reach GitHub'), tx('The check did not get through. Try again in a moment.'));
     return;
   }
 
@@ -26962,15 +27157,15 @@ async function runUpdateCheck({ quiet, announce = false }) {
   await renderUpdateSettings().catch(() => { /* the toggle is still right */ });
 
   if (!result.newer) {
-    if (!quiet) $('#update-status').textContent = `up to date — ${result.current} is the newest`;
-    if (announce) tellUpdateNotice(`Quantum Wake ${result.current} is the newest`, 'Nothing to update.');
+    if (!quiet) $('#update-status').textContent = tx('up to date — {version} is the newest', { version: result.current });
+    if (announce) tellUpdateNotice(tx('Quantum Wake {version} is the newest', { version: result.current }), tx('Nothing to update.'));
     else notice.hidden = true;
     return;
   }
 
-  $('#update-title').textContent = `Quantum Wake ${result.latest} is out`;
-  $('#update-detail').textContent = `You are running ${result.current}.`
-    + (result.publishedAt ? ` Published ${dayUtc(result.publishedAt)}.` : '');
+  $('#update-title').textContent = tx('Quantum Wake {version} is out', { version: result.latest });
+  $('#update-detail').textContent = tx('You are running {version}.', { version: result.current })
+    + (result.publishedAt ? ` ${tx('Published {date}.', { date: dayUtc(result.publishedAt) })}` : '');
 
   const actions = $('#update-actions');
   actions.textContent = '';
@@ -26980,13 +27175,13 @@ async function runUpdateCheck({ quiet, announce = false }) {
   // pressed is worse than one that was never there.
   if (result.canInstall) actions.append(updateNowButton(result));
 
-  const open = el('button', 'ghost', result.canInstall ? 'Read the notes' : 'Open the release page');
+  const open = el('button', 'ghost', result.canInstall ? tx('Read the notes') : tx('Open the release page'));
   open.addEventListener('click', () => {
     window.open(result.url, '_blank', 'noreferrer');
     if (!result.canInstall) notice.hidden = true;
   });
 
-  const later = el('button', 'ghost', 'Later');
+  const later = el('button', 'ghost', tx('Later'));
   later.addEventListener('click', () => { notice.hidden = true; });
 
   actions.append(open, later);
@@ -27006,7 +27201,7 @@ function tellUpdateNotice(title, detail) {
   const actions = $('#update-actions');
   actions.textContent = '';
 
-  const close = el('button', 'ghost', 'Close');
+  const close = el('button', 'ghost', tx('Close'));
   close.addEventListener('click', () => { notice.hidden = true; });
   actions.append(close);
 
@@ -27029,17 +27224,16 @@ function updateNowButton(result) {
   // part of what is being agreed to: on a metered connection ninety megabytes
   // is somebody's actual money, and finding out afterwards is too late.
   const size = result.downloadBytes
-    ? ` · ${Math.round(result.downloadBytes / 1048576)} MB`
+    ? ` · ${tx('{size} MB', { size: Math.round(result.downloadBytes / 1048576) })}`
     : '';
 
-  const install = el('button', 'ghost on', `Update to ${result.latest}${size}`);
-  install.title = 'Downloads it, checks it, and restarts into the new version';
+  const install = el('button', 'ghost on', `${tx('Update to {version}', { version: result.latest })}${size}`);
+  install.title = tx('Downloads it, checks it, and restarts into the new version');
 
   install.addEventListener('click', async () => {
     install.disabled = true;
-    install.textContent = 'Downloading…';
-    $('#update-detail').textContent = 'Fetching the new version and checking it against '
-      + 'what GitHub published. This can take a minute.';
+    install.textContent = tx('Downloading…');
+    $('#update-detail').textContent = tx('Fetching the new version and checking it against what GitHub published. This can take a minute.');
 
     let answer;
     try {
@@ -27049,27 +27243,75 @@ function updateNowButton(result) {
       if (!response.ok) {
         // The server's own words: it knows whether the folder was writable,
         // the download was short, or something had the file open.
-        $('#update-detail').textContent = answer?.message || 'The update could not be applied.';
-        install.textContent = 'Try again';
+        $('#update-detail').textContent = answer?.message || tx('The update could not be applied.');
+        install.textContent = tx('Try again');
         install.disabled = false;
         return;
       }
     } catch {
-      $('#update-detail').textContent = 'The download did not finish, so nothing was replaced.';
-      install.textContent = 'Try again';
+      $('#update-detail').textContent = tx('The download did not finish, so nothing was replaced.');
+      install.textContent = tx('Try again');
       install.disabled = false;
       return;
     }
 
     // Two endings, and they are different promises. One restarts itself; the
     // other has already swapped the file and needs a hand.
-    install.textContent = answer.restarting ? 'Restarting…' : 'Installed';
+    install.textContent = answer.restarting ? tx('Restarting…') : tx('Installed');
     $('#update-detail').textContent = answer.restarting
-      ? `Quantum Wake ${answer.version} is installed. Restarting now.`
-      : `Quantum Wake ${answer.version} is installed. Close this and start it again to use it.`;
+      ? tx('Quantum Wake {version} is installed. Restarting now.', { version: answer.version })
+      : tx('Quantum Wake {version} is installed. Close this and start it again to use it.', { version: answer.version });
   });
 
   return install;
+}
+
+/* ---------- language ---------- */
+
+/**
+ * The Settings block that picks the page's language.
+ *
+ * Each option is named in its own language, since the reader who needs one is
+ * the reader who cannot yet read the others. A partial language says what it
+ * covers, in that language, so it never passes for a finished one.
+ */
+async function renderLanguageSettings() {
+  const pick = $('#language-pick');
+  const covers = $('#language-covers');
+  if (!pick) return;
+
+  const answer = await getJson('/api/language');
+  const languages = answer.available || [];
+
+  pick.textContent = '';
+  for (const language of languages) {
+    const option = el('option', null, language.name);
+    option.value = language.code;
+    pick.append(option);
+  }
+  pick.value = answer.current;
+
+  // Shown whichever language is chosen: the note is written for the people
+  // who would pick that language, and they are reading an English page.
+  if (covers) {
+    const partial = languages.filter(language => language.covers);
+    covers.textContent = partial.map(language => `${language.name} — ${language.covers}.`).join(' ');
+    covers.hidden = partial.length === 0;
+  }
+
+  pick.onchange = async () => {
+    pick.disabled = true;
+    try {
+      await fetch(`/api/language?code=${encodeURIComponent(pick.value)}`, { method: 'POST' });
+      // Reloaded rather than re-rendered: dozens of renders have already
+      // written text into the page, and re-running all of them in place is a
+      // bug farm for a thing done once.
+      location.reload();
+    } catch {
+      pick.disabled = false;
+      pick.value = answer.current;
+    }
+  };
 }
 
 /** The Settings block: the toggle, and what the last look found. */
@@ -27084,8 +27326,8 @@ async function renderUpdateSettings() {
   if (!status) return;
 
   status.textContent = state.lastCheckedAt
-    ? `last checked ${ago(state.lastCheckedAt)}`
-    : 'never checked';
+    ? tx('last checked {ago}', { ago: ago(state.lastCheckedAt) })
+    : tx('never checked');
 }
 
 function initUpdates() {
@@ -27119,7 +27361,7 @@ function initUpdates() {
   $('#update-check').addEventListener('click', async (event) => {
     const button = event.currentTarget;
     button.disabled = true;
-    $('#update-status').textContent = 'looking…';
+    $('#update-status').textContent = tx('looking…');
 
     try {
       await runUpdateCheck({ quiet: false });
@@ -27176,10 +27418,10 @@ async function checkForWipe() {
 
   offeredPatch = found;
 
-  $('#patch-title').textContent = `${found.patch} arrived on ${dayUtc(found.at)}`;
+  $('#patch-title').textContent = tx('{patch} arrived on {date}', { patch: found.patch, date: dayUtc(found.at) });
   $('#patch-detail').textContent = wipe.at
-    ? `Your history is counted from ${dayUtc(wipe.at)}. If that patch wiped, the line belongs there instead.`
-    : 'Nothing is being held back at the moment. If that patch wiped, your totals are counting an account you no longer have.';
+    ? tx('Your history is counted from {date}. If that patch wiped, the line belongs there instead.', { date: dayUtc(wipe.at) })
+    : tx('Nothing is being held back at the moment. If that patch wiped, your totals are counting an account you no longer have.');
 
   notice.hidden = false;
 }
@@ -27229,15 +27471,19 @@ async function watchScan() {
   let sawRunning = false;
 
   for (;;) {
-    let status;
+    let activity;
     try {
-      status = await getJson('/api/scan/status');
+      activity = await getJson('/api/activity');
     } catch {
       await wait(1000);
       continue;
     }
 
+    // One poll for everything the app is busy with: the scan keeps its own bar
+    // and its own transitions, and the rest is drawn on the chip and the page.
+    const status = activity.scan || {};
     const finished = paintScan(status, sawRunning);
+    paintActivity(activity, { holding: finished });
     sawRunning = status.running;
 
     // The file table follows the same poll while it is on screen, so the row
@@ -27256,6 +27502,11 @@ async function watchScan() {
       try {
         await loadHistory();
       } catch { /* the retry loop in boot covers this */ }
+
+      // The page said it would fill in when the logs were read, so it does:
+      // the views that fetch on entry would otherwise keep what they got
+      // halfway through the scan until the pilot clicked away and back.
+      refreshShownView();
 
       // The file table is the one page that is *about* the scan that just
       // ended, so it does not wait for a click to show what it read.
@@ -27291,8 +27542,8 @@ function paintScan(status, sawRunning) {
     $('#scan-file').textContent = status.file || '';
 
     $('#scan-label').textContent = status.parsed > 0
-      ? `Parsing logs — ${status.parsed} new`
-      : 'Checking logs…';
+      ? tx('Parsing logs — {count} new', { count: status.parsed })
+      : tx('Checking logs…');
 
     return false;
   }
@@ -27304,12 +27555,302 @@ function paintScan(status, sawRunning) {
     return false;
 
   $('#scan-fill').style.width = '100%';
-  $('#scan-label').textContent = 'Scan complete';
-  $('#scan-count').textContent = `${status.parsed} parsed · ${status.elapsedSeconds}s`;
+  $('#scan-label').textContent = tx('Scan complete');
+  $('#scan-count').textContent = `${tx('{count} parsed', { count: status.parsed })} · ${status.elapsedSeconds}s`;
   $('#scan-file').textContent = '';
+  $('#scan-why').textContent = '';
 
   return true;
 }
+
+/* ---------- activity ---------- */
+
+/**
+ * What each page is built from, so a page can say which unfinished job it is
+ * waiting on - and stay quiet about the ones it is not.
+ *
+ * A notice on every page for every job would be the scan bar again: a strip
+ * that is always there and so never read. Settings, Overlay and the Log are
+ * missing on purpose; they are where the jobs are started and inspected, so
+ * they hear about all of them.
+ */
+const VIEW_SOURCES = {
+  logs: new Set(['now', 'map', 'logbook', 'sessions', 'servers', 'places', 'points', 'crew', 'casualties',
+    'contracts', 'events', 'spending', 'ledger', 'commodities', 'market', 'routes', 'fleet', 'hangar',
+    'loadout', 'stash', 'loot', 'garage', 'armoury', 'wikelo', 'blueprints']),
+  gamedata: new Set(['map', 'ships', 'parts', 'mining', 'crafting', 'blueprints', 'hangar', 'armoury']),
+  uex: new Set(['market', 'commodity', 'routes', 'garage', 'armoury', 'jobs', 'events', 'casualties']),
+  community: new Set(['market', 'commodity', 'commodities', 'parts', 'mining']),
+};
+
+const SEES_ALL_ACTIVITY = new Set(['settings', 'overlay', 'log']);
+
+/** When the chip last went quiet, so "up to date" is shown for a moment and then goes. */
+let activityQuietSince = null;
+let activitySawBusy = false;
+
+const ACTIVITY_SETTLED_MS = 4000;
+
+/**
+ * Everything running, oldest kind of work first, as one list the chip, the
+ * panel and the page notice all draw from.
+ *
+ * The game files come before the logs because the startup scan waits for
+ * them: on a cold start the logs are queued, not running, for half a minute,
+ * and saying nothing about them then is how a page came to look broken.
+ */
+function activityJobs(activity) {
+  const jobs = [];
+  if (!activity) return jobs;
+
+  const game = activity.gameData;
+  if (game?.state === 'reading') {
+    const seconds = Math.round(game.seconds || 0);
+    jobs.push({
+      source: 'gamedata',
+      label: tx('Reading game files'),
+      short: tx('Reading game files'),
+      count: seconds ? `${seconds}s` : '',
+      percent: null,
+      open: 'settings',
+    });
+  }
+
+  const scan = activity.scan;
+  if (scan?.running) {
+    jobs.push({
+      source: 'logs',
+      scan: true,
+      label: scan.parsed > 0 ? tx('Parsing logs — {count} new', { count: scan.parsed }) : tx('Checking logs…'),
+      // Before the server knows the total there is nothing to count: "0/0" reads as an empty install.
+      short: scan.total ? tx('Reading logs {done}/{total}', { done: scan.done, total: scan.total }) : tx('Reading logs…'),
+      count: scan.total ? `${scan.done} / ${scan.total} · ${scan.elapsedSeconds}s` : '',
+      percent: scan.total ? scan.percent : null,
+      file: scan.file || '',
+      open: 'log',
+    });
+  } else if (activity.scanWaiting) {
+    jobs.push({
+      source: 'logs',
+      label: tx('Logs queued'),
+      short: tx('Logs queued'),
+      count: game?.state === 'reading' ? tx('after the game files') : '',
+      percent: null,
+      open: 'log',
+    });
+  }
+
+  for (const job of activity.jobs || []) {
+    const kind = job.key === 'community' ? 'community' : 'uex';
+    const label = job.key === 'community'
+      ? tx('Downloading the community dataset')
+      : job.key === 'uex-feed'
+        ? tx('Fetching the UEX feed: {feed}', { feed: job.detail || '' })
+        : tx('Fetching UEX prices');
+
+    jobs.push({
+      source: kind,
+      label,
+      short: kind === 'community' ? tx('Downloading data') : tx('Fetching prices'),
+      count: job.seconds ? `${job.seconds}s` : '',
+      percent: null,
+      open: 'settings',
+    });
+  }
+
+  return jobs;
+}
+
+/** Whether a page is built from what a job is still producing. */
+function viewWaitsOn(view, source) {
+  if (SEES_ALL_ACTIVITY.has(view)) return true;
+  return Boolean(VIEW_SOURCES[source]?.has(view));
+}
+
+/** The sentence under the page notice: what the wait means for this page, not just that there is one. */
+function activityWhy(job) {
+  if (job.source === 'logs') return tx('This page is built from your logs and fills in when they have been read.');
+  if (job.source === 'gamedata') return tx('This page is built from your game files and fills in when they have been read.');
+  if (job.source === 'community') return tx('Commodity names on this page may be missing until the download finishes.');
+  return tx('Prices on this page are the previous ones until the fetch finishes.');
+}
+
+/**
+ * Draws the chip, its panel and the page notice from one poll.
+ *
+ * @param holding true while the scan bar holds on "Scan complete": the
+ *   notice belongs to paintScan until the loop retires it.
+ * @param now for the tests; the chip's "up to date" lasts a few seconds.
+ */
+function paintActivity(activity, { holding = false, now = Date.now() } = {}) {
+  lastActivity = activity;
+  const jobs = activityJobs(activity);
+
+  paintActivityChip(jobs, now);
+  paintActivityPanel(jobs);
+  if (!holding) paintPageWait(jobs);
+
+  return jobs;
+}
+
+function paintActivityChip(jobs, now) {
+  const chip = $('#activity');
+  if (!chip) return;
+
+  if (jobs.length) {
+    activitySawBusy = true;
+    activityQuietSince = null;
+
+    chip.hidden = false;
+    chip.classList.add('busy');
+    chip.classList.remove('settled');
+    $('#activity-text').textContent = jobs.length > 1 ? `${jobs[0].short} +${jobs.length - 1}` : jobs[0].short;
+    $('#activity-chip').title = jobs.map((j) => j.label).join('\n');
+    return;
+  }
+
+  // Idle on the first poll is the usual case - the startup scan ended before
+  // the page was opened - and announcing "up to date" for work nobody saw
+  // would put a chip on every load.
+  if (!activitySawBusy) {
+    chip.hidden = true;
+    return;
+  }
+
+  activityQuietSince ??= now;
+  chip.classList.remove('busy');
+  chip.classList.add('settled');
+  $('#activity-text').textContent = tx('Up to date');
+  $('#activity-chip').title = tx('Nothing running — every page is up to date.');
+
+  if (now - activityQuietSince >= ACTIVITY_SETTLED_MS) {
+    chip.hidden = true;
+    activitySawBusy = false;
+    activityQuietSince = null;
+    $('#activity-panel').hidden = true;
+    $('#activity-chip').setAttribute('aria-expanded', 'false');
+  }
+}
+
+function paintActivityPanel(jobs) {
+  const list = $('#activity-list');
+  if (!list) return;
+
+  list.textContent = '';
+
+  if (!jobs.length) {
+    list.append(el('p', 'muted', tx('Nothing running — every page is up to date.')));
+    return;
+  }
+
+  for (const job of jobs) {
+    const row = el('div', 'activity-row');
+
+    const head = el('div', 'activity-row-head');
+    head.append(el('b', null, job.label));
+    head.append(el('span', 'activity-count', job.count));
+    row.append(head);
+
+    const track = el('div', job.percent == null ? 'scan-track indeterminate' : 'scan-track');
+    const fill = el('div', 'scan-fill');
+    if (job.percent != null) fill.style.width = `${job.percent}%`;
+    track.append(fill);
+    row.append(track);
+
+    if (job.file) row.append(el('div', 'scan-file', job.file));
+
+    const open = el('button', 'ghost tiny', job.open === 'log' ? tx('Show the logs') : tx('Open Settings'));
+    open.type = 'button';
+    open.dataset.open = job.open;
+    open.addEventListener('click', () => {
+      showView(job.open);
+      if (job.open === 'log') showLogPane('files');
+      $('#activity-panel').hidden = true;
+      $('#activity-chip').setAttribute('aria-expanded', 'false');
+    });
+    row.append(open);
+
+    list.append(row);
+  }
+}
+
+/**
+ * The notice at the top of the page, when this page is waiting on something.
+ *
+ * It is the scan bar, widened to the other jobs and narrowed to the pages
+ * they feed: a full re-read in progress says so on Ledger, and says nothing on
+ * Controls, which no log has anything to do with.
+ */
+function paintPageWait(jobs) {
+  const panel = $('#scan');
+  if (!panel) return;
+
+  const job = jobs.find((j) => viewWaitsOn(shownView, j.source));
+
+  if (!job) {
+    panel.hidden = true;
+    return;
+  }
+
+  panel.hidden = false;
+
+  // A running scan was drawn by paintScan, file name and all; anything else
+  // is drawn here from the job.
+  if (!job.scan) {
+    $('#scan-label').textContent = job.label;
+    $('#scan-count').textContent = job.count;
+    $('#scan-file').textContent = job.file || '';
+    $('#scan-fill').style.width = job.percent == null ? '' : `${job.percent}%`;
+  }
+
+  // No percentage is known for the game files or a download: a bar that
+  // sweeps says "working" without claiming how far.
+  panel.classList.toggle('indeterminate', job.percent == null);
+  $('#scan-why').textContent = activityWhy(job);
+}
+
+/**
+ * Re-runs the fetches a page makes on entry, without the rest of showView:
+ * a scan finishing must not scroll the pilot back to the top of the page.
+ */
+function refreshShownView() {
+  const loaders = {
+    now: loadEarnings,
+    routes: loadRoutes,
+    casualties: loadCasualties,
+    crew: loadCrew,
+    servers: loadServers,
+    garage: loadGarage,
+    armoury: loadArmoury,
+    points: loadPoints,
+    wikelo: loadWikelo,
+    events: loadEvents,
+    hangar: loadHangar,
+  };
+
+  loaders[shownView]?.().catch(() => {});
+}
+
+$('#activity-chip')?.addEventListener('click', (e) => {
+  const panel = $('#activity-panel');
+  panel.hidden = !panel.hidden;
+  e.currentTarget.setAttribute('aria-expanded', String(!panel.hidden));
+  if (!panel.hidden) paintActivityPanel(activityJobs(lastActivity));
+});
+
+document.addEventListener?.('keydown', (e) => {
+  if (e.key === 'Escape' && !$('#activity-panel')?.hidden) {
+    $('#activity-panel').hidden = true;
+    $('#activity-chip')?.setAttribute('aria-expanded', 'false');
+  }
+});
+
+document.addEventListener?.('click', (e) => {
+  const panel = $('#activity-panel');
+  if (!panel || panel.hidden || e.target?.closest?.('#activity')) return;
+  panel.hidden = true;
+  $('#activity-chip')?.setAttribute('aria-expanded', 'false');
+});
 
 /**
  * The wizard's own copy of the bar.
@@ -27318,7 +27859,16 @@ function paintScan(status, sawRunning) {
  * it cannot be seen — and first run is the one time the scan has half a minute
  * of real work to show.
  */
-function paintSetupScan(status) {
+function paintSetupScan(status, waiting = false) {
+  // On first run the scan waits for the game files, and an idle scan used to
+  // fall through to "Logs read — history ready" before a single log was read.
+  if (waiting) {
+    $('#setup-scan-fill').style.width = '0%';
+    $('#setup-scan-label').textContent = 'Reading game files first — logs next';
+    $('#setup-scan-count').textContent = '';
+    return;
+  }
+
   if (status.running) {
     $('#setup-scan-fill').style.width = `${status.percent}%`;
 
@@ -27438,7 +27988,8 @@ async function maybeShowSetup() {
 
   const poll = setInterval(async () => {
     try {
-      paintSetupScan(await getJson('/api/scan/status'));
+      const activity = await getJson('/api/activity');
+      paintSetupScan(activity.scan || {}, Boolean(activity.scanWaiting));
     } catch { /* server between restarts; the next tick answers */ }
   }, 700);
 
@@ -27536,7 +28087,7 @@ async function boot() {
 
   // The current location on Now flies to the map like every other place name.
   $('#now-location').classList.add('now-jump');
-  $('#now-location').title = 'Show on the map';
+  $('#now-location').title = tx('Show on the map');
   $('#now-location').addEventListener('click', () => {
     const name = $('#now-location').textContent.trim();
     if (name && name !== '—') jumpToPlace(name);
@@ -27544,13 +28095,13 @@ async function boot() {
 
   try {
     const install = await getJson('/api/install');
-    $('#install').textContent = `${install.channel} · ${install.backups} logs`;
+    $('#install').textContent = `${install.channel} · ${txn(install.backups, '{count} log', '{count} logs')}`;
     // Said in full on hover: on a window too narrow for the top bar the label
     // still gives way to an ellipsis, and a count cut to "60 LO…" says nothing.
-    $('#install').title = `${install.channel} install · ${install.backups} logs read`;
+    $('#install').title = txn(install.backups, '{channel} install · {count} log read', '{channel} install · {count} logs read', { channel: install.channel });
     $('#about-install').textContent = `${install.channel} · ${install.backups} logs`;
   } catch {
-    $('#install').textContent = 'no install found';
+    $('#install').textContent = tx('no install found');
     $('#about-install').textContent = 'none found';
 
     // Nothing to read: ask where the game lives rather than showing an
@@ -27567,7 +28118,7 @@ async function boot() {
 
     $('#about-version').textContent = build;
     $('#foot-version').textContent = `v${info.version}`;
-    $('#foot-version').title = `Build ${build}`;
+    $('#foot-version').title = tx('Build {build}', { build });
   } catch {
     $('#about-version').textContent = 'unknown';
   }
@@ -27595,6 +28146,7 @@ async function boot() {
   }
 
   renderUpdateSettings().catch(() => { /* Settings fills in on its next visit */ });
+  renderLanguageSettings().catch(() => { /* the page stays in the language it was served in */ });
 
   loadWipe().catch(() => { /* Settings shows it on its next visit */ });
 

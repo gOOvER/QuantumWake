@@ -79,4 +79,35 @@ public sealed class LoadoutScreenTests
 
         Assert.Equal(1, page.Count("__dom.node('#loadout-grid').byClass('loadout-profile-undersuit').length"));
     }
+    [Fact]
+    public void Compact_overlay_uses_a_kit_manifest_instead_of_the_character_rig()
+    {
+        var page = new Page();
+
+        page.Do("""
+            document.body.classList.add('overlay');
+            renderLoadout({ loadoutAsOf: '2026-08-25T20:00:00Z', loadout: [
+              { port: 'helmet_attach', category: 'Armour', label: 'Head', slotCount: 1,
+                items: [{ name: 'ADP_Armor_Helmet', count: 1 }] },
+              { port: 'weapon_attach_hand_right', category: 'Weapons', label: 'Right hand', slotCount: 1,
+                items: [{ name: 'behring_p4_ar', count: 1 }] }
+            ] });
+            """);
+
+        Assert.Equal(1, page.Count("__dom.node('#loadout-grid').byClass('overlay-loadout-strip').length"));
+        Assert.Contains("2 observed slots", page.NodeText("#loadout-grid"));
+        Assert.Contains("1 worn", page.NodeText("#loadout-grid"));
+        Assert.Contains("1 carried", page.NodeText("#loadout-grid"));
+    }
+
+    [Fact]
+    public void Compact_overlay_explains_an_unobserved_kit()
+    {
+        var page = new Page();
+
+        page.Do("document.body.classList.add('overlay'); renderLoadout({ loadout: [] });");
+
+        Assert.Equal(1, page.Count("__dom.node('#loadout-grid').byClass('overlay-loadout-empty').length"));
+        Assert.Contains("No equipment observed yet", page.NodeText("#loadout-grid"));
+    }
 }

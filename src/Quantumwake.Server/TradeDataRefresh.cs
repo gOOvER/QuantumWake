@@ -27,6 +27,7 @@ public sealed class TradeDataRefresh(
     UexData uex,
     TradeDataStore preference,
     IHttpClientFactory factory,
+    ActivityBoard board,
     ILogger<TradeDataRefresh> logger) : BackgroundService
 {
     private static readonly TimeSpan Tick = TimeSpan.FromMinutes(15);
@@ -71,6 +72,9 @@ public sealed class TradeDataRefresh(
             // until shutdown must not leave the timestamp untouched.
             preference.Checked();
 
+            // The one fetch nobody clicked for, so the one most in need of
+            // saying it is happening: Market can be open on the old prices.
+            using var job = board.Track("uex");
             var count = await uex.EnableAsync(factory.CreateClient("community"), token);
 
             // Zero means the fetch stood down because UEX was disabled while it
