@@ -8,6 +8,7 @@ namespace Quantumwake.Data;
 /// carries, and how tightly it draws them.
 /// </summary>
 /// <param name="Density">"normal", "compact" or "tiny" - a type scale.</param>
+/// <param name="HighContrast">Uses brighter type and rules for the in-game widget.</param>
 /// <param name="Known">
 /// The cards the app offered when this layout was saved. Without it a card
 /// added in a later version is simply absent from <paramref name="Cards"/>,
@@ -20,7 +21,8 @@ public sealed record OverlayLayout(
     IReadOnlyList<string> Tabs,
     IReadOnlyList<string> Cards,
     string Density,
-    IReadOnlyList<string>? Known = null)
+    IReadOnlyList<string>? Known = null,
+    bool HighContrast = false)
 {
     /// <summary>The views worth having over a game, and the order they sit in.</summary>
     public static readonly IReadOnlyList<string> SelectableTabs =
@@ -34,7 +36,8 @@ public sealed record OverlayLayout(
         ["now", "map", "commodities", "market", "loadout", "stash"],
         [.. SelectableCards],
         "normal",
-        [.. SelectableCards]);
+        [.. SelectableCards],
+        false);
 }
 
 /// <summary>
@@ -148,7 +151,8 @@ public sealed class OverlayLayoutStore
             .ToList();
 
         var density = layout.Density is "compact" or "tiny" ? layout.Density : "normal";
-        var cleaned = new OverlayLayout(tabs, cards, density, [.. OverlayLayout.SelectableCards]);
+        var cleaned = new OverlayLayout(
+            tabs, cards, density, [.. OverlayLayout.SelectableCards], layout.HighContrast);
 
         lock (_gate)
         {

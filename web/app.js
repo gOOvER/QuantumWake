@@ -1,4 +1,4 @@
-﻿/* Quantumwake dashboard.
+/* Quantumwake dashboard.
  *
  * No framework and no external requests: the page is served by the local
  * process and also loaded by the overlay's WebView2, so it stays dependency
@@ -580,6 +580,7 @@ window.scCycleView = (delta) => {
   const current = buttons.findIndex((b) => b.classList.contains('active'));
   const next = (current + delta + buttons.length) % buttons.length;
   showView(buttons[next].dataset.view);
+  if (isOverlay) window.scOverlayFeedback?.('View changed', buttons[next].textContent.trim());
 };
 
 window.scShowView = showView;
@@ -605,6 +606,11 @@ window.scOverlayGlance = (on) => {
   window.history.replaceState(null, '', url);
   if (glance) showView('now');
 };
+
+/* The native shell has no room for a permanent status line. Its commands still
+   need an answer in pinned mode, where the header disappears and clicks reach
+   the game, so reuse the transient toast surface already shared by the web UI. */
+window.scOverlayFeedback = (title, detail) => toast('overlay-action', String(title || ''), detail ? String(detail) : '');
 
 /* ---------- page stats collapse ----------
  *
@@ -1130,14 +1136,15 @@ function renderNowFocus(state, briefing = pilotBriefing) {
   const nextStop = (briefing?.stops || []).find(stop => !stop.done);
   let focus = null;
 
-  if (state?.travelling) focus = { title: tx('In quantum'), detail: state.travellingTo || tx('Destination not identified'), view: 'map', action: tx('Map') };
-  else if (differing) focus = { title: tx('Screenshot differs from the logs'), detail: differing, view: 'log', action: tx('Log') };
-  else if (nextStop) focus = { title: tx('Next stop'), detail: nextStop.place || briefing.tripTitle || tx('Tracked flight plan'), view: 'map', action: tx('Map') };
-  else if (state?.contracts?.length) focus = contractFocus(state.contracts);
-  else if (state?.location) focus = { title: tx('At location'), detail: state.location, view: 'map', action: tx('Map') };
+  if (state?.travelling) focus = { title: tx('In quantum'), detail: state.travellingTo || tx('Destination not identified'), view: 'map', action: tx('Map'), urgency: 'live' };
+  else if (differing) focus = { title: tx('Screenshot differs from the logs'), detail: differing, view: 'log', action: tx('Log'), urgency: 'attention' };
+  else if (nextStop) focus = { title: tx('Next stop'), detail: nextStop.place || briefing.tripTitle || tx('Tracked flight plan'), view: 'map', action: tx('Map'), urgency: 'ready' };
+  else if (state?.contracts?.length) focus = { ...contractFocus(state.contracts), urgency: 'ready' };
+  else if (state?.location) focus = { title: tx('At location'), detail: state.location, view: 'map', action: tx('Map'), urgency: 'quiet' };
 
   strip.hidden = !focus;
   if (!focus) return;
+  strip.dataset.urgency = focus.urgency || 'quiet';
   title.textContent = focus.title;
   detail.textContent = focus.detail;
   open.hidden = false;
@@ -12762,6 +12769,12 @@ async function renderOverlayLayout() {
     radio.onchange = saveOverlayLayout;
   }
 
+  const contrast = $('#overlay-high-contrast');
+  if (contrast) {
+    contrast.checked = Boolean(data.current.highContrast);
+    contrast.onchange = saveOverlayLayout;
+  }
+
   $('#overlay-layout-status').textContent = '';
 }
 
@@ -12818,6 +12831,7 @@ async function saveOverlayLayout(savedMessage = 'saved', chosen = null) {
     tabs: pick('#overlay-tabs'),
     cards: pick('#overlay-cards'),
     density: $$('#overlay-density input').find((r) => r.checked)?.value || 'normal',
+    highContrast: Boolean($('#overlay-high-contrast')?.checked),
   };
 
   const status = $('#overlay-layout-status');
@@ -12889,10 +12903,14 @@ async function applyOverlayPreset(name) {
   // Full is the only layout whose contents change as the app gains cards. The
   // header menu lives in a page that has not opened Settings, so read the
   // offered lists when this browser has no cached copy yet.
-  const available = overlayLayoutData || (preset ? null : await getJson('/api/overlay/layout'));
-  const next = preset || { tabs: available?.tabs || [], cards: available?.cards || [], density: 'normal' };
+  const available = overlayLayoutData || await getJson('/api/overlay/layout');
+  const next = preset
+    ? { ...preset, highContrast: Boolean(available?.current?.highContrast) }
+    : { tabs: available?.tabs || [], cards: available?.cards || [], density: 'normal', highContrast: Boolean(available?.current?.highContrast) };
   all('#overlay-tabs', next.tabs); all('#overlay-cards', next.cards);
   $$('#overlay-density input').forEach(box => { box.checked = box.value === next.density; });
+  const contrast = $('#overlay-high-contrast');
+  if (contrast) contrast.checked = Boolean(next.highContrast);
   await saveOverlayLayout(
     `${name === 'full' ? 'Full' : name[0].toUpperCase() + name.slice(1)} layout saved`, next);
 }
@@ -12944,6 +12962,7 @@ async function applyOverlayLayout() {
 
   document.body.classList.remove('density-compact', 'density-tiny');
   if (layout.density !== 'normal') document.body.classList.add(`density-${layout.density}`);
+  document.body.classList.toggle('high-contrast', Boolean(layout.highContrast));
 
   // The active view may have just been hidden; fall back to the first shown.
   const active = $('#tabs button.active[data-view]');
@@ -21389,6 +21408,24 @@ function loadoutReadiness(slots, completeSighting) {
   return strip;
 }
 
+/** The overlay trades the desktop character illustration for a named manifest:
+ * at widget width, a readable inventory order answers faster than body-zone art. */
+function overlayLoadoutStrip(slots, asOf) {
+  const strip = el('section', 'overlay-loadout-strip');
+  strip.setAttribute('aria-label', 'Current loadout summary');
+  const equipped = slots.filter((slot) => loadoutPlacement(slot));
+  const stowed = slots.length - equipped.length;
+  const facts = [
+    `${equipped.length} worn`,
+    `${stowed} carried`,
+    asOf ? `seen ${relative(asOf)}` : 'latest observed kit',
+  ];
+  strip.append(el('span', 'overlay-loadout-kicker', 'Current kit'));
+  strip.append(el('strong', null, `${slots.length} observed slots`));
+  strip.append(el('span', 'overlay-loadout-facts', facts.join(' · ')));
+  return strip;
+}
+
 function renderLoadout(stats) {
   libraryStats = stats;
 
@@ -21396,7 +21433,16 @@ function renderLoadout(stats) {
   host.textContent = '';
 
   if (!stats.loadout || !stats.loadout.length) {
-    host.append(el('p', 'muted', 'No attachment events recorded yet.'));
+    const compactOverlay = isOverlay || document.body.classList.contains('overlay');
+    if (compactOverlay) {
+      const empty = el('section', 'overlay-loadout-empty');
+      empty.append(el('span', 'overlay-loadout-kicker', 'Current kit'));
+      empty.append(el('strong', null, 'No equipment observed yet'));
+      empty.append(el('span', null, 'Quantum Wake will list attachments after the game writes an equipment event.'));
+      host.append(empty);
+    } else {
+      host.append(el('p', 'muted', 'No attachment events recorded yet.'));
+    }
     return;
   }
 
@@ -21414,7 +21460,9 @@ function renderLoadout(stats) {
     return;
   }
 
+  const compactOverlay = isOverlay || document.body.classList.contains('overlay');
   const screen = el('section', 'loadout-character');
+  if (compactOverlay) screen.append(overlayLoadoutStrip(slots, stats.loadoutAsOf));
   const head = el('div', 'loadout-character-head');
   const meta = stats.loadoutAsOf
     ? `Last complete sighting ${relative(stats.loadoutAsOf)}`

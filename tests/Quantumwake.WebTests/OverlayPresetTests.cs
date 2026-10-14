@@ -65,4 +65,14 @@ public class OverlayPresetTests
         Assert.Contains("\"checklist\"", saved);
         Assert.Contains("\"density\":\"normal\"", saved);
     }
+    [Fact]
+    public void High_visibility_is_saved_with_the_layout()
+    {
+        var page = new Page();
+        page.Serve("/api/overlay/layout", Layout);
+
+        page.Do("__dom.node('#overlay-high-contrast').checked = true; await saveOverlayLayout();");
+
+        Assert.Contains("\"highContrast\":true", page.BodyOf("/api/overlay/layout"));
+    }
 }
