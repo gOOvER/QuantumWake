@@ -197,15 +197,17 @@ public class ScanProgressTests
             };
             """);
 
+        // The watcher reads the scan out of /api/activity, which carries the
+        // game files and the downloads beside it for the chip.
         page.Do($$"""
             __polls = [
               {{Status(running: true, done: 40, total: 148, parsed: 40, percent: 27)}},
               {{Status(running: false, parsed: 148, elapsed: 31)}},
               {{Status(running: false)}},
               {{Status(running: true, done: 3, total: 148, parsed: 3, percent: 2)}}
-            ];
+            ].map((scan) => ({ scan, scanWaiting: false, gameData: { state: 'ready' }, jobs: [] }));
 
-            Object.defineProperty(__fetch.routes, '/api/scan/status', {
+            Object.defineProperty(__fetch.routes, '/api/activity', {
               configurable: true,
               get: () => (__polls.length > 1 ? __polls.shift() : __polls[0]),
             });

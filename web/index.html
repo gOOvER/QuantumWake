@@ -112,6 +112,19 @@
              autocomplete="off" spellcheck="false" aria-label="Search everything">
       <div id="global-results" class="search-results" hidden></div>
     </div>
+    <!-- Whatever the app is busy with, from whichever page is open. It
+         stands in for the install label while it shows: the strip of tabs has
+         no width to spare, and this corner already says how the app is. -->
+    <div class="activity" id="activity" hidden>
+      <button type="button" class="activity-chip" id="activity-chip" aria-expanded="false" aria-controls="activity-panel">
+        <span class="activity-pulse" aria-hidden="true"></span>
+        <span id="activity-text">Working…</span>
+      </button>
+      <div class="activity-panel" id="activity-panel" hidden role="status" aria-live="polite">
+        <div class="activity-head">In progress</div>
+        <div id="activity-list"></div>
+      </div>
+    </div>
     <span id="install" class="muted">detecting…</span>
     <span id="link" class="dot" title="disconnected"></span>
   </div>
@@ -211,6 +224,7 @@
     </div>
     <div class="scan-track"><div class="scan-fill" id="scan-fill"></div></div>
     <div class="scan-file" id="scan-file"></div>
+    <div class="scan-why" id="scan-why"></div>
   </div>
 
 

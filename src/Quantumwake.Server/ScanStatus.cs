@@ -20,6 +20,24 @@ public sealed class ScanStatus
     private DateTimeOffset? _startedAt;
     private DateTimeOffset? _finishedAt;
 
+    /// <summary>
+    /// Whether any scan has begun since the server started.
+    /// </summary>
+    /// <remarks>
+    /// The startup scan waits behind the game-file read, which takes about half
+    /// a minute after a patch. For that half minute the scan is not running and
+    /// has not run, every page built on the logs is empty, and an idle status
+    /// alone cannot tell that from a scan already finished.
+    /// </remarks>
+    public bool HasStarted
+    {
+        get
+        {
+            lock (_gate)
+                return _startedAt is not null;
+        }
+    }
+
     /// <summary>A snapshot safe to serialise.</summary>
     public object Snapshot()
     {

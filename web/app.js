@@ -312,6 +312,16 @@ const STALE_MATTERS_ON = new Set(['market', 'commodity', 'garage', 'jobs', 'rout
 /** A possible wipe needs its full explanation only where a pilot reviews their current history. */
 const PATCH_MATTERS_ON = new Set(['now', 'settings']);
 
+/**
+ * The view on screen, kept here: the stub has no layout to ask. Declared above
+ * showView because the fragment shows a view at load, long before the
+ * activity code near the end of the file has run.
+ */
+let shownView = 'now';
+
+/** The last answer from /api/activity, so a tab change can redraw without waiting for the next poll. */
+let lastActivity = null;
+
 function showView(name) {
   // Assets merged into Fleet; old #assets links and habits still land somewhere.
   if (name === 'assets') name = 'fleet';
@@ -336,6 +346,11 @@ function showView(name) {
     (b) => b.dataset.view === (name === 'commodity' ? 'market' : name === 'help' ? 'about' : name === 'share' ? 'settings' : name));
 
   if (!target) return;
+
+  // The page notice is about this page, so it is redrawn with it rather than
+  // on the next poll: Controls should not spend a second saying Ledger is waiting.
+  shownView = name;
+  if (lastActivity) paintPageWait(activityJobs(lastActivity));
 
   // A map drawer is useful beside the map, but it is not the cross-page
   // context. Leaving it over another workspace hid the work the pilot chose
@@ -27408,15 +27423,19 @@ async function watchScan() {
   let sawRunning = false;
 
   for (;;) {
-    let status;
+    let activity;
     try {
-      status = await getJson('/api/scan/status');
+      activity = await getJson('/api/activity');
     } catch {
       await wait(1000);
       continue;
     }
 
+    // One poll for everything the app is busy with: the scan keeps its own bar
+    // and its own transitions, and the rest is drawn on the chip and the page.
+    const status = activity.scan || {};
     const finished = paintScan(status, sawRunning);
+    paintActivity(activity, { holding: finished });
     sawRunning = status.running;
 
     // The file table follows the same poll while it is on screen, so the row
@@ -27435,6 +27454,11 @@ async function watchScan() {
       try {
         await loadHistory();
       } catch { /* the retry loop in boot covers this */ }
+
+      // The page said it would fill in when the logs were read, so it does:
+      // the views that fetch on entry would otherwise keep what they got
+      // halfway through the scan until the pilot clicked away and back.
+      refreshShownView();
 
       // The file table is the one page that is *about* the scan that just
       // ended, so it does not wait for a click to show what it read.
@@ -27486,9 +27510,299 @@ function paintScan(status, sawRunning) {
   $('#scan-label').textContent = tx('Scan complete');
   $('#scan-count').textContent = `${tx('{count} parsed', { count: status.parsed })} · ${status.elapsedSeconds}s`;
   $('#scan-file').textContent = '';
+  $('#scan-why').textContent = '';
 
   return true;
 }
+
+/* ---------- activity ---------- */
+
+/**
+ * What each page is built from, so a page can say which unfinished job it is
+ * waiting on - and stay quiet about the ones it is not.
+ *
+ * A notice on every page for every job would be the scan bar again: a strip
+ * that is always there and so never read. Settings, Overlay and the Log are
+ * missing on purpose; they are where the jobs are started and inspected, so
+ * they hear about all of them.
+ */
+const VIEW_SOURCES = {
+  logs: new Set(['now', 'map', 'logbook', 'sessions', 'servers', 'places', 'points', 'crew', 'casualties',
+    'contracts', 'events', 'spending', 'ledger', 'commodities', 'market', 'routes', 'fleet', 'hangar',
+    'loadout', 'stash', 'loot', 'garage', 'armoury', 'wikelo', 'blueprints']),
+  gamedata: new Set(['map', 'ships', 'parts', 'mining', 'crafting', 'blueprints', 'hangar', 'armoury']),
+  uex: new Set(['market', 'commodity', 'routes', 'garage', 'armoury', 'jobs', 'events', 'casualties']),
+  community: new Set(['market', 'commodity', 'commodities', 'parts', 'mining']),
+};
+
+const SEES_ALL_ACTIVITY = new Set(['settings', 'overlay', 'log']);
+
+/** When the chip last went quiet, so "up to date" is shown for a moment and then goes. */
+let activityQuietSince = null;
+let activitySawBusy = false;
+
+const ACTIVITY_SETTLED_MS = 4000;
+
+/**
+ * Everything running, oldest kind of work first, as one list the chip, the
+ * panel and the page notice all draw from.
+ *
+ * The game files come before the logs because the startup scan waits for
+ * them: on a cold start the logs are queued, not running, for half a minute,
+ * and saying nothing about them then is how a page came to look broken.
+ */
+function activityJobs(activity) {
+  const jobs = [];
+  if (!activity) return jobs;
+
+  const game = activity.gameData;
+  if (game?.state === 'reading') {
+    const seconds = Math.round(game.seconds || 0);
+    jobs.push({
+      source: 'gamedata',
+      label: tx('Reading game files'),
+      short: tx('Reading game files'),
+      count: seconds ? `${seconds}s` : '',
+      percent: null,
+      open: 'settings',
+    });
+  }
+
+  const scan = activity.scan;
+  if (scan?.running) {
+    jobs.push({
+      source: 'logs',
+      scan: true,
+      label: scan.parsed > 0 ? tx('Parsing logs — {count} new', { count: scan.parsed }) : tx('Checking logs…'),
+      // Before the server knows the total there is nothing to count: "0/0" reads as an empty install.
+      short: scan.total ? tx('Reading logs {done}/{total}', { done: scan.done, total: scan.total }) : tx('Reading logs…'),
+      count: scan.total ? `${scan.done} / ${scan.total} · ${scan.elapsedSeconds}s` : '',
+      percent: scan.total ? scan.percent : null,
+      file: scan.file || '',
+      open: 'log',
+    });
+  } else if (activity.scanWaiting) {
+    jobs.push({
+      source: 'logs',
+      label: tx('Logs queued'),
+      short: tx('Logs queued'),
+      count: game?.state === 'reading' ? tx('after the game files') : '',
+      percent: null,
+      open: 'log',
+    });
+  }
+
+  for (const job of activity.jobs || []) {
+    const kind = job.key === 'community' ? 'community' : 'uex';
+    const label = job.key === 'community'
+      ? tx('Downloading the community dataset')
+      : job.key === 'uex-feed'
+        ? tx('Fetching the UEX feed: {feed}', { feed: job.detail || '' })
+        : tx('Fetching UEX prices');
+
+    jobs.push({
+      source: kind,
+      label,
+      short: kind === 'community' ? tx('Downloading data') : tx('Fetching prices'),
+      count: job.seconds ? `${job.seconds}s` : '',
+      percent: null,
+      open: 'settings',
+    });
+  }
+
+  return jobs;
+}
+
+/** Whether a page is built from what a job is still producing. */
+function viewWaitsOn(view, source) {
+  if (SEES_ALL_ACTIVITY.has(view)) return true;
+  return Boolean(VIEW_SOURCES[source]?.has(view));
+}
+
+/** The sentence under the page notice: what the wait means for this page, not just that there is one. */
+function activityWhy(job) {
+  if (job.source === 'logs') return tx('This page is built from your logs and fills in when they have been read.');
+  if (job.source === 'gamedata') return tx('This page is built from your game files and fills in when they have been read.');
+  if (job.source === 'community') return tx('Commodity names on this page may be missing until the download finishes.');
+  return tx('Prices on this page are the previous ones until the fetch finishes.');
+}
+
+/**
+ * Draws the chip, its panel and the page notice from one poll.
+ *
+ * @param holding true while the scan bar holds on "Scan complete": the
+ *   notice belongs to paintScan until the loop retires it.
+ * @param now for the tests; the chip's "up to date" lasts a few seconds.
+ */
+function paintActivity(activity, { holding = false, now = Date.now() } = {}) {
+  lastActivity = activity;
+  const jobs = activityJobs(activity);
+
+  paintActivityChip(jobs, now);
+  paintActivityPanel(jobs);
+  if (!holding) paintPageWait(jobs);
+
+  return jobs;
+}
+
+function paintActivityChip(jobs, now) {
+  const chip = $('#activity');
+  if (!chip) return;
+
+  if (jobs.length) {
+    activitySawBusy = true;
+    activityQuietSince = null;
+
+    chip.hidden = false;
+    chip.classList.add('busy');
+    chip.classList.remove('settled');
+    $('#activity-text').textContent = jobs.length > 1 ? `${jobs[0].short} +${jobs.length - 1}` : jobs[0].short;
+    $('#activity-chip').title = jobs.map((j) => j.label).join('\n');
+    return;
+  }
+
+  // Idle on the first poll is the usual case - the startup scan ended before
+  // the page was opened - and announcing "up to date" for work nobody saw
+  // would put a chip on every load.
+  if (!activitySawBusy) {
+    chip.hidden = true;
+    return;
+  }
+
+  activityQuietSince ??= now;
+  chip.classList.remove('busy');
+  chip.classList.add('settled');
+  $('#activity-text').textContent = tx('Up to date');
+  $('#activity-chip').title = tx('Nothing running — every page is up to date.');
+
+  if (now - activityQuietSince >= ACTIVITY_SETTLED_MS) {
+    chip.hidden = true;
+    activitySawBusy = false;
+    activityQuietSince = null;
+    $('#activity-panel').hidden = true;
+    $('#activity-chip').setAttribute('aria-expanded', 'false');
+  }
+}
+
+function paintActivityPanel(jobs) {
+  const list = $('#activity-list');
+  if (!list) return;
+
+  list.textContent = '';
+
+  if (!jobs.length) {
+    list.append(el('p', 'muted', tx('Nothing running — every page is up to date.')));
+    return;
+  }
+
+  for (const job of jobs) {
+    const row = el('div', 'activity-row');
+
+    const head = el('div', 'activity-row-head');
+    head.append(el('b', null, job.label));
+    head.append(el('span', 'activity-count', job.count));
+    row.append(head);
+
+    const track = el('div', job.percent == null ? 'scan-track indeterminate' : 'scan-track');
+    const fill = el('div', 'scan-fill');
+    if (job.percent != null) fill.style.width = `${job.percent}%`;
+    track.append(fill);
+    row.append(track);
+
+    if (job.file) row.append(el('div', 'scan-file', job.file));
+
+    const open = el('button', 'ghost tiny', job.open === 'log' ? tx('Show the logs') : tx('Open Settings'));
+    open.type = 'button';
+    open.dataset.open = job.open;
+    open.addEventListener('click', () => {
+      showView(job.open);
+      if (job.open === 'log') showLogPane('files');
+      $('#activity-panel').hidden = true;
+      $('#activity-chip').setAttribute('aria-expanded', 'false');
+    });
+    row.append(open);
+
+    list.append(row);
+  }
+}
+
+/**
+ * The notice at the top of the page, when this page is waiting on something.
+ *
+ * It is the scan bar, widened to the other jobs and narrowed to the pages
+ * they feed: a full re-read in progress says so on Ledger, and says nothing on
+ * Controls, which no log has anything to do with.
+ */
+function paintPageWait(jobs) {
+  const panel = $('#scan');
+  if (!panel) return;
+
+  const job = jobs.find((j) => viewWaitsOn(shownView, j.source));
+
+  if (!job) {
+    panel.hidden = true;
+    return;
+  }
+
+  panel.hidden = false;
+
+  // A running scan was drawn by paintScan, file name and all; anything else
+  // is drawn here from the job.
+  if (!job.scan) {
+    $('#scan-label').textContent = job.label;
+    $('#scan-count').textContent = job.count;
+    $('#scan-file').textContent = job.file || '';
+    $('#scan-fill').style.width = job.percent == null ? '' : `${job.percent}%`;
+  }
+
+  // No percentage is known for the game files or a download: a bar that
+  // sweeps says "working" without claiming how far.
+  panel.classList.toggle('indeterminate', job.percent == null);
+  $('#scan-why').textContent = activityWhy(job);
+}
+
+/**
+ * Re-runs the fetches a page makes on entry, without the rest of showView:
+ * a scan finishing must not scroll the pilot back to the top of the page.
+ */
+function refreshShownView() {
+  const loaders = {
+    now: loadEarnings,
+    routes: loadRoutes,
+    casualties: loadCasualties,
+    crew: loadCrew,
+    servers: loadServers,
+    garage: loadGarage,
+    armoury: loadArmoury,
+    points: loadPoints,
+    wikelo: loadWikelo,
+    events: loadEvents,
+    hangar: loadHangar,
+  };
+
+  loaders[shownView]?.().catch(() => {});
+}
+
+$('#activity-chip')?.addEventListener('click', (e) => {
+  const panel = $('#activity-panel');
+  panel.hidden = !panel.hidden;
+  e.currentTarget.setAttribute('aria-expanded', String(!panel.hidden));
+  if (!panel.hidden) paintActivityPanel(activityJobs(lastActivity));
+});
+
+document.addEventListener?.('keydown', (e) => {
+  if (e.key === 'Escape' && !$('#activity-panel')?.hidden) {
+    $('#activity-panel').hidden = true;
+    $('#activity-chip')?.setAttribute('aria-expanded', 'false');
+  }
+});
+
+document.addEventListener?.('click', (e) => {
+  const panel = $('#activity-panel');
+  if (!panel || panel.hidden || e.target?.closest?.('#activity')) return;
+  panel.hidden = true;
+  $('#activity-chip')?.setAttribute('aria-expanded', 'false');
+});
 
 /**
  * The wizard's own copy of the bar.
@@ -27497,7 +27811,16 @@ function paintScan(status, sawRunning) {
  * it cannot be seen — and first run is the one time the scan has half a minute
  * of real work to show.
  */
-function paintSetupScan(status) {
+function paintSetupScan(status, waiting = false) {
+  // On first run the scan waits for the game files, and an idle scan used to
+  // fall through to "Logs read — history ready" before a single log was read.
+  if (waiting) {
+    $('#setup-scan-fill').style.width = '0%';
+    $('#setup-scan-label').textContent = 'Reading game files first — logs next';
+    $('#setup-scan-count').textContent = '';
+    return;
+  }
+
   if (status.running) {
     $('#setup-scan-fill').style.width = `${status.percent}%`;
 
@@ -27617,7 +27940,8 @@ async function maybeShowSetup() {
 
   const poll = setInterval(async () => {
     try {
-      paintSetupScan(await getJson('/api/scan/status'));
+      const activity = await getJson('/api/activity');
+      paintSetupScan(activity.scan || {}, Boolean(activity.scanWaiting));
     } catch { /* server between restarts; the next tick answers */ }
   }, 700);
 

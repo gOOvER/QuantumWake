@@ -88,6 +88,7 @@ public static class ServerHost
             builder.Services.AddSingleton(install);
         builder.Services.AddSignalR();
         builder.Services.AddSingleton<ScanStatus>();
+        builder.Services.AddSingleton<ActivityBoard>();
         builder.Services.AddSingleton<LiveSessionService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<LiveSessionService>());
 
@@ -395,8 +396,9 @@ public static class ServerHost
             };
         });
 
-        app.MapPost("/api/community/enable", async (LogLibrary lib, IHttpClientFactory httpFactory) =>
+        app.MapPost("/api/community/enable", async (LogLibrary lib, IHttpClientFactory httpFactory, ActivityBoard board) =>
         {
+            using var job = board.Track("community");
             try
             {
                 var count = await lib.Community.EnableAsync(httpFactory.CreateClient("community"));
@@ -688,6 +690,20 @@ public static class ServerHost
         });
 
         app.MapGet("/api/scan/status", (ScanStatus status) => status.Snapshot());
+
+        // Everything the app is busy with, in one answer, so the page can say so
+        // whichever tab it is on. Before this the scan had a bar, the game-file
+        // read a line in Settings and the downloads a word beside their switch:
+        // a page left empty by any of them looked broken from anywhere else.
+        // scanWaiting is the startup scan queued behind the game files - not
+        // running, never run, and every log page empty meanwhile.
+        app.MapGet("/api/activity", (ScanStatus scan, GameDataStatus gameData, ActivityBoard board) => new
+        {
+            scan = scan.Snapshot(),
+            scanWaiting = install is not null && !scan.HasStarted,
+            gameData = gameData.Snapshot(),
+            jobs = board.Snapshot()
+        });
 
         // What the scans have read: each log file the install has, whether the
         // copy on disk is the one summarised, and the runs themselves. The Log
@@ -3831,8 +3847,9 @@ public static class ServerHost
             }));
 
         app.MapPost("/api/uex/feeds/{key}/enable",
-            async (string key, UexFeeds feeds, IHttpClientFactory httpFactory) =>
+            async (string key, UexFeeds feeds, IHttpClientFactory httpFactory, ActivityBoard board) =>
             {
+                using var job = board.Track("uex-feed", UexFeeds.All.FirstOrDefault(f => f.Key == key)?.Title ?? key);
                 try
                 {
                     var count = await feeds.EnableAsync(key, httpFactory.CreateClient("community"));
@@ -4387,8 +4404,9 @@ public static class ServerHost
                 };
             }));
 
-        app.MapPost("/api/uex/enable", async (UexData uex, IHttpClientFactory httpFactory) =>
+        app.MapPost("/api/uex/enable", async (UexData uex, IHttpClientFactory httpFactory, ActivityBoard board) =>
         {
+            using var job = board.Track("uex");
             try
             {
                 var count = await uex.EnableAsync(httpFactory.CreateClient("community"));
